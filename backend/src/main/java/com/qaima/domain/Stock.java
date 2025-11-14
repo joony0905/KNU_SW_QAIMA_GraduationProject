@@ -1,16 +1,16 @@
 package com.qaima.domain;
 
-import org.hibernate.annotations.ColumnDefault;
 import jakarta.persistence.*;
-import java.time.LocalDate;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.ColumnDefault;
+import java.time.LocalDate;
 
 @Getter
 @NoArgsConstructor
 @Entity
 @Table(name = "stock", uniqueConstraints = {
-        // indexes { (exchange_id, stock_code) [unique] } -> 복합 유니크 키
+        // ERD: (exchange_id, stock_code) [unique]
         @UniqueConstraint(
                 name = "uk_exchange_stock_code",
                 columnNames = {"exchange_id", "stock_code"}
@@ -19,38 +19,35 @@ import lombok.NoArgsConstructor;
 public class Stock {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // bigserial [pk]
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long stockId;
 
-    // exchange_id bigint [not null, ref: > exchange.exchange_id]
+    // (ERD: exchange_id bigint [not null, ref: > exchange.exchange_id])
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "exchange_id", nullable = false)
     private Exchange exchange;
-    //stockid로 Exchange 조인해서 contry 확인
-    //stock.getExchange().getCountry(); // KR / US 등
-    //stock.getExchange().getCode();
 
-    // industry_id bigint [ref: > industry.industry_id]
-    //TODO: Industry 엔티티를 만들고 나면 @ManyToOne으로 변경 필요
-    private Long industryId;
-
-    @Column(nullable = false, length = 32) // stock_code varchar(32) [not null]
+    @Column(nullable = false, length = 32)
     private String stockCode;
 
     @Column(length = 20)
     private String isin;
 
-    @Column(nullable = false, length = 255) // company_name varchar(255) [not null]
+    @Column(nullable = false, length = 255)
     private String companyName;
+
+    // (ERD: industry_id bigint [ref: > industry.industry_id])
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "industry_id")
+    private Industry industry;
 
     @Column(length = 20)
     private String assetType;
 
     @Column(length = 3)
-    @ColumnDefault("'KRW'") // currency varchar(3) [default: 'KRW']
+    @ColumnDefault("'KRW'")
     private String currency;
 
     private LocalDate listedAt;
     private LocalDate delistedAt;
-
 }
