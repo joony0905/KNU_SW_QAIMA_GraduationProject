@@ -3,9 +3,11 @@ package com.qaima.domain;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
 @NoArgsConstructor
+@Setter
 @Entity
 @Table(name = "exchange")
 
