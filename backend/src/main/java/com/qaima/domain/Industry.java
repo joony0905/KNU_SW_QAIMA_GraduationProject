@@ -3,13 +3,16 @@ package com.qaima.domain;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import java.util.List;
 import java.util.ArrayList;
 
 @Getter
 @NoArgsConstructor
+@Setter
 @Entity
 @Table(name = "industry")
+    
 public class Industry {
 
     @Id
