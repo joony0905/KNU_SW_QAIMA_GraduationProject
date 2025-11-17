@@ -7,6 +7,7 @@ import com.qaima.external.StockApiClient;
 import com.qaima.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +36,7 @@ public class StockService {
         return dto;
     }
 
-    public MarketStackTickersResponse.TickerData getTickerMeta(String symbol) {
+    public Mono<MarketStackTickersResponse.TickerData> getTickerMeta(String symbol) {
         return stockApiClient.fetchTickerMeta(symbol);
     }
 }
