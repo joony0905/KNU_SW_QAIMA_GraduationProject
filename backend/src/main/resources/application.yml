@@ -1,13 +1,32 @@
+
 spring:
   datasource:
-    url: jdbc:h2:mem:qaima
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+    url: jdbc:mysql://localhost:3306/qaima?useSSL=false&serverTimezone=UTC&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
+    username: root
+    password: 572839asd$$
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
-  h2:
-    console:
-      enabled: true
+      ddl-auto: create
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+
+    defer-datasource-initialization: true
+
+  sql:
+    init:
+      mode: always
+
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+jwt:
+  secret-key: QaimaProjectSecretKeyIsVeryStrongAndLongEnoughForHS256
+  access-token-validity-seconds: 3600 # 1시간
+
+marketstack:
+  base-url: "http://api.marketstack.com/v1"
+  access-key: "0e2ffcd2045a1395308dbb14ea2086af"
