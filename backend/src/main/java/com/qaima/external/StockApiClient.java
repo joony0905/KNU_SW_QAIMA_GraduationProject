@@ -5,6 +5,7 @@ import com.qaima.dto.MarketStackTickersResponse;
 import com.qaima.dto.StockDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 @Component
 @RequiredArgsConstructor
@@ -22,9 +23,13 @@ public class StockApiClient {
         };
     }
 
-    public MarketStackTickersResponse.TickerData fetchTickerMeta(String symbol) {
+    public Mono<MarketStackTickersResponse.TickerData> fetchTickerMeta(String symbol) {
         // 지금은 모든 국가 Marketstack(Single Provider)
         return globalClient.fetchTickerMeta(symbol);
+    }
+
+    public Mono<MarketStackTickersResponse> fetchTickers() {
+        return globalClient.fetchTickers();
     }
 
 }
