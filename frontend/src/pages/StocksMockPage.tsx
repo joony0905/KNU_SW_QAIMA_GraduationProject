@@ -1,160 +1,248 @@
+// frontend/src/pages/StocksMockPage.tsx
+import TradingViewWidget from "../components/TradingViewWidget";
+import { useEffect, useState } from "react";
+
+function useKSTTime() {
+  const [time, setTime] = useState("");
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date().toLocaleString("ko-KR", {
+        timeZone: "Asia/Seoul",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      setTime(now);
+    };
+
+    update();
+    const interval = setInterval(update, 1000 * 30); // 30초마다 업뎃
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return time;
+}
+
 export default function StocksMockPage() {
+  const currentTime = useKSTTime();
   return (
-    <div className="relative bg-white w-full flex gap-5 max-md:flex-col">
-      <div className="flex-1 bg-gray-100 rounded-lg border border-gray-400 border-solid p-4 max-md:mb-5">
-        <div className="bg-gray-200 rounded-lg border border-gray-400 border-solid h-12 mb-4 flex items-center px-4">
-          <div className="text-xs text-center text-black mr-auto ml-12 max-md:ml-4">
-            종목 기본 정보
-          </div>
-          <div className="text-xs text-center text-black">
-            티커 | 현재가 | 등락률 | 시가총액
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
+      {/* 해상도별 최대 폭 조절 */}
+      <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
 
-        <div className="bg-white rounded-md border border-gray-300 border-solid h-[100px] mb-4 relative">
-          <div className="absolute text-xs text-cyan-400 left-4 top-2">
-            stock + stock_realtime_cache + financials (파생) 조인
-          </div>
-          <div className="absolute text-xs text-center text-black left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[220px]">
-            ex: 삼성전자 (005930)
-            <br />
-            현재가 78,300 (+1.2%) · 시가총액 468조
-            <br />
-            52주 고가 / 저가, PER, PBR 등
-          </div>
-        </div>
+        {/* ================= 헤더 ================= */}
+        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
+            심층분석
+          </h1>
+        </header>
 
-        <div className="bg-white rounded-md border border-gray-300 border-solid min-h-[766px] max-md:min-h-[400px] relative p-4">
-          <div className="absolute text-xs text-cyan-400 left-4 top-4">
-            캔들차트=price_ohlcv / RSI·볼린저밴드=indicator_value 캐시
-          </div>
-          <div className="text-xs text-center text-black mt-8 mb-8">
-            캔들차트 + 볼린저밴드 + RSI + 거래량
-          </div>
-          <img
-            src="https://api.builder.io/api/v1/image/assets/TEMP/9ef9d853f827953ac9586639bcb6a1a0eeaebccf?width=1092"
-            alt=""
-            className="w-full h-auto mx-auto max-w-[546px]"
-          />
-          <div className="text-xs text-black mt-8 leading-relaxed">
-            종목 기본 정보 → stock, exchange, stock_realtime_cache, financials
-            <br />
-            차트(캔들·거래량·볼밴·RSI) → 시세: price_ohlcv → 지표: indicator_value
-            (캐시된 기술적 지표)
-            <br />
-            재무/밸류 박스 &amp; 지표카드 → 회계 수치: financials →
-            (부채비율/유동비율/ROE 등 최근 분기값)
-            <br />
-            리스크 라벨 / 점수화 블록 → analysis_request.response_text��서 추출
-            &amp; 캐시
-            <br />
-            상세 분석 설명(투자 아이디어, 모니터링 포인트 등) →
-            analysis_request.response_text (GPT 결과를 그대로 저장/재사용)
-            <br />
-            뉴스/키워드 근거 → news, news_security_map, sentiment_result,
-            sentiment_daily_s2c
-            <br />내 포트폴리오 / 내정보 → users, user_invest_profile, portfolios,
-            portfolio_holding
-            <br />
-            사전 용어 팝업 → dictionary, (dictionary_match_log로 조회 이벤트 로깅)
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 bg-yellow-100 rounded-lg border border-yellow-300 border-solid p-4 max-md:w-full">
-        <div className="bg-amber-300 rounded-lg border border-yellow-300 border-solid h-12 mb-4 flex items-center px-4">
-          <div className="text-xs text-center text-black flex-1 ml-8">
-            🤖 QAIMA 종목 분석 리포트
-          </div>
-          <div className="text-xs text-center text-black">
-            리스크: ⚠ 중간
-          </div>
-        </div>
-
-        <div className="bg-white rounded-md border border-yellow-300 border-solid p-6 mb-4 max-md:h-auto">
-          <div className="flex flex-wrap gap-4 mb-4">
-            <img
-              src="https://api.builder.io/api/v1/image/assets/TEMP/f507419ad0a1d5b2d7c993e09ff091fb0791ceaf?width=638"
-              alt=""
-              className="flex-1 min-w-[280px] h-auto max-sm:w-full"
-            />
-            <div className="flex-1 min-w-[280px]">
-              <div className="text-xs text-cyan-400 mb-2">
-                financial
-              </div>
-              <div className="text-xs text-center text-black mt-24">
-                제무제표
+        {/* ========== 종목 검색 / 내 관심 영역 ========== */}
+        <section className="w-full flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          {/* 왼쪽: 국내 / 종목 입력 */}
+          <div className="w-full lg:max-w-md bg-white rounded-lg border border-stone-300 px-3 py-2 sm:px-4 sm:py-3 flex flex-col gap-2">
+            <div className="flex gap-3 items-center">
+              <button className="w-20 sm:w-24 h-8 sm:h-9 border border-black rounded-md flex items-center justify-center text-sm sm:text-base font-medium">
+                국내
+              </button>
+              <div className="flex-1 flex items-center justify-between gap-2">
+                <span className="text-zinc-500 text-xs sm:text-sm md:text-base font-medium">
+                  종목을 입력해주세요
+                </span>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-zinc-200 rounded-full" />
               </div>
             </div>
           </div>
-          <img
-            src="https://api.builder.io/api/v1/image/assets/TEMP/ffcb6ee3fbfd6fecda7bdb4e03846166766cd31c?width=640"
-            alt=""
-            className="w-80 h-auto max-sm:w-full"
-          />
-        </div>
 
-        <div className="bg-white rounded-md border border-yellow-300 border-solid p-6 mb-4 max-md:h-auto relative">
-          <div className="absolute text-xs text-center text-cyan-400 left-6 top-24">
-            analysis_request.response_text
-          </div>
-          <div className="text-xs text-center text-black leading-relaxed max-sm:text-left">
-            상세 분석 예시 (TESLA, NASDAQ: TSLA)
-            <br />
-            <br />
-            📈 투자 아이디어:
-            <br />
-            테슬라는 전기차 산업의 시장 리더로, 2025년에도 글로벌 전동�� 추세의
-            핵심 수혜주로 평가된다.
-            <br />
-            최근 Cybertruck 양산 확대 및 차세대 4680 배터리 생산 효율 개선
-            소식이 주가 상승 모멘텀을 제공하고 있다.
-            <br />
-            또한, 자율주행 소프트웨어(FSD) 구독 모델이 본격적으로 매출에 반영될
-            경우,
-            <br />
-            기존 자동차 제조업을 넘어선 **SaaS형 수익 구조 전환**이 가속화될
-            전망이다.
-            <br />
-            <br />
-            <br />
-            📊 모니터링 포인트:
-            <br />- 마진 회복 속도 (2025E 영업이익률 11% 이상 회복 여부)
-            <br />- FSD 소프트웨어 수익 비중의 점진적 증가
-            <br />- 전력 비용 안정 및 Gigafactory 생산량 추이
-            <br />
-            <br />
-            📉 기술적 관점:
-            <br />
-            현재 주가는 20일 이동평균선을 상향 돌파하며 단기 반등세를 시도
-            중이나,
-            <br />
-            240달러 부근의 강한 저항선이 존재한다.
-            <br />
-            RSI는 64 수준으로 **단기 과매수권에 근접**,
-            <br />
-            거래량은 이전 상승 파동 대비 약 85% 수준으로 매수세의 지속성 검증이
-            필요하다.
-            <br />
-            <br />
-            🧭 종합 의견:
-            <br />
-            단기적으로는 변동성이 큰 구간에서 차익 실현 매물이 나올 가능성이
-            있으나,
-            <br />
-            중장기 관점에서 FSD·에너지·AI 생태계 확장성은 여전히 유효하다.
-            <br />
-            따라서 보수적 투자자는 220달러 이하 구간에서 분할 매수 접근이
-            바람직하며,
-            <br />
-            고위험 투자자는 AI 테마 연동 시 단기 트레이딩 기회도 기대할 수 있다.
-          </div>
-        </div>
+          {/* 오른쪽: 내 관심 / 워치리스트 카드 */}
+          <div className="w-full lg:flex-1 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-end">
+            <button className="w-24 sm:w-28 h-8 sm:h-9 border border-black rounded-md flex items-center justify-center text-sm sm:text-base font-medium bg-white">
+              내 관심
+            </button>
 
-        <button className="w-40 h-10 bg-blue-500 rounded-md border border-sky-600 border-solid text-xs text-center text-black">
-          분석
-        </button>
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* 워치리스트 카드 */}
+              <div className="min-w-[210px] sm:min-w-[230px] flex items-center gap-2 sm:gap-3 px-3 py-2 border-2 border-stone-300 bg-white">
+                <div className="flex items-center gap-2">
+                  <div className="text-black text-xs sm:text-sm font-medium">
+                    SK하이닉스
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <div className="text-red-600 text-xs sm:text-sm font-semibold">
+                      612,000
+                    </div>
+                    <div className="text-black text-[10px] sm:text-xs font-medium">
+                      9,922,488
+                    </div>
+                  </div>
+                </div>
+                <div className="w-2.5 h-2.5 bg-red-600 rounded-sm" />
+                <div className="flex flex-col items-end gap-0.5">
+                  <div className="text-red-600 text-xs sm:text-sm font-semibold">
+                    6,000
+                  </div>
+                  <div className="text-red-600 text-[10px] sm:text-xs font-medium">
+                    +0.99%
+                  </div>
+                </div>
+              </div>
+
+              {/* + 버튼 */}
+              <button className="w-7 h-7 sm:w-8 sm:h-8 bg-zinc-300 rounded-full flex items-center justify-center text-lg sm:text-xl">
+                +
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ========== 메인 2열 레이아웃 ========== */}
+        <main className="w-full flex flex-col gap-4 sm:gap-5">
+          {/* 큰 화면에서는 2열, 작은 화면에서는 1열 */}
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)] gap-4 lg:gap-6 items-start">
+
+            {/* ---------- 왼쪽: 차트 + 요약 ---------- */}
+            <div className="flex flex-col gap-3 sm:gap-4">
+              {/* 종목 상세 + 차트 카드 */}
+              
+              <section className="w-full bg-zinc-100 rounded-2xl p-3 sm:p-4 md:p-5 flex flex-col gap-3 xl:h-[520px]">
+                {/* 종목 헤더 */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-wrap items-end gap-1.5">
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-medium text-black">
+                      애플
+                    </h2>
+                    <span className="text-sm sm:text-base md:text-lg text-black">
+                      (AAPL)
+                    </span>
+                  </div>
+                
+                  <span className="text-[10px] sm:text-xs font-medium text-black">
+                  {currentTime} KST
+                  </span>
+                  
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-2xl md:text-3xl font-medium text-black">
+                      267.99
+                    </span>
+                    <div className="flex items-center gap-1.5 text-red-600 text-sm md:text-base font-medium">
+                      <span>+3.1</span>
+                      <span>(+3.27%)</span>
+                      <div className="w-3 h-3 bg-red-600 rounded-sm" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 차트 영역: 해상도에 따라 높이 변화 */}
+                <div className="w-full flex-1 bg-white rounded-xl overflow-hidden">
+                  <TradingViewWidget />
+                </div>
+              </section>
+            </div>
+
+            {/* ---------- 오른쪽: 재무제표 카드 ---------- */}
+            <aside className="w-full bg-zinc-100 rounded-2xl px-4 sm:px-5 py-4 sm:py-5 flex flex-col gap-3 sm:gap-4 xl:h-[520px] overflow-y-auto">
+              {/* 수익성 */}
+              <section className="flex flex-col gap-2 sm:gap-3">
+                <h3 className="text-base sm:text-lg md:text-xl font-normal text-black">
+                  수익성
+                </h3>
+                <div className="w-full rounded-2xl overflow-hidden border border-stone-300">
+                  <div className="grid grid-cols-3 divide-x divide-stone-300 border-b border-stone-300">
+                    <Cell title="EPS" subtitle="주당순이익" value="12.5%" />
+                    <Cell title="ROE" subtitle="자기자본이익률" value="12.5%" />
+                    <Cell title="ROA" subtitle="총자산이익률" value="12.5%" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2">
+                    <Cell
+                      title="Operating Margin"
+                      subtitle="영업이익률"
+                      value="12.5%"
+                    />
+                    <Cell title="Net Margin" subtitle="순이익률" value="12.5%" />
+                  </div>
+                </div>
+              </section>
+
+              {/* 가치(밸류에이션) */}
+              <section className="flex flex-col gap-2 sm:gap-3">
+                <h3 className="text-base sm:text-lg md:text-xl font-normal text-black">
+                  가치(밸류에이션)
+                </h3>
+                <div className="w-full rounded-2xl overflow-hidden border border-stone-300 grid grid-cols-2">
+                  <Cell title="PER" subtitle="주가수익비율" value="20배" />
+                  <Cell title="PBR" subtitle="주가순자산비율" value="2배" />
+                  <Cell title="PSR" subtitle="주가매출비율" value="2배" />
+                  <Cell title="BPS" subtitle="주당순자산가치" value="12.5%" />
+                </div>
+              </section>
+
+              {/* 재무안정성 */}
+              <section className="flex flex-col gap-2 sm:gap-3">
+                <h3 className="text-base sm:text-lg md:text-xl font-normal text-black">
+                  재무안정성
+                </h3>
+                <div className="w-full rounded-2xl overflow-hidden border border-stone-300 grid grid-cols-1 sm:grid-cols-2">
+                  <Cell title="Debt Ratio" subtitle="부채비율" value="35%" />
+                  <Cell
+                    title="Interest Coverage Ratio"
+                    subtitle="이자보상비율"
+                    value="12.5%"
+                  />
+                </div>
+              </section>
+
+              {/* 유동성 */}
+              <section className="flex flex-col gap-2 sm:gap-3">
+                <h3 className="text-base sm:text-lg md:text-xl font-normal text-black">
+                  유동성
+                </h3>
+                <div className="w-full rounded-2xl overflow-hidden border border-stone-300 grid grid-cols-1 sm:grid-cols-2">
+                  <Cell title="Current Ratio" subtitle="유동비율" value="12.5%" />
+                  <Cell title="Quick Ratio" subtitle="당좌비율" value="12.5%" />
+                </div>
+              </section>
+            </aside>
+          </div>
+
+          {/* ========== 하단 분석 결과 영역 ========== */}
+          <section className="w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex items-center justify-center mt-2">
+            <button className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium">
+              분석 결과 보기
+            </button>
+          </section>
+        </main>
       </div>
+    </div>
+  );
+}
+
+/** 재무제표 공통 셀 */
+function Cell({
+  title,
+  subtitle,
+  value,
+}: {
+  title: string;
+  subtitle: string;
+  value: string;
+}) {
+  return (
+    <div className="p-2 sm:p-2.5 bg-white flex items-start justify-between gap-2">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-black text-xs sm:text-sm md:text-base font-medium">
+          {title}
+        </span>
+        <span className="text-black text-[10px] sm:text-[11px] md:text-xs">
+          {subtitle}
+        </span>
+      </div>
+      <span className="text-black text-xs sm:text-sm md:text-base font-medium whitespace-nowrap">
+        {value}
+      </span>
     </div>
   );
 }

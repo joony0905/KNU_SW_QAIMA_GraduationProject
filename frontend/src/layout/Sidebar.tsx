@@ -1,53 +1,54 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import {
+  Search,
+  Globe,
+  FileBarChart,
+  BookA,
+  CircleUserRound,
+} from "lucide-react";
+
+const navItems = [
+  { path: "/ping", icon: null, label: "소개" },
+  { path: "/feature/1", icon: Search, label: "심층분석" },
+  { path: "/feature/2", icon: Globe, label: "외부요인" },
+  { path: "/feature/3", icon: FileBarChart, label: "포트폴리오" },
+  { path: "/feature/4", icon: BookA, label: "사전" },
+];
 
 export default function Sidebar() {
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem("qaima_token");
-    navigate("/login");
-  };
-
   return (
-    <div className="overflow-hidden text-xs text-center bg-white max-w-24 text-neutral-800">
-      <div className="flex flex-col items-start px-4 pt-28 pb-96 w-full bg-gray-50 border border-solid border-zinc-200">
+    <div className="w-[90px] h-screen border-r-2 border-[#C6C6C6] bg-[#FDFDFD] flex flex-col items-center justify-center gap-[30px] py-8 fixed left-0 top-0 z-50">
+      {navItems.map((item) => (
         <NavLink
-          to="/ping"
-          className="flex flex-col justify-center items-start p-5 whitespace-nowrap bg-white rounded-lg border border-solid border-zinc-200 w-full"
+          key={item.path}
+          to={item.path}
+          className="flex flex-col items-center gap-[5px] p-[5px] w-[84px] rounded-[15px] hover:bg-[#D7D7D7]"
         >
-          <div>소개</div>
+          <div className="w-[50px] h-[50px] bg-gray-100 rounded-full flex items-center justify-center">
+            {item.icon ? (
+              <item.icon className="w-[30px] h-[30px] stroke-[2]" />
+            ) : (
+              <span className="text-xs font-bold">LOGO</span>
+            )}
+          </div>
+          <div className="text-black text-center text-[14px] font-normal">{item.label}</div>
         </NavLink>
-        <NavLink
-          to="/feature/1"
-          className="flex flex-col justify-center px-2.5 py-5 mt-6 bg-white rounded-lg border border-solid border-zinc-200 w-full"
-        >
-          <div>심층 분석</div>
-        </NavLink>
-        <NavLink
-          to="/feature/2"
-          className="flex flex-col justify-center px-2.5 py-5 mt-6 bg-white rounded-lg border border-solid border-zinc-200 w-full"
-        >
-          <div>외부 요인</div>
-        </NavLink>
-        <NavLink
-          to="/feature/3"
-          className="flex flex-col justify-center px-1.5 py-5 mt-5 whitespace-nowrap bg-white rounded-lg border border-solid border-zinc-200 w-full"
-        >
-          <div>포트폴리오</div>
-        </NavLink>
-        <NavLink
-          to="/feature/4"
-          className="flex flex-col justify-center px-6 py-5 mt-5 whitespace-nowrap bg-white rounded-lg border border-solid border-zinc-200 w-full"
-        >
-          <div>사전</div>
-        </NavLink>
-        <button
-          onClick={handleLogout}
-          className="flex flex-col justify-center px-4 py-5 mt-5 mb-0 whitespace-nowrap bg-white rounded-lg border border-solid border-zinc-200 w-full"
-        >
-          <div>내정보</div>
-        </button>
-      </div>
+      ))}
+      {/* 내정보(로그아웃)은 버튼 처리 */}
+      <button
+        onClick={() => {
+          localStorage.removeItem("qaima_token");
+          navigate("/login");
+        }}
+        className="flex flex-col items-center gap-[5px] p-[5px] w-[84px] rounded-[15px] hover:bg-[#D7D7D7]"
+      >
+        <div className="w-[50px] h-[50px] bg-gray-100 rounded-full flex items-center justify-center">
+          <CircleUserRound className="w-[30px] h-[30px] stroke-[2]" />
+        </div>
+        <div className="text-black text-center text-[16px] font-normal">내정보</div>
+      </button>
     </div>
   );
 }
