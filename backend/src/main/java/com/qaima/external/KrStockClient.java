@@ -1,8 +1,10 @@
 package com.qaima.external;
 
+import com.qaima.domain.Stock;
 import com.qaima.dto.KisResponseDto;
 import com.qaima.dto.KisStatResponseDto;
 import com.qaima.dto.MarketStackTickersResponse;
+import com.qaima.dto.StockDto;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,26 +13,25 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
 @Slf4j
 @Component
-
 public class KrStockClient {
 
     private final WebClient webClient;
 
-    @Value("${kis.base-url}")
-    private String baseUrl;
     @Value("${kis.app-key}")
     private String appKey;
+
     @Value("${kis.app-secret}")
     private String appSecret;
 
     private String cachedToken;
 
-    public KrStockClient(@Qualifier("defaultWebClient") WebClient webClient) {
+    public KrStockClient(@Qualifier("kisWebClient") WebClient webClient) {
         this.webClient = webClient;
     }
 
@@ -45,32 +46,67 @@ public class KrStockClient {
         body.put("appsecret", appSecret);
 
         return webClient.post()
-                .uri(baseUrl + "/oauth2/tokenP")
+                .uri("/oauth2/tokenP")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(body)
                 .retrieve()
                 .bodyToMono(KisResponseDto.class)
-                .map(response -> {
-                    this.cachedToken = "Bearer " + response.getAccessToken();
-                    return this.cachedToken;
+                .map(resp -> {
+                    cachedToken = "Bearer " + resp.getAccessToken();
+                    return cachedToken;
                 });
     }
 
-    public Mono<MarketStackTickersResponse.TickerData> fetchTickerMeta(String symbol) {
-        String cleanSymbol = symbol.replace(".XKRX", "").replace(".XKOS", "");
+    /**
+     * 한국 종목 실시간 시세 → StockDto
+     */
+    public Mono<StockDto> fetchStock(Stock stock) {
+        String code = stock.getStockCode();
 
         return getAccessToken()
                 .flatMap(token ->
                         webClient.get()
                                 .uri(uriBuilder -> uriBuilder
-                                        .scheme("https")
-                                        .host("openapi.koreainvestment.com")
-                                        .port(9443)
-                                        .path("/uapi/domestic-stock/v1/quotations/inquire-price")
+                                        .path("/api/domestic-stock/v1/quotations/inquire-price")
+                                        .queryParam("FID_COND_MRKT_DIV_CODE", "J")
+                                        .queryParam("FID_INPUT_ISCD", code)
+                                        .build()
+                                )
+                                .header("authorization", token)
+                                .header("appkey", appKey)
+                                .header("appsecret", appSecret)
+                                .header("tr_id", "FHKST01010100")
+                                .retrieve()
+                                .bodyToMono(KisStatResponseDto.class)
+                )
+                .flatMap(resp -> {
+                    KisStatResponseDto.Output o = resp.getOutput();
+                    if (o == null) {
+                        return Mono.error(new IllegalStateException("KIS output 없음"));
+                    }
+                    return Mono.just(mapToStockDto(stock, o));
+                });
+    }
+
+    /**
+     * 디버그용 티커 메타 (컨트롤러 /debug/ticker-meta 에서 사용)
+     * MarketStackTickersResponse.TickerData 형태로 맞춰줌
+     */
+    public Mono<MarketStackTickersResponse.TickerData> fetchTickerMeta(String symbol) {
+        String cleanSymbol = symbol
+                .replace(".XKRX", "")
+                .replace(".XKOS", "");
+
+        return getAccessToken()
+                .flatMap(token ->
+                        webClient.get()
+                                .uri(uriBuilder -> uriBuilder
+                                        .path("/api/domestic-stock/v1/quotations/inquire-price")
                                         .queryParam("FID_COND_MRKT_DIV_CODE", "J")
                                         .queryParam("FID_INPUT_ISCD", cleanSymbol)
-                                        .build())
-                                .header("Authorization", token)
+                                        .build()
+                                )
+                                .header("authorization", token)
                                 .header("appkey", appKey)
                                 .header("appsecret", appSecret)
                                 .header("tr_id", "FHKST01010100")
@@ -108,9 +144,6 @@ public class KrStockClient {
                         return Mono.empty();
                     }
 
-                    log.info("[KrStockClient] KIS 가격 매핑 완료: symbol={}, price={}, changeRate={}",
-                            symbol, data.getPrice(), data.getChangeRate());
-
                     return Mono.just(data);
                 })
                 .onErrorResume(e -> {
@@ -119,20 +152,21 @@ public class KrStockClient {
                 });
     }
 
+    // 필요하면 raw output용
     public Mono<KisStatResponseDto.Output> fetchKisStatRaw(String stockCode) {
         return getAccessToken()
                 .flatMap(token ->
                         webClient.get()
                                 .uri(uriBuilder -> uriBuilder
-                                        .path("/uapi/domestic-stock/v1/quotations/inquire-price")
-                                        .queryParam("FID_COND_MRKT_DIV_CODE", "J")  // 코스피, 코스닥 등 기존 코드와 동일하게
-                                        .queryParam("FID_INPUT_ISCD", stockCode)    // 종목코드
+                                        .path("/api/domestic-stock/v1/quotations/inquire-price")
+                                        .queryParam("FID_COND_MRKT_DIV_CODE", "J")
+                                        .queryParam("FID_INPUT_ISCD", stockCode)
                                         .build()
                                 )
                                 .header("authorization", token)
                                 .header("appkey", appKey)
                                 .header("appsecret", appSecret)
-                                .header("tr_id", "FHKST01010100") // 기존에 쓰던 tr_id 그대로
+                                .header("tr_id", "FHKST01010100")
                                 .retrieve()
                                 .bodyToMono(KisStatResponseDto.class)
                                 .flatMap(resp -> {
@@ -144,5 +178,41 @@ public class KrStockClient {
                 );
     }
 
+    private StockDto mapToStockDto(Stock s, KisStatResponseDto.Output o) {
+        Double price = parseDouble(o.getStck_prpr());
+        Double change = parseDouble(o.getPrdy_ctrt());
 
+        Long industryId = (s.getIndustry() != null)
+                ? s.getIndustry().getIndustryId()
+                : null;
+
+        return StockDto.builder()
+                .stockId(s.getStockId())
+                .stockCode(s.getStockCode())
+                .isin(s.getIsin())
+                .companyName(s.getCompanyName())
+                .exchangeId(s.getExchange().getExchangeId())
+                .exchangeCode(s.getExchange().getCode())
+                .assetType(s.getAssetType())
+                .currency(s.getCurrency())
+                .industryId(industryId)
+                .price(price)
+                .changeRate(change)
+                .listedAt(toDate(s.getListedAt()))
+                .delistedAt(toDate(s.getDelistedAt()))
+                .build();
+    }
+
+    private Double parseDouble(String x) {
+        try {
+            if (x == null || x.isBlank()) return null;
+            return Double.parseDouble(x);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String toDate(LocalDate d) {
+        return d != null ? d.toString() : null;
+    }
 }

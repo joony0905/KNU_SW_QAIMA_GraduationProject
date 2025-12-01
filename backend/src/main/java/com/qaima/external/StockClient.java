@@ -7,9 +7,12 @@ import reactor.core.publisher.Mono;
 
 public interface StockClient {
 
-    StockDto fetchStock(Stock stock);
+    // 종목 + 실시간 시세 조회 (KR/US 공통)
+    Mono<StockDto> fetchStock(Stock stock);
 
+    // 티커 메타정보 (디버그용)
     Mono<MarketStackTickersResponse.TickerData> fetchTickerMeta(String symbol);
-    Mono<MarketStackTickersResponse> fetchTickers();
 
+    // 전체 티커 리스트 (Marketstack 전용)
+    Mono<MarketStackTickersResponse> fetchTickers();
 }

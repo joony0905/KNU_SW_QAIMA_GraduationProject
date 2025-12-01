@@ -1,7 +1,7 @@
 // frontend/src/pages/StocksMockPage.tsx
 import TradingViewWidget from "../components/TradingViewWidget";
 import { useEffect, useState } from "react";
-import api from "../lib/apiClient"; // ✅ 추가
+import api from "../lib/apiClient";
 
 function useKSTTime() {
   const [time, setTime] = useState("");
