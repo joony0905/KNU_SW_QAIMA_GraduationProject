@@ -25,6 +25,8 @@ public class MarketStackTickersResponse {
         private Boolean has_intraday;       // intraday 데이터 보유 여부
         private Boolean has_eod;            // EOD 데이터 보유 여부
         private StockExchange stock_exchange;
+        private Double price;               // 현재가
+        private Double changeRate;          // 등락률 (%)
     }
 
     @Data
