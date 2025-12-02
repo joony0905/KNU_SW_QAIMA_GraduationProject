@@ -6,6 +6,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.CreationTimestamp;
+import java.time.Instant;
 
 @Getter
 @NoArgsConstructor
@@ -99,5 +102,13 @@ public class Financial {
 
     @Column(precision = 10, scale = 4)
     private BigDecimal pbr;
-        
+
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(nullable = false)
+    private Instant updatedAt;
+
 }
