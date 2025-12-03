@@ -1,10 +1,10 @@
 package com.qaima.external;
 
+import com.qaima.domain.Freq;
 import com.qaima.domain.Stock;
-import com.qaima.dto.KisResponseDto;
-import com.qaima.dto.KisStatResponseDto;
-import com.qaima.dto.MarketStackTickersResponse;
-import com.qaima.dto.StockDto;
+import com.qaima.dto.*;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,8 +13,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -67,7 +72,7 @@ public class KrStockClient {
                 .flatMap(token ->
                         webClient.get()
                                 .uri(uriBuilder -> uriBuilder
-                                        .path("/api/domestic-stock/v1/quotations/inquire-price")
+                                        .path("/uapi/domestic-stock/v1/quotations/inquire-price")
                                         .queryParam("FID_COND_MRKT_DIV_CODE", "J")
                                         .queryParam("FID_INPUT_ISCD", code)
                                         .build()
@@ -75,7 +80,7 @@ public class KrStockClient {
                                 .header("authorization", token)
                                 .header("appkey", appKey)
                                 .header("appsecret", appSecret)
-                                .header("tr_id", "FHKST01010100")
+                                .header("tr_id", "VHKST03010100")
                                 .retrieve()
                                 .bodyToMono(KisStatResponseDto.class)
                 )
@@ -91,6 +96,7 @@ public class KrStockClient {
     /**
      * 디버그용 티커 메타 (컨트롤러 /debug/ticker-meta 에서 사용)
      * MarketStackTickersResponse.TickerData 형태로 맞춰줌
+     * 전체적으로 활용하게끔 수정함
      */
     public Mono<MarketStackTickersResponse.TickerData> fetchTickerMeta(String symbol) {
         String cleanSymbol = symbol
@@ -109,7 +115,7 @@ public class KrStockClient {
                                 .header("authorization", token)
                                 .header("appkey", appKey)
                                 .header("appsecret", appSecret)
-                                .header("tr_id", "FHKST01010100")
+                                .header("tr_id", "VHKST03010100")
                                 .retrieve()
                                 .bodyToMono(KisStatResponseDto.class)
                 )
@@ -134,10 +140,10 @@ public class KrStockClient {
 
                     try {
                         if (o.getStck_prpr() != null && !o.getStck_prpr().isBlank()) {
-                            data.setPrice(Double.parseDouble(o.getStck_prpr()));
+                            data.setPrice(parseBig(o.getStck_prpr()));
                         }
                         if (o.getPrdy_ctrt() != null && !o.getPrdy_ctrt().isBlank()) {
-                            data.setChangeRate(Double.parseDouble(o.getPrdy_ctrt()));
+                            data.setChangeRate(parseBig(o.getPrdy_ctrt()));
                         }
                     } catch (NumberFormatException e) {
                         log.error("[KrStockClient] 가격/등락률 파싱 에러: {}", e.getMessage());
@@ -152,7 +158,7 @@ public class KrStockClient {
                 });
     }
 
-    // 필요하면 raw output용
+    // raw output용
     public Mono<KisStatResponseDto.Output> fetchKisStatRaw(String stockCode) {
         return getAccessToken()
                 .flatMap(token ->
@@ -166,7 +172,7 @@ public class KrStockClient {
                                 .header("authorization", token)
                                 .header("appkey", appKey)
                                 .header("appsecret", appSecret)
-                                .header("tr_id", "FHKST01010100")
+                                .header("tr_id", "VHKST03010100")
                                 .retrieve()
                                 .bodyToMono(KisStatResponseDto.class)
                                 .flatMap(resp -> {
@@ -178,9 +184,13 @@ public class KrStockClient {
                 );
     }
 
+    //------------------------------------------
+
+
+    //stock, stockdto 매핑
     private StockDto mapToStockDto(Stock s, KisStatResponseDto.Output o) {
-        Double price = parseDouble(o.getStck_prpr());
-        Double change = parseDouble(o.getPrdy_ctrt());
+        BigDecimal price = parseBig(o.getStck_prpr());
+        BigDecimal change = parseBig(o.getPrdy_ctrt());
 
         Long industryId = (s.getIndustry() != null)
                 ? s.getIndustry().getIndustryId()
@@ -198,18 +208,164 @@ public class KrStockClient {
                 .industryId(industryId)
                 .price(price)
                 .changeRate(change)
-                .listedAt(toDate(s.getListedAt()))
-                .delistedAt(toDate(s.getDelistedAt()))
+                .listedAt(s.getListedAt())
+                .delistedAt(s.getDelistedAt())
                 .build();
     }
 
-    private Double parseDouble(String x) {
-        try {
-            if (x == null || x.isBlank()) return null;
-            return Double.parseDouble(x);
-        } catch (Exception e) {
-            return null;
+
+    /**
+     * KIS 캔들(OHLCV) 조회
+     * - freq: QAIMA 도메인 Freq → KIS interval 코드 매핑
+     * - from/to: 일단 날짜 기준(일봉)으로 사용하는 걸 기본으로 두고, 필요하면 시분까지 확장
+     */
+    public Mono<List<PriceOhlcvDto>> fetchCandles(
+            String stockCode,
+            String marketDivCode,
+            Freq freq,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        String interval = toKisInterval(freq);
+
+        return getAccessToken()
+                .flatMap(token ->
+                        webClient.get()
+                                .uri(uriBuilder -> uriBuilder
+                                        .path("/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice")
+                                        .queryParam("FID_COND_MRKT_DIV_CODE", "J") // 추후 J에서 확장
+                                        .queryParam("FID_INPUT_ISCD", stockCode)
+                                        .queryParam("FID_PERIOD_DIV_CODE", interval) // "D","W","M"
+                                        .queryParam("FID_INPUT_DATE_1", toKisDateString(from))
+                                        .queryParam("FID_INPUT_DATE_2", toKisDateString(to))
+                                        .build()
+                                )
+                                .header("authorization", token)
+                                .header("appkey", appKey)
+                                .header("appsecret", appSecret)
+                                .header("tr_id", "VHKST03010100")
+                                .header("custtype", "P")
+                                .retrieve()
+                                // HTTP 4xx/5xx면 바로 에러로
+                                .onStatus(
+                                        status -> status.is4xxClientError() || status.is5xxServerError(),
+                                        resp -> resp.bodyToMono(String.class)
+                                                .flatMap(body -> {
+                                                    log.error("[KrStockClient] KIS candles HTTP error. status={}, body={}",
+                                                            resp.statusCode(), body);
+                                                    return Mono.error(new IllegalStateException(
+                                                            "KIS candles HTTP error: " + body
+                                                    ));
+                                                })
+                                )
+                                .bodyToMono(KisCandlesResponse.class)
+                                // KIS 비즈니스 코드 체크 (rt_cd != "0" 또는 빈 값 → 에러 처리)
+                                .flatMap(resp -> {
+                                    log.info("[KIS CANDLES RAW] rt_cd={}, msg_cd={}, msg1={}, candles_size={}",
+                                            resp.getRt_cd(),
+                                            resp.getMsg_cd(),
+                                            resp.getMsg1(),
+                                            resp.getOutput2() == null ? null : resp.getOutput2().size()
+                                    );
+
+                                    // 데이터 못받아옴 -> rt_cd="", output2=null이면 에러
+                                    if (resp.getRt_cd() == null ||
+                                            resp.getRt_cd().isBlank() ||
+                                            !"0".equals(resp.getRt_cd())) {
+
+                                        String msg = String.format(
+                                                "KIS candles API biz error. rt_cd=%s, msg_cd=%s, msg1=%s",
+                                                resp.getRt_cd(), resp.getMsg_cd(), resp.getMsg1()
+                                        );
+                                        return Mono.error(new IllegalStateException(msg));
+                                    }
+
+                                    return Mono.just(resp);
+                                })
+                                .map(this::mapToPriceOhlcvDtoList)
+                );
+    }
+
+
+
+    private String toKisInterval(Freq freq) {
+        return switch (freq) {
+            case ONE_D -> "D";
+            case ONE_W -> "W";
+            case ONE_M -> "M";
+            case ONE_H -> "60M";   // 분봉용 엔드포인트 쓸때 분리
+            default -> "D";
+        };
+    }
+
+
+    private List<PriceOhlcvDto> mapToPriceOhlcvDtoList(KisCandlesResponse resp) {
+
+        if (resp == null || resp.getOutput2() == null) {
+            return List.of();
         }
+
+        return resp.getOutput2().stream()
+                .map(c -> PriceOhlcvDto.builder()
+                        .ts(parseKisDate(c.getStck_bsop_date()))
+                        .open(parseBig(c.getStck_oprc()))
+                        .high(parseBig(c.getStck_hgpr()))
+                        .low(parseBig(c.getStck_lwpr()))
+                        .close(parseBig(c.getStck_clpr()))
+                        .volume(parseBig(c.getAcml_vol()))
+                        .build()
+                )
+                .toList();
+    }
+
+    // 내부 응답 DTO
+    @Getter
+    @Setter
+    public static class KisCandlesResponse {
+        private String rt_cd;
+        private String msg_cd;
+        private String msg1;
+        private Output1 output1;
+        private List<Candle> output2;
+
+        @Getter @Setter
+        public static class Output1 {
+            private String stck_cntg_hour;
+            private String stck_prpr;
+            private String stck_oprc;
+            private String stck_hgpr;
+            private String stck_lwpr;
+        }
+
+        @Getter @Setter
+        public static class Candle {
+            private String stck_bsop_date; // 날짜 yyyyMMdd
+            private String stck_oprc;      // 시가
+            private String stck_hgpr;      // 고가
+            private String stck_lwpr;      // 저가
+            private String stck_clpr;      // 종가
+            private String acml_vol;       // 거래량
+        }
+    }
+
+
+    private BigDecimal parseBig(String x) {
+        try {
+            if (x == null || x.isBlank()) return BigDecimal.ZERO;
+            return new BigDecimal(x.trim());
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+
+    private OffsetDateTime parseKisDate(String yyyymmdd) {
+        LocalDate date = LocalDate.parse(yyyymmdd, DateTimeFormatter.ofPattern("yyyyMMdd"));
+        return date.atStartOfDay().atOffset(ZoneOffset.UTC);
+    }
+
+    private String toKisDateString(OffsetDateTime odt) {
+        return odt.toLocalDate().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
     }
 
     private String toDate(LocalDate d) {

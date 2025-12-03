@@ -9,8 +9,19 @@ import lombok.*;
 @Builder
 public class FeatOneResponseTextDto {
 
-    // LLM이 생성한 분석 텍스트
-    private String analysisText;
+    private Long stockId;       // 선택사항
+    private String stockCode;   // 선택사항
 
-    //TODO 나중에 세부 섹션(요약/리스크/투자포인트 등) 쪼개고 구체화할때 필드 추가
+    private String summary;     // 한 줄 요약
+    private String business;    // 사업/비즈니스 설명
+    private String financial;   // 재무 상태/지표 해석
+    private String valuation;   // 밸류에이션/밴드 설명
+    private String risk;        // 리스크 요인
+    private String outlook;     // 전망/코멘트
+
+    // 프롬프트 디버깅용
+    private String rawPrompt;
+
+    // summary~outlook 전부 합친 완성본 텍스트 (편의용)
+    private String analysisText;
 }

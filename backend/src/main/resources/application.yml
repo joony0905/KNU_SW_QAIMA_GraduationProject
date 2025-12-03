@@ -1,5 +1,5 @@
 analysis:
-  base-url: "http://localhost:8000"
+  base-url: "http://localhost:8001"
 
 spring:
   profiles:
@@ -10,3 +10,8 @@ spring:
 
   config:
     import: optional:application-secret.yml
+
+logging:
+  level:
+    reactor.netty.http.client: DEBUG
+    org.springframework.web.reactive.function.client: TRACE

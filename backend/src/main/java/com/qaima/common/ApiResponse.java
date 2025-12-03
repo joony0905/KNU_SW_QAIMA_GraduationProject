@@ -1,6 +1,9 @@
 package com.qaima.common;
 
+import com.qaima.dto.FeatOneResponseTextDto;
+
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -41,6 +44,20 @@ public class ApiResponse<T> {
         ApiError err = new ApiError(code, message);
         return new ApiResponse<>(meta, null, List.of(err));
     }
+
+    public static <T> ApiResponse<T> internalError(String code, String message) {
+        ApiError error = new ApiError(code, message);
+        return new ApiResponse<>(
+                Meta.failure(),   // status = failure, timestamp, requestId 생성
+                null,                // data
+                List.of(error)       // errors
+        );
+    }
+
+    public boolean isSuccess() {
+        return meta != null && "success".equalsIgnoreCase(meta.getStatus());
+    }
+
 
     public Meta getMeta() { return meta; }
     public void setMeta(Meta meta) { this.meta = meta; }

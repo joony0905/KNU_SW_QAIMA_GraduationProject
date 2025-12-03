@@ -11,9 +11,7 @@ import java.util.Map;
 @AllArgsConstructor
 @Builder
 public class FeatOneRequestDto {
-
-    private String stockCode;
-    private String companyName;
+    private StockDto stock;
 
     // 차트 / 지표 / 재무데이터 FastAPI에 넘길 때 쓰는 페이로드
     private List<PriceOhlcvDto> candles;

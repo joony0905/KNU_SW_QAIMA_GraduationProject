@@ -1,9 +1,13 @@
 package com.qaima.external;
 
+import com.qaima.common.ApiResponse;
 import com.qaima.domain.Stock;
 import com.qaima.dto.MarketStackTickersResponse;
+import com.qaima.dto.PriceOhlcvDto;
 import com.qaima.dto.StockDto;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 public interface StockClient {
 
@@ -11,7 +15,7 @@ public interface StockClient {
     Mono<StockDto> fetchStock(Stock stock);
 
     // 티커 메타정보 (디버그용)
-    Mono<MarketStackTickersResponse.TickerData> fetchTickerMeta(String symbol);
+    Mono<ApiResponse<MarketStackTickersResponse.TickerData>> fetchTickerMeta(String symbol);
 
     // 전체 티커 리스트 (Marketstack 전용)
     Mono<MarketStackTickersResponse> fetchTickers();

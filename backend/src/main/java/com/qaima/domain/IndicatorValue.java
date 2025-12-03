@@ -13,7 +13,7 @@ import java.time.OffsetDateTime;
         name = "indicator_value",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_indicator_unique",
-                columnNames = {"stock_id", "ts", "freq", "key"}
+                columnNames = {"stock_id", "ts", "freq", "indicator_key"}
         )
 )
 @Getter
@@ -39,12 +39,12 @@ public class IndicatorValue {
     @Column(name = "freq", nullable = false)
     private Freq freq;
 
-    @Column(name = "key", nullable = false, length = 50)
+    @Column(name = "indicator_key", nullable = false, length = 50)
     private String key; // "STOCHRSI_14_3_3", "BB_20_2" 등
 
     @Column(name = "value_num", precision = 20, scale = 8)
     private BigDecimal valueNum;
 
-    @Column(name = "value_json", columnDefinition = "jsonb")
+    @Column(name = "value_json")//, columnDefinition = "jsonb")
     private String valueJson; // JSONB 문자열
 }

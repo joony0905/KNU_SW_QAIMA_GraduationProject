@@ -1,10 +1,9 @@
 package com.qaima.dto;
-
-import com.qaima.domain.Stock;
 import lombok.*;
 
 import java.util.List;
 
+//FastAPI 분석 텍스트 + DB 데이터들을 한 번에 묶어서 프론트로 보내기 위한 최종 Response DTO
 @Getter
 @Setter
 @NoArgsConstructor
@@ -12,9 +11,7 @@ import java.util.List;
 @Builder
 public class FeatOneResponseDataDto {
 
-    private String stockCode;
-    private String companyName;
-    private String exchangeCode;
+    private StockDto stock;
 
     // 차트
     private List<PriceOhlcvDto> candles;
@@ -26,6 +23,8 @@ public class FeatOneResponseDataDto {
     // 재무 요약 (최근 N개) - finan에서 의미 있는 지표만
     private List<FinancialSummaryDto> financials;
 
-    // LLM 분석 결과 (FastAPI → GPT) 아직 없으면 null
-    private String analysisText;
+    // LLM 분석 결과 (FastAPI → GPT)
+    private FeatOneResponseTextDto analysis;
+
+
 }

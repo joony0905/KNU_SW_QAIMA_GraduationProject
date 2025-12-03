@@ -1,5 +1,6 @@
 package com.qaima.api.stock;
 
+import com.qaima.common.ApiResponse;
 import com.qaima.dto.MarketStackTickersResponse;
 import com.qaima.dto.StockDto;
 import com.qaima.external.StockClient;
@@ -22,8 +23,14 @@ public class StockController {
         return stockService.getStockWithRealtime(stockId);
     }
 
+    @GetMapping("/code/{stockCode}")
+    public Mono<StockDto> getStockByCode(@PathVariable String stockCode) {
+        return stockService.getStockWithRealtimeByCode(stockCode);
+    }
+
+
     @GetMapping("/debug/ticker-meta")
-    public Mono<MarketStackTickersResponse.TickerData> getTickerMeta(
+    public Mono<ApiResponse<MarketStackTickersResponse.TickerData>> getTickerMeta(
             @RequestParam String symbol
     ) {
         return stockClient.fetchTickerMeta(symbol);

@@ -2,6 +2,11 @@ package com.qaima.dto;
 import lombok.Builder;
 import lombok.Data;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.Date;
+
 //application.yml에 snake_case로 json 자동변환하기때문에 erd내 변수명이랑 동일하게 json 보낼수있음
 @Data
 @Builder
@@ -31,10 +36,10 @@ public class StockDto {
     private String industryCode;
     ** */
 
-    private Double price;               // 현재가
-    private Double changeRate;          // 등락률 (%)
+    private BigDecimal price;               // 현재가
+    private BigDecimal changeRate;          // 등락률 (%)
 
-    private String listedAt;            // yyyy-MM-dd
-    private String delistedAt;          // yyyy-MM-dd or null
+    private LocalDate listedAt;            // yyyy-MM-dd
+    private LocalDate delistedAt;          // yyyy-MM-dd or null
 
 }
