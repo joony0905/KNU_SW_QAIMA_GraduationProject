@@ -1,7 +1,7 @@
 package com.qaima.dto;
 
 import lombok.*;
-
+import java.time.LocalDate;
 import java.math.BigDecimal;
 
 @Getter
@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class FinancialDto {
 
+    private Long financialId;
     private Long stockId;
     private String ticker;
     private String companyName;
@@ -18,6 +19,7 @@ public class FinancialDto {
     private Integer year;
     private Integer quarter;
     private String periodType; // "A", "Q", "TTM"
+    private LocalDate reportDate;
 
     // 규모(원 단위) 지표들
     private BigDecimal revenue;
