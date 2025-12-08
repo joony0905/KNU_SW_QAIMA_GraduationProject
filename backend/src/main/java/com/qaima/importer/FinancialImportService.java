@@ -35,7 +35,6 @@ public class FinancialImportService {
     public void importFromCsv(Path csvPath) throws IOException {
         try (BufferedReader reader = Files.newBufferedReader(csvPath, StandardCharsets.UTF_8)) {
 
-            // 1) 헤더 파싱
             String headerLine = reader.readLine();
             if (headerLine == null) {
                 log.warn("빈 CSV 파일입니다: {}", csvPath);
@@ -43,14 +42,13 @@ public class FinancialImportService {
             }
             Map<String, Integer> idx = buildHeaderIndex(headerLine);
 
-            // 2) 본문 라인 반복
             String line;
             int lineNo = 1;
             while ((line = reader.readLine()) != null) {
                 lineNo++;
                 if (line.isBlank()) continue;
 
-                String[] cols = line.split(",", -1); // 빈 컬럼도 유지
+                String[] cols = line.split(",", -1);
 
                 try {
                     importSingleRow(idx, cols);
