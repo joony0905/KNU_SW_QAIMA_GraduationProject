@@ -437,7 +437,7 @@ export default function StocksMockPage() {
                     </span>
                     <div className="flex items-center gap-1.5 text-red-600 text-sm md:text-base font-medium">
                       <span>{mainStock.change}</span>
-                      <span>({mainStock.changeRate}%)</span>
+                      <span>({mainStock.changeRate})</span>
                       <div className="w-3 h-3 bg-red-600 rounded-sm" />
                     </div>
                   </div>
