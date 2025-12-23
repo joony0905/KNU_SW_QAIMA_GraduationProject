@@ -36,6 +36,7 @@ export default function StocksMockPage() {
   const handleSearch = (value: string) => {
     console.log("검색 실행:", value);
     // TODO: 선택된 종목으로 API 호출 연결
+    setHasSelectedStock(true);
   };
 
   const [analysisResult, setAnalysisResult] = useState<any>(null);
@@ -43,6 +44,7 @@ export default function StocksMockPage() {
   const [err, setErr] = useState("");
 
   const [activeTab, setActiveTab] = useState<"재무제표" | "공매도">("재무제표");
+  const [hasSelectedStock, setHasSelectedStock] = useState(false);
 
   const handleAnalyzeClick = async () => {
     setLoading(true);
@@ -201,6 +203,11 @@ export default function StocksMockPage() {
     return () =>
       document.removeEventListener("click", handleClickOutsideTopic);
   }, []);
+  // mainStock용 색/방향 계산 (StockCard와 동일한 규칙)
+  const mainColorClass = getColorClass(mainStock.changeRate);
+  const mainNumericChange = Number(mainStock.change.replace(/,/g, "").trim());
+  const mainDisplayRate =
+  mainNumericChange === 0 ? "0.00%" : mainStock.changeRate;
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
@@ -382,6 +389,7 @@ export default function StocksMockPage() {
                     });
 
                     setIsOpen(false);
+                    setHasSelectedStock(true);
                   }}
                   className="w-full text-left"
                 >
@@ -400,6 +408,7 @@ export default function StocksMockPage() {
         )}
 
         {/* ========== 메인 2열 레이아웃 ========== */}
+      {hasSelectedStock && (
         <main className="w-full flex flex-col gap-4 sm:gap-5">
           <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)] gap-4 lg:gap-6 items-start">
             {/* ---------- 왼쪽: 차트 + 요약 ---------- */}
@@ -435,10 +444,43 @@ export default function StocksMockPage() {
                     <span className="text-2xl md:text-3xl font-medium text-black">
                       {mainStock.price}
                     </span>
-                    <div className="flex items-center gap-1.5 text-red-600 text-sm md:text-base font-medium">
-                      <span>{mainStock.change}</span>
-                      <span>({mainStock.changeRate})</span>
-                      <div className="w-3 h-3 bg-red-600 rounded-sm" />
+
+                    <div className="flex items-center gap-1.5 text-sm md:text-base font-medium">
+                      {/* 금액 + 퍼센트 색은 워치리스트와 동일하게 */}
+                      <span className={mainColorClass}>{mainStock.change}</span>
+                      <span className={mainColorClass}>({mainDisplayRate})</span>
+
+                      {/* 방향 표시: 상승/하락/보합 → StockCard 삼각형 그대로 */}
+                      {mainNumericChange > 0 && (
+                        <div
+                          className={`${mainColorClass} w-0 h-0 
+                            border-l-[6px] border-r-[6px] 
+                            border-b-[9px] border-transparent 
+                            border-b-current`}
+                        />
+                      )}
+
+                      {mainNumericChange < 0 && (
+                        <div
+                          className={`${mainColorClass} w-0 h-0 
+                            border-l-[6px] border-r-[6px] 
+                            border-t-[9px] border-transparent 
+                            border-t-current`}
+                        />
+                      )}
+
+                      {mainNumericChange === 0 && (
+                        <span
+                          className={`
+                            ${mainColorClass}
+                            text-xl sm:text-2xl
+                            font-extrabold
+                            leading-none
+                          `}
+                        >
+                          -
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -630,6 +672,7 @@ export default function StocksMockPage() {
             )}
           </section>
         </main>
+      )}
 
         {/* 토스트 메시지 */}
         {toast.visible && (
