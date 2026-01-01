@@ -34,4 +34,14 @@ public class WebClientConfig {
                 .build();
     }
 
+    // FastAPI 분석 서버 전용
+    @Bean(name = "analysisWebClient")
+    public WebClient analysisWebClient(
+            @Value("${analysis.base-url}") String baseUrl
+    ) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
+
 }
