@@ -7,6 +7,7 @@ import StocksMockPage from "./pages/StocksMockPage";
 import Feature2MockPage from "./pages/Feature2MockPage";
 import PortfolioMockPage from "./pages/PortfolioMockPage";
 import DictionaryMockPage from "./pages/DictionaryMockPage";
+import SignupPage from "./pages/SignupPage";
 
 export default function App() {
   return (
@@ -23,6 +24,9 @@ export default function App() {
           </MainLayout>
         }
       />
+      
+      <Route path="/signup" element={<SignupPage />} />
+
       <Route
         path="/ping"
         element={
