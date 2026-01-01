@@ -9,6 +9,7 @@ import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.IndicatorValueRepository;
 import com.qaima.repository.PriceOhlcvRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
@@ -64,10 +65,14 @@ public class FeatOneService {
                         .subscribeOn(Schedulers.boundedElastic())
         );
 
-        // 4. 재무 (현재는 최근 N개가 아니라 repository 메서드 정의에 따름)
+        int financialLimit = 5; // 추후 수정, test용
+
         Mono<List<Financial>> financialsMono = stockMono.flatMap(stock ->
                 Mono.fromCallable(() ->
-                                financialRepository.findTopByStockOrderByReportDateDescVersionDesc(stock)
+                                financialRepository.findByStockOrderByReportDateDescVersionDesc(
+                                        stock,
+                                        PageRequest.of(0, financialLimit)
+                                )
                         )
                         .subscribeOn(Schedulers.boundedElastic())
         );
