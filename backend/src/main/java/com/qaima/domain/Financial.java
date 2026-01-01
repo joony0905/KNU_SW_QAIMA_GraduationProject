@@ -4,24 +4,32 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Getter
 @NoArgsConstructor
 @Setter
 @Entity
-@Table(name = "financial",
-      uniqueConstraints = {
-    @UniqueConstraint(
-            name = "uk_stock_report_version",
-            columnNames = {"stock_id", "report_date", "version"}
-    )
-},
-indexes = {
-@Index(name = "idx_financials_stock_fiscal_period", columnList = "stock_id, fiscal_year, fiscal_quarter")
-    })
-
+@Table(
+        name = "financial",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_stock_fiscal_period",
+                        columnNames = {"stock_id", "fiscal_year", "fiscal_quarter", "period_type"}
+                )
+        },
+        indexes = {
+                @Index(
+                        name = "idx_financials_stock_fiscal_period",
+                        columnList = "stock_id, period_type, fiscal_year, fiscal_quarter"
+                )
+        }
+)
 public class Financial {
 
     @Id
@@ -35,20 +43,26 @@ public class Financial {
     @Column(nullable = false)
     private LocalDate reportDate;
 
-    @Column(nullable = false, columnDefinition = "int default 1")
-    private int version;
-
+    // 애플리케이션에서 기본값 1로 사용
     @Column(nullable = false)
+    private int version = 1;
+
+    @Column(name = "fiscal_year", nullable = false)
     private int fiscalYear;
 
+    @Column(name = "fiscal_quarter")
     private Integer fiscalQuarter;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    @Column(name = "period_type", nullable = false, length = 10)
     private PeriodType periodType;
 
     private LocalDate filingDate;
+
+    @Column(length = 10)
     private String currency;
+
+    @Column(length = 50)
     private String source;
 
     @Column(precision = 20, scale = 2)
@@ -73,7 +87,7 @@ public class Financial {
     private BigDecimal equity;
 
     @Column(precision = 20, scale = 2)
-    private BigDecimal capitalStock;
+    private BigDecimal capitalStock;          // 상장주식수
 
     @Column(precision = 20, scale = 2)
     private BigDecimal retainedEarnings;
@@ -84,7 +98,7 @@ public class Financial {
     @Column(precision = 20, scale = 2)
     private BigDecimal marketCap;
 
-    // --- [파생] 지표 필드들 ---
+    // 파생 지표들
     @Column(precision = 10, scale = 4)
     private BigDecimal operatingMargin;
 
@@ -99,5 +113,12 @@ public class Financial {
 
     @Column(precision = 10, scale = 4)
     private BigDecimal pbr;
-        
+
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(nullable = false)
+    private Instant updatedAt;
 }
