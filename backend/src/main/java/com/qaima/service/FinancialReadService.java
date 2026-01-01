@@ -27,7 +27,7 @@ public class FinancialReadService {
      */
     @Transactional(readOnly = true)
     public List<FinancialDto> getAnnualForLastNYears(String stockCode, int years, LocalDate asOfDate) {
-        Stock stock = stockRepository.findByStockCode(stockCode)
+        Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode));
 
         int toYear = (asOfDate != null ? asOfDate : LocalDate.now()).getYear();
@@ -51,8 +51,7 @@ public class FinancialReadService {
      */
     @Transactional(readOnly = true)
     public List<FinancialDto> getAnnualForYear(String stockCode, int year) {
-        // ✅ 여기도 동일하게 수정
-        Stock stock = stockRepository.findByStockCode(stockCode)
+        Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode));
 
         List<Financial> financials = financialRepository

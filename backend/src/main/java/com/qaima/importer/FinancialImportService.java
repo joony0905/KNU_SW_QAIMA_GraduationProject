@@ -78,7 +78,7 @@ public class FinancialImportService {
             throw new IllegalArgumentException("stock_code 가 비어 있습니다.");
         }
 
-        Stock stock = stockRepository.findByStockCode(stockCode)
+        Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
                 .orElseThrow(() -> new IllegalArgumentException("stock 테이블에 없는 stock_code: " + stockCode));
 
         Financial f = new Financial();

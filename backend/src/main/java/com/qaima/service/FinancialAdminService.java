@@ -24,7 +24,7 @@ public class FinancialAdminService {
 
     @Transactional
     public FinancialDto create(String stockCode, FinancialDto dto) {
-        Stock stock = stockRepository.findByStockCode(stockCode)
+        Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode));
 
         if (dto.getYear() == null) {
