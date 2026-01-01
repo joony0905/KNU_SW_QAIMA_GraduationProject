@@ -53,4 +53,5 @@ public class Stock {
 
     private LocalDate listedAt;
     private LocalDate delistedAt;
+
 }

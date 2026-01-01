@@ -1,6 +1,7 @@
 // frontend/src/pages/StocksMockPage.tsx
 import TradingViewWidget from "../components/TradingViewWidget";
 import { useEffect, useState } from "react";
+import api from "../lib/apiClient";
 
 function useKSTTime() {
   const [time, setTime] = useState("");
@@ -29,6 +30,29 @@ function useKSTTime() {
 
 export default function StocksMockPage() {
   const currentTime = useKSTTime();
+
+  // ✅ 분석 결과 영역 상태
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
+  // ✅ 버튼 클릭 시 API 호출
+  const handleAnalyzeClick = async () => {
+    setLoading(true);
+    setErr("");
+    setAnalysisResult(null);
+
+    try {
+      // 백엔드 라우트에 맞게 경로만 조정
+      const res = await api.get("/api/v1/stocks/marketstack/ticker/AAPL");
+      setAnalysisResult(res);
+    } catch (e: any) {
+      setErr(e?.message || "요청 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
       {/* 해상도별 최대 폭 조절 */}
@@ -107,7 +131,6 @@ export default function StocksMockPage() {
             {/* ---------- 왼쪽: 차트 + 요약 ---------- */}
             <div className="flex flex-col gap-3 sm:gap-4">
               {/* 종목 상세 + 차트 카드 */}
-              
               <section className="w-full bg-zinc-100 rounded-2xl p-3 sm:p-4 md:p-5 flex flex-col gap-3 xl:h-[520px]">
                 {/* 종목 헤더 */}
                 <div className="flex flex-col gap-1.5">
@@ -119,11 +142,11 @@ export default function StocksMockPage() {
                       (AAPL)
                     </span>
                   </div>
-                
+
                   <span className="text-[10px] sm:text-xs font-medium text-black">
-                  {currentTime} KST
+                    {currentTime} KST
                   </span>
-                  
+
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-2xl md:text-3xl font-medium text-black">
                       267.99
@@ -209,10 +232,34 @@ export default function StocksMockPage() {
           </div>
 
           {/* ========== 하단 분석 결과 영역 ========== */}
-          <section className="w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex items-center justify-center mt-2">
-            <button className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium">
+          <section className="w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex flex-col items-center justify-center gap-4 mt-2">
+            <button
+              onClick={handleAnalyzeClick}
+              className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium"
+            >
               분석 결과 보기
             </button>
+
+            {/* 로딩 */}
+            {loading && (
+              <p className="text-sm sm:text-base text-gray-600">
+                분석 중입니다...
+              </p>
+            )}
+
+            {/* 에러 */}
+            {err && (
+              <p className="text-sm sm:text-base text-red-600">
+                {err}
+              </p>
+            )}
+
+            {/* JSON 결과 */}
+            {analysisResult && (
+              <pre className="w-[90%] max-w-4xl bg-[#020617] text-white text-xs sm:text-sm p-4 sm:p-5 rounded-xl overflow-x-auto whitespace-pre-wrap">
+{JSON.stringify(analysisResult, null, 2)}
+              </pre>
+            )}
           </section>
         </main>
       </div>

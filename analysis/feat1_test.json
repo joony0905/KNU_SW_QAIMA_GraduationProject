@@ -1,0 +1,40 @@
+{
+  "stock": {
+    "stock_id": 1,
+    "stock_code": "005930",
+    "isin": "KR7005930003",
+    "company_name": "삼성전자",
+    "exchange_id": 1,
+    "exchange_code": "XKRX",
+    "asset_type": "EQUITY",
+    "currency": "KRW",
+    "industry_id": 10,
+    "listed_at": "1975-06-11",
+    "delisted_at": null
+  },
+  "financials": [
+    {
+      "stock_id": 1,
+      "fiscal_year": 2024,
+      "fiscal_quarter": 3,
+      "period_type": "Q",
+      "report_date": "2024-09-30",
+      "filing_date": "2024-10-31",
+      "revenue": 100000000000.0,
+      "operating_income": 12000000000.0,
+      "net_income": 9000000000.0,
+      "assets": 300000000000.0,
+      "liabilities": 100000000000.0,
+      "equity": 200000000000.0,
+      "operating_margin": 0.12,
+      "net_margin": 0.09,
+      "roe": 0.15,
+      "per": 12.3,
+      "pbr": 1.5,
+      "currency": "KRW"
+    }
+  ],
+  "indicators": [],
+  "output_language": "ko",
+  "prompt_version": "v1-dev"
+}

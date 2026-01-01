@@ -1,5 +1,6 @@
 package com.qaima.api.StockDebugController;
 
+import com.qaima.common.ApiResponse;
 import com.qaima.dto.MarketStackTickersResponse;
 import com.qaima.external.StockApiClient;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,9 @@ public class StockDebugController {
     private final StockApiClient stockApiClient;
 
     @GetMapping("/api/debug/ticker-meta")
-    public Mono<MarketStackTickersResponse.TickerData> debugTicker(@RequestParam String symbol) {
+    public Mono<ApiResponse<MarketStackTickersResponse.TickerData>> debugTicker(
+            @RequestParam String symbol
+    ) {
         return stockApiClient.fetchTickerMeta(symbol);
     }
 }
