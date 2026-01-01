@@ -1,17 +1,18 @@
 package com.qaima.service;
 
 import com.qaima.domain.User;
-import com.qaima.domain.UserRole;
+import com.qaima.dto.LoginRequestDto;
+import com.qaima.dto.LoginResponseDto;
 import com.qaima.dto.SignupRequestDto;
 import com.qaima.dto.UserResponseDto;
 import com.qaima.repository.UserRepository;
+import com.qaima.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.qaima.dto.LoginRequestDto;
-import com.qaima.dto.LoginResponseDto;
 
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +20,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtTokenProvider jwtTokenProvider;
 
     @Transactional
     public UserResponseDto signup(SignupRequestDto requestDto) {
@@ -33,45 +35,59 @@ public class AuthService {
 
         User newUser = new User();
         newUser.setEmail(requestDto.getEmail());
-        newUser.setPasswordHash(encodedPassword); // (암호화된 비밀번호 저장)
+        newUser.setPasswordHash(encodedPassword);
         newUser.setName(requestDto.getName());
         newUser.setPhone(requestDto.getPhone());
         newUser.setBirthdate(requestDto.getBirthdate());
 
-
-        newUser.setRole(UserRole.user);
+        // Role Status 기본값
+        newUser.setRole(com.qaima.domain.UserRole.user);
         newUser.setStatus("active");
         newUser.setEmailVerified(false);
         newUser.setGlossaryHover(false);
 
-
-        // DB에 저장
         User savedUser = userRepository.save(newUser);
-
-
         return new UserResponseDto(savedUser);
     }
 
-    @Transactional(readOnly = true)
-    public LoginResponseDto login(LoginRequestDto requestDto) {
+    /**
+     * 로그인: JWT AccessToken 발급
+     * - ip는 Controller에서 받아서 넘겨주세요.
+     */
+    @Transactional
+    public LoginResponseDto login(LoginRequestDto requestDto, String ip) {
 
-        // 이메일로 유저 찾기
         User user = userRepository.findByEmail(requestDto.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("이메일 또는 비밀번호가 일치하지 않습니다.")); // 정보에 맞는 유저가 없다면 정보 불일치로 응답)
+                .orElseThrow(() -> new IllegalArgumentException("이메일 또는 비밀번호가 일치하지 않습니다."));
 
-        // 암호화된 비밀번호 검증
         if (!passwordEncoder.matches(requestDto.getPassword(), user.getPasswordHash())) {
             throw new IllegalArgumentException("이메일 또는 비밀번호가 일치하지 않습니다.");
         }
 
-        // (임시) 로그인 성공
-        String tempToken = "임시_JWT_토큰입니다"; // 임시 토큰
+        // 상태 체크 (inactive/blocked 등)
+        if (user.getStatus() == null || !user.getStatus().equalsIgnoreCase("active")) {
+            throw new IllegalArgumentException("비활성화된 계정입니다.");
+        }
+
+        // 잠금 체크
+        // if (user.getLockedUntil() != null && user.getLockedUntil().isAfter(LocalDateTime.now())) {
+        //     throw new IllegalArgumentException("계정이 잠금 상태입니다. 잠시 후 다시 시도하세요.");
+        // }
+
+        // 마지막 로그인
+        // user.setLastLoginAt(LocalDateTime.now());
+        // user.setLastLoginIp(ip);
+        
+
+        String role = (user.getRole() == null) ? "USER" : user.getRole().name().toUpperCase();
+
+        String accessToken = jwtTokenProvider.createAccessToken(user.getUserId(), role);
 
         return new LoginResponseDto(
                 user.getUserId(),
                 user.getEmail(),
                 user.getName(),
-                tempToken // (임시 토큰 반환)
+                accessToken
         );
     }
 }
