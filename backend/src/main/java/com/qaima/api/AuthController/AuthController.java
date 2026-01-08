@@ -6,9 +6,9 @@ import com.qaima.dto.LoginResponseDto;
 import com.qaima.dto.SignupRequestDto;
 import com.qaima.dto.UserResponseDto;
 import com.qaima.service.AuthService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -35,8 +35,10 @@ public class AuthController {
      */
     @PostMapping("/login")
     public Mono<ApiResponse<LoginResponseDto>> login(@Valid @RequestBody LoginRequestDto requestDto,
-                                                     HttpServletRequest request) {
-        String ip = request.getRemoteAddr();
+                                                     ServerHttpRequest request) {
+        String ip = request.getRemoteAddress() != null
+                ? request.getRemoteAddress().getAddress().getHostAddress()
+                : "unknown";
         return authService.login(requestDto, ip)
                 .map(ApiResponse::success);
     }
