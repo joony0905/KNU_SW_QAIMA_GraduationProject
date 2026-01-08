@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import java.util.List;
 
 @Slf4j
@@ -23,52 +25,56 @@ public class StockSyncService {
     private final IndustryRepository industryRepository;
 
     @Transactional
-    public void syncMarketStackTickers(List<TickerData> tickersFromApi) {
+    public Mono<Void> syncMarketStackTickers(List<TickerData> tickersFromApi) {
+        return Mono.fromCallable(() -> {
+                    log.info("Marketstack Ticker 동기화 시작. (총 {}건)", tickersFromApi.size());
 
-        log.info("Marketstack Ticker 동기화 시작. (총 {}건)", tickersFromApi.size());
+                    for (TickerData dto : tickersFromApi) {
+                        if (dto.getStock_exchange() == null) {
+                            log.warn("Exchange 정보가 없는 Ticker입니다: {}", dto.getSymbol());
+                            continue;
+                        }
 
-        for (TickerData dto : tickersFromApi) {
-            if (dto.getStock_exchange() == null) {
-                log.warn("Exchange 정보가 없는 Ticker입니다: {}", dto.getSymbol());
-                continue;
-            }
+                        String exchangeCodeValue = dto.getStock_exchange().getAcronym();
 
-            String exchangeCodeValue = dto.getStock_exchange().getAcronym();
+                        if (exchangeCodeValue == null) {
+                            exchangeCodeValue = dto.getStock_exchange().getMic();
+                        }
 
-            if (exchangeCodeValue == null) {
-                exchangeCodeValue = dto.getStock_exchange().getMic();
-            }
+                        final String finalExchangeCode = exchangeCodeValue;
 
-            final String finalExchangeCode = exchangeCodeValue;
+                        Exchange exchange = exchangeRepository.findByCode(finalExchangeCode)
+                                .orElseGet(() -> {
+                                    log.info("새로운 Exchange 생성: {}", finalExchangeCode);
+                                    Exchange newEx = new Exchange();
+                                    newEx.setCode(finalExchangeCode);
+                                    newEx.setName(dto.getStock_exchange().getName());
+                                    newEx.setCountry(dto.getStock_exchange().getCountry());
+                                    return exchangeRepository.save(newEx);
+                                });
 
-            Exchange exchange = exchangeRepository.findByCode(finalExchangeCode)
-                    .orElseGet(() -> {
-                        log.info("새로운 Exchange 생성: {}", finalExchangeCode);
-                        Exchange newEx = new Exchange();
-                        newEx.setCode(finalExchangeCode);
-                        newEx.setName(dto.getStock_exchange().getName());
-                        newEx.setCountry(dto.getStock_exchange().getCountry());
-                        return exchangeRepository.save(newEx);
-                    });
+                        Industry industry = industryRepository.findByName("Unknown")
+                                .orElseGet(() -> {
+                                    log.info("기본 Industry (Unknown) 생성");
+                                    Industry newInd = new Industry();
+                                    newInd.setName("Unknown");
+                                    return industryRepository.save(newInd);
+                                });
 
-            Industry industry = industryRepository.findByName("Unknown")
-                    .orElseGet(() -> {
-                        log.info("기본 Industry (Unknown) 생성");
-                        Industry newInd = new Industry();
-                        newInd.setName("Unknown");
-                        return industryRepository.save(newInd);
-                    });
+                        Stock stock = stockRepository.findByExchangeAndStockCode(exchange, dto.getSymbol())
+                                .orElse(new Stock());
 
-            Stock stock = stockRepository.findByExchangeAndStockCode(exchange, dto.getSymbol())
-                    .orElse(new Stock());
+                        stock.setStockCode(dto.getSymbol());
+                        stock.setCompanyName(dto.getName());
+                        stock.setExchange(exchange);
+                        stock.setIndustry(industry);
 
-            stock.setStockCode(dto.getSymbol());
-            stock.setCompanyName(dto.getName());
-            stock.setExchange(exchange);
-            stock.setIndustry(industry);
-
-            stockRepository.save(stock);
-        }
-        log.info("Ticker 동기화 완료.");
+                        stockRepository.save(stock);
+                    }
+                    log.info("Ticker 동기화 완료.");
+                    return null;
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .then();
     }
 }

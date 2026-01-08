@@ -7,6 +7,7 @@ import com.qaima.dto.WatchlistItemUpdateDto;
 import com.qaima.service.WatchlistService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -23,10 +24,10 @@ public class WatchlistController {
      * GET /api/v1/watchlist/{watchlistId}
      */
     @GetMapping("/{watchlistId}")
-    public ApiResponse<List<WatchlistResponseDto>> getWatchlistItems(@PathVariable Long watchlistId) {
+    public Mono<ApiResponse<List<WatchlistResponseDto>>> getWatchlistItems(@PathVariable Long watchlistId) {
         Long currentUserId = 1L;
-        List<WatchlistResponseDto> items = watchlistService.getWatchlistItems(watchlistId, currentUserId);
-        return ApiResponse.success(items);
+        return watchlistService.getWatchlistItems(watchlistId, currentUserId)
+                .map(ApiResponse::success);
     }
 
     /*
@@ -34,10 +35,10 @@ public class WatchlistController {
      * POST /api/v1/watchlist/items
      */
     @PostMapping("/items")
-    public ApiResponse<WatchlistResponseDto> addStockToWatchlist(@RequestBody WatchlistRequestDto requestDto) {
+    public Mono<ApiResponse<WatchlistResponseDto>> addStockToWatchlist(@RequestBody WatchlistRequestDto requestDto) {
         Long currentUserId = 1L;
-        WatchlistResponseDto newItem = watchlistService.addStockToWatchlist(requestDto, currentUserId);
-        return ApiResponse.success(newItem);
+        return watchlistService.addStockToWatchlist(requestDto, currentUserId)
+                .map(ApiResponse::success);
     }
 
     /*
@@ -45,10 +46,10 @@ public class WatchlistController {
      * DELETE /api/v1/watchlist/items/{itemId}
      */
     @DeleteMapping("/items/{itemId}")
-    public ApiResponse<?> removeStockFromWatchlist(@PathVariable Long itemId) {
+    public Mono<ApiResponse<?>> removeStockFromWatchlist(@PathVariable Long itemId) {
         Long currentUserId = 1L;
-        watchlistService.removeStockFromWatchlist(itemId, currentUserId);
-        return ApiResponse.success(null);
+        return watchlistService.removeStockFromWatchlist(itemId, currentUserId)
+                .thenReturn(ApiResponse.success(null));
     }
 
     /*
@@ -57,11 +58,11 @@ public class WatchlistController {
      */
   
     @PatchMapping("/items/{itemId}")
-    public ApiResponse<WatchlistResponseDto> updateWatchlistItemNote(
+    public Mono<ApiResponse<WatchlistResponseDto>> updateWatchlistItemNote(
             @PathVariable Long itemId,
             @RequestBody WatchlistItemUpdateDto requestDto) {
         Long currentUserId = 1L;
-        WatchlistResponseDto updatedItem = watchlistService.updateWatchlistItemNote(itemId, requestDto, currentUserId);
-        return ApiResponse.success(updatedItem);
+        return watchlistService.updateWatchlistItemNote(itemId, requestDto, currentUserId)
+                .map(ApiResponse::success);
     }
 }

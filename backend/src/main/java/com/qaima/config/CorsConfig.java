@@ -1,22 +1,24 @@
 package com.qaima.config;
 
+import java.util.List;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsWebFilter;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 
 @Configuration
-public class CorsConfig implements WebMvcConfigurer {
-
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-
-        registry.addMapping("/api/**")   // 우리 API prefix에 맞게
-                .allowedOrigins(
-                        "http://localhost:5173"   // Vite 기본 포트
-                )
-                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true)   // 나중에 쿠키/세션 쓸 가능성 고려
-                .maxAge(3600);            // preflight 캐시 시간(초)
-    }
-}
+    public class CorsConfig {
+            @Bean
+            public CorsWebFilter corsWebFilter() {
+                CorsConfiguration config = new CorsConfiguration();
+                config.setAllowedOrigins(List.of("http://localhost:5173"));
+                config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                config.setAllowedHeaders(List.of("*"));
+                config.setAllowCredentials(true);
+                config.setMaxAge(3600L);
+                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+                source.registerCorsConfiguration("/api/**", config);
+                return new CorsWebFilter(source);
+            }
+        }

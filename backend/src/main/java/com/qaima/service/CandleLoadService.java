@@ -56,10 +56,8 @@ public class CandleLoadService {
                     return krStockClient
                             .fetchCandles(stockCode, marketDivCode, freq, from, to)
                             .timeout(KIS_TIMEOUT)
-                            .map(dto -> save(stock, dto))
-                            .map(list ->
-                                    new CandleLoadResult(list, CandleSource.KIS)
-                            )
+                            .flatMap(dto -> save(stock, dto)
+                                    .map(list -> new CandleLoadResult(list, CandleSource.KIS)))
                             // KIS 실패 → Marketstack
                             .onErrorResume(kisErr -> {
                                 log.warn("[CANDLE] KIS failed → fallback to Marketstack: {}",
@@ -68,10 +66,8 @@ public class CandleLoadService {
                                 return globalStockClient
                                         .fetchCandles(stockCode, freq, from, to)
                                         .timeout(MARKETSTACK_TIMEOUT)
-                                        .map(dto -> save(stock, dto))
-                                        .map(list ->
-                                                new CandleLoadResult(list, CandleSource.MARKETSTACK)
-                                        )
+                                        .flatMap(dto -> save(stock, dto)
+                                                .map(list -> new CandleLoadResult(list, CandleSource.MARKETSTACK)))
                                         // 전부 실패 → EMPTY
                                         .onErrorResume(globalErr -> {
                                             log.error("[CANDLE] Marketstack failed: {}",
@@ -86,9 +82,9 @@ public class CandleLoadService {
 
     /* ========================= */
 
-    private List<PriceOhlcv> save(Stock stock, List<PriceOhlcvDto> dtoList) {
+    private Mono<List<PriceOhlcv>> save(Stock stock, List<PriceOhlcvDto> dtoList) {
         if (dtoList == null || dtoList.isEmpty()) {
-            return List.of();
+            return Mono.just(List.of());
         }
 
         return Mono.fromCallable(() -> {
@@ -98,8 +94,7 @@ public class CandleLoadService {
                                     .collect(Collectors.toList());
                     return priceOhlcvRepository.saveAll(entities);
                 })
-                .subscribeOn(Schedulers.boundedElastic())
-                .block(); // 내부에서만 block (외부로 전파 X)
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     private PriceOhlcv toEntity(Stock stock, PriceOhlcvDto dto) {
