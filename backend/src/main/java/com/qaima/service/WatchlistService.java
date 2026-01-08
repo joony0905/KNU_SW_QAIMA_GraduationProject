@@ -128,9 +128,14 @@ public class WatchlistService {
 
                     item.setNote(requestDto.getNote());
 
-                    return Mono.fromCallable(() -> watchlistItemRepository.save(item))
+                    /** 타입 오염돼서 임시로 제네릭타입 설정
+                     JPA 호출은 항상 Mono.<T>fromCallable(...)
+                     WebFlux 환경에서 blocking JPA 호출 처리
+                     fromCallable + boundedElastic + 제네릭 명시로 타입 추론 이슈 방지
+                     추후 전체적인 수정 */
+                    return Mono.<WatchlistItem>fromCallable(() -> watchlistItemRepository.save(item))
                             .subscribeOn(Schedulers.boundedElastic())
-                            .map(WatchlistResponseDto::new);
+                            .map(saved -> new WatchlistResponseDto(saved));
                 });
     }
 
