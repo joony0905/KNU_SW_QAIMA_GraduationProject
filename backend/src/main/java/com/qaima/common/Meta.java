@@ -6,14 +6,15 @@ import java.util.UUID;
 /**
  * API 응답 메타데이터
  *
- * - 요청 ID, 상태(success/failure), 응답 시각 포함
- * - 요청 추적 및 로깅에 활용 가능
+ * - 요청 ID, 상태(success/failure), 응답 시각
+ * - warning: 부분 실패/주의 상태 전달용
  */
 public class Meta {
 
     private String requestId;
     private String status;
     private Instant timestamp;
+    private String warning;
 
     public Meta() {}
 
@@ -33,6 +34,8 @@ public class Meta {
         return new Meta(UUID.randomUUID().toString(), "failure", Instant.now());
     }
 
+    // ===== getters / setters =====
+
     public String getRequestId() { return requestId; }
     public void setRequestId(String requestId) { this.requestId = requestId; }
 
@@ -41,4 +44,7 @@ public class Meta {
 
     public Instant getTimestamp() { return timestamp; }
     public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
+
+    public String getWarning() { return warning; }
+    public void setWarning(String warning) { this.warning = warning; }
 }

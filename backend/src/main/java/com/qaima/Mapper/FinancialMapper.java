@@ -1,4 +1,4 @@
-package com.qaima.Mapper;
+package com.qaima.mapper;
 
 import com.qaima.domain.Financial;
 import com.qaima.dto.FinancialDto;
