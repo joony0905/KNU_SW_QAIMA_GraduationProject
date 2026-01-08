@@ -1,5 +1,6 @@
 package com.qaima.common;
 
+import com.qaima.common.exception.AnalysisApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -15,14 +16,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /** 일반 예외 처리 */
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
-        ApiResponse<Void> body = ApiResponse.error("INTERNAL_ERROR", e.getMessage());
+    /** 분석 API 실패 */
+    @ExceptionHandler(AnalysisApiException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAnalysisApi(AnalysisApiException e) {
+        ApiResponse<Void> body =
+                ApiResponse.error("ANALYSIS_API_FAILED", "분석 결과를 불러올 수 없습니다.");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 
-    /** 입력값 검증 실패 처리 */
+    /** 입력값 검증 실패 */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException e) {
         String msg = e.getBindingResult().getFieldError() != null
@@ -32,4 +34,13 @@ public class GlobalExceptionHandler {
         ApiResponse<Void> body = ApiResponse.error("VALIDATION_ERROR", msg);
         return ResponseEntity.badRequest().body(body);
     }
+
+    /** 나머지 예외 (진짜 내부 오류) */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
+        ApiResponse<Void> body =
+                ApiResponse.error("INTERNAL_ERROR", "서버 내부 오류가 발생했습니다.");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+    }
 }
+
