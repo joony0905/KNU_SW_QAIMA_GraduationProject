@@ -38,6 +38,13 @@ public class ApiResponse<T> {
         return new ApiResponse<>(meta, data, Collections.emptyList());
     }
 
+    /** 200이지만 fallback 동작시 로그 확인용으로 만듦. */
+    public static <T> ApiResponse<T> successWithWarning(T data, String warning) {
+        Meta meta = Meta.success();
+        meta.setWarning(warning);
+        return new ApiResponse<>(meta, data, Collections.emptyList());
+    }
+
     /** 실패 응답 생성 */
     public static <T> ApiResponse<T> error(String code, String message) {
         Meta meta = Meta.failure();

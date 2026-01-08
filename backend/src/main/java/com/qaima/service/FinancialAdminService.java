@@ -4,7 +4,7 @@ import com.qaima.domain.Financial;
 import com.qaima.domain.PeriodType;
 import com.qaima.domain.Stock;
 import com.qaima.dto.FinancialDto;
-import com.qaima.Mapper.FinancialMapper;
+import com.qaima.mapper.FinancialMapper;
 import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,7 @@ public class FinancialAdminService {
 
     @Transactional
     public FinancialDto create(String stockCode, FinancialDto dto) {
-        Stock stock = stockRepository.findByStockCode(stockCode)
+        Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
                 .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode));
 
         if (dto.getYear() == null) {
