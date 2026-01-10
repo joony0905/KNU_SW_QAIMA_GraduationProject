@@ -1,0 +1,168 @@
+package com.qaima.api.EmailController;
+
+import com.qaima.common.ApiResponse;
+import com.qaima.common.Blocking;
+import com.qaima.dto.EmailConfirmDto;
+import com.qaima.dto.EmailRequestDto;
+import com.qaima.dto.PwdResetRequestDto;
+import com.qaima.service.AuthLoginLogService;
+import com.qaima.service.MailAuthService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/v1/email")
+public class EmailController {
+
+    private final MailAuthService mailAuthService;
+    private final AuthLoginLogService authLoginLogService;
+
+    // 회원가입 이메일 인증번호 발송
+    @PostMapping("/verification/request")
+    public Mono<ApiResponse<Void>> requestVerification(@Valid @RequestBody EmailRequestDto dto,
+                                                       ServerHttpRequest request) {
+        String email = dto.getEmail();
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+
+        return Blocking.run(() -> mailAuthService.requestEmailVerificationCode(email))
+                .then(authLoginLogService.event("EMAIL_VERIFICATION_REQUESTED", true, null, email, ip, ua, null, null)
+                        .onErrorResume(e -> Mono.empty()))
+                .thenReturn(ApiResponse.<Void>success(null))
+                .onErrorResume(ex ->
+                        authLoginLogService.event("EMAIL_VERIFICATION_REQUESTED", false, null, email, ip, ua,
+                                        "EMAIL_VERIFICATION_REQUEST_FAILED", ex.getMessage())
+                                .onErrorResume(e -> Mono.empty())
+                                .then(Mono.<ApiResponse<Void>>error(ex))
+                );
+    }
+
+    // 회원가입 이메일 인증번호 확인
+    @PostMapping("/verification/confirm")
+    public Mono<ApiResponse<Void>> confirmVerification(@Valid @RequestBody EmailConfirmDto dto,
+                                                       ServerHttpRequest request) {
+        String email = dto.getEmail();
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+
+        return Blocking.run(() -> mailAuthService.confirmEmailVerificationCode(email, dto.getCode()))
+                .then(authLoginLogService.event("EMAIL_VERIFICATION_CONFIRMED", true, null, email, ip, ua, null, null)
+                        .onErrorResume(e -> Mono.empty()))
+                .thenReturn(ApiResponse.<Void>success(null))
+                .onErrorResume(ex ->
+                        authLoginLogService.event("EMAIL_VERIFICATION_CONFIRMED", false, null, email, ip, ua,
+                                        "EMAIL_VERIFICATION_CONFIRM_FAILED", ex.getMessage())
+                                .onErrorResume(e -> Mono.empty())
+                                .then(Mono.<ApiResponse<Void>>error(ex))
+                );
+    }
+
+    // 비밀번호 재설정 링크 발송
+    @PostMapping("/pwdreset/request")
+    public Mono<ApiResponse<Void>> requestPasswordReset(@Valid @RequestBody EmailRequestDto dto,
+                                                        ServerHttpRequest request) {
+        String email = dto.getEmail();
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+
+        return Blocking.run(() -> mailAuthService.requestPasswordResetLink(email))
+                .then(authLoginLogService.event("PASSWORD_RESET_REQUESTED", true, null, email, ip, ua, null, null)
+                        .onErrorResume(e -> Mono.empty()))
+                .thenReturn(ApiResponse.<Void>success(null))
+                .onErrorResume(ex ->
+                        authLoginLogService.event("PASSWORD_RESET_REQUESTED", false, null, email, ip, ua,
+                                        "PASSWORD_RESET_REQUEST_FAILED", ex.getMessage())
+                                .onErrorResume(e -> Mono.empty())
+                                .then(Mono.<ApiResponse<Void>>error(ex))
+                );
+    }
+
+    // 링크 클릭하면 뜨는 비밀번호 입력 폼
+    @GetMapping(value = "/pwdreset/form", produces = "text/html; charset=UTF-8")
+    public Mono<String> passwordResetForm(@RequestParam("token") String token) {
+        return Mono.just("""
+            <!doctype html>
+            <html lang="ko">
+            <head><meta charset="utf-8"><title>비밀번호 재설정</title></head>
+            <body>
+              <h2>비밀번호 재설정</h2>
+              <form method="POST" action="/api/v1/email/pwdreset/confirm-form">
+                <input type="hidden" name="token" value="%s"/>
+                <label>새 비밀번호(8자 이상)</label><br/>
+                <input type="password" name="newPassword" minlength="8" required/><br/><br/>
+                <button type="submit">변경</button>
+              </form>
+            </body>
+            </html>
+            """.formatted(escapeHtml(token)));
+    }
+
+    // 폼 제출 처리
+    @PostMapping(
+            value = "/pwdreset/confirm-form",
+            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
+            produces = "text/html; charset=UTF-8"
+    )
+    public Mono<String> confirmPasswordResetForm(@RequestParam("token") String token,
+                                                 @RequestParam("newPassword") String newPassword,
+                                                 ServerHttpRequest request) {
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+
+        return Blocking.run(() -> mailAuthService.confirmPasswordReset(token, newPassword))
+                .then(authLoginLogService.event("PASSWORD_RESET_CONFIRMED", true, null, null, ip, ua, null, null)
+                        .onErrorResume(e -> Mono.empty()))
+                .thenReturn("""
+                    <!doctype html>
+                    <html lang="ko">
+                    <head><meta charset="utf-8"><title>완료</title></head>
+                    <body><h2>비밀번호가 변경되었습니다.</h2></body>
+                    </html>
+                    """)
+                .onErrorResume(ex ->
+                        authLoginLogService.event("PASSWORD_RESET_CONFIRMED", false, null, null, ip, ua,
+                                        "PASSWORD_RESET_CONFIRM_FAILED", ex.getMessage())
+                                .onErrorResume(e -> Mono.empty())
+                                .then(Mono.<String>error(ex))
+                );
+    }
+
+    // JSON 기반 비밀번호 변경
+    @PostMapping("/pwdreset/confirm")
+    public Mono<ApiResponse<Void>> confirmPasswordResetJson(@Valid @RequestBody PwdResetRequestDto dto,
+                                                            ServerHttpRequest request) {
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+
+        return Blocking.run(() -> mailAuthService.confirmPasswordReset(dto.getToken(), dto.getNewPassword()))
+                .then(authLoginLogService.event("PASSWORD_RESET_CONFIRMED", true, null, null, ip, ua, null, null)
+                        .onErrorResume(e -> Mono.empty()))
+                .thenReturn(ApiResponse.<Void>success(null))
+                .onErrorResume(ex ->
+                        authLoginLogService.event("PASSWORD_RESET_CONFIRMED", false, null, null, ip, ua,
+                                        "PASSWORD_RESET_CONFIRM_FAILED", ex.getMessage())
+                                .onErrorResume(e -> Mono.empty())
+                                .then(Mono.<ApiResponse<Void>>error(ex))
+                );
+    }
+
+    private static String extractClientIp(ServerHttpRequest request) {
+        String xff = request.getHeaders().getFirst("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        if (request.getRemoteAddress() == null) return null;
+        return request.getRemoteAddress().getAddress().getHostAddress();
+    }
+
+    private static String escapeHtml(String s) {
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+}
