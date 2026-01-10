@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -30,6 +29,7 @@ public class FinancialController {
      * - 하반기만: periodType=H&periodNo=2
      * - TTM: periodType=TTM (periodNo는 생략하거나 0)
      */
+
     @GetMapping("/{ticker}/financials")
     public Mono<List<FinancialDto>> getFinancialsForLastNYears(
             @PathVariable String ticker,
@@ -40,11 +40,7 @@ public class FinancialController {
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-
-        return Mono.fromCallable(() ->
-                        financialQueryService.getForLastNYears(ticker, pt, periodNo, years, asOfDate)
-                )
-                .subscribeOn(Schedulers.boundedElastic());
+        return financialQueryService.getForLastNYears(ticker, pt, periodNo, years, asOfDate);
     }
 
     /**
@@ -54,6 +50,7 @@ public class FinancialController {
      * 확장:
      * 예: GET /api/v1/stocks/005930/financials/2023?periodType=H&periodNo=2
      */
+
     @GetMapping("/{ticker}/financials/{year}")
     public Mono<List<FinancialDto>> getFinancialsForYear(
             @PathVariable String ticker,
@@ -62,10 +59,7 @@ public class FinancialController {
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-
-        return Mono.fromCallable(() ->
-                        financialQueryService.getForYear(ticker, pt, periodNo, year)
-                )
-                .subscribeOn(Schedulers.boundedElastic());
+        return financialQueryService.getForYear(ticker, pt, periodNo, year);
     }
 }
+
