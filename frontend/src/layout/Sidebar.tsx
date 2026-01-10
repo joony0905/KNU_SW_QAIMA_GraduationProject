@@ -1,18 +1,19 @@
+// src/components/Sidebar.tsx
 import { NavLink, useNavigate } from "react-router-dom";
-import {
-  Search,
-  Globe,
-  FileBarChart,
-  BookA,
-  CircleUserRound,
-} from "lucide-react";
+
+import introIcon from "../assets/intro.png";
+import analysisIcon from "../assets/analysis.png";
+import externalIcon from "../assets/external.png";
+import portfolioIcon from "../assets/portfolio.png";
+import dictionaryIcon from "../assets/dictionary.png";
+import mypageIcon from "../assets/mypage.png";
 
 const navItems = [
-  { path: "/ping", icon: null, label: "소개" },
-  { path: "/feature/1", icon: Search, label: "심층분석" },
-  { path: "/feature/2", icon: Globe, label: "외부요인" },
-  { path: "/feature/3", icon: FileBarChart, label: "포트폴리오" },
-  { path: "/feature/4", icon: BookA, label: "사전" },
+  { path: "/ping", icon: introIcon, label: "소개" },
+  { path: "/feature/1", icon: analysisIcon, label: "심층분석" },
+  { path: "/feature/2", icon: externalIcon, label: "외부요인" },
+  { path: "/feature/3", icon: portfolioIcon, label: "포트폴리오" },
+  { path: "/feature/4", icon: dictionaryIcon, label: "사전" },
 ];
 
 export default function Sidebar() {
@@ -26,28 +27,38 @@ export default function Sidebar() {
           to={item.path}
           className="flex flex-col items-center gap-[5px] p-[5px] w-[84px] rounded-[15px] hover:bg-[#D7D7D7]"
         >
-          <div className="w-[50px] h-[50px] bg-gray-100 rounded-full flex items-center justify-center">
-            {item.icon ? (
-              <item.icon className="w-[30px] h-[30px] stroke-[2]" />
-            ) : (
-              <span className="text-xs font-bold">LOGO</span>
-            )}
+          <div className="w-[50px] h-[50px] flex items-center justify-center">
+            <img
+              src={item.icon}
+              alt={item.label}
+              className="w-full h-full object-contain"
+            />
           </div>
-          <div className="text-black text-center text-[14px] font-normal">{item.label}</div>
+          <div className="text-black text-center text-[14px] font-normal">
+            {item.label}
+          </div>
         </NavLink>
       ))}
-      {/* 내정보(로그아웃)은 버튼 처리 */}
+
+      {/* 내정보(로그아웃) 버튼 */}
       <button
         onClick={() => {
           localStorage.removeItem("qaima_token");
+          localStorage.removeItem("qaima_refresh_token");
           navigate("/login");
         }}
         className="flex flex-col items-center gap-[5px] p-[5px] w-[84px] rounded-[15px] hover:bg-[#D7D7D7]"
       >
-        <div className="w-[50px] h-[50px] bg-gray-100 rounded-full flex items-center justify-center">
-          <CircleUserRound className="w-[30px] h-[30px] stroke-[2]" />
+        <div className="w-[50px] h-[50px] flex items-center justify-center">
+          <img
+            src={mypageIcon}
+            alt="내정보"
+            className="w-full h-full object-contain"
+          />
         </div>
-        <div className="text-black text-center text-[16px] font-normal">내정보</div>
+        <div className="text-black text-center text-[14px] font-normal">
+          내정보
+        </div>
       </button>
     </div>
   );
