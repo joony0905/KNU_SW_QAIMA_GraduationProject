@@ -6,6 +6,8 @@ import com.qaima.service.FinancialReadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -29,7 +31,7 @@ public class FinancialController {
      * - TTM: periodType=TTM (periodNo는 생략하거나 0)
      */
     @GetMapping("/{ticker}/financials")
-    public List<FinancialDto> getFinancialsForLastNYears(
+    public Mono<List<FinancialDto>> getFinancialsForLastNYears(
             @PathVariable String ticker,
             @RequestParam(name = "years", defaultValue = "5") int years,
             @RequestParam(name = "asOfDate", required = false)
@@ -38,7 +40,11 @@ public class FinancialController {
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-        return financialQueryService.getForLastNYears(ticker, pt, periodNo, years, asOfDate);
+
+        return Mono.fromCallable(() ->
+                        financialQueryService.getForLastNYears(ticker, pt, periodNo, years, asOfDate)
+                )
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
@@ -49,13 +55,17 @@ public class FinancialController {
      * 예: GET /api/v1/stocks/005930/financials/2023?periodType=H&periodNo=2
      */
     @GetMapping("/{ticker}/financials/{year}")
-    public List<FinancialDto> getFinancialsForYear(
+    public Mono<List<FinancialDto>> getFinancialsForYear(
             @PathVariable String ticker,
             @PathVariable int year,
             @RequestParam(name = "periodType", required = false) PeriodType periodType,
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-        return financialQueryService.getForYear(ticker, pt, periodNo, year);
+
+        return Mono.fromCallable(() ->
+                        financialQueryService.getForYear(ticker, pt, periodNo, year)
+                )
+                .subscribeOn(Schedulers.boundedElastic());
     }
 }
