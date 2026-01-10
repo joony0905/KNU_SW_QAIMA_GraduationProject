@@ -1,6 +1,7 @@
 package com.qaima.api.Watchlist;
 
 import com.qaima.common.ApiResponse;
+import com.qaima.common.Blocking;
 import com.qaima.dto.WatchlistRequestDto;
 import com.qaima.dto.WatchlistResponseDto;
 import com.qaima.dto.WatchlistItemUpdateDto;
@@ -26,7 +27,7 @@ public class WatchlistController {
     @GetMapping("/{watchlistId}")
     public Mono<ApiResponse<List<WatchlistResponseDto>>> getWatchlistItems(@PathVariable Long watchlistId) {
         Long currentUserId = 1L;
-        return watchlistService.getWatchlistItems(watchlistId, currentUserId)
+        return Blocking.call(() -> watchlistService.getWatchlistItems(watchlistId, currentUserId))
                 .map(ApiResponse::success);
     }
 
@@ -37,7 +38,7 @@ public class WatchlistController {
     @PostMapping("/items")
     public Mono<ApiResponse<WatchlistResponseDto>> addStockToWatchlist(@RequestBody WatchlistRequestDto requestDto) {
         Long currentUserId = 1L;
-        return watchlistService.addStockToWatchlist(requestDto, currentUserId)
+        return Blocking.call(() -> watchlistService.addStockToWatchlist(requestDto, currentUserId))
                 .map(ApiResponse::success);
     }
 
@@ -46,9 +47,9 @@ public class WatchlistController {
      * DELETE /api/v1/watchlist/items/{itemId}
      */
     @DeleteMapping("/items/{itemId}")
-    public Mono<ApiResponse<?>> removeStockFromWatchlist(@PathVariable Long itemId) {
+    public Mono<ApiResponse<Void>> removeStockFromWatchlist(@PathVariable Long itemId) {
         Long currentUserId = 1L;
-        return watchlistService.removeStockFromWatchlist(itemId, currentUserId)
+        return Blocking.run(() -> watchlistService.removeStockFromWatchlist(itemId, currentUserId))
                 .thenReturn(ApiResponse.success(null));
     }
 
@@ -56,13 +57,14 @@ public class WatchlistController {
      * 갱신
      * DELETE /api/v1/watchlist/items/{itemId}
      */
-  
+
     @PatchMapping("/items/{itemId}")
     public Mono<ApiResponse<WatchlistResponseDto>> updateWatchlistItemNote(
             @PathVariable Long itemId,
-            @RequestBody WatchlistItemUpdateDto requestDto) {
+            @RequestBody WatchlistItemUpdateDto requestDto
+    ) {
         Long currentUserId = 1L;
-        return watchlistService.updateWatchlistItemNote(itemId, requestDto, currentUserId)
+        return Blocking.call(() -> watchlistService.updateWatchlistItemNote(itemId, requestDto, currentUserId))
                 .map(ApiResponse::success);
     }
 }
