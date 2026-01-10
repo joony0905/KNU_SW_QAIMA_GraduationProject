@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
-import api from "../lib/apiClient";
+import api from "../api/apiClient";
 import searchIcon from "../assets/search.png";
+import type { WatchlistItem } from "../types/watchlist";
 
 interface StockInputBoxProps {
   placeholder?: string;
@@ -15,10 +16,8 @@ export default function StockInputBox({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // 관심 리스트 토글 상태
   const [isInterestListOpen, setIsInterestListOpen] = useState(false);
-  // 더미 관심 종목 목록
-  const dummyInterests = ["삼성전자", "LG에너지솔루션", "카카오"];
+  const [interests, setInterests] = useState<WatchlistItem[]>([]);
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
@@ -37,6 +36,47 @@ export default function StockInputBox({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    // TODO: 나중에 실제 fetchWatchlist(1) 호출로 교체
+    /*useEffect(() => {
+      const fetchInterests = async () => {
+        try {
+          const res = await api.get<ApiResponse<WatchlistItem[]>>(
+            "/api/v1/watchlist/1"
+          );
+          setInterests(res.data.data);
+        } catch (e) {
+          console.error("관심 종목 불러오기 실패:", e);
+        }
+      };
+      fetchInterests();
+    }, []); */
+    const dummy: WatchlistItem[] = [
+      {
+        watchlistItemId: 1,
+        stockId: 1,
+        stockName: "삼성전자",
+        note: null,
+        industryName: "전자",
+      },
+      {
+        watchlistItemId: 2,
+        stockId: 2,
+        stockName: "LG에너지솔루션",
+        note: null,
+        industryName: "2차전지",
+      },
+      {
+        watchlistItemId: 3,
+        stockId: 3,
+        stockName: "카카오",
+        note: null,
+        industryName: "인터넷",
+      },
+    ];
+    setInterests(dummy);
+  }, []);
+
   const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
@@ -44,7 +84,7 @@ export default function StockInputBox({
     if (value.trim()) {
       try {
         const res = await api.get(
-          `/api/v1/stocks/search?q=${encodeURIComponent(value)}`
+          `/stocks/search?q=${encodeURIComponent(value)}`
         );
         setSuggestions(res?.data || []);
         setShowSuggestions(true);
@@ -87,9 +127,7 @@ export default function StockInputBox({
         {/* 관심 버튼 */}
         <div className="w-full sm:w-28 flex justify-start items-center">
           <button
-            onClick={() =>
-              setIsInterestListOpen((prev: boolean) => !prev)
-            }
+            onClick={() => setIsInterestListOpen((prev: boolean) => !prev)}
             className="
               inline-flex items-center gap-2 px-3 py-1.5 rounded-full
               bg-gray-200 text-gray-800
@@ -100,7 +138,7 @@ export default function StockInputBox({
               xmlns="http://www.w3.org/2000/svg"
               width="20"
               height="20"
-              fill="currentColor"      // 항상 찬 별
+              fill="currentColor" // 항상 찬 별
               stroke="currentColor"
               strokeWidth="2"
               viewBox="0 0 24 24"
@@ -169,17 +207,19 @@ export default function StockInputBox({
             isInterestListOpen && (
               <div className="bg-white border border-stone-300 rounded-md shadow-md">
                 <ul className="max-h-40 overflow-y-auto">
-                  {dummyInterests.map((item) => (
+                  {interests.map((item) => (
                     <li
-                      key={item}
+                      key={item.watchlistItemId}
                       onClick={() => {
-                        setInputValue(item);
-                        if (onSearch) onSearch(item);
+                        if (item.stockName) {
+                          setInputValue(item.stockName);
+                          if (onSearch) onSearch(item.stockName);
+                        }
                         setIsInterestListOpen(false);
                       }}
                       className="px-3 py-1.5 cursor-pointer hover:bg-zinc-100 text-sm sm:text-base md:text-lg font-['Inter']"
                     >
-                      {item}
+                      {item.stockName ?? "(이름 없음)"}
                     </li>
                   ))}
                 </ul>
