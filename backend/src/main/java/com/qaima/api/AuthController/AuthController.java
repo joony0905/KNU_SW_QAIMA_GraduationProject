@@ -23,23 +23,32 @@ public class AuthController {
      * 회원가입 API
      * POST /api/v1/auth/signup
      */
+
     @PostMapping("/signup")
-    public Mono<ApiResponse<UserResponseDto>> signup(@Valid @RequestBody SignupRequestDto requestDto) {
-        return authService.signup(requestDto)
-                .map(ApiResponse::success);
+    public Mono<ApiResponse<UserResponseDto>> signup(@Valid @RequestBody SignupRequestDto requestDto,
+                                                     ServerHttpRequest request) {
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+        return authService.signup(requestDto, ip, ua).map(ApiResponse::success);
     }
 
     /**
      * 로그인 API
      * POST /api/v1/auth/login
      */
+
     @PostMapping("/login")
     public Mono<ApiResponse<LoginResponseDto>> login(@Valid @RequestBody LoginRequestDto requestDto,
                                                      ServerHttpRequest request) {
-        String ip = request.getRemoteAddress() != null
-                ? request.getRemoteAddress().getAddress().getHostAddress()
-                : "unknown";
-        return authService.login(requestDto, ip)
-                .map(ApiResponse::success);
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+        return authService.login(requestDto, ip, ua).map(ApiResponse::success);
+    }
+    
+    private static String extractClientIp(ServerHttpRequest request) {
+        String xff = request.getHeaders().getFirst("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
+        if (request.getRemoteAddress() == null) return null;
+        return request.getRemoteAddress().getAddress().getHostAddress();
     }
 }
