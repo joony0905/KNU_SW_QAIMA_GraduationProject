@@ -48,7 +48,12 @@ public class CandleLoadService {
                     return stockClient
                             .fetchCandles(stock, freq, from, to)
                             .flatMap(result -> save(stock, result.getCandles())
-                                    .map(list -> new CandleLoadResult(list, result.getSource())))
+                                    .map(list -> {
+                                        CandleSource source = list.isEmpty()
+                                                ? CandleSource.EMPTY
+                                                : result.getSource();
+                                        return new CandleLoadResult(list, source);
+                                    }))
                             .onErrorResume(err -> {
                                 log.error("[CANDLE] KIS/Marketstack 모두 실패: {}", err.getMessage(), err);
                                 return Mono.just(
