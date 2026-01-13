@@ -24,6 +24,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Component
@@ -306,17 +307,17 @@ public class KrStockClient {
             return List.of();
         }
 
-        return resp.getOutput2().stream()
-                .map(c -> PriceOhlcvDto.builder()
-                        .ts(parseKisDate(c.getStck_bsop_date()))
-                        .open(parseBig(c.getStck_oprc()))
-                        .high(parseBig(c.getStck_hgpr()))
-                        .low(parseBig(c.getStck_lwpr()))
-                        .close(parseBig(c.getStck_clpr()))
-                        .volume(parseBig(c.getAcml_vol()))
-                        .build()
-                )
+        int rawCount = resp.getOutput2().size();
+        List<PriceOhlcvDto> candles = resp.getOutput2().stream()
+                .map(this::toPriceOhlcvDto)
+                .flatMap(Optional::stream)
                 .toList();
+
+        if (rawCount > 0 && candles.isEmpty()) {
+            log.warn("KIS candles dropped entirely. rawCount={}", rawCount);
+        }
+
+        return candles;
     }
 
     // 내부 응답 DTO
@@ -350,6 +351,31 @@ public class KrStockClient {
     }
 
 
+    private Optional<PriceOhlcvDto> toPriceOhlcvDto(KisCandlesResponse.Candle candle) {
+        OffsetDateTime ts = parseKisDate(candle.getStck_bsop_date());
+        if (ts == null) {
+            return Optional.empty();
+        }
+
+        BigDecimal open = parseBigOrNull(candle.getStck_oprc());
+        BigDecimal high = parseBigOrNull(candle.getStck_hgpr());
+        BigDecimal low = parseBigOrNull(candle.getStck_lwpr());
+        BigDecimal close = parseBigOrNull(candle.getStck_clpr());
+
+        if (open == null || high == null || low == null || close == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(PriceOhlcvDto.builder()
+                .ts(ts)
+                .open(open)
+                .high(high)
+                .low(low)
+                .close(close)
+                .volume(parseBigOrZero(candle.getAcml_vol()))
+                .build());
+    }
+
     private BigDecimal parseBig(String x) {
         try {
             if (x == null || x.isBlank()) return BigDecimal.ZERO;
@@ -359,10 +385,29 @@ public class KrStockClient {
         }
     }
 
+    private BigDecimal parseBigOrNull(String x) {
+        try {
+            if (x == null || x.isBlank()) return null;
+            return new BigDecimal(x.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private BigDecimal parseBigOrZero(String x) {
+        return parseBig(x);
+    }
 
     private OffsetDateTime parseKisDate(String yyyymmdd) {
-        LocalDate date = LocalDate.parse(yyyymmdd, DateTimeFormatter.ofPattern("yyyyMMdd"));
-        return date.atStartOfDay().atOffset(ZoneOffset.UTC);
+        try {
+            if (yyyymmdd == null || yyyymmdd.isBlank()) {
+                return null;
+            }
+            LocalDate date = LocalDate.parse(yyyymmdd, DateTimeFormatter.ofPattern("yyyyMMdd"));
+            return date.atStartOfDay().atOffset(ZoneOffset.UTC);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String toKisDateString(OffsetDateTime odt) {

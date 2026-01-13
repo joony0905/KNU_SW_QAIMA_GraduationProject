@@ -142,13 +142,20 @@ public class StockService {
     private String normalizeExchangeCode(String exchangeCode) {
         if (exchangeCode == null) return null;
 
-        return switch (exchangeCode.toUpperCase()) {
-            case "XKRX" -> "KRX";
+        String normalized = exchangeCode.trim().toUpperCase();
+        if (normalized.startsWith("KRX ")) {
+            return "KRX";
+        }
+
+        String condensed = normalized.replace(" ", "");
+
+        return switch (condensed) {
+            case "XKRX", "KRX", "KRXSM" -> "KRX";
             case "XKOS" -> "KOSDAQ";
+            case "XKON" -> "KONEX";
             case "XNYS" -> "NYSE";
             case "XNAS" -> "NASDAQ";
-            default -> exchangeCode;
+            default -> normalized;
         };
     }
 }
-
