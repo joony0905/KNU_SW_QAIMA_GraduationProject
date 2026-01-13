@@ -2,10 +2,7 @@ package com.qaima.external;
 
 import com.qaima.domain.Freq;
 import com.qaima.domain.Stock;
-import com.qaima.dto.KisStatResponseDto;
-import com.qaima.dto.KisTickerMetaDto;
-import com.qaima.dto.PriceOhlcvDto;
-import com.qaima.dto.StockDto;
+import com.qaima.dto.*;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -160,7 +157,7 @@ public class KrStockClient {
                 });
     }
 
-    // raw output용
+    // raw output용 혅재가 시세 조회
     public Mono<KisStatResponseDto.Output> fetchKisStatRaw(String stockCode) {
         return getAccessToken()
                 .flatMap(token ->
@@ -174,7 +171,7 @@ public class KrStockClient {
                                 .header("authorization", token)
                                 .header("appkey", appKey)
                                 .header("appsecret", appSecret)
-                                .header("tr_id", "VHKST03010100")
+                                .header("tr_id", "FHKST01010100")
                                 .retrieve()
                                 .bodyToMono(KisStatResponseDto.class)
                                 .flatMap(resp -> {
@@ -245,7 +242,7 @@ public class KrStockClient {
                                 .header("authorization", token)
                                 .header("appkey", appKey)
                                 .header("appsecret", appSecret)
-                                .header("tr_id", "VHKST03010100")
+                                .header("tr_id", "FHKST03010100")
                                 .header("custtype", "P")
                                 .retrieve()
                                 // HTTP 4xx/5xx면 바로 에러로
