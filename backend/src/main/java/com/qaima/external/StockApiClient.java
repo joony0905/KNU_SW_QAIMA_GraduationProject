@@ -210,10 +210,11 @@ public class StockApiClient implements StockClient {
     }
 
     private StockMeta toStockMetaFromKis(KisTickerMetaDto kis, String symbol) {
+        String normalizedSymbol = normalizeSymbolForFetch(symbol);
         return StockMeta.builder()
-                .symbol(symbol)
+                .symbol(normalizedSymbol)
                 .name(kis.getName())
-                .exchangeCode(extractExchangeCodeFromSymbol(symbol))
+                .exchangeCode(normalizeExchangeCode(extractExchangeCodeFromSymbol(normalizedSymbol)))
                 .price(kis.getPrice())
                 .changeRate(kis.getChangeRate())
                 .source("KIS")
@@ -224,6 +225,7 @@ public class StockApiClient implements StockClient {
         MarketStackTickersResponse.StockExchange exchange = data.getStock_exchange();
         String exchangeCode = null;
         String countryCode = null;
+        String normalizedSymbol = normalizeSymbolForFetch(data.getSymbol());
 
         if (exchange != null) {
             exchangeCode = exchange.getAcronym() != null ? exchange.getAcronym() : exchange.getMic();
@@ -231,9 +233,9 @@ public class StockApiClient implements StockClient {
         }
 
         return StockMeta.builder()
-                .symbol(data.getSymbol())
+                .symbol(normalizedSymbol)
                 .name(data.getName())
-                .exchangeCode(exchangeCode)
+                .exchangeCode(normalizeExchangeCode(exchangeCode))
                 .countryCode(countryCode)
                 .price(data.getPrice())
                 .changeRate(data.getChangeRate())
@@ -250,5 +252,25 @@ public class StockApiClient implements StockClient {
             return "KRX";
         }
         return null;
+    }
+
+    private String normalizeExchangeCode(String exchangeCode) {
+        if (exchangeCode == null) return null;
+
+        String normalized = exchangeCode.trim().toUpperCase();
+        if (normalized.startsWith("KRX ")) {
+            return "KRX";
+        }
+
+        String condensed = normalized.replace(" ", "");
+
+        return switch (condensed) {
+            case "XKRX", "KRX", "KRXSM" -> "KRX";
+            case "XKOS" -> "KOSDAQ";
+            case "XKON" -> "KONEX";
+            case "XNYS" -> "NYSE";
+            case "XNAS" -> "NASDAQ";
+            default -> normalized;
+        };
     }
 }
