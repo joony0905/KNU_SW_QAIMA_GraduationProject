@@ -1,5 +1,6 @@
 package com.qaima.service;
 
+import com.qaima.common.Blocking;
 import com.qaima.domain.Stock;
 import com.qaima.domain.User;
 import com.qaima.domain.Watchlist;
@@ -13,12 +14,9 @@ import com.qaima.repository.WatchlistItemRepository;
 import com.qaima.repository.WatchlistRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,114 +27,101 @@ public class WatchlistService {
     private final UserRepository userRepository;
     private final StockRepository stockRepository;
 
-    // 관심종목 추가
-
-    @Transactional
     public Mono<WatchlistResponseDto> addStockToWatchlist(WatchlistRequestDto requestDto, Long userId) {
-        // (나중에는 Spring Security에서 인증된 유저 정보를 가져와야 함)
-        Mono<User> userMono = Mono.fromCallable(() -> userRepository.findById(userId)
-                        .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")))
-                .subscribeOn(Schedulers.boundedElastic());
+        Mono<User> userMono = Blocking.call(() -> userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")));
 
-        Mono<Stock> stockMono = Mono.fromCallable(() -> stockRepository.findById(requestDto.getStockId())
-                        .orElseThrow(() -> new IllegalArgumentException("주식을 찾을 수 없습니다.")))
-                .subscribeOn(Schedulers.boundedElastic());
+        Mono<Stock> stockMono = Blocking.call(() -> stockRepository.findById(requestDto.getStockId())
+                .orElseThrow(() -> new IllegalArgumentException("주식을 찾을 수 없습니다.")));
 
-        Mono<Watchlist> watchlistMono = Mono.fromCallable(() -> watchlistRepository.findById(requestDto.getWatchlistId())
-                        .orElseThrow(() -> new IllegalArgumentException("관심목록을 찾을 수 없습니다.")))
-                .subscribeOn(Schedulers.boundedElastic());
+        Mono<Watchlist> watchlistMono = Blocking.call(() -> watchlistRepository.findById(requestDto.getWatchlistId())
+                .orElseThrow(() -> new IllegalArgumentException("관심목록을 찾을 수 없습니다.")));
 
         return Mono.zip(userMono, stockMono, watchlistMono)
                 .flatMap(tuple -> {
+                    User user = tuple.getT1();
                     Stock stock = tuple.getT2();
                     Watchlist watchlist = tuple.getT3();
+                    if (watchlist.getUser() == null || watchlist.getUser().getUserId() == null ||
+                            !watchlist.getUser().getUserId().equals(user.getUserId())) {
+                        return Mono.error(new IllegalArgumentException("관심목록 접근 권한이 없습니다."));
+                    }
 
-                    // (추가: 이 유저가 이 관심목록의 주인인지 확인하는 로직 필요)
                     WatchlistItem newItem = new WatchlistItem(watchlist, stock);
 
-                    return Mono.fromCallable(() -> watchlistItemRepository.save(newItem))
-                            .subscribeOn(Schedulers.boundedElastic())
+                    return Blocking.call(() -> watchlistItemRepository.save(newItem))
                             .map(WatchlistResponseDto::new);
                 });
     }
 
-    /*
-     *  조회
-     */
-    @Transactional(readOnly = true)
     public Mono<List<WatchlistResponseDto>> getWatchlistItems(Long watchlistId, Long userId) {
-        // (나중에 Security에서 인증된 유저 정보를 가져와야 함)
-        Mono<User> userMono = Mono.fromCallable(() -> userRepository.findById(userId)
-                        .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")))
-                .subscribeOn(Schedulers.boundedElastic());
+        Mono<User> userMono = Blocking.call(() -> userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")));
 
-        Mono<Watchlist> watchlistMono = Mono.fromCallable(() -> watchlistRepository.findById(watchlistId)
-                        .orElseThrow(() -> new IllegalArgumentException("관심목록을 찾을 수 없습니다.")))
-                .subscribeOn(Schedulers.boundedElastic());
+        Mono<Watchlist> watchlistMono = Blocking.call(() -> watchlistRepository.findById(watchlistId)
+                .orElseThrow(() -> new IllegalArgumentException("관심목록을 찾을 수 없습니다.")));
 
-        return userMono.then(watchlistMono)
-                .flatMap(watchlist -> Mono.fromCallable(() -> watchlistItemRepository.findByWatchlist(watchlist))
-                        .subscribeOn(Schedulers.boundedElastic()))
-                .map(items -> items.stream()
-                        .map(WatchlistResponseDto::new)
-                        .collect(Collectors.toList()));
+        return Mono.zip(userMono, watchlistMono)
+                .flatMap(tuple -> {
+                    User user = tuple.getT1();
+                    Watchlist watchlist = tuple.getT2();
+
+                    if (watchlist.getUser() == null || watchlist.getUser().getUserId() == null ||
+                            !watchlist.getUser().getUserId().equals(user.getUserId())) {
+                        return Mono.error(new IllegalArgumentException("관심목록 접근 권한이 없습니다."));
+                    }
+
+                    return Blocking.call(() -> watchlistItemRepository.findByWatchlist(watchlist));
+                })
+                .map(items -> items.stream().map(WatchlistResponseDto::new).toList());
     }
 
-    /*
-     * 삭제
-     */
-    @Transactional
     public Mono<Void> removeStockFromWatchlist(Long watchlistItemId, Long userId) {
-        // (나중에 Security에서 인증된 유저 정보를 가져와야 함)
-        Mono<User> userMono = Mono.fromCallable(() -> userRepository.findById(userId)
-                        .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")))
-                .subscribeOn(Schedulers.boundedElastic());
+        Mono<User> userMono = Blocking.call(() -> userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")));
 
-        Mono<WatchlistItem> itemMono = Mono.fromCallable(() -> watchlistItemRepository.findById(watchlistItemId)
-                        .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다.")))
-                .subscribeOn(Schedulers.boundedElastic());
+        Mono<WatchlistItem> itemMono = Blocking.call(() -> watchlistItemRepository.findById(watchlistItemId)
+                .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다.")));
 
-        return userMono.then(itemMono)
-                .flatMap(item -> Mono.fromCallable(() -> {
-                            watchlistItemRepository.delete(item);
-                            return null;
-                        })
-                        .subscribeOn(Schedulers.boundedElastic()))
-                .then();
+        return Mono.zip(userMono, itemMono)
+                .flatMap(tuple -> {
+                    User user = tuple.getT1();
+                    WatchlistItem item = tuple.getT2();
+
+                    if (item.getWatchlist() == null || item.getWatchlist().getUser() == null ||
+                            item.getWatchlist().getUser().getUserId() == null ||
+                            !item.getWatchlist().getUser().getUserId().equals(user.getUserId())) {
+                        return Mono.error(new IllegalArgumentException("삭제 권한이 없습니다."));
+                    }
+
+                    return Blocking.run(() -> watchlistItemRepository.delete(item));
+                });
     }
 
-    /*
-     *  갱신
-     */
-    @Transactional
-    public Mono<WatchlistResponseDto> updateWatchlistItemNote(Long watchlistItemId, WatchlistItemUpdateDto requestDto, Long userId) {
-        // (임시) 유저 ID로 유저 찾기
-        Mono<User> userMono = Mono.fromCallable(() -> userRepository.findById(userId)
-                        .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")))
-                .subscribeOn(Schedulers.boundedElastic());
+    public Mono<WatchlistResponseDto> updateWatchlistItemNote(Long watchlistItemId,
+                                                              WatchlistItemUpdateDto requestDto,
+                                                              Long userId) {
+        Mono<User> userMono = Blocking.call(() -> userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")));
 
-        Mono<WatchlistItem> itemMono = Mono.fromCallable(() -> watchlistItemRepository.findById(watchlistItemId)
-                        .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다.")))
-                .subscribeOn(Schedulers.boundedElastic());
+        Mono<WatchlistItem> itemMono = Blocking.call(() -> watchlistItemRepository.findById(watchlistItemId)
+                .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다.")));
 
-        return userMono.then(itemMono)
-                .flatMap(item -> {
-                    // (중요!) 이 아이템이 이 유저의 소유가 맞는지 확인
-                    if (!item.getWatchlist().getUser().getUserId().equals(userId)) {
+        return Mono.zip(userMono, itemMono)
+                .flatMap(tuple -> {
+                    User user = tuple.getT1();
+                    WatchlistItem item = tuple.getT2();
+
+                    if (item.getWatchlist() == null || item.getWatchlist().getUser() == null ||
+                            item.getWatchlist().getUser().getUserId() == null ||
+                            !item.getWatchlist().getUser().getUserId().equals(user.getUserId())) {
                         return Mono.error(new IllegalArgumentException("수정 권한이 없습니다."));
                     }
 
                     item.setNote(requestDto.getNote());
 
-                    /** 타입 오염돼서 임시로 제네릭타입 설정
-                     JPA 호출은 항상 Mono.<T>fromCallable(...)
-                     WebFlux 환경에서 blocking JPA 호출 처리
-                     fromCallable + boundedElastic + 제네릭 명시로 타입 추론 이슈 방지
-                     추후 전체적인 수정 */
-                    return Mono.<WatchlistItem>fromCallable(() -> watchlistItemRepository.save(item))
-                            .subscribeOn(Schedulers.boundedElastic())
-                            .map(saved -> new WatchlistResponseDto(saved));
+                    return Blocking.call(() -> watchlistItemRepository.save(item))
+                            .map(WatchlistResponseDto::new);
                 });
     }
-
 }

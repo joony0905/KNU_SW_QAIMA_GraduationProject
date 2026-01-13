@@ -18,7 +18,9 @@ public class FinancialDto {
 
     private Integer year;
     private Integer quarter;
-    private String periodType; // "A", "Q", "TTM"
+    private Integer Half;
+    private String periodType; // "A", "Q", "H", "TTM"
+    private Integer periodNo;
     private LocalDate reportDate;
 
     // 규모(원 단위) 지표들

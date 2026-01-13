@@ -1,14 +1,21 @@
 package com.qaima.importer;
 
+import com.qaima.domain.Exchange;
 import com.qaima.domain.Financial;
 import com.qaima.domain.PeriodType;
 import com.qaima.domain.Stock;
+import com.qaima.repository.ExchangeRepository;
 import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.StockRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -27,15 +34,25 @@ public class FinancialImportService {
 
     private final StockRepository stockRepository;
     private final FinancialRepository financialRepository;
+    private final ExchangeRepository exchangeRepository;
+    private final PlatformTransactionManager transactionManager;
 
-    /**
-     * 파이썬이 생성한 재무제표 CSV를 읽어서 Financial 엔티티로 저장
-     */
-    @Transactional
+    @PersistenceContext
+    private EntityManager em;
+
+
     public void importFromCsv(Path csvPath) throws IOException {
+        TransactionTemplate tt = new TransactionTemplate(transactionManager);
+        tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+
+        int lineNo = 0;
+        int ok = 0;
+        int fail = 0;
+
         try (BufferedReader reader = Files.newBufferedReader(csvPath, StandardCharsets.UTF_8)) {
 
             String headerLine = reader.readLine();
+            lineNo++;
             if (headerLine == null) {
                 log.warn("빈 CSV 파일입니다: {}", csvPath);
                 return;
@@ -43,7 +60,6 @@ public class FinancialImportService {
             Map<String, Integer> idx = buildHeaderIndex(headerLine);
 
             String line;
-            int lineNo = 1;
             while ((line = reader.readLine()) != null) {
                 lineNo++;
                 if (line.isBlank()) continue;
@@ -51,25 +67,31 @@ public class FinancialImportService {
                 String[] cols = line.split(",", -1);
 
                 try {
-                    importSingleRow(idx, cols);
+                    tt.execute(status -> {
+                        importSingleRow(idx, cols);     // 내부에서 save() 수행
+                        financialRepository.flush();    // 제약 위반 즉시 노출
+                        em.clear();                     // 영속성 컨텍스트 오염/메모리 누수 방지
+                        return null;
+                    });
+                    ok++;
+                } catch (DataIntegrityViolationException e) {
+                    fail++;
+                    log.warn("CSV {}:{} 저장 스킵 (DB 제약 위반): {}", csvPath, lineNo, rootMessage(e));
+                    safeClear();
                 } catch (Exception e) {
+                    fail++;
                     log.error("CSV {}:{} 라인 처리 중 오류: {}", csvPath, lineNo, e.getMessage(), e);
+                    safeClear();
                 }
 
-                long count = financialRepository.count();
-                log.info("현재 financial 행 수 = {}", count);
-
+                if ((ok + fail) % 200 == 0) {
+                    log.info("import progress: ok={}, fail={}, lastLine={}", ok, fail, lineNo);
+                }
             }
-        }
-    }
 
-    private Map<String, Integer> buildHeaderIndex(String headerLine) {
-        String[] headers = headerLine.split(",", -1);
-        Map<String, Integer> map = new HashMap<>();
-        for (int i = 0; i < headers.length; i++) {
-            map.put(headers[i].trim(), i);
+            log.info("import done: ok={}, fail={}, totalLines={}", ok, fail, lineNo);
+
         }
-        return map;
     }
 
     private void importSingleRow(Map<String, Integer> idx, String[] cols) {
@@ -78,27 +100,43 @@ public class FinancialImportService {
             throw new IllegalArgumentException("stock_code 가 비어 있습니다.");
         }
 
+        String stockName = getString(cols, idx, "name");
+
         Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
-                .orElseThrow(() -> new IllegalArgumentException("stock 테이블에 없는 stock_code: " + stockCode));
+                .orElseGet(() -> {
+                    Exchange krx = exchangeRepository.findByCode("KRX")
+                            .orElseThrow(() -> new IllegalStateException("exchange 테이블에 code=KRX가 없습니다."));
+
+                    Stock s = new Stock();
+                    s.setStockCode(stockCode);
+                    if (stockName != null && !stockName.isBlank()) s.setCompanyName(stockName);
+                    s.setExchange(krx);
+                    log.warn("stock 자동 생성: {} ({})", stockCode, stockName);
+                    return stockRepository.save(s);
+                });
 
         Financial f = new Financial();
-
-        // FK
         f.setStock(stock);
 
-        // NOT NULL 필드들
-        f.setReportDate(parseLocalDate(getString(cols, idx, "report_date")));
-        // version은 엔티티에서 기본값 1이지만, CSV에 있으면 따라감
+        // NOT NULL
+        LocalDate reportDate = parseLocalDate(getString(cols, idx, "report_date"));
+        if (reportDate == null) throw new IllegalArgumentException("report_date 가 비어 있습니다.");
+        f.setReportDate(reportDate);
+
         Integer version = parseInteger(getString(cols, idx, "version"));
-        if (version != null) {
-            f.setVersion(version);
-        }
+        if (version != null) f.setVersion(version);
 
         f.setFiscalYear(requiredInt(cols, idx, "fiscal_year"));
-        f.setFiscalQuarter(parseInteger(getString(cols, idx, "fiscal_quarter")));
         f.setPeriodType(parsePeriodType(getString(cols, idx, "period_type")));
 
-        // 선택 필드들
+        // CSV period_no 반영 (반기 H2 유지/유니크 충돌 방지)
+        Integer periodNo = parseInteger(getString(cols, idx, "period_no"));
+        if (periodNo != null) f.setPeriodNo(periodNo);
+
+        // 호환용
+        f.setFiscalQuarter(parseInteger(getString(cols, idx, "fiscal_quarter")));
+
+        // 선택
         f.setFilingDate(parseLocalDate(getString(cols, idx, "filing_date")));
         f.setCurrency(getString(cols, idx, "currency"));
         f.setSource(getString(cols, idx, "source"));
@@ -121,10 +159,18 @@ public class FinancialImportService {
         f.setPer(parseBigDecimal(getString(cols, idx, "per")));
         f.setPbr(parseBigDecimal(getString(cols, idx, "pbr")));
 
-        // createdAt / updatedAt 은 @CreationTimestamp / @UpdateTimestamp 로 자동 세팅
         financialRepository.save(f);
     }
 
+    private Map<String, Integer> buildHeaderIndex(String headerLine) {
+        headerLine = headerLine.replace("\uFEFF", ""); // BOM 제거
+        String[] headers = headerLine.split(",", -1);
+        Map<String, Integer> map = new HashMap<>();
+        for (int i = 0; i < headers.length; i++) {
+            map.put(headers[i].trim(), i);
+        }
+        return map;
+    }
 
     private String getString(String[] cols, Map<String, Integer> idx, String colName) {
         Integer i = idx.get(colName);
@@ -135,16 +181,26 @@ public class FinancialImportService {
 
     private Integer requiredInt(String[] cols, Map<String, Integer> idx, String colName) {
         String v = getString(cols, idx, colName);
-        if (v == null) {
-            throw new IllegalArgumentException(colName + " 는 필수 정수값입니다.");
-        }
+        if (v == null) throw new IllegalArgumentException(colName + " 는 필수 정수값입니다.");
         return Integer.parseInt(v);
     }
 
     private Integer parseInteger(String v) {
-        if (v == null) return null;
-        return v.isBlank() ? null : Integer.parseInt(v);
+        if (v == null || v.isBlank()) return null;
+        String s = v.trim();
+        try {
+            return Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            // "1.0" 같은 케이스 처리
+            try {
+                double d = Double.parseDouble(s);
+                return (int) d;
+            } catch (NumberFormatException ex) {
+                throw e;
+            }
+        }
     }
+
 
     private LocalDate parseLocalDate(String v) {
         if (v == null || v.isBlank()) return null;
@@ -157,25 +213,26 @@ public class FinancialImportService {
     }
 
     private PeriodType parsePeriodType(String v) {
-        if (v == null || v.isBlank()) {
-            throw new IllegalArgumentException("period_type 이 비어 있습니다.");
-        }
+        if (v == null || v.isBlank()) throw new IllegalArgumentException("period_type 이 비어 있습니다.");
+
+        String code = v.trim().toUpperCase();
         try {
-            return PeriodType.valueOf(v);
+            return PeriodType.valueOf(code);
         } catch (IllegalArgumentException ex) {
-            switch (v) {
-                case "A":
-                    return PeriodType.A;
-                default:
-                    throw new IllegalArgumentException("지원하지 않는 period_type: " + v);
-            }
+            // 안전하게 스킵시키고 싶으면 여기서 throw (현재 구현은 throw로 스킵 처리)
+            throw new IllegalArgumentException("지원하지 않는 period_type: " + code);
         }
     }
+
+    private String rootMessage(Throwable t) {
+        Throwable cur = t;
+        while (cur.getCause() != null) cur = cur.getCause();
+        return cur.getMessage();
+    }
+
+    private void safeClear() {
+        try {
+            if (em != null) em.clear();
+        } catch (Exception ignored) {}
+    }
 }
-
-
-/** 사용법
- * csv를 파일 경로에 맞춰서 넣고 터미널에서도 똑같이 경로를 맞춘 후 아래 2줄의 코드를 터미널에서 실행
- * SPRING_PROFILES_ACTIVE=import-financial-csv \
- * ./gradlew bootRun --args='data/financial_005930_2019_2023.csv'
- */
