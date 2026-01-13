@@ -2,7 +2,10 @@ package com.qaima.external;
 
 import com.qaima.domain.Freq;
 import com.qaima.domain.Stock;
-import com.qaima.dto.*;
+import com.qaima.dto.KisStatResponseDto;
+import com.qaima.dto.KisTickerMetaDto;
+import com.qaima.dto.PriceOhlcvDto;
+import com.qaima.dto.StockDto;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -95,10 +98,10 @@ public class KrStockClient {
 
     /**
      * 디버그용 티커 메타 (컨트롤러 /debug/ticker-meta 에서 사용)
-     * MarketStackTickersResponse.TickerData 형태로 맞춰줌
-     * 전체적으로 활용하게끔 수정함
+     * KIS 티커 메타 조회
+     * KIS 응답 스키마 기반으로 DTO 분리
      */
-    public Mono<MarketStackTickersResponse.TickerData> fetchTickerMeta(String symbol) {
+    public Mono<KisTickerMetaDto> fetchTickerMeta(String symbol) {
         String cleanSymbol = symbol
                 .replace(".XKRX", "")
                 .replace(".XKOS", "");
@@ -132,25 +135,23 @@ public class KrStockClient {
                         return Mono.empty();
                     }
 
-                    MarketStackTickersResponse.TickerData data =
-                            new MarketStackTickersResponse.TickerData();
-
-                    data.setSymbol(symbol);
-                    data.setName("KIS_" + cleanSymbol);
+                    KisTickerMetaDto.KisTickerMetaDtoBuilder data = KisTickerMetaDto.builder()
+                            .symbol(symbol)
+                            .name("KIS_" + cleanSymbol);
 
                     try {
                         if (o.getStck_prpr() != null && !o.getStck_prpr().isBlank()) {
-                            data.setPrice(parseBig(o.getStck_prpr()));
+                            data.price(parseBig(o.getStck_prpr()));
                         }
                         if (o.getPrdy_ctrt() != null && !o.getPrdy_ctrt().isBlank()) {
-                            data.setChangeRate(parseBig(o.getPrdy_ctrt()));
+                            data.changeRate(parseBig(o.getPrdy_ctrt()));
                         }
                     } catch (NumberFormatException e) {
                         log.error("[KrStockClient] 가격/등락률 파싱 에러: {}", e.getMessage());
                         return Mono.empty();
                     }
 
-                    return Mono.just(data);
+                    return Mono.just(data.build());
                 })
                 .onErrorResume(e -> {
                     log.error("[KrStockClient] 한투 API 에러: {}", e.getMessage(), e);

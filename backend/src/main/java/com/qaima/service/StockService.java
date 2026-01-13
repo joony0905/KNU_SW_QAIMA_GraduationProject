@@ -1,7 +1,7 @@
 package com.qaima.service;
 
 import com.qaima.domain.Stock;
-import com.qaima.dto.MarketStackTickersResponse;
+import com.qaima.dto.StockMeta;
 import com.qaima.dto.StockDto;
 import com.qaima.external.StockClient;
 import com.qaima.repository.ExchangeRepository;
@@ -57,7 +57,7 @@ public class StockService {
 
                     log.info("[loadOrCreateStock] DB 미존재 → 외부 메타 조회 시작: {}", normalizedCode);
 
-                    return stockClient.fetchTickerMeta(normalizedCode) // Mono<ApiResponse<TickerData>>
+                    return stockClient.fetchTickerMeta(normalizedCode) // Mono<ApiResponse<StockMeta>>
                             .flatMap(apiResponse -> {
                                 if (apiResponse == null || !apiResponse.isSuccess()) {
                                     log.warn("[loadOrCreateStock] 외부 메타 조회 실패 → DB 저장 안 함: {}",
@@ -67,7 +67,7 @@ public class StockService {
                                     ));
                                 }
 
-                                MarketStackTickersResponse.TickerData meta = apiResponse.getData();
+                                StockMeta meta = apiResponse.getData();
                                 if (meta == null) {
                                     return Mono.error(new IllegalStateException(
                                             "메타 데이터 없음: " + normalizedCode
@@ -99,15 +99,12 @@ public class StockService {
 
     private Mono<Stock> createAndSaveStockFromMeta(
             String normalizedCode,
-            MarketStackTickersResponse.TickerData meta
+            StockMeta meta
     ) {
-        MarketStackTickersResponse.StockExchange ex = meta.getStock_exchange();
-        if (ex == null) {
-            return Mono.error(new IllegalStateException("Marketstack 응답에 stock_exchange가 없음"));
+        String exchangeCode = normalizeExchangeCode(meta.getExchangeCode());
+        if (exchangeCode == null || exchangeCode.isBlank()) {
+            return Mono.error(new IllegalStateException("메타 응답에 exchangeCode가 없음"));
         }
-
-        String mic = ex.getMic();
-        String exchangeCode = normalizeExchangeCode(mic); // "XKRX" → "KRX"
 
         return Mono.fromCallable(() ->
                         exchangeRepository.findByCode(exchangeCode)
@@ -117,16 +114,22 @@ public class StockService {
                 )
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(exchange -> {
-                    Stock stock = new Stock();
-                    stock.setStockCode(normalizedCode);
-                    stock.setCompanyName(meta.getName());
-                    stock.setAssetType("EQUITY");
-                    stock.setCurrency(ex.getCountry_code() != null ? ex.getCountry_code() : "USD");
-                    stock.setExchange(exchange);
-                    stock.setIsin(null);
+                    return Mono.fromCallable(() -> stockRepository.findByExchangeAndStockCode(exchange, normalizedCode))
+                            .subscribeOn(Schedulers.boundedElastic())
+                            .flatMap(existing -> existing
+                                    .map(Mono::just)
+                                    .orElseGet(() -> {
+                                        Stock stock = new Stock();
+                                        stock.setStockCode(normalizedCode);
+                                        stock.setCompanyName(meta.getName());
+                                        stock.setAssetType("EQUITY");
+                                        stock.setCurrency(meta.getCountryCode() != null ? meta.getCountryCode() : "USD");
+                                        stock.setExchange(exchange);
+                                        stock.setIsin(null);
 
-                    return Mono.fromCallable(() -> stockRepository.save(stock))
-                            .subscribeOn(Schedulers.boundedElastic());
+                                        return Mono.fromCallable(() -> stockRepository.save(stock))
+                                                .subscribeOn(Schedulers.boundedElastic());
+                                    }));
                 });
     }
 
@@ -136,17 +139,16 @@ public class StockService {
         return (dotIdx > 0) ? symbol.substring(0, dotIdx) : symbol.trim();
     }
 
-    private String normalizeExchangeCode(String msExchange) {
-        if (msExchange == null) return "UNKNOWN";
+    private String normalizeExchangeCode(String exchangeCode) {
+        if (exchangeCode == null) return null;
 
-        return switch (msExchange.toUpperCase()) {
+        return switch (exchangeCode.toUpperCase()) {
             case "XKRX" -> "KRX";
             case "XKOS" -> "KOSDAQ";
             case "XNYS" -> "NYSE";
             case "XNAS" -> "NASDAQ";
-            default -> msExchange;
+            default -> exchangeCode;
         };
     }
 }
-
 
