@@ -1,12 +1,10 @@
 package com.qaima.external;
 
 import com.qaima.domain.Stock;
+import com.qaima.dto.MarketStackCandlesResponse;
 import com.qaima.dto.MarketStackTickersResponse;
 import com.qaima.dto.PriceOhlcvDto;
 import com.qaima.dto.StockDto;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,9 +12,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import com.qaima.domain.Freq;
-import com.qaima.dto.PriceOhlcvDto;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @Slf4j
@@ -144,7 +143,7 @@ public class GlobalStockClient {
                         .build()
                 )
                 .retrieve()
-                .bodyToMono(MarketStackEodResponse.class)
+                .bodyToMono(MarketStackCandlesResponse.class)
                 .map(resp -> mapToPriceOhlcvDtoList(resp, freq));
     }
 
@@ -159,7 +158,7 @@ public class GlobalStockClient {
         };
     }
 
-    private List<PriceOhlcvDto> mapToPriceOhlcvDtoList(MarketStackEodResponse resp, Freq freq) {
+    private List<PriceOhlcvDto> mapToPriceOhlcvDtoList(MarketStackCandlesResponse resp, Freq freq) {
 
         if (resp == null || resp.getData() == null) {
             return List.of();
@@ -167,46 +166,20 @@ public class GlobalStockClient {
 
         return resp.getData().stream()
                 .map(d -> PriceOhlcvDto.builder()
-                        .ts(parseMarketstackDate(d.getDate()))
+                        .ts(parseMarketstackDate(d.getT()))
                         .freq(freq)
-                        .open(d.getOpen() != null ? d.getOpen() : BigDecimal.ZERO)
-                        .high(d.getHigh() != null ? d.getHigh() : BigDecimal.ZERO)
-                        .low(d.getLow() != null ? d.getLow() : BigDecimal.ZERO)
-                        .close(d.getClose() != null ? d.getClose() : BigDecimal.ZERO)
-                        .volume(d.getVolume() != null ? d.getVolume() : BigDecimal.ZERO)
+                        .open(d.getO() != null ? d.getO() : BigDecimal.ZERO)
+                        .high(d.getH() != null ? d.getH() : BigDecimal.ZERO)
+                        .low(d.getL() != null ? d.getL() : BigDecimal.ZERO)
+                        .close(d.getC() != null ? d.getC() : BigDecimal.ZERO)
+                        .volume(BigDecimal.valueOf(d.getV()))
                         .build()
                 )
                 .toList();
     }
 
-
-    // 내부 응답 DTO
-    @Getter
-    @Setter
-    public static class MarketStackEodResponse {
-        private List<EodData> data;
-
-        @Getter @Setter
-        public static class EodData {
-            private String date;          // "2024-12-02T00:00:00+00:00"
-            private BigDecimal open;
-            private BigDecimal high;
-            private BigDecimal low;
-            private BigDecimal close;
-            private BigDecimal volume;
-        }
-    }
-
-    private OffsetDateTime parseMarketstackDate(String date) {
-        if (date == null || date.isBlank()) return null;
-
-        // "+0000" → "+00:00" 변환
-        if (date.length() == 24 && (date.charAt(22) != ':')) {
-            date = date.substring(0, 22) + ":" + date.substring(22);
-        }
-
-        return OffsetDateTime.parse(date);
+    private OffsetDateTime parseMarketstackDate(long epochSeconds) {
+        return OffsetDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC);
     }
 
 }
-
