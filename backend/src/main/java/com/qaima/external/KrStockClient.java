@@ -237,6 +237,7 @@ public class KrStockClient {
                                         .queryParam("FID_PERIOD_DIV_CODE", interval) // "D","W","M"
                                         .queryParam("FID_INPUT_DATE_1", toKisDateString(from))
                                         .queryParam("FID_INPUT_DATE_2", toKisDateString(to))
+                                        .queryParam("FID_ORG_ADJ_PRC", "0")
                                         .build()
                                 )
                                 .header("authorization", token)
@@ -244,6 +245,7 @@ public class KrStockClient {
                                 .header("appsecret", appSecret)
                                 .header("tr_id", "FHKST03010100")
                                 .header("custtype", "P")
+                                .header("content-type", "application/json; charset=utf-8")
                                 .retrieve()
                                 // HTTP 4xx/5xx면 바로 에러로
                                 .onStatus(
@@ -281,7 +283,7 @@ public class KrStockClient {
 
                                     return Mono.just(resp);
                                 })
-                                .map(this::mapToPriceOhlcvDtoList)
+                                .map(resp -> mapToPriceOhlcvDtoList(resp, freq))
                 );
     }
 
@@ -298,7 +300,7 @@ public class KrStockClient {
     }
 
 
-    private List<PriceOhlcvDto> mapToPriceOhlcvDtoList(KisCandlesResponse resp) {
+    private List<PriceOhlcvDto> mapToPriceOhlcvDtoList(KisCandlesResponse resp, Freq freq) {
 
         if (resp == null || resp.getOutput2() == null) {
             return List.of();
@@ -306,7 +308,7 @@ public class KrStockClient {
 
         int rawCount = resp.getOutput2().size();
         List<PriceOhlcvDto> candles = resp.getOutput2().stream()
-                .map(this::toPriceOhlcvDto)
+                .map(candle -> toPriceOhlcvDto(candle, freq))
                 .flatMap(Optional::stream)
                 .toList();
 
@@ -348,7 +350,7 @@ public class KrStockClient {
     }
 
 
-    private Optional<PriceOhlcvDto> toPriceOhlcvDto(KisCandlesResponse.Candle candle) {
+    private Optional<PriceOhlcvDto> toPriceOhlcvDto(KisCandlesResponse.Candle candle, Freq freq) {
         OffsetDateTime ts = parseKisDate(candle.getStck_bsop_date());
         if (ts == null) {
             return Optional.empty();
