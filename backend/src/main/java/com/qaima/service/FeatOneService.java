@@ -43,7 +43,7 @@ public class FeatOneService {
      * 4) FastAPI 분석 요청
      * 5) 응답 DTO 조립
      */
-    public Mono<FeatOneResponseDataDto> getFeatOneData(
+    public Mono<FeatOneResult> getFeatOneData(
             String stockCode,
             Freq freq,
             OffsetDateTime from,
@@ -92,13 +92,20 @@ public class FeatOneService {
                     );
 
                     return analysisApiClient.requestStockAnalysis(requestDto)
-                            .map(textDto -> buildFeatOneResponseDto(
-                                    stock,
-                                    candles,
-                                    indicators,
-                                    financials,
-                                    textDto
-                            ));
+                            .map(textDto -> {
+                                FeatOneResponseDataDto data =
+                                        buildFeatOneResponseDto(
+                                                stock,
+                                                candles,
+                                                indicators,
+                                                financials,
+                                                textDto
+                                        );
+
+                                boolean chartUnavailable = candles == null || candles.isEmpty();
+
+                                return new FeatOneResult(data, chartUnavailable);
+                            });
                 });
     }
 

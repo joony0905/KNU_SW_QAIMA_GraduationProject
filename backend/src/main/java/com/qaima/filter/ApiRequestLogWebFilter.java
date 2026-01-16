@@ -40,16 +40,15 @@ public class ApiRequestLogWebFilter implements WebFilter {
                 .cast(Authentication.class)
                 .onErrorResume(e -> Mono.empty());
 
+        Mono<Void> saveLog = authMono
+                .flatMap(auth -> apiRequestLogService.save(build(exchange, auth, requestId, startNs)))
+                .switchIfEmpty(apiRequestLogService.save(build(exchange, null, requestId, startNs)))
+                .onErrorResume(e -> Mono.empty());
+
         return chain.filter(exchange)
-                .doFinally(sig -> authMono
-                        .defaultIfEmpty(null)
-                        .flatMap(auth -> {
-                            ApiRequestLog log = build(exchange, auth, requestId, startNs);
-                            return apiRequestLogService.save(log);
-                        })
-                        .onErrorResume(e -> Mono.empty())
-                        .subscribe());
+                .then(saveLog);
     }
+
 
     private boolean shouldSkip(String path) {
         if (path == null) return false;
