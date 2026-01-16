@@ -22,4 +22,8 @@ export const ENDPOINTS = {
     getAnalysis: (stockCode: string, freq: string, from: string, to: string) =>
       `/feature1?stockCode=${stockCode}&freq=${freq}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   },
+  charts: {
+    candles: (stockCode: string, freq: string, from: string, to: string) =>
+      `/charts/candles?stockCode=${stockCode}&freq=${freq}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  },
 };
