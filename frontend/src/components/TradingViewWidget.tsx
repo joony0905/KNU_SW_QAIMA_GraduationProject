@@ -1,146 +1,123 @@
-import React, { useEffect, useRef, memo } from "react";
+import React, { memo, useEffect, useRef } from "react";
+import {
+  createChart,
+  CandlestickSeries,
+  HistogramSeries,
+  CrosshairMode,
+  type IChartApi,
+  type ISeriesApi,
+  type CandlestickData,
+  type HistogramData,
+  type Time,
+} from "lightweight-charts";
+
 import type { Candle } from "../types/candle";
-import { toChartCandles, toChartVolumes } from "../mappers/candleMapper";
 
-declare global {
-  interface Window {
-    LightweightCharts?: {
-      createChart: (container: HTMLElement, options: Record<string, unknown>) => {
-        addCandlestickSeries: (options?: Record<string, unknown>) => {
-          setData: (data: Array<Record<string, unknown>>) => void;
-        };
-        addHistogramSeries: (options?: Record<string, unknown>) => {
-          setData: (data: Array<Record<string, unknown>>) => void;
-        };
-        timeScale: () => { fitContent: () => void };
-        applyOptions: (options: Record<string, unknown>) => void;
-        remove: () => void;
-      };
-    };
-  }
-}
+/** epoch ms / s 자동 보정 */
+const toEpochSeconds = (t: number) =>
+  t > 10_000_000_000 ? Math.floor(t / 1000) : t;
 
-interface TradingViewWidgetProps {
+const mapCandles = (candles: Candle[]): CandlestickData<Time>[] =>
+  candles
+    .map((c) => ({
+      time: toEpochSeconds(Number(c.t)) as Time,
+      open: Number(c.o),
+      high: Number(c.h),
+      low: Number(c.l),
+      close: Number(c.c),
+    }))
+    .sort((a, b) => Number(a.time) - Number(b.time));
+
+const mapVolumes = (candles: Candle[]): HistogramData<Time>[] =>
+  candles
+    .map((c) => ({
+      time: toEpochSeconds(Number(c.t)) as Time,
+      value: Number(c.v),
+      color:
+        Number(c.c) >= Number(c.o)
+          ? "rgba(239, 68, 68, 0.6)"
+          : "rgba(59, 130, 246, 0.6)",
+    }))
+    .sort((a, b) => Number(a.time) - Number(b.time));
+
+interface Props {
   candles: Candle[];
 }
 
-const loadLightweightCharts = () =>
-  new Promise<NonNullable<Window["LightweightCharts"]>>((resolve, reject) => {
-    if (window.LightweightCharts) {
-      resolve(window.LightweightCharts);
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src =
-      "https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js";
-    script.async = true;
-    script.onload = () => {
-      if (window.LightweightCharts) {
-        resolve(window.LightweightCharts);
-      } else {
-        reject(new Error("Lightweight Charts 로드 실패"));
-      }
-    };
-    script.onerror = () => reject(new Error("Lightweight Charts 스크립트 에러"));
-    document.body.appendChild(script);
-  });
-
-function TradingViewWidget({ candles }: TradingViewWidgetProps) {
-  const container = useRef<HTMLDivElement | null>(null);
-  const chartRef = useRef<ReturnType<
-    NonNullable<Window["LightweightCharts"]>["createChart"]
-  > | null>(null);
-  const candleSeriesRef = useRef<{
-    setData: (data: Array<Record<string, unknown>>) => void;
-  } | null>(null);
-  const volumeSeriesRef = useRef<{
-    setData: (data: Array<Record<string, unknown>>) => void;
-  } | null>(null);
+function TradingViewWidget({ candles }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
 
   useEffect(() => {
-    let resizeObserver: ResizeObserver | null = null;
-    let isMounted = true;
+    if (!containerRef.current) return;
 
-    const initChart = async () => {
-      if (!container.current) return;
-      try {
-        const charts = await loadLightweightCharts();
-        if (!isMounted || !container.current) return;
+    // 기존 차트 제거 (중복 방지)
+    containerRef.current.innerHTML = "";
 
-        chartRef.current = charts.createChart(container.current, {
-          layout: {
-            background: { color: "#ffffff" },
-            textColor: "#1f2937",
-          },
-          grid: {
-            vertLines: { color: "#f3f4f6" },
-            horzLines: { color: "#f3f4f6" },
-          },
-          timeScale: { timeVisible: true },
-          rightPriceScale: { borderColor: "#e5e7eb" },
-        });
+    const chart = createChart(containerRef.current, {
+      width: containerRef.current.clientWidth || 600,
+      height: containerRef.current.clientHeight || 420,
+      layout: {
+        background: { color: "#ffffff" },
+        textColor: "#1f2937",
+      },
+      grid: {
+        vertLines: { color: "#f3f4f6" },
+        horzLines: { color: "#f3f4f6" },
+      },
+      crosshair: { mode: CrosshairMode.Normal },
+      rightPriceScale: { borderColor: "#e5e7eb" },
+      timeScale: { timeVisible: true },
+      watermark: { visible: false }, // 로고 제거
+    });
 
-        candleSeriesRef.current = chartRef.current.addCandlestickSeries({
-          upColor: "#ef4444",
-          downColor: "#3b82f6",
-          borderVisible: false,
-          wickUpColor: "#ef4444",
-          wickDownColor: "#3b82f6",
-        });
+    const candleSeries = chart.addSeries(CandlestickSeries, {
+      upColor: "#ef4444",
+      downColor: "#3b82f6",
+      borderVisible: false,
+      wickUpColor: "#ef4444",
+      wickDownColor: "#3b82f6",
+      priceFormat: {
+        type: "price",
+        precision: 0,
+        minMove: 1, // 원화 정수
+      },
+    });
 
-        volumeSeriesRef.current = chartRef.current.addHistogramSeries({
-          color: "rgba(148, 163, 184, 0.6)",
-          priceFormat: {
-            type: "volume",
-          },
-          priceScaleId: "",
-          scaleMargins: {
-            top: 0.8,
-            bottom: 0,
-          },
-        });
+    const volumeSeries = chart.addSeries(HistogramSeries, {
+      priceFormat: { type: "volume" },
+      priceScaleId: "",
+      scaleMargins: { top: 0.8, bottom: 0 },
+    });
 
-        resizeObserver = new ResizeObserver(() => {
-          if (!chartRef.current || !container.current) return;
-          chartRef.current.applyOptions({
-            width: container.current.clientWidth,
-            height: container.current.clientHeight,
-          });
-        });
-        resizeObserver.observe(container.current);
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
-    initChart();
+    chartRef.current = chart;
+    candleSeriesRef.current = candleSeries;
+    volumeSeriesRef.current = volumeSeries;
 
     return () => {
-      isMounted = false;
-      resizeObserver?.disconnect();
-      chartRef.current?.remove();
+      chart.remove();
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
     };
   }, []);
 
+  // 데이터 주입
   useEffect(() => {
     if (!candleSeriesRef.current || !volumeSeriesRef.current) return;
-    const candleData = toChartCandles(candles);
-    const volumeData = toChartVolumes(candles);
+    if (!candles || candles.length === 0) return;
 
-    candleSeriesRef.current.setData(candleData);
-    volumeSeriesRef.current.setData(volumeData);
+    candleSeriesRef.current.setData(mapCandles(candles));
+    volumeSeriesRef.current.setData(mapVolumes(candles));
     chartRef.current?.timeScale().fitContent();
   }, [candles]);
 
   return (
     <div
-      ref={container}
-      className="tradingview-widget-container"
-      style={{ width: "100%", height: "100%" }}
+      ref={containerRef}
+      style={{ width: "100%", height: 420 }} // 부모 높이 확정 필수
     />
   );
 }

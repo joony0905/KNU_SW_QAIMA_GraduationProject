@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import api from "../api/apiClient";
 import searchIcon from "../assets/search.png";
 import type { WatchlistItem } from "../types/watchlist";
 
@@ -23,12 +22,8 @@ export default function StockInputBox({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(e.target as Node)
-      ) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
-        // 필요하면 관심 리스트도 같이 닫기
         // setIsInterestListOpen(false);
       }
     };
@@ -37,20 +32,7 @@ export default function StockInputBox({
   }, []);
 
   useEffect(() => {
-    // TODO: 나중에 실제 fetchWatchlist(1) 호출로 교체
-    /*useEffect(() => {
-      const fetchInterests = async () => {
-        try {
-          const res = await api.get<ApiResponse<WatchlistItem[]>>(
-            "/api/v1/watchlist/1"
-          );
-          setInterests(res.data.data);
-        } catch (e) {
-          console.error("관심 종목 불러오기 실패:", e);
-        }
-      };
-      fetchInterests();
-    }, []); */
+    // TODO: 나중에 실제 watchlist API로 교체
     const dummy: WatchlistItem[] = [
       {
         watchlistItemId: 1,
@@ -77,37 +59,51 @@ export default function StockInputBox({
     setInterests(dummy);
   }, []);
 
-  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * 자동완성 API 비활성화 버전
+   * - 타이핑 중에는 API 호출하지 않음
+   * - 필요하면 관심 목록에서만 "로컬 자동완성" 제공
+   */
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
 
-    if (value.trim()) {
-      try {
-        const res = await api.get(
-          `/stocks/search?q=${encodeURIComponent(value)}`
-        );
-        setSuggestions(res?.data || []);
-        setShowSuggestions(true);
-      } catch (err) {
-        console.error("자동완성 API 실패:", err);
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    } else {
+    const q = value.trim();
+    if (!q) {
+      setSuggestions([]);
       setShowSuggestions(false);
+      return;
     }
+
+    // (선택) 로컬 자동완성: 관심 목록에서만 필터
+    const local = interests
+      .map((x) => x.stockName)
+      .filter((name): name is string => !!name)
+      .filter((name) => name.includes(q))
+      .slice(0, 10);
+
+    setSuggestions(local);
+    setShowSuggestions(local.length > 0);
   };
 
   const handleSelect = (value: string) => {
     setInputValue(value);
     setShowSuggestions(false);
-    if (onSearch) onSearch(value);
+    setIsInterestListOpen(false);
+    onSearch?.(value);
+  };
+
+  const submitSearch = () => {
+    const q = inputValue.trim();
+    if (!q) return;
+    setShowSuggestions(false);
+    setIsInterestListOpen(false);
+    onSearch?.(q);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && onSearch) {
-      onSearch(inputValue);
-      setShowSuggestions(false);
+    if (e.key === "Enter") {
+      submitSearch();
     }
   };
 
@@ -127,7 +123,11 @@ export default function StockInputBox({
         {/* 관심 버튼 */}
         <div className="w-full sm:w-28 flex justify-start items-center">
           <button
-            onClick={() => setIsInterestListOpen((prev: boolean) => !prev)}
+            onClick={() => {
+              setIsInterestListOpen((prev) => !prev);
+              setShowSuggestions(false);
+            }}
+            type="button"
             className="
               inline-flex items-center gap-2 px-3 py-1.5 rounded-full
               bg-gray-200 text-gray-800
@@ -138,11 +138,11 @@ export default function StockInputBox({
               xmlns="http://www.w3.org/2000/svg"
               width="20"
               height="20"
-              fill="currentColor" // 항상 찬 별
+              fill="currentColor"
               stroke="currentColor"
               strokeWidth="2"
               viewBox="0 0 24 24"
-              className="text-yellow-400" // 노란색 별
+              className="text-yellow-400"
             >
               <path d="M12 17.75l-6.16 3.73 1.18-6.88L2 9.77l6.92-1L12 2.5l3.08 6.27 6.92 1-5.02 4.83 1.18 6.88z" />
             </svg>
@@ -168,7 +168,8 @@ export default function StockInputBox({
             "
           />
           <button
-            onClick={() => onSearch && onSearch(inputValue)}
+            type="button"
+            onClick={submitSearch}
             className="
               shrink-0
               w-8 h-8 sm:w-9 sm:h-9
@@ -187,10 +188,10 @@ export default function StockInputBox({
         </div>
       </div>
 
-      {/* 자동완성 / 관심 리스트 공통 레이어 */}
+      {/* 자동완성 / 관심 리스트 */}
       {(showSuggestions && suggestions.length > 0) || isInterestListOpen ? (
         <div className="absolute top-full left-0 mt-1 w-full z-50">
-          {/* 자동완성 우선 */}
+          {/* 자동완성 (로컬) */}
           {showSuggestions && suggestions.length > 0 ? (
             <ul className="max-h-40 overflow-y-auto bg-white border border-stone-300 rounded-md shadow-md">
               {suggestions.map((s, idx) => (
@@ -204,6 +205,7 @@ export default function StockInputBox({
               ))}
             </ul>
           ) : (
+            // 관심 리스트
             isInterestListOpen && (
               <div className="bg-white border border-stone-300 rounded-md shadow-md">
                 <ul className="max-h-40 overflow-y-auto">
@@ -212,10 +214,10 @@ export default function StockInputBox({
                       key={item.watchlistItemId}
                       onClick={() => {
                         if (item.stockName) {
-                          setInputValue(item.stockName);
-                          if (onSearch) onSearch(item.stockName);
+                          handleSelect(item.stockName);
+                        } else {
+                          setIsInterestListOpen(false);
                         }
-                        setIsInterestListOpen(false);
                       }}
                       className="px-3 py-1.5 cursor-pointer hover:bg-zinc-100 text-sm sm:text-base md:text-lg font-['Inter']"
                     >
@@ -228,21 +230,6 @@ export default function StockInputBox({
           )}
         </div>
       ) : null}
-
-      {/* TODO: 실제 관심 종목 API 예시 */}
-      {/*
-      useEffect(() => {
-        const fetchInterests = async () => {
-          try {
-            const res = await api.get("/api/v1/interests");
-            // 예: setInterests(res.data);
-          } catch (e) {
-            console.error("관심 종목 불러오기 실패:", e);
-          }
-        };
-        fetchInterests();
-      }, []);
-      */}
     </div>
   );
 }

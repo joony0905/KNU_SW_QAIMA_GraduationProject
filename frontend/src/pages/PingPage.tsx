@@ -11,7 +11,7 @@ export default function PingPage() {
     setLoading(true);
     setErr("");
     try {
-      const res = await api.get("/api/v1/test/ping");
+      const res = await api.get("test/ping");
       setResult(res);
     } catch (e: any) {
       setErr(e.message);

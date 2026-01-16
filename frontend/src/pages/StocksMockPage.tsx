@@ -46,85 +46,6 @@ function useKSTTime() {
 export default function StocksMockPage() {
   const currentTime = useKSTTime();
 
-  const loadCandles = async (stockCode: string) => {
-    setChartLoading(true);
-    setChartError(null);
-
-    const toDate = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - 30);
-
-    try {
-      const response = await fetchCandles(
-        stockCode,
-        "ONE_D",
-        fromDate.toISOString(),
-        toDate.toISOString()
-      );
-      if (response.data.length === 0) {
-        setChartError("차트 데이터가 없습니다.");
-      }
-      setCandles(response.data);
-    } catch (e) {
-      console.error("차트 데이터 조회 실패:", e);
-      setChartError("차트를 불러오지 못했습니다.");
-      setCandles([]);
-    } finally {
-      setChartLoading(false);
-    }
-  };
-
-  const handleSearch = async (value: string) => {
-    console.log("검색 실행:", value);
-
-    if (!value.trim()) {
-      setErr("종목을 입력해주세요.");
-      setHasSelectedStock(false);
-      return;
-    }
-
-    setErr("");
-    setHasSelectedStock(true);
-
-    // ===== 종목 상세 정보 조회 추가 =====
-    try {
-      const stockInfo = await getStockByCode(value);
-
-      // mainStock 업데이트
-      setMainStock({
-        name: stockInfo.companyName,
-        symbol: stockInfo.stockCode,
-        price: stockInfo.price?.toString() || "0",
-        change: stockInfo.changeRate
-          ? (stockInfo.changeRate > 0 ? "+" : "") +
-            stockInfo.changeRate.toFixed(2)
-          : "0",
-        changeRate: stockInfo.changeRate
-          ? (stockInfo.changeRate > 0 ? "+" : "") +
-            stockInfo.changeRate.toFixed(2) +
-            "%"
-          : "0%",
-      });
-    } catch (e) {
-      console.error("종목 정보 조회 실패:", e);
-      // 실패해도 계속 진행 (재무제표는 별도)
-    }
-    // ====================================
-
-    // 재무제표 조회
-    try {
-      const financials = await fetchFinancials(value, 5);
-      if (financials.length > 0) {
-        const latest = financials[0];
-        setFinancial(latest);
-        setSections(buildSectionsFromDto(latest));
-      }
-    } catch (e) {
-      console.error("재무제표 조회 실패:", e);
-      setErr("재무제표 데이터를 불러오지 못했습니다.");
-    }
-    await loadCandles(value);
-  };
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -142,24 +63,6 @@ export default function StocksMockPage() {
     liquiditySection,
   ]);
 
-  const handleAnalyzeClick = async () => {
-    setLoading(true);
-    setErr("");
-    setAnalysisResult(null);
-
-    try {
-      // TODO: mainStock.symbol을 실제 ticker로 교체 필요
-      // 임시로 "005930" 또는 검색한 종목 코드 사용
-      const result = await fetchAnalysis(mainStock.symbol);
-      setAnalysisResult(result.analysis); // analysis 부분만 저장
-    } catch (e) {
-      console.error("분석 결과 조회 실패:", e);
-      setErr("분석 결과를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const [isOpen, setIsOpen] = useState(false);
 
   const getColorClass = (rate: string) => {
@@ -171,6 +74,7 @@ export default function StocksMockPage() {
   // 특징주 리스트용 타입/데이터
   interface FeaturedStock {
     name: string;
+    symbol: string; // code/ticker 추가 (중요)
     price: string;
     volume: string;
     change: string;
@@ -180,6 +84,7 @@ export default function StocksMockPage() {
   const [featuredStocks, setFeaturedStocks] = useState<FeaturedStock[]>([
     {
       name: "삼성전자",
+      symbol: "005930",
       price: "70,000",
       volume: "12,345,678",
       change: "500",
@@ -187,6 +92,7 @@ export default function StocksMockPage() {
     },
     {
       name: "LG에너지솔루션",
+      symbol: "373220",
       price: "400,000",
       volume: "3,210,987",
       change: "-2,000",
@@ -194,6 +100,7 @@ export default function StocksMockPage() {
     },
     {
       name: "카카오",
+      symbol: "035720",
       price: "55,000",
       volume: "8,765,432",
       change: "0",
@@ -210,11 +117,143 @@ export default function StocksMockPage() {
     changeRate: "+0.72%",
   });
 
+  const loadCandles = async (stockCode: string) => {
+    setChartLoading(true);
+    setChartError(null);
+
+    const toDate = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(toDate.getDate() - 30);
+
+    try {
+      const response = await fetchCandles(
+        stockCode,
+        "ONE_D",
+        fromDate.toISOString(),
+        toDate.toISOString()
+      );
+
+      if (response.data.length === 0) {
+        setChartError("차트 데이터가 없습니다.");
+      }
+      setCandles(response.data);
+    } catch (e: any) {
+      console.error("차트 데이터 조회 실패:", {
+        message: e?.message,
+        status: e?.response?.status,
+        data: e?.response?.data,
+        url: e?.config?.baseURL
+          ? `${e.config.baseURL}${e.config.url}`
+          : e?.config?.url,
+        params: e?.config?.params,
+      });
+      setChartError("차트를 불러오지 못했습니다.");
+      setCandles([]);
+    } finally {
+      setChartLoading(false);
+    }
+  };
+
+  
+  const looksLikeCode = (s: string) => {
+    // 005930 같은 국내코드(숫자 6자리) 또는 AAPL 같은 티커(영문/숫자/.-)
+    return /^\d{6}$/.test(s) || /^[A-Za-z0-9.\-]{1,15}$/.test(s);
+  };
+
+  const handleSearch = async (value: string) => {
+    console.log("검색 실행:", value);
+
+    const q = value.trim();
+    if (!q) {
+      setErr("종목을 입력해주세요.");
+      setHasSelectedStock(false);
+      return;
+    }
+
+    setErr("");
+    setHasSelectedStock(true);
+
+    let resolvedCode: string | null = null;
+
+    // 1) 먼저 getStockByCode로 코드 확정 시도
+    try {
+      const stockInfo = await getStockByCode(q);
+      resolvedCode = stockInfo.stockCode;
+
+      setMainStock({
+        name: stockInfo.companyName,
+        symbol: stockInfo.stockCode,
+        price: stockInfo.price?.toString() || "0",
+        change: stockInfo.changeRate
+          ? (stockInfo.changeRate > 0 ? "+" : "") + stockInfo.changeRate.toFixed(2)
+          : "0",
+        changeRate: stockInfo.changeRate
+          ? (stockInfo.changeRate > 0 ? "+" : "") + stockInfo.changeRate.toFixed(2) + "%"
+          : "0%",
+      });
+    } catch (e) {
+      console.error("종목 정보 조회 실패(임시 무시):", e);
+
+      // 2) 실패 시: 입력값이 코드처럼 보이면 그걸로 진행, 아니면 중단
+      if (looksLikeCode(q)) {
+        resolvedCode = q;
+        // 코드로 직접 입력했을 때는 이름을 모르니 최소 표기
+        setMainStock((prev) => ({
+          ...prev,
+          name: prev.name,
+          symbol: q,
+        }));
+      } else {
+        setErr("종목 코드를 확인할 수 없습니다. (예: 005930, AAPL)");
+        setHasSelectedStock(false);
+        return;
+      }
+    }
+
+    // 여기부터는 무조건 stockCode만 사용
+    const code = resolvedCode;
+
+    // 3) 재무제표(실패해도 차트는 가게)
+    try {
+      const financials = await fetchFinancials(code, 5);
+      if (financials.length > 0) {
+        const latest = financials[0];
+        setFinancial(latest);
+        setSections(buildSectionsFromDto(latest));
+      }
+    } catch (e) {
+      console.error("재무제표 조회 실패:", e);
+      // 여기서 return 금지 (차트는 보여줘야 함)
+    }
+
+    // 4) 차트는 항상 실행
+    await loadCandles(code);
+  };
+
+
+  const handleAnalyzeClick = async () => {
+    setLoading(true);
+    setErr("");
+    setAnalysisResult(null);
+
+    try {
+      // mainStock.symbol은 이제 항상 stockCode로 유지됨
+      const result = await fetchAnalysis(mainStock.symbol);
+      setAnalysisResult(result.analysis);
+    } catch (e) {
+      console.error("분석 결과 조회 실패:", e);
+      setErr("분석 결과를 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /*
   useEffect(() => {
     void loadCandles(mainStock.symbol);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
+  */
   const featuredListWrapperRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
@@ -264,12 +303,6 @@ export default function StocksMockPage() {
     console.log("★ toggleInterest clicked, isInterested =", isInterested);
     try {
       // TODO: 실제 관심종목(워치리스트) API 연동
-      // if (isInterested) {
-      //   await api.delete(`/api/v1/watchlist/items/${mainStock.symbol}`);
-      // } else {
-      //   await api.post(`/api/v1/watchlist/items`, { stockId: mainStock.id, watchlistId: 1 });
-      // }
-
       setIsInterested((prev) => !prev);
       setToast({
         message: isInterested
@@ -277,8 +310,8 @@ export default function StocksMockPage() {
           : "관심종목에 추가되었습니다.",
         visible: true,
       });
-    } catch (err) {
-      console.error("관심 종목 토글 실패:", err);
+    } catch (err2) {
+      console.error("관심 종목 토글 실패:", err2);
     }
   };
 
@@ -355,10 +388,10 @@ export default function StocksMockPage() {
               >
                 {/* 가운데 정렬 텍스트 */}
                 <span
-                  className={`
+                  className="
                     flex-1 text-center truncate whitespace-nowrap
                     text-xs sm:text-sm
-                  `}
+                  "
                 >
                   {topic}
                 </span>
@@ -478,19 +511,9 @@ export default function StocksMockPage() {
                 <button
                   key={idx}
                   onClick={() => {
-                    // 메인 종목 정보 업데이트
-                    setMainStock({
-                      name: stock.name,
-                      symbol: "AAPL", // 나중에 실제 symbol 필드로 교체
-                      price: stock.price,
-                      change: stock.change,
-                      changeRate: stock.changeRate,
-                    });
-
                     setIsOpen(false);
-
-                    // handleSearch 호출 → 차트 + 재무제표 자동 갱신
-                    handleSearch(stock.name);
+                    // code로 검색 (이름 금지)
+                    handleSearch(stock.symbol);
                   }}
                   className="w-full text-left"
                 >
@@ -547,7 +570,6 @@ export default function StocksMockPage() {
                       </span>
 
                       <div className="flex items-center gap-1.5 text-sm md:text-base font-medium">
-                        {/* 금액 + 퍼센트 색은 특징주 리스트와 동일하게 */}
                         <span className={mainColorClass}>
                           {mainStock.change}
                         </span>
@@ -555,7 +577,6 @@ export default function StocksMockPage() {
                           ({mainDisplayRate})
                         </span>
 
-                        {/* 방향 표시: 상승/하락/보합 → StockCard 삼각형 그대로 */}
                         {mainNumericChange > 0 && (
                           <div
                             className={`${mainColorClass} w-0 h-0 
@@ -641,8 +662,6 @@ export default function StocksMockPage() {
                         <IndicatorSectionBlock
                           key={section.sectionTitle}
                           section={section}
-                          // layout은 섹션 제목 기준으로 지금처럼 고정하거나,
-                          // section에 layout 필드를 추가해도 됨
                           layout={
                             section.sectionTitle === "수익성"
                               ? "3-2"
@@ -677,19 +696,14 @@ export default function StocksMockPage() {
                 분석 결과 보기
               </button>
 
-              {/* 로딩 */}
               {loading && (
                 <p className="text-sm sm:text-base text-gray-600">
                   분석 중입니다...
                 </p>
               )}
 
-              {/* 에러 */}
-              {err && (
-                <p className="text-sm sm:text-base text-red-600">{err}</p>
-              )}
+              {err && <p className="text-sm sm:text-base text-red-600">{err}</p>}
 
-              {/* JSON 결과 */}
               {analysisResult && (
                 <pre className="w-[90%] max-w-4xl bg-[#020617] text-white text-xs sm:text-sm p-4 sm:p-5 rounded-xl overflow-x-auto whitespace-pre-wrap">
                   {JSON.stringify(analysisResult, null, 2)}
@@ -731,7 +745,6 @@ function Cell({
 }) {
   return (
     <div className={`px-3 py-2 bg-white flex flex-col ${className}`}>
-      {/* 윗줄: 영어 지표명 + 수치 */}
       <div className="flex justify-between items-center">
         <span className="text-black text-sm sm:text-base font-semibold">
           {title}
@@ -743,7 +756,6 @@ function Cell({
 
       <div className="h-[3px] sm:h-[4px]" />
 
-      {/* 아랫줄: 한글 설명 */}
       <span className="text-black text-[11px] sm:text-xs font-normal leading-tight">
         {subtitle}
       </span>
@@ -758,14 +770,10 @@ type IndicatorSectionBlockProps = {
   layout: "3-2" | "2-2" | "2";
 };
 
-function IndicatorSectionBlock({
-  section,
-  layout,
-}: IndicatorSectionBlockProps) {
+function IndicatorSectionBlock({ section, layout }: IndicatorSectionBlockProps) {
   const rows = section.rows;
 
   if (layout === "3-2") {
-    // 위 3개, 아래 2개 (수익성)
     const top = rows.slice(0, 3);
     const bottom = rows.slice(3);
 
@@ -803,7 +811,6 @@ function IndicatorSectionBlock({
   }
 
   if (layout === "2-2") {
-    // 2x2 (가치)
     return (
       <div className="flex flex-col gap-2.5">
         <div className="text-black text-base sm:text-lg md:text-xl font-normal">
@@ -826,7 +833,6 @@ function IndicatorSectionBlock({
     );
   }
 
-  // layout === "2" (재무안정성 / 유동성)
   return (
     <div className="flex flex-col gap-2.5">
       <div className="text-black text-base sm:text-lg md:text-xl font-normal">
