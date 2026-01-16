@@ -1,7 +1,6 @@
 // frontend/src/pages/StocksMockPage.tsx
 import TradingViewWidget from "../components/TradingViewWidget";
 import { useRef, useEffect, useState } from "react";
-import api from "../api/apiClient";
 import StockCard from "../components/StockCard";
 import StockInputBox from "../components/StockInputBox";
 import { Star } from "lucide-react";
@@ -12,13 +11,13 @@ import {
   liquiditySection,
   type IndicatorSection,
 } from "../mocks/financialIndicators";
-import { getErrorMessage } from "../utils/errorMessage";
-import { ENDPOINTS } from "../api/endpoints";
 import type { FinancialDto } from "../types/financial";
 import { buildSectionsFromDto } from "../mappers/financialMapper";
 import { fetchFinancials } from "../api/financial";
 import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
+import { fetchCandles } from "../api/charts";
+import type { Candle } from "../types/candle";
 
 function useKSTTime() {
   const [time, setTime] = useState("");
@@ -47,6 +46,34 @@ function useKSTTime() {
 export default function StocksMockPage() {
   const currentTime = useKSTTime();
 
+  const loadCandles = async (stockCode: string) => {
+    setChartLoading(true);
+    setChartError(null);
+
+    const toDate = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(toDate.getDate() - 30);
+
+    try {
+      const response = await fetchCandles(
+        stockCode,
+        "ONE_D",
+        fromDate.toISOString(),
+        toDate.toISOString()
+      );
+      if (response.data.length === 0) {
+        setChartError("차트 데이터가 없습니다.");
+      }
+      setCandles(response.data);
+    } catch (e) {
+      console.error("차트 데이터 조회 실패:", e);
+      setChartError("차트를 불러오지 못했습니다.");
+      setCandles([]);
+    } finally {
+      setChartLoading(false);
+    }
+  };
+
   const handleSearch = async (value: string) => {
     console.log("검색 실행:", value);
 
@@ -58,9 +85,6 @@ export default function StocksMockPage() {
 
     setErr("");
     setHasSelectedStock(true);
-
-    setChartLoading(true);
-    setChartError(null);
 
     // ===== 종목 상세 정보 조회 추가 =====
     try {
@@ -99,13 +123,11 @@ export default function StocksMockPage() {
       console.error("재무제표 조회 실패:", e);
       setErr("재무제표 데이터를 불러오지 못했습니다.");
     }
-
-    setTimeout(() => {
-      setChartLoading(false);
-    }, 800);
+    await loadCandles(value);
   };
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
+  const [candles, setCandles] = useState<Candle[]>([]);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -181,12 +203,17 @@ export default function StocksMockPage() {
 
   // 메인 종목 (검색된 종목)
   const [mainStock, setMainStock] = useState({
-    name: "애플",
-    symbol: "AAPL",
-    price: "267.99",
-    change: "+3.1",
-    changeRate: "+3.27%",
+    name: "삼성전자",
+    symbol: "005930",
+    price: "70,000",
+    change: "+500",
+    changeRate: "+0.72%",
   });
+
+  useEffect(() => {
+    void loadCandles(mainStock.symbol);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const featuredListWrapperRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -577,7 +604,9 @@ export default function StocksMockPage() {
                       </p>
                     )}
 
-                    {!chartLoading && !chartError && <TradingViewWidget />}
+                    {!chartLoading && !chartError && (
+                      <TradingViewWidget candles={candles} />
+                    )}
                   </div>
                 </section>
               </div>
