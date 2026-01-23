@@ -17,8 +17,15 @@ public class StockDebugController {
 
     @GetMapping("/api/debug/ticker-meta")
     public Mono<ApiResponse<MarketStackTickersResponse.TickerData>> debugTicker(
-            @RequestParam String symbol
+            @RequestParam(name = "stockCode") String stockCode
     ) {
-        return stockApiClient.fetchTickerMeta(symbol);
+        return stockApiClient.fetchTickerMeta(resolveStockCode(stockCode));
+    }
+
+    private String resolveStockCode(String stockCode) {
+        if (stockCode == null || stockCode.isBlank()) {
+            throw new IllegalArgumentException("stockCode is required");
+        }
+        return stockCode;
     }
 }

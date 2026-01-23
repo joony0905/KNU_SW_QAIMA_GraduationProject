@@ -26,13 +26,22 @@ public class WatchlistService {
     private final WatchlistItemRepository watchlistItemRepository;
     private final UserRepository userRepository;
     private final StockRepository stockRepository;
+    private static final String DEFAULT_EXCHANGE_CODE = "KRX";
 
     public Mono<WatchlistResponseDto> addStockToWatchlist(WatchlistRequestDto requestDto, Long userId) {
         Mono<User> userMono = Blocking.call(() -> userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")));
 
-        Mono<Stock> stockMono = Blocking.call(() -> stockRepository.findById(requestDto.getStockId())
-                .orElseThrow(() -> new IllegalArgumentException("주식을 찾을 수 없습니다.")));
+        String stockCode = requestDto.getStockCode();
+        if (stockCode == null || stockCode.isBlank()) {
+            return Mono.error(new IllegalArgumentException("stockCode is required"));
+        }
+        String exchangeCode = normalizeExchangeCode(requestDto.getExchangeCode());
+        String resolvedExchange = exchangeCode != null ? exchangeCode : DEFAULT_EXCHANGE_CODE;
+
+        Mono<Stock> stockMono = Blocking.call(() -> stockRepository
+                .findByExchangeCodeAndStockCodeIgnoreCase(resolvedExchange, stockCode)
+                .orElseThrow(() -> new IllegalArgumentException("Stock not found")));
 
         Mono<Watchlist> watchlistMono = Blocking.call(() -> watchlistRepository.findById(requestDto.getWatchlistId())
                 .orElseThrow(() -> new IllegalArgumentException("관심목록을 찾을 수 없습니다.")));
@@ -123,5 +132,23 @@ public class WatchlistService {
                     return Blocking.call(() -> watchlistItemRepository.save(item))
                             .map(WatchlistResponseDto::new);
                 });
+    }
+
+    private String normalizeExchangeCode(String exchangeCode) {
+        if (exchangeCode == null) {
+            return null;
+        }
+        String trimmed = exchangeCode.trim();
+        if (trimmed.isBlank()) {
+            return null;
+        }
+
+        return switch (trimmed.toUpperCase()) {
+            case "XKRX" -> "KRX";
+            case "XKOS" -> "KOSDAQ";
+            case "XNYS" -> "NYSE";
+            case "XNAS" -> "NASDAQ";
+            default -> trimmed.toUpperCase();
+        };
     }
 }

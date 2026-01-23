@@ -41,14 +41,12 @@ public class ApiRequestLogWebFilter implements WebFilter {
                 .onErrorResume(e -> Mono.empty());
 
         return chain.filter(exchange)
-                .doFinally(sig -> authMono
-                        .defaultIfEmpty(null)
-                        .flatMap(auth -> {
-                            ApiRequestLog log = build(exchange, auth, requestId, startNs);
-                            return apiRequestLogService.save(log);
-                        })
+                .then(Mono.defer(() -> authMono
+                        .flatMap(auth -> apiRequestLogService.save(build(exchange, auth, requestId, startNs)))
+                        .switchIfEmpty(Mono.defer(() -> apiRequestLogService.save(build(exchange, null, requestId, startNs))))
                         .onErrorResume(e -> Mono.empty())
-                        .subscribe());
+                ));
+
     }
 
     private boolean shouldSkip(String path) {

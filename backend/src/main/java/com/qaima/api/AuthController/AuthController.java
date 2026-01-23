@@ -44,7 +44,7 @@ public class AuthController {
         String ua = request.getHeaders().getFirst("User-Agent");
         return authService.login(requestDto, ip, ua).map(ApiResponse::success);
     }
-    
+
     private static String extractClientIp(ServerHttpRequest request) {
         String xff = request.getHeaders().getFirst("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();

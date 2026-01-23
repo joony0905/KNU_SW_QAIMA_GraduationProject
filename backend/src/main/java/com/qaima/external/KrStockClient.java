@@ -286,6 +286,33 @@ public class KrStockClient {
                 );
     }
 
+    public Mono<KisStatResponseDto.Output> fetchKisStatRaw(String stockCode, String marketDivCode) {
+        String mkt = (marketDivCode == null || marketDivCode.isBlank()) ? "J" : marketDivCode;
+
+        return getAccessToken()
+                .flatMap(token ->
+                        webClient.get()
+                                .uri(uriBuilder -> uriBuilder
+                                        .path("/uapi/domestic-stock/v1/quotations/inquire-price")
+                                        .queryParam("FID_COND_MRKT_DIV_CODE", mkt)
+                                        .queryParam("FID_INPUT_ISCD", stockCode)
+                                        .build()
+                                )
+                                .header("authorization", token)
+                                .header("appkey", appKey)
+                                .header("appsecret", appSecret)
+                                .header("tr_id", "VHKST03010100")
+                                .retrieve()
+                                .bodyToMono(KisStatResponseDto.class)
+                                .flatMap(resp -> {
+                                    if (resp.getOutput() == null) {
+                                        return Mono.error(new IllegalStateException("KIS 응답에 output 없음"));
+                                    }
+                                    return Mono.just(resp.getOutput());
+                                })
+                );
+    }
+
 
 
     private String toKisInterval(Freq freq) {
@@ -317,6 +344,8 @@ public class KrStockClient {
                 )
                 .toList();
     }
+
+
 
     // 내부 응답 DTO
     @Getter

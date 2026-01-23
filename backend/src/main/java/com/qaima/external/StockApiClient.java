@@ -110,10 +110,9 @@ public class StockApiClient implements StockClient {
                 .onErrorResume(ex -> {
                     log.error("[StockApiClient] fetchTickerMeta fatal error. symbol={}, cause={}",
                             symbol, ex.getMessage(), ex);
-                    return Mono.just(ApiResponse.internalError(
-                            "META_INTERNAL_ERROR",
-                            ex.getMessage()
-                    ));
+                    return Mono.error(
+                            new IllegalStateException(
+                                    "META_INTERNAL_ERROR: ..."));
                 });
     }
 

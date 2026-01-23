@@ -9,7 +9,8 @@ import lombok.Getter;
 public class WatchlistResponseDto {
 
     private Long watchlistItemId;
-    private Long stockId;
+    private String stockCode;
+    private String exchangeCode;
     private String stockName;
     private String note;
     private String industryName;
@@ -21,8 +22,11 @@ public class WatchlistResponseDto {
 
         Stock stock = item.getStock();
         if (stock != null) {
-            this.stockId = stock.getStockId();
             this.stockName = stock.getCompanyName();
+            this.stockCode = stock.getStockCode();
+            if (stock.getExchange() != null) {
+                this.exchangeCode = stock.getExchange().getCode();
+            }
 
             if (stock.getIndustry() != null) {
                 this.industryName = stock.getIndustry().getName();
