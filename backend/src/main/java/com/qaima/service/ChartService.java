@@ -25,7 +25,7 @@ public class ChartService {
             OffsetDateTime from,
             OffsetDateTime to
     ) {
-        return stockService.getOrCreateStockByCode(stockCode)
+        return stockService.getStockByCode(stockCode)
                 .flatMap(stock -> candleLoadService.load(stock, freq, from, to));
     }
 }

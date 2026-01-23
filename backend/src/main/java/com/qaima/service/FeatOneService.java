@@ -9,6 +9,7 @@ import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.IndicatorValueRepository;
 import com.qaima.repository.PriceOhlcvRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,19 +18,24 @@ import reactor.core.scheduler.Schedulers;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class FeatOneService {
 
-    private final StockService stockService;                 // Stock 생성 관련
+    private final StockService stockService;
     private final PriceOhlcvRepository priceOhlcvRepository;
     private final IndicatorValueRepository indicatorValueRepository;
     private final FinancialRepository financialRepository;
+    private final MarketSnapshotService marketSnapshotService;
+
 
     private final KrStockClient krStockClient;
     private final GlobalStockClient globalStockClient;
@@ -49,15 +55,15 @@ public class FeatOneService {
             OffsetDateTime from,
             OffsetDateTime to
     ) {
-        // 1. 종목 조회 + 없으면 외부에서 자동 생성 (한 번만)
-        Mono<Stock> stockMono = stockService.getOrCreateStockByCode(stockCode).cache();
+        // 1) 종목 조회 + 없으면 외부에서 자동 생성 (한 번만)
+        Mono<Stock> stockMono = stockService.getStockByCode(stockCode).cache();
 
-        // 2. 캔들 (DB → 없으면 KIS → 실패 시 Global)
+        // 2) 캔들 (DB → 없으면 KIS → 실패 시 Global)
         Mono<List<PriceOhlcv>> candlesMono = stockMono.flatMap(stock ->
                 loadCandlesWithFallback(stock, freq, from, to)
         );
 
-        // 3. 지표 (초기엔 DB에 있는 것만 나중에 FastAPI 계산과 혼합 가능)
+        // 3) 지표 (초기엔 DB에 있는 것만)
         Mono<List<IndicatorValue>> indicatorsMono = stockMono.flatMap(stock ->
                 Mono.fromCallable(() ->
                                 indicatorValueRepository.findByStockAndFreqAndTsBetweenOrderByTs(
@@ -67,25 +73,66 @@ public class FeatOneService {
                         .subscribeOn(Schedulers.boundedElastic())
         );
 
-        int financialLimit = 5; // 추후 수정, test용
+        int financialLimit = 5; // 테스트용
 
         Mono<List<Financial>> financialsMono = stockMono.flatMap(stock ->
                 Mono.fromCallable(() ->
-                                financialRepository.findByStockOrderByReportDateDescVersionDesc(
+                                financialRepository.findByStockAndPeriodTypeOrderByFiscalYearDescVersionDesc(
                                         stock,
+                                        PeriodType.A,
                                         PageRequest.of(0, financialLimit)
                                 )
                         )
                         .subscribeOn(Schedulers.boundedElastic())
         );
 
-        // 5. DB + 외부 데이터 → FastAPI 요청 → 응답 DTO 조립
-        return Mono.zip(stockMono, candlesMono, indicatorsMono, financialsMono)
+        // 4) 시장 스냅샷 (KIS inquire-price)  ※ 국내만. 해외는 null 처리
+        Mono<MarketSnapshotDto> marketSnapshotMono = stockMono
+                .flatMap(stock -> {
+                    LocalDate baseDate = LocalDate.now();
+
+                    if (stock.getExchange() == null) return Mono.empty();
+                    String div = toKisMarketDivCode(stock.getExchange());
+                    if ("B".equals(div)) return Mono.empty();
+
+                    return krStockClient.fetchKisStatRaw(stock.getStockCode(), div)
+                            .flatMap(output -> {
+                                MarketSnapshotDto dto = toMarketSnapshotDto(output, baseDate);
+
+                                Mono<Void> saveMono = marketSnapshotService
+                                        .upsertFromKis(stock, output, dto.getAsOfDate())
+                                        .doOnError(e -> log.warn("MarketSnapshot upsert failed. stockCode={}", stock.getStockCode(), e))
+                                        .onErrorResume(e -> Mono.empty())
+                                        .then();
+
+                                return saveMono.thenReturn(dto);
+                            })
+                            .doOnError(ex -> log.warn("KIS market snapshot failed. stockCode={}, div={}",
+                                    stock.getStockCode(), div, ex))
+                            .onErrorResume(ex -> marketSnapshotService.getLatestDto(stock, baseDate));
+                })
+                .cache();
+
+
+
+        // 5) DB + 외부 데이터 → FastAPI 요청 → 응답 DTO 조립
+        Mono<Optional<MarketSnapshotDto>> marketSnapshotMonoOpt = marketSnapshotMono
+                .map(Optional::of)
+                .defaultIfEmpty(Optional.empty());
+
+        return Mono.zip(
+                        stockMono,
+                        candlesMono,
+                        indicatorsMono,
+                        financialsMono,
+                        marketSnapshotMonoOpt
+                )
                 .flatMap(tuple -> {
                     Stock stock = tuple.getT1();
                     List<PriceOhlcv> candles = tuple.getT2();
                     List<IndicatorValue> indicators = tuple.getT3();
                     List<Financial> financials = tuple.getT4();
+                    MarketSnapshotDto marketSnapshot = tuple.getT5().orElse(null);
 
                     FeatOneRequestDto requestDto = buildFeatOneRequestDto(
                             stock, candles, indicators, financials
@@ -97,6 +144,7 @@ public class FeatOneService {
                                     candles,
                                     indicators,
                                     financials,
+                                    marketSnapshot,
                                     textDto
                             ));
                 });
@@ -115,9 +163,8 @@ public class FeatOneService {
             OffsetDateTime to
     ) {
         String stockCode = stock.getStockCode();
-        String marketDivCode = toKisMarketDivCode(stock.getExchange()); // KOSPI/KOSDAQ/KONEX/해외
+        String marketDivCode = toKisMarketDivCode(stock.getExchange());
 
-        // 1) 먼저 DB 조회
         return Mono.fromCallable(() ->
                         priceOhlcvRepository.findByStockCodeAndFreqAndTsBetween(
                                 stockCode, freq, from, to
@@ -125,25 +172,20 @@ public class FeatOneService {
                 )
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(existing -> {
-                    // 1-1) 이미 DB에 있으면 그대로 반환
                     if (!existing.isEmpty()) {
                         return Mono.just(existing);
                     }
 
-                    // 2) DB에 없으면 KIS 캔들 호출
                     Mono<List<PriceOhlcvDto>> fromKis =
                             krStockClient.fetchCandles(stockCode, marketDivCode, freq, from, to);
 
-                    // 3) KIS 실패 시 Global(Marketstack) 폴백
                     Mono<List<PriceOhlcvDto>> fromGlobal =
                             fromKis.onErrorResume(ex ->
                                     globalStockClient.fetchCandles(stockCode, freq, from, to)
                             );
 
-                    // 4) 외부에서 가져온 DTO를 엔티티로 변환 후 saveAll
                     return fromGlobal.flatMap(dtoList -> {
                         if (dtoList == null || dtoList.isEmpty()) {
-                            // 외부에서도 아무것도 못 가져온 경우 → 빈 리스트
                             return Mono.just(List.<PriceOhlcv>of());
                         }
 
@@ -170,7 +212,7 @@ public class FeatOneService {
 
         PriceOhlcv entity = new PriceOhlcv();
         entity.setId(id);
-        entity.setStock(stock); // ManyToOne
+        entity.setStock(stock);
         entity.setOpen(dto.getOpen());
         entity.setHigh(dto.getHigh());
         entity.setLow(dto.getLow());
@@ -201,7 +243,6 @@ public class FeatOneService {
                 .build();
     }
 
-
     private FinancialSummaryDto toFinancialSummaryDto(Financial f) {
         Integer q = null;
         Integer h = null;
@@ -209,16 +250,17 @@ public class FeatOneService {
         if (f.getPeriodType() == PeriodType.Q) {
             q = (f.getFiscalQuarter() != null) ? f.getFiscalQuarter() : f.getPeriodNo();
         } else if (f.getPeriodType() == PeriodType.H) {
-            h = f.getPeriodNo(); // 1 or 2
+            h = f.getPeriodNo();
         }
 
-        Double debtRatio = null;
-        if (f.getLiabilities() != null && f.getEquity() != null && f.getEquity().signum() != 0) {
-            debtRatio = f.getLiabilities()
-                    .divide(f.getEquity(), 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100))
-                    .doubleValue();
-        }
+        Double operatingMargin = ratioPct(f.getOperatingIncome(), f.getRevenue());
+        Double netMargin = ratioPct(f.getNetIncome(), f.getRevenue());
+        Double roe = ratioPct(f.getNetIncome(), f.getEquity());
+        Double debtRatio = ratioPct(f.getLiabilities(), f.getEquity());
+
+        // PER, PBR, MarketCap은 시장 값이므로 FinancialSummary에서는 null
+        Double per = null;
+        Double pbr = null;
 
         return FinancialSummaryDto.builder()
                 .fiscalYear(f.getFiscalYear())
@@ -228,7 +270,6 @@ public class FeatOneService {
                 .periodType(f.getPeriodType().name())
                 .reportDate(f.getReportDate())
 
-                // 규모
                 .revenue(f.getRevenue())
                 .grossProfit(f.getGrossProfit())
                 .operatingIncome(f.getOperatingIncome())
@@ -239,20 +280,17 @@ public class FeatOneService {
                 .capitalStock(f.getCapitalStock())
                 .retainedEarnings(f.getRetainedEarnings())
                 .cashAndEquivalents(f.getCashAndEquivalents())
-                .marketCap(f.getMarketCap())
+                .marketCap(null)
 
-                // 지표(Double)
-                .operatingMargin(bdToDouble(f.getOperatingMargin()))
-                .netMargin(bdToDouble(f.getNetMargin()))
-                .roe(bdToDouble(f.getRoe()))
-                .per(bdToDouble(f.getPer()))
-                .pbr(bdToDouble(f.getPbr()))
+                .operatingMargin(operatingMargin)
+                .netMargin(netMargin)
+                .roe(roe)
+                .per(per)
+                .pbr(pbr)
                 .debtRatio(debtRatio)
-
                 .build();
     }
 
-    //Stock 엔티티 → StockDto 매핑
     private StockDto toStockDto(Stock stock) {
         if (stock == null) return null;
 
@@ -261,19 +299,11 @@ public class FeatOneService {
                 .stockCode(stock.getStockCode())
                 .isin(stock.getIsin())
                 .companyName(stock.getCompanyName())
-                // 필요하면 아래 값들 점점 채워나가면 됨
-                .exchangeId(
-                        stock.getExchange() != null ? stock.getExchange().getExchangeId() : null
-                )
-                .exchangeCode(
-                        stock.getExchange() != null ? stock.getExchange().getCode() : null
-                )
+                .exchangeId(stock.getExchange() != null ? stock.getExchange().getExchangeId() : null)
+                .exchangeCode(stock.getExchange() != null ? stock.getExchange().getCode() : null)
                 .assetType(stock.getAssetType())
                 .currency(stock.getCurrency())
-                .industryId(
-                        stock.getIndustry() != null ? stock.getIndustry().getIndustryId() : null
-                )
-                // price/changeRate는 실시간 조회용이라 여기서는 null로 둬도 됨
+                .industryId(stock.getIndustry() != null ? stock.getIndustry().getIndustryId() : null)
                 .listedAt(stock.getListedAt())
                 .delistedAt(stock.getDelistedAt())
                 .build();
@@ -304,15 +334,16 @@ public class FeatOneService {
                 .candles(candleDtos)
                 .indicators(indicatorDtos)
                 .financials(financialDtos)
-                // .options(null) // 필요하면 나중에 추가
                 .build();
     }
 
+    // 응답 DTO에만 marketSnapshot 포함
     private FeatOneResponseDataDto buildFeatOneResponseDto(
             Stock stock,
             List<PriceOhlcv> candles,
             List<IndicatorValue> indicators,
             List<Financial> financials,
+            MarketSnapshotDto marketSnapshot,
             FeatOneResponseTextDto textDto
     ) {
         List<PriceOhlcvDto> candleDtos = candles.stream()
@@ -334,7 +365,7 @@ public class FeatOneService {
                 .candles(candleDtos)
                 .indicators(indicatorDtos)
                 .financials(financialDtos)
-                // Text 섹션 전체를 analysis에 그대로 넣는다
+                .marketSnapshot(marketSnapshot)
                 .analysis(textDto)
                 .build();
     }
@@ -345,13 +376,54 @@ public class FeatOneService {
             case "KOSPI" -> "J";
             case "KOSDAQ" -> "Q";
             case "KONEX" -> "K";
-            default -> "B";  // 해외 기타 거래소 전부 B
+            default -> "B";
         };
     }
 
-    // BigDecimal → Double 변환
-    private static Double bdToDouble(BigDecimal v) {
-        return v == null ? null : v.doubleValue();
+    // 파생지표 계산 유틸
+    private static Double ratioPct(BigDecimal numerator, BigDecimal denominator) {
+        if (numerator == null || denominator == null) return null;
+        if (denominator.signum() == 0) return null;
+        return numerator
+                .divide(denominator, 6, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .doubleValue();
     }
 
+    private MarketSnapshotDto toMarketSnapshotDto(KisStatResponseDto.Output o, LocalDate asOfDate) {
+        if (o == null) return null;
+
+        return MarketSnapshotDto.builder()
+                .asOfDate(asOfDate)
+                .marketCap(parseNullableBigDecimal(o.getHts_avls()))
+                .per(parseNullableDouble(o.getPer()))
+                .pbr(parseNullableDouble(o.getPbr()))
+                .sharesOutstanding(parseNullableBigDecimal(o.getLstn_stcn()))
+                .source("KIS")
+                .build();
+    }
+
+    private static BigDecimal parseNullableBigDecimal(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        if (t.isEmpty()) return null;
+        t = t.replace(",", "");
+        try {
+            return new BigDecimal(t);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static Double parseNullableDouble(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        if (t.isEmpty()) return null;
+        t = t.replace(",", "");
+        try {
+            return Double.parseDouble(t);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
 }

@@ -26,5 +26,8 @@ public class FeatOneResponseDataDto {
     // LLM 분석 결과 (FastAPI → GPT)
     private FeatOneResponseTextDto analysis;
 
+    // 시장 스냅샷 - KIS 기반 (시총/PER/PBR 등)
+    private MarketSnapshotDto marketSnapshot;
+
 
 }

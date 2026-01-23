@@ -51,15 +51,13 @@ public class HelloController {
      * 외부(예시) API 통신 테스트
      */
     @GetMapping("/api/v1/test/external")
-    public ApiResponse<Map<String, Object>> testExternal() {
-        String result = externalClient.getPost(1);
-
-        Map<String, Object> payload = Map.of(
-                "ok", true,
-                "source", "jsonplaceholder.typicode.com/posts/1",
-                "response", result
-        );
-        return ApiResponse.success(payload);
+    public Mono<ApiResponse<Map<String, Object>>> testExternal() {
+        return externalClient.getPost(1)
+                .map(result -> ApiResponse.success(Map.of(
+                        "ok", true,
+                        "source", "jsonplaceholder.typicode.com/posts/1",
+                        "response", result
+                )));
     }
 
     StockDto dummyStock = StockDto.builder()
@@ -70,7 +68,7 @@ public class HelloController {
             .build();
     /**
      * GET /api/v1/test/feature1
-     * FastAPI(기능1) 응답 테스트
+     * FastAPI(기능1) 연동 테스트
      */
     @GetMapping("/api/v1/test/feature1")
     public Mono<ApiResponse<FeatOneResponseTextDto>> testAnalysis() {
