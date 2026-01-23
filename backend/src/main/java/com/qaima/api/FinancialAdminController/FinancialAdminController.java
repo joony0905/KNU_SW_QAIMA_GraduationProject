@@ -12,13 +12,14 @@ import reactor.core.publisher.Mono;
 public class FinancialAdminController {
 
     private final FinancialAdminService financialCommandService;
-    
+
     @PostMapping("/stocks/{stockCode}/financials")
     public Mono<FinancialDto> createFinancial(
             @PathVariable String stockCode,
+            @RequestParam(name = "exchange", required = false) String exchange,
             @RequestBody FinancialDto dto
     ) {
-        return financialCommandService.create(stockCode, dto);
+        return financialCommandService.create(stockCode, exchange, dto);
     }
 
     @PutMapping("/financials/{id}")

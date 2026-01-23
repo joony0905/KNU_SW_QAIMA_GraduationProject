@@ -22,9 +22,11 @@ public class FinancialReadService {
     private final StockRepository stockRepository;
     private final FinancialRepository financialRepository;
     private final FinancialMapper financialMapper;
+    private static final String DEFAULT_EXCHANGE_CODE = "KRX";
 
     public Mono<List<FinancialDto>> getForLastNYears(
             String stockCode,
+            String exchangeCode,
             PeriodType periodType,
             Integer periodNo,
             int years,
@@ -37,27 +39,37 @@ public class FinancialReadService {
         int toYear = (asOfDate != null ? asOfDate : LocalDate.now()).getYear();
         int fromYear = toYear - (years - 1);
 
-        return Blocking.call(() -> stockRepository.findByStockCodeWithExchange(stockCode)
-                        .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode)))
+        String resolvedExchange = resolveExchangeCode(exchangeCode);
+        return Blocking.call(() -> stockRepository
+                        .findByExchangeCodeAndStockCodeIgnoreCase(resolvedExchange, stockCode)
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "Unknown stockCode: " + stockCode + " (exchange=" + resolvedExchange + ")"
+                        )))
                 .flatMap(stock -> Blocking.call(() -> queryFinancials(stock, periodType, periodNo, fromYear, toYear)))
                 .map(list -> list.stream().map(financialMapper::toDto).toList());
     }
 
     public Mono<List<FinancialDto>> getForYear(
             String stockCode,
+            String exchangeCode,
             PeriodType periodType,
             Integer periodNo,
             int year
     ) {
-        return getForLastNYears(stockCode, periodType, periodNo, 1, LocalDate.of(year, 12, 31));
+        return getForLastNYears(stockCode, exchangeCode, periodType, periodNo, 1, LocalDate.of(year, 12, 31));
     }
 
-    public Mono<List<FinancialDto>> getAnnualForLastNYears(String stockCode, int years, LocalDate asOfDate) {
-        return getForLastNYears(stockCode, PeriodType.A, null, years, asOfDate);
+    public Mono<List<FinancialDto>> getAnnualForLastNYears(
+            String stockCode,
+            String exchangeCode,
+            int years,
+            LocalDate asOfDate
+    ) {
+        return getForLastNYears(stockCode, exchangeCode, PeriodType.A, null, years, asOfDate);
     }
 
-    public Mono<List<FinancialDto>> getAnnualForYear(String stockCode, int year) {
-        return getForYear(stockCode, PeriodType.A, null, year);
+    public Mono<List<FinancialDto>> getAnnualForYear(String stockCode, String exchangeCode, int year) {
+        return getForYear(stockCode, exchangeCode, PeriodType.A, null, year);
     }
 
     private List<Financial> queryFinancials(
@@ -100,5 +112,27 @@ public class FinancialReadService {
             }
         }
     }
-}
 
+    private String resolveExchangeCode(String exchangeCode) {
+        String normalized = normalizeExchangeCode(exchangeCode);
+        return normalized != null ? normalized : DEFAULT_EXCHANGE_CODE;
+    }
+
+    private String normalizeExchangeCode(String exchangeCode) {
+        if (exchangeCode == null) {
+            return null;
+        }
+        String trimmed = exchangeCode.trim();
+        if (trimmed.isBlank()) {
+            return null;
+        }
+
+        return switch (trimmed.toUpperCase()) {
+            case "XKRX" -> "KRX";
+            case "XKOS" -> "KOSDAQ";
+            case "XNYS" -> "NYSE";
+            case "XNAS" -> "NASDAQ";
+            default -> trimmed.toUpperCase();
+        };
+    }
+}

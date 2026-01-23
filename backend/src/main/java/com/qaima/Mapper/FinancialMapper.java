@@ -18,7 +18,7 @@ public class FinancialMapper {
     public FinancialDto toDto(Financial f) {
         if (f == null) return null;
 
-        // periodType/periodNo
+        // periodType/periodNo 기반으로 quarter/half 파생
         Integer quarter = null;
         Integer half = null;
 
@@ -42,11 +42,13 @@ public class FinancialMapper {
                 // 식별/메타
                 .financialId(f.getFinancialId())
                 .stockId(f.getStock().getStockId())
-                .ticker(f.getStock().getStockCode())
+                .stockCode(f.getStock().getStockCode())
                 .companyName(f.getStock().getCompanyName())
+
                 .year(f.getFiscalYear())
                 .quarter(quarter)
                 .half(half)
+
                 .periodType(pt != null ? pt.name() : null)
                 .periodNo(f.getPeriodNo())
                 .reportDate(f.getReportDate())
@@ -56,21 +58,14 @@ public class FinancialMapper {
                 .grossProfit(f.getGrossProfit())
                 .operatingIncome(f.getOperatingIncome())
                 .netIncome(f.getNetIncome())
+
                 .assets(f.getAssets())
                 .liabilities(f.getLiabilities())
                 .equity(f.getEquity())
+
                 .capitalStock(f.getCapitalStock())
                 .retainedEarnings(f.getRetainedEarnings())
                 .cashAndEquivalents(f.getCashAndEquivalents())
-                .marketCap(f.getMarketCap())
-
-                // 비율/배수(Double)
-                .operatingMargin(bdToDouble(f.getOperatingMargin()))
-                .netMargin(bdToDouble(f.getNetMargin()))
-                .roe(bdToDouble(f.getRoe()))
-                .per(bdToDouble(f.getPer()))
-                .pbr(bdToDouble(f.getPbr()))
-                .debtRatio(debtRatio)
 
                 .build();
     }

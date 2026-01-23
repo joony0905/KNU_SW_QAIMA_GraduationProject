@@ -30,9 +30,10 @@ public class FinancialController {
      * - TTM: periodType=TTM (periodNo는 생략하거나 0)
      */
 
-    @GetMapping("/{ticker}/financials")
+    @GetMapping("/{stockCode}/financials")
     public Mono<List<FinancialDto>> getFinancialsForLastNYears(
-            @PathVariable String ticker,
+            @PathVariable("stockCode") String stockCode,
+            @RequestParam(name = "exchange", required = false) String exchange,
             @RequestParam(name = "years", defaultValue = "5") int years,
             @RequestParam(name = "asOfDate", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
@@ -40,7 +41,7 @@ public class FinancialController {
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-        return financialQueryService.getForLastNYears(ticker, pt, periodNo, years, asOfDate);
+        return financialQueryService.getForLastNYears(stockCode, exchange, pt, periodNo, years, asOfDate);
     }
 
     /**
@@ -51,15 +52,15 @@ public class FinancialController {
      * 예: GET /api/v1/stocks/005930/financials/2023?periodType=H&periodNo=2
      */
 
-    @GetMapping("/{ticker}/financials/{year}")
+    @GetMapping("/{stockCode}/financials/{year}")
     public Mono<List<FinancialDto>> getFinancialsForYear(
-            @PathVariable String ticker,
+            @PathVariable("stockCode") String stockCode,
             @PathVariable int year,
+            @RequestParam(name = "exchange", required = false) String exchange,
             @RequestParam(name = "periodType", required = false) PeriodType periodType,
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-        return financialQueryService.getForYear(ticker, pt, periodNo, year);
+        return financialQueryService.getForYear(stockCode, exchange, pt, periodNo, year);
     }
 }
-

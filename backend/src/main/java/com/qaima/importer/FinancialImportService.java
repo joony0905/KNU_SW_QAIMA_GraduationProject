@@ -68,9 +68,9 @@ public class FinancialImportService {
 
                 try {
                     tt.execute(status -> {
-                        importSingleRow(idx, cols);     // 내부에서 save() 수행
-                        financialRepository.flush();    // 제약 위반 즉시 노출
-                        em.clear();                     // 영속성 컨텍스트 오염/메모리 누수 방지
+                        importSingleRow(idx, cols);
+                        financialRepository.flush();
+                        em.clear();
                         return null;
                     });
                     ok++;
@@ -102,7 +102,7 @@ public class FinancialImportService {
 
         String stockName = getString(cols, idx, "name");
 
-        Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
+        Stock stock = stockRepository.findByExchangeCodeAndStockCodeIgnoreCase("KRX", stockCode)
                 .orElseGet(() -> {
                     Exchange krx = exchangeRepository.findByCode("KRX")
                             .orElseThrow(() -> new IllegalStateException("exchange 테이블에 code=KRX가 없습니다."));
@@ -133,10 +133,7 @@ public class FinancialImportService {
         Integer periodNo = parseInteger(getString(cols, idx, "period_no"));
         if (periodNo != null) f.setPeriodNo(periodNo);
 
-        // 호환용
         f.setFiscalQuarter(parseInteger(getString(cols, idx, "fiscal_quarter")));
-
-        // 선택
         f.setFilingDate(parseLocalDate(getString(cols, idx, "filing_date")));
         f.setCurrency(getString(cols, idx, "currency"));
         f.setSource(getString(cols, idx, "source"));
@@ -151,13 +148,6 @@ public class FinancialImportService {
         f.setCapitalStock(parseBigDecimal(getString(cols, idx, "capital_stock")));
         f.setRetainedEarnings(parseBigDecimal(getString(cols, idx, "retained_earnings")));
         f.setCashAndEquivalents(parseBigDecimal(getString(cols, idx, "cash_and_equivalents")));
-        f.setMarketCap(parseBigDecimal(getString(cols, idx, "market_cap")));
-
-        f.setOperatingMargin(parseBigDecimal(getString(cols, idx, "operating_margin")));
-        f.setNetMargin(parseBigDecimal(getString(cols, idx, "net_margin")));
-        f.setRoe(parseBigDecimal(getString(cols, idx, "roe")));
-        f.setPer(parseBigDecimal(getString(cols, idx, "per")));
-        f.setPbr(parseBigDecimal(getString(cols, idx, "pbr")));
 
         financialRepository.save(f);
     }

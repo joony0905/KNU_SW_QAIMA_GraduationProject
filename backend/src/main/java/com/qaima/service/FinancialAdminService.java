@@ -26,11 +26,16 @@ public class FinancialAdminService {
     private final FinancialRepository financialRepository;
     private final FinancialMapper financialMapper;
     private final PlatformTransactionManager transactionManager;
+    private static final String DEFAULT_EXCHANGE_CODE = "KRX";
 
-    public Mono<FinancialDto> create(String stockCode, FinancialDto dto) {
+    public Mono<FinancialDto> create(String stockCode, String exchangeCode, FinancialDto dto) {
         return Blocking.call(() -> tx().execute(status -> {
-            Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode));
+            String resolvedExchange = resolveExchangeCode(exchangeCode);
+            Stock stock = stockRepository
+                    .findByExchangeCodeAndStockCodeIgnoreCase(resolvedExchange, stockCode)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Unknown stockCode: " + stockCode + " (exchange=" + resolvedExchange + ")"
+                    ));
 
             if (dto.getYear() == null) throw new IllegalArgumentException("year 값은 필수입니다.");
             if (dto.getPeriodType() == null || dto.getPeriodType().isBlank())
@@ -55,7 +60,6 @@ public class FinancialAdminService {
             entity.setLiabilities(dto.getLiabilities());
             entity.setEquity(dto.getEquity());
             entity.setCapitalStock(dto.getCapitalStock());
-            entity.setMarketCap(dto.getMarketCap());
 
             Financial saved = financialRepository.save(entity);
             return financialMapper.toDto(saved);
@@ -92,7 +96,6 @@ public class FinancialAdminService {
             if (dto.getLiabilities() != null) entity.setLiabilities(dto.getLiabilities());
             if (dto.getEquity() != null) entity.setEquity(dto.getEquity());
             if (dto.getCapitalStock() != null) entity.setCapitalStock(dto.getCapitalStock());
-            if (dto.getMarketCap() != null) entity.setMarketCap(dto.getMarketCap());
 
             Financial saved = financialRepository.save(entity);
             return financialMapper.toDto(saved);
@@ -167,5 +170,27 @@ public class FinancialAdminService {
             }
         }
     }
-}
 
+    private String resolveExchangeCode(String exchangeCode) {
+        String normalized = normalizeExchangeCode(exchangeCode);
+        return normalized != null ? normalized : DEFAULT_EXCHANGE_CODE;
+    }
+
+    private String normalizeExchangeCode(String exchangeCode) {
+        if (exchangeCode == null) {
+            return null;
+        }
+        String trimmed = exchangeCode.trim();
+        if (trimmed.isBlank()) {
+            return null;
+        }
+
+        return switch (trimmed.toUpperCase()) {
+            case "XKRX" -> "KRX";
+            case "XKOS" -> "KOSDAQ";
+            case "XNYS" -> "NYSE";
+            case "XNAS" -> "NASDAQ";
+            default -> trimmed.toUpperCase();
+        };
+    }
+}

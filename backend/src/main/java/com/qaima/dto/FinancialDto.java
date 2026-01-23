@@ -1,5 +1,6 @@
 package com.qaima.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.*;
 import java.time.LocalDate;
 import java.math.BigDecimal;
@@ -13,7 +14,8 @@ public class FinancialDto {
 
     private Long financialId;
     private Long stockId;
-    private String ticker;
+    @JsonAlias("ticker")
+    private String stockCode;
     private String companyName;
 
     private Integer year;
@@ -38,13 +40,4 @@ public class FinancialDto {
     private BigDecimal retainedEarnings;    // 이익잉여금 추가
     private BigDecimal cashAndEquivalents;  // 현금 및 현금성자산 추가
 
-    private BigDecimal marketCap;           // 시가총액, 기준일 주가 * 상장주식수 (외부 시세, 발행주식수 필요)
-
-    // 비율 지표들 (%)
-    private Double operatingMargin; // 영업이익률(%) = operatingIncome / revenue * 100
-    private Double netMargin;       // 순이익률(%) = netIncome / revenue * 100
-    private Double roe;             // ROE(%) = netIncome / equity * 100  (기간 정합성 주의: 연간/TTM 기준 권장)
-    private Double per;             // PER = marketCap / netIncome (또는 주가/주당순이익)  (기간 정합성 주의)
-    private Double pbr;             // PBR = marketCap / equity (또는 주가/주당순자산)
-    private Double debtRatio;       // 부채비율(%) = liabilities / equity * 100  (equity=0 또는 null 방어 필요)
 }
