@@ -117,7 +117,7 @@ function TradingViewWidget({ candles }: Props) {
   return (
     <div
       ref={containerRef}
-      style={{ width: "100%", height: 420 }} // 부모 높이 확정 필수
+      style={{ width: "100%", height: "100%" }} // 부모 높이 확정 필수
     />
   );
 }
