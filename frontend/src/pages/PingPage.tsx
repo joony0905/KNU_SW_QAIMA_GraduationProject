@@ -1,5 +1,5 @@
 import { useState } from "react";
-import api from "../lib/apiClient";
+import api from "../api/apiClient";
 import ApiResultBox from "../components/ApiResultBox";
 
 export default function PingPage() {
@@ -11,7 +11,7 @@ export default function PingPage() {
     setLoading(true);
     setErr("");
     try {
-      const res = await api.get("/api/v1/test/ping");
+      const res = await api.get("test/ping");
       setResult(res);
     } catch (e: any) {
       setErr(e.message);
@@ -22,7 +22,9 @@ export default function PingPage() {
 
   return (
     <div className="ml-[90px]">
-      <h1 style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "12px" }}>
+      <h1
+        style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "12px" }}
+      >
         API 응답 테스트
       </h1>
       <p style={{ marginBottom: "12px" }}>

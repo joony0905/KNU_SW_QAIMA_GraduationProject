@@ -1,12 +1,10 @@
 package com.qaima.external;
 
 import com.qaima.domain.Stock;
+import com.qaima.dto.MarketStackCandlesResponse;
 import com.qaima.dto.MarketStackTickersResponse;
 import com.qaima.dto.PriceOhlcvDto;
 import com.qaima.dto.StockDto;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,10 +12,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import com.qaima.domain.Freq;
-import com.qaima.dto.PriceOhlcvDto;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Component
@@ -144,7 +148,7 @@ public class GlobalStockClient {
                         .build()
                 )
                 .retrieve()
-                .bodyToMono(MarketStackEodResponse.class)
+                .bodyToMono(MarketStackCandlesResponse.class)
                 .map(resp -> mapToPriceOhlcvDtoList(resp, freq));
     }
 
@@ -159,54 +163,78 @@ public class GlobalStockClient {
         };
     }
 
-    private List<PriceOhlcvDto> mapToPriceOhlcvDtoList(MarketStackEodResponse resp, Freq freq) {
+    private List<PriceOhlcvDto> mapToPriceOhlcvDtoList(MarketStackCandlesResponse resp, Freq freq) {
 
         if (resp == null || resp.getData() == null) {
             return List.of();
         }
 
-        return resp.getData().stream()
-                .map(d -> PriceOhlcvDto.builder()
-                        .ts(parseMarketstackDate(d.getDate()))
-                        .freq(freq)
-                        .open(d.getOpen() != null ? d.getOpen() : BigDecimal.ZERO)
-                        .high(d.getHigh() != null ? d.getHigh() : BigDecimal.ZERO)
-                        .low(d.getLow() != null ? d.getLow() : BigDecimal.ZERO)
-                        .close(d.getClose() != null ? d.getClose() : BigDecimal.ZERO)
-                        .volume(d.getVolume() != null ? d.getVolume() : BigDecimal.ZERO)
-                        .build()
-                )
+        int rawCount = resp.getData().size();
+        List<PriceOhlcvDto> candles = resp.getData().stream()
+                .map(d -> toPriceOhlcvDto(d, freq))
+                .flatMap(Optional::stream)
                 .toList();
-    }
 
-
-    // 내부 응답 DTO
-    @Getter
-    @Setter
-    public static class MarketStackEodResponse {
-        private List<EodData> data;
-
-        @Getter @Setter
-        public static class EodData {
-            private String date;          // "2024-12-02T00:00:00+00:00"
-            private BigDecimal open;
-            private BigDecimal high;
-            private BigDecimal low;
-            private BigDecimal close;
-            private BigDecimal volume;
-        }
-    }
-
-    private OffsetDateTime parseMarketstackDate(String date) {
-        if (date == null || date.isBlank()) return null;
-
-        // "+0000" → "+00:00" 변환
-        if (date.length() == 24 && (date.charAt(22) != ':')) {
-            date = date.substring(0, 22) + ":" + date.substring(22);
+        if (rawCount > 0 && candles.isEmpty()) {
+            log.warn("Marketstack candles dropped entirely. freq={}, rawCount={}", freq, rawCount);
         }
 
-        return OffsetDateTime.parse(date);
+        return candles;
+    }
+
+    private Optional<PriceOhlcvDto> toPriceOhlcvDto(MarketStackCandlesResponse.CandleData data, Freq freq) {
+        Optional<OffsetDateTime> ts = parseMarketstackDate(data);
+        if (ts.isEmpty()) {
+            return Optional.empty();
+        }
+
+        if (data.getOpen() == null || data.getHigh() == null || data.getLow() == null || data.getClose() == null) {
+            return Optional.empty();
+        }
+
+        return Optional.of(PriceOhlcvDto.builder()
+                .ts(ts.get())
+                .freq(freq)
+                .open(data.getOpen())
+                .high(data.getHigh())
+                .low(data.getLow())
+                .close(data.getClose())
+                .volume(data.getVolume() != null ? BigDecimal.valueOf(data.getVolume()) : BigDecimal.ZERO)
+                .build());
+    }
+
+    private Optional<OffsetDateTime> parseMarketstackDate(MarketStackCandlesResponse.CandleData data) {
+        if (data.getEpochSeconds() != null) {
+            return Optional.of(OffsetDateTime.ofInstant(Instant.ofEpochSecond(data.getEpochSeconds()), ZoneOffset.UTC));
+        }
+
+        if (data.getDate() == null || data.getDate().isBlank()) {
+            return Optional.empty();
+        }
+
+        String raw = data.getDate();
+
+        try {
+            return Optional.of(OffsetDateTime.parse(raw, DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        } catch (DateTimeParseException ignored) {
+            // try secondary format
+        }
+
+        try {
+            DateTimeFormatter formatter = new DateTimeFormatterBuilder()
+                    .appendPattern("yyyy-MM-dd'T'HH:mm:ssZ")
+                    .toFormatter();
+            return Optional.of(OffsetDateTime.parse(raw, formatter));
+        } catch (DateTimeParseException ignored) {
+            // try local date only
+        }
+
+        try {
+            LocalDate date = LocalDate.parse(raw, DateTimeFormatter.ISO_LOCAL_DATE);
+            return Optional.of(date.atStartOfDay().atOffset(ZoneOffset.UTC));
+        } catch (DateTimeParseException ignored) {
+            return Optional.empty();
+        }
     }
 
 }
-

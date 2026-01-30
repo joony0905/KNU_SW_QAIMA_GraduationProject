@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import kakaoIcon from "../assets/kakaoicon.png";
 import naverIcon from "../assets/navericon.png";
 import googleIcon from "../assets/googleicon.png";
+import { login } from "../api/auth";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -24,17 +25,27 @@ export default function LoginPage() {
       if (!form.email || !form.password) {
         throw new Error("이메일과 비밀번호를 입력하세요.");
       }
-      // 실제 로그인 API 붙이면 여기서 호출
-      localStorage.setItem("qaima_token", "mock-token");
+
+      // 1) 지금은 서버가 없으니까, 아래 실제 호출은 잠시 막아두고
+      // const data = await login(form.email, form.password);
+
+      const data = await login({ email: form.email, password: form.password });
+
+      localStorage.setItem("qaima_token", data.accessToken);
+
       navigate("/ping");
-    } catch (err: any) {
-      setError(err.message ?? "로그인에 실패했습니다.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Network Error");
+      }
     } finally {
       setLoading(false);
     }
   };
 
- return (
+  return (
     <div className="min-h-screen flex items-center justify-center  bg-white p-4">
       <div className="w-full max-w-[420px] bg-white shadow-xl py-20 px-12 flex flex-col items-center gap-8">
         <form
@@ -88,11 +99,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {error && (
-            <p className="text-sm text-red-600">
-              {error}
-            </p>
-          )}
+          {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button
             type="submit"
@@ -117,7 +124,6 @@ export default function LoginPage() {
             </span>
           </button>
 
-
           {/* Naver Login */}
           <button className="flex flex-col items-center gap-2.5 w-[60px] hover:opacity-80 transition-opacity">
             <img
@@ -129,7 +135,6 @@ export default function LoginPage() {
               NAVER{"\n"}로그인
             </span>
           </button>
-
 
           {/* Google Login */}
           <button className="flex flex-col items-center gap-2.5 w-[55px] hover:opacity-80 transition-opacity">

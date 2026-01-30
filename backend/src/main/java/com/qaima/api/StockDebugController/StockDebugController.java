@@ -1,7 +1,7 @@
 package com.qaima.api.StockDebugController;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.MarketStackTickersResponse;
+import com.qaima.dto.StockMeta;
 import com.qaima.external.StockApiClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;

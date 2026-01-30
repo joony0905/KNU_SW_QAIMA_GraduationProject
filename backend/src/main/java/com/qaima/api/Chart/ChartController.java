@@ -44,9 +44,8 @@ public class ChartController {
                 .data(CandleMapper.toSeries(result.getCandles()))
                 .build();
 
-        // 부분 실패(200 유지) + 원인 추적 가능한 warning
-        if (result.getSource() == CandleSource.EMPTY) {
-            return ApiResponse.successWithWarning(data, "CHART_DATA_UNAVAILABLE");
+        if (result.getCandles().isEmpty() || result.getSource() == CandleSource.EMPTY) {
+            return ApiResponse.successWithWarning(data, "NO_DATA");
         }
 
         // 폴백시 warning

@@ -1,9 +1,13 @@
 package com.qaima.service;
 
-import com.qaima.domain.*;
+import com.qaima.service.CandleLoadResult;
+import com.qaima.domain.CandleSource;
+import com.qaima.domain.Freq;
+import com.qaima.domain.PriceOhlcv;
+import com.qaima.domain.PriceOhlcvId;
+import com.qaima.domain.Stock;
 import com.qaima.dto.PriceOhlcvDto;
-import com.qaima.external.GlobalStockClient;
-import com.qaima.external.KrStockClient;
+import com.qaima.external.StockClient;
 import com.qaima.repository.PriceOhlcvRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,7 +15,6 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,11 +25,7 @@ import java.util.stream.Collectors;
 public class CandleLoadService {
 
     private final PriceOhlcvRepository priceOhlcvRepository;
-    private final KrStockClient krStockClient;
-    private final GlobalStockClient globalStockClient;
-
-    private static final Duration KIS_TIMEOUT = Duration.ofSeconds(3);
-    private static final Duration MARKETSTACK_TIMEOUT = Duration.ofSeconds(4);
+    private final StockClient stockClient;
 
     public Mono<CandleLoadResult> load(
             Stock stock,
@@ -35,78 +34,79 @@ public class CandleLoadService {
             OffsetDateTime to
     ) {
         String stockCode = stock.getStockCode();
-        String marketDivCode = toKisMarketDivCode(stock.getExchange());
 
         // DB 조회
         return Mono.fromCallable(() ->
-                        priceOhlcvRepository
-                                .findByStockCodeAndFreqAndTsBetween(
-                                        stockCode, freq, from, to
-                                )
+                        priceOhlcvRepository.findByStockCodeAndFreqAndTsBetween(
+                                stockCode, freq, from, to
+                        )
                 )
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(dbCandles -> {
                     if (!dbCandles.isEmpty()) {
-                        return Mono.just(
-                                new CandleLoadResult(dbCandles, CandleSource.DB)
-                        );
+                        return Mono.just(new CandleLoadResult(dbCandles, CandleSource.DB));
                     }
 
-                    // KIS 호출
-                    return krStockClient
-                            .fetchCandles(stockCode, marketDivCode, freq, from, to)
-                            .timeout(KIS_TIMEOUT)
-                            .flatMap(dto -> save(stock, dto)
-                                    .map(list -> new CandleLoadResult(list, CandleSource.KIS)))
-                            // KIS 실패 → Marketstack
-                            .onErrorResume(kisErr -> {
-                                log.warn("[CANDLE] KIS failed → fallback to Marketstack: {}",
-                                        kisErr.getMessage());
-
-                                return globalStockClient
-                                        .fetchCandles(stockCode, freq, from, to)
-                                        .timeout(MARKETSTACK_TIMEOUT)
-                                        .flatMap(dto -> save(stock, dto)
-                                                .map(list -> new CandleLoadResult(list, CandleSource.MARKETSTACK)))
-                                        // 전부 실패 → EMPTY
-                                        .onErrorResume(globalErr -> {
-                                            log.error("[CANDLE] Marketstack failed: {}",
-                                                    globalErr.getMessage(), globalErr);
-                                            return Mono.just(
-                                                    new CandleLoadResult(List.of(), CandleSource.EMPTY)
-                                            );
-                                        });
+                    return stockClient
+                            .fetchCandles(stock, freq, from, to)
+                            .flatMap(result ->
+                                    save(stock, freq, result.getCandles())
+                                            .map(list -> {
+                                                CandleSource source = list.isEmpty()
+                                                        ? CandleSource.EMPTY
+                                                        : result.getSource();
+                                                return new CandleLoadResult(list, source);
+                                            })
+                            )
+                            .onErrorResume(err -> {
+                                log.error("[CANDLE] KIS/Marketstack 모두 실패: {}", err.getMessage(), err);
+                                return Mono.just(new CandleLoadResult(List.of(), CandleSource.EMPTY));
                             });
                 });
     }
 
     /* ========================= */
 
-    private Mono<List<PriceOhlcv>> save(Stock stock, List<PriceOhlcvDto> dtoList) {
+    private Mono<List<PriceOhlcv>> save(Stock stock, Freq freq, List<PriceOhlcvDto> dtoList) {
         if (dtoList == null || dtoList.isEmpty()) {
             return Mono.just(List.of());
         }
 
         return Mono.fromCallable(() -> {
-                    List<PriceOhlcv> entities =
-                            dtoList.stream()
-                                    .map(dto -> toEntity(stock, dto))
-                                    .collect(Collectors.toList());
+                    List<PriceOhlcv> entities = dtoList.stream()
+                            .map(dto -> toEntity(stock, freq, dto))
+                            .collect(Collectors.toList());
+
                     return priceOhlcvRepository.saveAll(entities);
                 })
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
-    private PriceOhlcv toEntity(Stock stock, PriceOhlcvDto dto) {
+    private PriceOhlcv toEntity(Stock stock, Freq freq, PriceOhlcvDto dto) {
+        // 외부 응답 dto에 freq가 없을 수 있으니, 요청 freq를 fallback으로 사용
+        Freq resolvedFreq = (dto != null && dto.getFreq() != null) ? dto.getFreq() : freq;
+        if (resolvedFreq == null) {
+            throw new IllegalStateException("PriceOhlcv freq is null for stock=" + stock.getStockCode());
+        }
+        if (dto == null) {
+            throw new IllegalArgumentException("PriceOhlcvDto is null for stock=" + stock.getStockCode());
+        }
+        if (dto.getTs() == null) {
+            throw new IllegalStateException("PriceOhlcv ts is null for stock=" + stock.getStockCode());
+        }
+
         PriceOhlcvId id = new PriceOhlcvId(
                 stock.getStockId(),
                 dto.getTs(),
-                dto.getFreq()
+                resolvedFreq
         );
 
         PriceOhlcv e = new PriceOhlcv();
         e.setId(id);
         e.setStock(stock);
+
+        //e.setFreq(resolvedFreq);
+
         e.setOpen(dto.getOpen());
         e.setHigh(dto.getHigh());
         e.setLow(dto.getLow());

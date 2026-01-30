@@ -1,120 +1,690 @@
+// Feature2MockPage.tsx
+import { useState, useRef, useEffect } from "react";
+import StockInputBox from "../components/StockInputBox";
+import StockCard from "../components/StockCard";
+import { fetchCandles } from "../api/charts";
+import type { Candle } from "../types/candle";
+import TradingViewWidget from "../components/TradingViewWidget";
+import clsx from "clsx";
+
+const getColorClass = (rate: string) => {
+  if (rate.startsWith("+")) return "text-red-600";
+  if (rate.startsWith("-")) return "text-blue-600";
+  return "text-black";
+};
+
+interface FeaturedStock {
+  name: string;
+  symbol: string;
+  price: string;
+  volume: string;
+  change: string;
+  changeRate: string;
+}
+
+type NewsItem = {
+  id: string;
+  title: string;
+  summary: string;
+  source: string;
+  timeAgo: string;
+  thumbnailUrl?: string;
+};
+
+type RelatedStock = {
+  id: string;
+  name: string;
+  price: string;
+  volume: string;
+  diff: string;
+  rate: string;
+  direction: "up" | "down" | "flat";
+};
+
+const dummyNews: NewsItem[] = [
+  {
+    id: "1",
+    title: "Title",
+    summary: "blablablabla~~~~~~~~~~~~~~~ blablablabla...",
+    source: "출간사 이름",
+    timeAgo: "3시간 전",
+  },
+  {
+    id: "2",
+    title: "Title",
+    summary: "blablablabla~~~~~~~~~~~~~~~ blablablabla...",
+    source: "출간사 이름",
+    timeAgo: "5시간 전",
+  },
+  {
+    id: "3",
+    title: "Title",
+    summary: "blablablabla~~~~~~~~~~~~~~~ blablablabla...",
+    source: "출간사 이름",
+    timeAgo: "어제",
+  },
+];
+
+const dummyRelatedStocks: RelatedStock[] = [
+  {
+    id: "skhynix",
+    name: "SK하이닉스",
+    price: "612,000",
+    volume: "9,922,488",
+    diff: "6,000",
+    rate: "+0.99%",
+    direction: "up",
+  },
+  {
+    id: "samsung",
+    name: "삼성전자",
+    price: "104,100",
+    volume: "45,942,879",
+    diff: "3,500",
+    rate: "+3.48%",
+    direction: "up",
+  },
+  {
+    id: "samsung",
+    name: "삼성전자",
+    price: "104,100",
+    volume: "45,942,879",
+    diff: "3,500",
+    rate: "+3.48%",
+    direction: "up",
+  },
+  {
+    id: "kodex",
+    name: "KODEX 레버리지",
+    price: "44,430",
+    volume: "35,605,843",
+    diff: "830",
+    rate: "+1.90%",
+    direction: "up",
+  },
+  {
+    id: "ecopro",
+    name: "에코프로",
+    price: "94,100",
+    volume: "12,469,599",
+    diff: "6,200",
+    rate: "+7.05%",
+    direction: "flat",
+  },
+  {
+    id: "inverse",
+    name: "KODEX 200선물인버스2X",
+    price: "692",
+    volume: "1,630,500,839",
+    diff: "14",
+    rate: "-0.99%",
+    direction: "down",
+  },
+];
+
 export default function Feature2MockPage() {
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState<string | null>(null);
+  const [candles, setCandles] = useState<Candle[]>([]);
+
+  const loadCandles = async (stockCode: string) => {
+    setChartLoading(true);
+    setChartError(null);
+    const toDate = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(toDate.getDate() - 30);
+    try {
+      const response = await fetchCandles(
+        stockCode,
+        "ONE_D",
+        fromDate.toISOString(),
+        toDate.toISOString(),
+      );
+      if (response.data.length === 0) {
+        setChartError("차트 데이터가 없습니다.");
+      }
+      setCandles(response.data);
+    } catch (e: any) {
+      console.error("차트 데이터 조회 실패:", e);
+      setChartError("차트를 불러오지 못했습니다.");
+      setCandles([]);
+    } finally {
+      setChartLoading(false);
+    }
+  };
+
+  const [industryChartLoading, setIndustryChartLoading] = useState(false);
+  const [industryChartError, setIndustryChartError] = useState<string | null>(
+    null,
+  );
+  const [industryCandles, setIndustryCandles] = useState<Candle[]>([]);
+
+  const loadIndustryCandles = async (industryCode: string) => {
+    setIndustryChartLoading(true);
+    setIndustryChartError(null);
+    const toDate = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(toDate.getDate() - 30);
+    try {
+      const response = await fetchCandles(
+        industryCode,
+        "ONE_D",
+        fromDate.toISOString(),
+        toDate.toISOString(),
+      );
+      if (response.data.length === 0) {
+        setIndustryChartError("차트 데이터가 없습니다.");
+      }
+      setIndustryCandles(response.data);
+    } catch (e: any) {
+      console.error("차트 데이터 조회 실패:", e);
+      setIndustryChartError("차트를 불러오지 못했습니다.");
+      setIndustryCandles([]);
+    } finally {
+      setIndustryChartLoading(false);
+    }
+  };
+
+  const [featuredStocks] = useState<FeaturedStock[]>([
+    {
+      name: "삼성전자",
+      symbol: "005930",
+      price: "70,000",
+      volume: "12,345,678",
+      change: "500",
+      changeRate: "+0.72%",
+    },
+    {
+      name: "LG에너지솔루션",
+      symbol: "373220",
+      price: "400,000",
+      volume: "3,210,987",
+      change: "-2,000",
+      changeRate: "-0.50%",
+    },
+    {
+      name: "카카오",
+      symbol: "035720",
+      price: "55,000",
+      volume: "8,765,432",
+      change: "0",
+      changeRate: "0%",
+    },
+  ]);
+
+  const featuredListWrapperRef = useRef<HTMLDivElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [panelPos, setPanelPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
+  const [topic, setTopic] = useState<
+    | "상승종목"
+    | "상한가 임박종목"
+    | "하락종목"
+    | "상한가 이탈종목"
+    | "거래량 상위종목"
+    | "거래대금 상위종목"
+    | "거래량 급등종목"
+  >("상승종목");
+  const [isTopicOpen, setIsTopicOpen] = useState(false);
+  const topicRef = useRef<HTMLDivElement | null>(null);
+
+  const [mainStock, setMainStock] = useState({
+    name: "삼성전자",
+    symbol: "005930",
+  });
+
+  const handleSearch = async (value: string) => {
+    const q = value.trim();
+    if (!q) return;
+
+    // 일단 코드 그대로 사용 (005930 같은 케이스)
+    setMainStock((prev) => ({ ...prev, symbol: q }));
+
+    await Promise.allSettled([loadCandles(q), loadIndustryCandles(q)]);
+  };
+
+  const [newsItems, setNewsItems] = useState<NewsItemDto[]>(dummyNews);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [newsError, setNewsError] = useState<string | null>(null);
+
+  const [relatedStocks, setRelatedStocks] =
+    useState<RelatedStockDto[]>(dummyRelatedStocks);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [relatedError, setRelatedError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        featuredListWrapperRef.current?.contains(e.target as Node) ||
+        dropdownRef.current?.contains(e.target as Node)
+      ) {
+        return;
+      }
+      setIsOpen(false);
+    };
+
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutsideTopic = (e: MouseEvent) => {
+      if (!topicRef.current) return;
+      if (topicRef.current.contains(e.target as Node)) return;
+      setIsTopicOpen(false);
+    };
+
+    document.addEventListener("click", handleClickOutsideTopic);
+    return () => document.removeEventListener("click", handleClickOutsideTopic);
+  }, []);
+
+  useEffect(() => {
+    if (!mainStock) return;
+
+    loadCandles(mainStock.symbol);
+
+    // 나중에 진짜 industryCode 오면 이 부분만 교체
+    const dummyIndustryCode = mainStock.symbol; // 임시
+    loadIndustryCandles(dummyIndustryCode);
+  }, [mainStock]);
+
   return (
-    <div className="relative bg-white w-full">
-      <div className="flex gap-0 max-md:flex-col">
-        <div className="relative bg-gray-100 rounded-lg border border-gray-400 border-solid h-[800px] w-[334px] max-md:w-full max-md:h-auto max-md:mb-5">
-          <div className="flex absolute top-0 left-0 justify-between items-center px-6 py-0 h-11 bg-gray-200 rounded-lg border border-gray-400 border-solid w-[334px] max-md:w-full">
-            <div className="text-xs text-black">선택 종목 차트</div>
-            <div className="text-xs text-black">티커 · 현재가 · 등락률</div>
-          </div>
-          <div className="absolute left-4 text-xs text-center text-black top-[60px] w-[258px]">
-            캔들 + 볼린저밴드 + RSI + 거래량 영역 (차트 자리)
-          </div>
-          <img
-            src="https://api.builder.io/api/v1/image/assets/TEMP/e9171333739f89d0b5181115863cfb9120813ad5?width=616"
-            alt="Chart 1"
-            className="absolute left-3 h-[140px] top-[191px] w-[308px] max-sm:h-auto max-sm:left-[5%] max-sm:w-[90%]"
-          />
-          <div className="absolute w-64 text-xs leading-4 text-center text-cyan-400 left-[38px] top-[378px]">
-            종목 차트 stock, price_ohlcv, indicator_value, stock_realtime_cache
-            <br />
-            <br />
-            유저 접근 / 내정보 (투자성향) → users, user_invest_profile, login_session
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
+      <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
+        {/* 헤더 */}
+        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
+            외부요인
+          </h1>
+        </header>
 
-        <div className="relative w-[576px] max-md:w-full">
-          <div className="relative bg-gray-200 rounded-lg border border-gray-400 border-solid h-[416px] w-[576px] max-md:w-full">
-            <div className="flex absolute top-0 left-0 justify-between items-center px-6 py-0 h-11 rounded-lg border border-gray-400 border-solid bg-zinc-200 w-[576px] max-md:w-full">
-              <div className="text-xs text-black">산업 지수 (예: 반도체 지수)</div>
-              <div className="text-xs text-black">상대강도 · 변동성</div>
-            </div>
-            <div className="absolute left-5 text-xs text-center text-black top-[75px] w-[239px]">
-              산업지수 라인차트 / 이동평균 / 거래량 히���토리
-            </div>
-            <img
-              src="https://api.builder.io/api/v1/image/assets/TEMP/ea40e5f327633475d7d4b08ebdaab8895d44ada1?width=1090"
-              alt="Chart 2"
-              className="absolute h-[242px] left-[15px] top-[147px] w-[545px] max-sm:h-auto max-sm:left-[5%] max-sm:w-[90%]"
+        {/* 상단 검색 / 특징주 */}
+        <section className="w-full flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="w-full lg:max-w-md bg-white rounded-[10px] outline outline-1 outline-stone-300 px-2 py-1 sm:px-2 sm:py-1 flex flex-col gap-2">
+            <StockInputBox
+              placeholder="종목을 입력해주세요"
+              onSearch={handleSearch}
             />
-            <div className="absolute left-72 text-xs leading-6 text-center text-black top-[69px] w-[204px]">
-              산업지수 차트 industry_index, industry_index_ohlcv, indicator_value
-            </div>
           </div>
 
-          <div className="absolute left-0 top-[416px] w-[576px] max-md:relative max-md:w-full max-md:top-0 max-md:mt-5">
-            <div className="flex justify-between items-center px-6 py-0 h-10 bg-gray-50 rounded-lg border border-gray-300 border-solid w-[576px] max-md:w-full">
-              <div className="text-xs text-black">산업 내 유사 종목 (클러스터링 결과)</div>
-              <div className="text-xs text-black">티커 | 현재가 | 등락률</div>
-            </div>
-            <div className="relative mt-10 bg-white rounded-lg border border-gray-300 border-solid h-[344px] w-[576px] max-md:w-full max-md:h-auto max-md:min-h-[344px]">
-              <img
-                src="https://api.builder.io/api/v1/image/assets/TEMP/a25c6e347eca133ac1bee6a52efb5a6074463f91?width=442"
-                alt="Cluster visualization"
-                className="absolute h-[236px] left-[29px] top-[49px] w-[221px] max-sm:h-auto max-sm:left-[5%] max-sm:w-[40%]"
-              />
-              <div className="absolute text-xs leading-4 text-center text-black right-[135px] top-[115px] w-[169px]">
-                TSM 184.20 +2.4%
-                <br />
-                NVDA 136.55 +1.1%
-                <br />
-                AMD 78.33 -0.8%
-                <br />
-                (예시 데이터 자리)
-              </div>
-              <div className="absolute text-xs leading-4 text-center text-black left-[259px] top-[113px] w-[135px]">
-                티커 클릭시
-                <br />
-                해당 티커로이동
-              </div>
-              <div className="absolute text-xs leading-5 text-center text-cyan-400 left-[301px] top-[220px] w-[157px]">
-                산업 내 유사 종목 peer_cluster_cache join stock, stock_realtime_cache
-              </div>
-            </div>
-          </div>
-        </div>
+          <div
+            ref={featuredListWrapperRef}
+            className="w-full lg:flex-1 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end"
+          >
+            <div ref={topicRef} className="relative w-40">
+              <button
+                onClick={() => setIsTopicOpen((prev) => !prev)}
+                className="w-full h-9 sm:h-10 border border-black rounded-md bg-white flex items-center px-3 font-medium relative"
+              >
+                <span className="flex-1 text-center truncate whitespace-nowrap text-xs sm:text-sm">
+                  {topic}
+                </span>
+                <span className="absolute right-1 sm:right-2 text-[10px] sm:text-xs">
+                  {isTopicOpen ? "▲" : "▼"}
+                </span>
+              </button>
 
-        <div className="relative rounded-lg border border-gray-400 border-solid bg-zinc-200 h-[800px] w-[432px] max-md:w-full max-md:mt-5 max-md:h-auto max-md:min-h-[800px]">
-          <div className="flex absolute top-0 left-0 justify-between items-center px-6 py-0 h-11 bg-gray-300 rounded-lg border border-gray-400 border-solid w-[432px] max-md:w-full">
-            <div className="text-xs text-black">관련 뉴스 &amp; 감성 점수</div>
-            <div className="text-xs text-black">긍정 / 중립 / 부정</div>
-          </div>
-          <div className="flex absolute left-4 top-[60px] flex-col gap-2.5 justify-center items-center bg-white rounded-lg border border-gray-300 border-solid h-[110px] w-[400px] max-sm:left-[5%] max-sm:w-[90%]">
-            <div className="text-xs text-center text-black">반도체 수요 회복 기대</div>
-            <div className="text-xs text-center text-black">Sentiment: +0.82 (긍정)</div>
-          </div>
-          <div className="flex absolute left-4 top-[190px] flex-col gap-2.5 justify-center items-center bg-white rounded-lg border border-gray-300 border-solid h-[110px] w-[400px] max-sm:left-[5%] max-sm:w-[90%]">
-            <div className="text-xs text-center text-black">원가 부담 확대 우려</div>
-            <div className="text-xs text-center text-black">Sentiment: -0.41 (부정)</div>
-          </div>
-          <img
-            src="https://api.builder.io/api/v1/image/assets/TEMP/8f1c2b1706dcc2e98bad373190c61f10a03ddfb3?width=798"
-            alt="News image"
-            className="absolute h-[292px] left-[11px] top-[318px] w-[399px] max-sm:h-auto max-sm:left-[5%] max-sm:w-[90%]"
-          />
-          <div className="absolute text-xs leading-5 text-center text-cyan-400 left-[71px] top-[650px] w-[265px]">
-            뉴스 &amp; 감성 점수 → news, news_security_map, sentiment_result, sentiment_daily_agg
-          </div>
-        </div>
-      </div>
+              {isTopicOpen && (
+                <div className="absolute mt-1 w-full bg-white border border-stone-300 rounded-md shadow-md z-50">
+                  {[
+                    "상승종목",
+                    "상한가 임박종목",
+                    "하락종목",
+                    "상한가 이탈종목",
+                    "거래량 상위종목",
+                    "거래대금 상위종목",
+                    "거래량 급등종목",
+                  ].map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        setTopic(item as typeof topic);
+                        setIsTopicOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-sm sm:text-base hover:bg-zinc-100 ${
+                        topic === item ? "bg-zinc-100 font-semibold" : ""
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-      <div className="relative h-56 bg-yellow-100 rounded-lg border border-yellow-300 border-solid mt-5 w-full max-md:mt-5">
-        <div className="flex absolute top-0 left-0 justify-between items-center px-8 py-0 h-11 bg-amber-300 rounded-lg border border-yellow-300 border-solid w-full max-sm:px-2.5 max-sm:py-0">
-          <div className="text-xs text-black max-sm:text-xs">🤖 QAIMA 산업 분석 요약</div>
-          <div className="text-xs text-black max-sm:text-xs">현재 평가: ⚠ 중립</div>
-        </div>
-        <div className="flex absolute flex-col justify-center text-xs leading-5 text-center text-black left-[33px] top-[100px] w-[358px]">
-          업황: 메모리 반도체 가격 반등 조짐.
-          <br />
-          리스크: 전력/원가 압박 지속.
-          <br />
-          시사점: 단기 모멘텀은 있으나 중장기 확신은 재무 안정성 확인 필요.
-        </div>
-        <div className="flex absolute flex-col justify-center text-xs leading-5 text-center text-cyan-400 left-[437px] top-[72px] w-[172px] max-sm:left-[5%] max-sm:w-[90%]">
-          산업 분석 요약 analysis_request.response_text (source='feature2_external')
-          <br />
-          사전 용어 팝업 dictionary, (dictionary_match로 조회 이벤트 로깅)
-        </div>
+            <div className="flex items-center gap-2 relative">
+              <div
+                ref={cardRef}
+                className="inline-block w-[260px] sm:w-[280px] lg:w-[380px]"
+              >
+                {featuredStocks[0] && (
+                  <StockCard
+                    name={featuredStocks[0].name}
+                    price={featuredStocks[0].price}
+                    volume={featuredStocks[0].volume}
+                    change={featuredStocks[0].change}
+                    changeRate={featuredStocks[0].changeRate}
+                    getColorClass={getColorClass}
+                  />
+                )}
+              </div>
+
+              <button
+                onClick={() => {
+                  setIsOpen((prev) => !prev);
+                  if (!cardRef.current) return;
+                  const rect = cardRef.current.getBoundingClientRect();
+                  setPanelPos({ top: rect.top, left: rect.left });
+                }}
+                className="w-6 h-6 bg-zinc-300 rounded-full flex items-center justify-center transition-colors hover:bg-zinc-400 flex-shrink-0"
+              >
+                <span className="text-lg font-bold leading-none">
+                  {isOpen ? "-" : "+"}
+                </span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* 메인 2열 레이아웃 */}
+        <main className="w-full mt-6 flex flex-col xl:flex-row justify-center items-start gap-6">
+          {/* ============ 좌측: 종목 차트 + 산업 지수 ============ */}
+          <div className="flex-1 flex flex-col gap-5">
+            {/* [좌측 상단] 종목 차트 카드 */}
+            <section className="w-full bg-zinc-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
+              {/* 종목 헤더 라인 */}
+              <div className="flex items-baseline gap-1">
+                <h2 className="text-lg sm:text-2xl font-medium text-black">
+                  {mainStock.name}
+                </h2>
+                <span className="text-sm sm:text-base text-black">
+                  ({mainStock.symbol})
+                </span>
+              </div>
+
+              {/* 차트 영역 */}
+              <div className="w-full h-64 sm:h-80 bg-white rounded-xl overflow-hidden">
+                {chartLoading && (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-md text-gray-500">
+                      차트를 불러오는 중입니다…
+                    </p>
+                  </div>
+                )}
+
+                {chartError && !chartLoading && (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-md text-red-500">
+                      {chartError ?? "차트를 불러오지 못했습니다."}
+                    </p>
+                  </div>
+                )}
+
+                {!chartLoading && !chartError && (
+                  <TradingViewWidget candles={candles} />
+                )}
+              </div>
+            </section>
+
+            {/* [좌측 하단] 산업 지수 차트 카드 */}
+            <section className="w-full bg-zinc-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-2.5 overflow-hidden">
+              <h2 className="text-black text-lg sm:text-2xl font-medium">
+                {mainStock.name}({mainStock.symbol}) 관련 산업 지수
+              </h2>
+
+              <div className="w-full h-64 sm:h-80 bg-white rounded-xl overflow-hidden">
+                {industryChartLoading && (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-md text-gray-500">
+                      차트를 불러오는 중입니다…
+                    </p>
+                  </div>
+                )}
+
+                {industryChartError && !industryChartLoading && (
+                  <div className="h-full flex items-center justify-center">
+                    <p className="text-md text-red-500">
+                      {industryChartError ?? "차트를 불러오지 못했습니다."}
+                    </p>
+                  </div>
+                )}
+
+                {!industryChartLoading && !industryChartError && (
+                  <TradingViewWidget candles={industryCandles} />
+                )}
+              </div>
+            </section>
+          </div>
+          {/* ============ 우측: 감성 지수 + 뉴스 + 관련 종목 ============ */}
+          <div className="w-full xl:w-[380px] 2xl:w-[420px] flex flex-col items-stretch gap-5">
+            {/* [우측 최상단] 부정/긍정 지수 영역 */}
+            <section className="w-full flex justify-center items-center gap-6 sm:gap-10">
+              {/* 부정 지수 */}
+              <div className="flex flex-col items-center gap-1 w-40">
+                <p className="text-center text-sm sm:text-base font-medium text-black">
+                  부정 지수 -0.28
+                </p>
+                <p className="text-center text-xs sm:text-sm text-black">
+                  원가 부담 확대 우려
+                </p>
+              </div>
+
+              {/* 가운데 구분선 */}
+              <div className="hidden sm:block w-px h-12 bg-zinc-600" />
+
+              {/* 긍정 지수 */}
+              <div className="flex flex-col items-center gap-1 w-44">
+                <p className="text-center text-sm sm:text-base font-medium text-black">
+                  긍정 지수 1.24
+                </p>
+                <p className="text-center text-xs sm:text-sm text-black">
+                  반도체 수요 회복 기대
+                </p>
+              </div>
+            </section>
+
+            {/* [우측 중단] 관련 뉴스 카드 */}
+            <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
+              {/* 왼쪽: 뉴스 리스트 */}
+              <div className="flex flex-col gap-3">
+                <h3 className="text-black text-base sm:text-lg font-medium">
+                  삼성전자 관련 뉴스
+                </h3>
+
+                {newsLoading && (
+                  <div className="h-24 flex items-center justify-center text-sm text-gray-500">
+                    뉴스를 불러오는 중입니다…
+                  </div>
+                )}
+
+                {newsError && !newsLoading && (
+                  <div className="h-24 flex items-center justify-center text-sm text-red-500">
+                    {newsError ?? "뉴스를 불러오지 못했습니다."}
+                  </div>
+                )}
+
+                {!newsLoading && !newsError && (
+                  <div className="flex flex-col max-h-72 overflow-y-auto">
+                    {newsItems.map((item, idx) => (
+                      <article
+                        key={item.id}
+                        className={`flex items-center gap-4 px-2.5 py-2 bg-white border-t ${
+                          idx === newsItems.length - 1 ? "border-b" : ""
+                        } border-zinc-300`}
+                      >
+                        <div className="w-20 h-16 bg-zinc-300 rounded-2xl flex-shrink-0" />
+                        <div className="flex-1 flex flex-col gap-2">
+                          <div className="flex flex-col">
+                            <h4 className="text-black text-sm sm:text-base font-semibold">
+                              {item.title}
+                            </h4>
+                            <p className="text-black text-xs sm:text-sm leading-snug">
+                              {item.summary}
+                            </p>
+                          </div>
+                          <p className="text-black text-[11px] sm:text-xs font-medium">
+                            {item.timeAgo} • {item.source}
+                          </p>
+                        </div>
+                      </article>
+                    ))}
+
+                    {newsItems.length === 0 && (
+                      <div className="py-6 text-center text-sm text-gray-500">
+                        표시할 뉴스가 없습니다.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* [우측 하단] 관련 산업 유사 종목 리스트 */}
+            <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
+              <div className="flex flex-col gap-3">
+                <h3 className="text-black text-base sm:text-lg font-medium">
+                  삼성전자 관련 산업 유사 종목
+                </h3>
+
+                {relatedLoading && (
+                  <div className="h-24 flex items-center justify-center text-sm text-gray-500">
+                    유사 종목을 불러오는 중입니다…
+                  </div>
+                )}
+
+                {relatedError && !relatedLoading && (
+                  <div className="h-24 flex items-center justify-center text-sm text-red-500">
+                    {relatedError ?? "유사 종목을 불러오지 못했습니다."}
+                  </div>
+                )}
+
+                {!relatedLoading && !relatedError && (
+                  <div className="flex flex-col max-h-72 overflow-y-auto">
+                    {relatedStocks.map((row, idx) => (
+                      <div
+                        key={row.id}
+                        className={`flex items-center justify-between gap-4 px-2.5 py-2 bg-white border-t ${
+                          idx === relatedStocks.length - 1 ? "border-b" : ""
+                        } border-zinc-300`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-28 sm:w-32 text-xs sm:text-sm font-medium text-black">
+                            {row.name}
+                          </div>
+
+                          <div className="w-24 sm:w-28 flex flex-col items-end">
+                            <div
+                              className={`text-right text-sm sm:text-base font-semibold ${
+                                row.direction === "up"
+                                  ? "text-red-600"
+                                  : "text-blue-700"
+                              }`}
+                            >
+                              {row.price}
+                            </div>
+                            <div className="text-right text-[10px] sm:text-xs text-black">
+                              {row.volume}
+                            </div>
+                          </div>
+
+                          <div className="w-4 flex items-center justify-center">
+                            {row.direction === "flat" ? (
+                              <span className="text-2xl font-extrabold leading-none text-black">
+                                -
+                              </span>
+                            ) : (
+                              <span
+                                className={clsx(
+                                  "text-xs sm:text-sm font-bold leading-none",
+                                  row.direction === "up"
+                                    ? "text-red-600"
+                                    : "text-blue-700",
+                                )}
+                              >
+                                {row.direction === "up" ? "▲" : "▼"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="w-16 sm:w-20 flex flex-col items-end gap-0.5">
+                          <div
+                            className={`text-xs sm:text-sm font-semibold ${
+                              row.direction === "up"
+                                ? "text-red-600"
+                                : "text-blue-700"
+                            }`}
+                          >
+                            {row.diff}
+                          </div>
+                          <div
+                            className={`text-[10px] sm:text-xs ${
+                              row.direction === "up"
+                                ? "text-red-600"
+                                : "text-blue-700"
+                            }`}
+                          >
+                            {row.rate}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {relatedStocks.length === 0 && (
+                      <div className="py-6 text-center text-sm text-gray-500">
+                        표시할 유사 종목이 없습니다.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </main>
+
+        {/* 분석 결과 보기 영역 */}
+        <section className="w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex flex-col items-center justify-center gap-4 mt-6">
+          <button className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium">
+            분석 결과 보기
+          </button>
+        </section>
+
+        {/* 펼쳐진 특징주 리스트 패널 */}
+        {isOpen && panelPos && (
+          <div
+            ref={dropdownRef}
+            className="fixed w-[260px] sm:w-[280px] lg:w-[380px] max-h-[400px] bg-white border border-stone-300 rounded-sm shadow-md overflow-y-auto overflow-x-hidden z-50"
+            style={{ top: panelPos.top, left: panelPos.left }}
+          >
+            <div className="pr-3">
+              {featuredStocks.map((stock, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    setIsOpen(false);
+                    handleSearch(stock.symbol);
+                  }}
+                  className="w-full text-left"
+                >
+                  <StockCard
+                    name={stock.name}
+                    price={stock.price}
+                    volume={stock.volume}
+                    change={stock.change}
+                    changeRate={stock.changeRate}
+                    getColorClass={getColorClass}
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
