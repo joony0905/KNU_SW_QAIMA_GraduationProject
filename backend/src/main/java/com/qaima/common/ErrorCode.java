@@ -17,7 +17,15 @@ public enum ErrorCode {
 
     // ===== 500 =====
     ANALYSIS_API_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "ANALYSIS_API_FAILED", "분석 API 호출에 실패했습니다."),
-    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "서버 내부 오류");
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "서버 내부 오류"),
+
+    //502
+    KIS_HTTP_ERROR(HttpStatus.BAD_GATEWAY, "KIS_HTTP_ERROR", "KIS 호출에 실패했습니다."),
+    KIS_DECODE_ERROR(HttpStatus.BAD_GATEWAY, "KIS_DECODE_ERROR", "KIS 응답 파싱에 실패했습니다."),
+    KIS_BIZ_ERROR(HttpStatus.BAD_GATEWAY, "KIS_BIZ_ERROR", "KIS 응답이 정상 처리되지 않았습니다."),
+
+    // ===== 200 이지만 상태 알림(권장: 서비스에서 warning으로 처리) =====
+    KIS_MARKET_CLOSED(HttpStatus.SERVICE_UNAVAILABLE, "KIS_MARKET_CLOSED", "장 운영 시간이 아닙니다.");
 
     private final HttpStatus status;
     private final String code;

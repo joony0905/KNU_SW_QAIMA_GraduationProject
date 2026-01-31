@@ -1,5 +1,7 @@
 package com.qaima.service;
 
+import com.qaima.common.ErrorCode;
+import com.qaima.common.ErrorException;
 import com.qaima.domain.*;
 import com.qaima.dto.*;
 import com.qaima.external.AnalysisApiClient;
@@ -26,38 +28,28 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class FeatOneService {
 
-    private final StockService stockService;                 // Stock 생성 관련
+    private final StockService stockService;
     private final PriceOhlcvRepository priceOhlcvRepository;
     private final IndicatorValueRepository indicatorValueRepository;
     private final FinancialRepository financialRepository;
 
+    // Feature1은 (너가 현재 유지 중인 구조대로) 직접 KIS/Marketstack을 사용
     private final KrStockClient krStockClient;
     private final GlobalStockClient globalStockClient;
     private final AnalysisApiClient analysisApiClient;
 
-    /**
-     * 기능 1 전체 플로우
-     * 1) 종목 조회 (없으면 외부 메타로 생성)
-     * 2) 캔들 로딩 (DB → 없으면 외부 → DB저장)
-     * 3) 지표, 재무 로딩 (현재는 DB)
-     * 4) FastAPI 분석 요청
-     * 5) 응답 DTO 조립
-     */
     public Mono<FeatOneResult> getFeatOneData(
             String stockCode,
             Freq freq,
             OffsetDateTime from,
             OffsetDateTime to
     ) {
-        // 1. 종목 조회 + 없으면 외부에서 자동 생성 (한 번만)
         Mono<Stock> stockMono = stockService.getOrCreateStockByCode(stockCode).cache();
 
-        // 2. 캔들 (DB → 없으면 KIS → 실패 시 Global)
         Mono<List<PriceOhlcv>> candlesMono = stockMono.flatMap(stock ->
                 loadCandlesWithFallback(stock, freq, from, to)
         );
 
-        // 3. 지표 (초기엔 DB에 있는 것만 나중에 FastAPI 계산과 혼합 가능)
         Mono<List<IndicatorValue>> indicatorsMono = stockMono.flatMap(stock ->
                 Mono.fromCallable(() ->
                                 indicatorValueRepository.findByStockAndFreqAndTsBetweenOrderByTs(
@@ -67,7 +59,7 @@ public class FeatOneService {
                         .subscribeOn(Schedulers.boundedElastic())
         );
 
-        int financialLimit = 5; // 추후 수정, test용
+        int financialLimit = 5;
 
         Mono<List<Financial>> financialsMono = stockMono.flatMap(stock ->
                 Mono.fromCallable(() ->
@@ -79,7 +71,6 @@ public class FeatOneService {
                         .subscribeOn(Schedulers.boundedElastic())
         );
 
-        // 5. DB + 외부 데이터 → FastAPI 요청 → 응답 DTO 조립
         return Mono.zip(stockMono, candlesMono, indicatorsMono, financialsMono)
                 .flatMap(tuple -> {
                     Stock stock = tuple.getT1();
@@ -87,33 +78,26 @@ public class FeatOneService {
                     List<IndicatorValue> indicators = tuple.getT3();
                     List<Financial> financials = tuple.getT4();
 
-                    FeatOneRequestDto requestDto = buildFeatOneRequestDto(
-                            stock, candles, indicators, financials
-                    );
+                    FeatOneRequestDto requestDto =
+                            buildFeatOneRequestDto(stock, candles, indicators, financials);
 
                     return analysisApiClient.requestStockAnalysis(requestDto)
                             .map(textDto -> {
                                 FeatOneResponseDataDto data =
-                                        buildFeatOneResponseDto(
-                                                stock,
-                                                candles,
-                                                indicators,
-                                                financials,
-                                                textDto
-                                        );
+                                        buildFeatOneResponseDto(stock, candles, indicators, financials, textDto);
 
-                                boolean chartUnavailable = candles == null || candles.isEmpty();
-
+                                boolean chartUnavailable = (candles == null || candles.isEmpty());
                                 return new FeatOneResult(data, chartUnavailable);
                             });
                 });
     }
 
     /**
-     * 1) DB에서 캔들 조회
-     * 2) 비어 있으면 KIS 캔들 호출
-     * 3) KIS 실패 시 Global(Marketstack) 폴백
-     * 4) 외부에서 가져온 건 DB에 저장 후 PriceOhlcv 리스트 반환
+     * 1) DB 조회
+     * 2) 비어있으면 KIS 호출
+     * 3) KIS가 http/biz/market_closed 실패면 Marketstack 폴백
+     * 4) decode는 내부 버그로 간주 → 그대로 throw
+     * 5) 외부 데이터는 saveAll 후 반환
      */
     private Mono<List<PriceOhlcv>> loadCandlesWithFallback(
             Stock stock,
@@ -122,43 +106,46 @@ public class FeatOneService {
             OffsetDateTime to
     ) {
         String stockCode = stock.getStockCode();
-        String marketDivCode = toKisMarketDivCode(stock.getExchange()); // KOSPI/KOSDAQ/KONEX/해외
+        String marketDivCode = toKisMarketDivCode(stock.getExchange());
 
-        // 1) 먼저 DB 조회
         return Mono.fromCallable(() ->
-                        priceOhlcvRepository.findByStockCodeAndFreqAndTsBetween(
-                                stockCode, freq, from, to
-                        )
+                        priceOhlcvRepository.findByStockCodeAndFreqAndTsBetween(stockCode, freq, from, to)
                 )
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(existing -> {
-                    // 1-1) 이미 DB에 있으면 그대로 반환
                     if (!existing.isEmpty()) {
                         return Mono.just(existing);
                     }
 
-                    // 2) DB에 없으면 KIS 캔들 호출
                     Mono<List<PriceOhlcvDto>> fromKis =
                             krStockClient.fetchCandles(stockCode, marketDivCode, freq, from, to);
 
-                    // 3) KIS 실패 시 Global(Marketstack) 폴백
                     Mono<List<PriceOhlcvDto>> fromGlobal =
-                            fromKis.onErrorResume(ex ->
-                                    globalStockClient.fetchCandles(stockCode, freq, from, to)
-                            );
+                            fromKis.onErrorResume(ErrorException.class, e -> {
+                                // decode는 숨기지 말고 터뜨림 (내부 버그/DTO 불일치)
+                                if (e.getErrorCode() == ErrorCode.KIS_DECODE_ERROR) {
+                                    return Mono.error(e);
+                                }
 
-                    // 4) 외부에서 가져온 DTO를 엔티티로 변환 후 saveAll
+                                // http/biz/market_closed는 글로벌 폴백 허용
+                                if (e.getErrorCode() == ErrorCode.KIS_HTTP_ERROR
+                                        || e.getErrorCode() == ErrorCode.KIS_BIZ_ERROR
+                                        || e.getErrorCode() == ErrorCode.KIS_MARKET_CLOSED) {
+                                    return globalStockClient.fetchCandles(stockCode, freq, from, to);
+                                }
+
+                                return Mono.error(e);
+                            });
+
                     return fromGlobal.flatMap(dtoList -> {
                         if (dtoList == null || dtoList.isEmpty()) {
-                            // 외부에서도 아무것도 못 가져온 경우 → 빈 리스트
                             return Mono.just(List.<PriceOhlcv>of());
                         }
 
                         return Mono.fromCallable(() -> {
                                     List<PriceOhlcv> entities = dtoList.stream()
-                                            .map(dto -> toPriceOhlcvEntity(stock, dto))
+                                            .map(dto -> toPriceOhlcvEntity(stock, freq, dto))
                                             .collect(Collectors.toList());
-
                                     return priceOhlcvRepository.saveAll(entities);
                                 })
                                 .subscribeOn(Schedulers.boundedElastic());
@@ -166,18 +153,29 @@ public class FeatOneService {
                 });
     }
 
-    // ===== 매핑 로직 =====
+    private PriceOhlcv toPriceOhlcvEntity(Stock stock, Freq reqFreq, PriceOhlcvDto dto) {
+        if (dto == null) {
+            throw new IllegalArgumentException("PriceOhlcvDto is null for stock=" + stock.getStockCode());
+        }
+        if (dto.getTs() == null) {
+            throw new IllegalStateException("PriceOhlcv ts is null for stock=" + stock.getStockCode());
+        }
 
-    private PriceOhlcv toPriceOhlcvEntity(Stock stock, PriceOhlcvDto dto) {
+        // dto.freq가 비어있으면 요청 freq로 보정 (저장 안정성)
+        Freq resolvedFreq = (dto.getFreq() != null) ? dto.getFreq() : reqFreq;
+        if (resolvedFreq == null) {
+            throw new IllegalStateException("PriceOhlcv freq is null for stock=" + stock.getStockCode());
+        }
+
         PriceOhlcvId id = new PriceOhlcvId(
                 stock.getStockId(),
                 dto.getTs(),
-                dto.getFreq()
+                resolvedFreq
         );
 
         PriceOhlcv entity = new PriceOhlcv();
         entity.setId(id);
-        entity.setStock(stock); // ManyToOne
+        entity.setStock(stock);
         entity.setOpen(dto.getOpen());
         entity.setHigh(dto.getHigh());
         entity.setLow(dto.getLow());
@@ -208,7 +206,6 @@ public class FeatOneService {
                 .build();
     }
 
-
     private FinancialSummaryDto toFinancialSummaryDto(Financial f) {
         Integer q = null;
         Integer h = null;
@@ -216,7 +213,7 @@ public class FeatOneService {
         if (f.getPeriodType() == PeriodType.Q) {
             q = (f.getFiscalQuarter() != null) ? f.getFiscalQuarter() : f.getPeriodNo();
         } else if (f.getPeriodType() == PeriodType.H) {
-            h = f.getPeriodNo(); // 1 or 2
+            h = f.getPeriodNo();
         }
 
         Double debtRatio = null;
@@ -235,7 +232,6 @@ public class FeatOneService {
                 .periodType(f.getPeriodType().name())
                 .reportDate(f.getReportDate())
 
-                // 규모
                 .revenue(f.getRevenue())
                 .grossProfit(f.getGrossProfit())
                 .operatingIncome(f.getOperatingIncome())
@@ -248,18 +244,15 @@ public class FeatOneService {
                 .cashAndEquivalents(f.getCashAndEquivalents())
                 .marketCap(f.getMarketCap())
 
-                // 지표(Double)
                 .operatingMargin(bdToDouble(f.getOperatingMargin()))
                 .netMargin(bdToDouble(f.getNetMargin()))
                 .roe(bdToDouble(f.getRoe()))
                 .per(bdToDouble(f.getPer()))
                 .pbr(bdToDouble(f.getPbr()))
                 .debtRatio(debtRatio)
-
                 .build();
     }
 
-    //Stock 엔티티 → StockDto 매핑
     private StockDto toStockDto(Stock stock) {
         if (stock == null) return null;
 
@@ -268,19 +261,11 @@ public class FeatOneService {
                 .stockCode(stock.getStockCode())
                 .isin(stock.getIsin())
                 .companyName(stock.getCompanyName())
-                // 필요하면 아래 값들 점점 채워나가면 됨
-                .exchangeId(
-                        stock.getExchange() != null ? stock.getExchange().getExchangeId() : null
-                )
-                .exchangeCode(
-                        stock.getExchange() != null ? stock.getExchange().getCode() : null
-                )
+                .exchangeId(stock.getExchange() != null ? stock.getExchange().getExchangeId() : null)
+                .exchangeCode(stock.getExchange() != null ? stock.getExchange().getCode() : null)
                 .assetType(stock.getAssetType())
                 .currency(stock.getCurrency())
-                .industryId(
-                        stock.getIndustry() != null ? stock.getIndustry().getIndustryId() : null
-                )
-                // price/changeRate는 실시간 조회용이라 여기서는 null로 둬도 됨
+                .industryId(stock.getIndustry() != null ? stock.getIndustry().getIndustryId() : null)
                 .listedAt(stock.getListedAt())
                 .delistedAt(stock.getDelistedAt())
                 .build();
@@ -292,26 +277,15 @@ public class FeatOneService {
             List<IndicatorValue> indicators,
             List<Financial> financials
     ) {
-        List<PriceOhlcvDto> candleDtos = candles.stream()
-                .map(this::toPriceOhlcvDto)
-                .toList();
-
-        List<IndicatorValueDto> indicatorDtos = indicators.stream()
-                .map(this::toIndicatorValueDto)
-                .toList();
-
-        List<FinancialSummaryDto> financialDtos = financials.stream()
-                .map(this::toFinancialSummaryDto)
-                .toList();
-
-        StockDto stockDto = toStockDto(stock);
+        List<PriceOhlcvDto> candleDtos = candles.stream().map(this::toPriceOhlcvDto).toList();
+        List<IndicatorValueDto> indicatorDtos = indicators.stream().map(this::toIndicatorValueDto).toList();
+        List<FinancialSummaryDto> financialDtos = financials.stream().map(this::toFinancialSummaryDto).toList();
 
         return FeatOneRequestDto.builder()
-                .stock(stockDto)
+                .stock(toStockDto(stock))
                 .candles(candleDtos)
                 .indicators(indicatorDtos)
                 .financials(financialDtos)
-                // .options(null) // 필요하면 나중에 추가
                 .build();
     }
 
@@ -322,43 +296,29 @@ public class FeatOneService {
             List<Financial> financials,
             FeatOneResponseTextDto textDto
     ) {
-        List<PriceOhlcvDto> candleDtos = candles.stream()
-                .map(this::toPriceOhlcvDto)
-                .toList();
-
-        List<IndicatorValueDto> indicatorDtos = indicators.stream()
-                .map(this::toIndicatorValueDto)
-                .toList();
-
-        List<FinancialSummaryDto> financialDtos = financials.stream()
-                .map(this::toFinancialSummaryDto)
-                .toList();
-
-        StockDto stockDto = toStockDto(stock);
+        List<PriceOhlcvDto> candleDtos = candles.stream().map(this::toPriceOhlcvDto).toList();
+        List<IndicatorValueDto> indicatorDtos = indicators.stream().map(this::toIndicatorValueDto).toList();
+        List<FinancialSummaryDto> financialDtos = financials.stream().map(this::toFinancialSummaryDto).toList();
 
         return FeatOneResponseDataDto.builder()
-                .stock(stockDto)
+                .stock(toStockDto(stock))
                 .candles(candleDtos)
                 .indicators(indicatorDtos)
                 .financials(financialDtos)
-                // Text 섹션 전체를 analysis에 그대로 넣는다
                 .analysis(textDto)
                 .build();
     }
 
-    // 거래소 → KIS marketDivCode 매핑
     private String toKisMarketDivCode(Exchange exchange) {
         return switch (exchange.getCode()) {
             case "KOSPI" -> "J";
             case "KOSDAQ" -> "Q";
             case "KONEX" -> "K";
-            default -> "B";  // 해외 기타 거래소 전부 B
+            default -> "B";
         };
     }
 
-    // BigDecimal → Double 변환
     private static Double bdToDouble(BigDecimal v) {
         return v == null ? null : v.doubleValue();
     }
-
 }

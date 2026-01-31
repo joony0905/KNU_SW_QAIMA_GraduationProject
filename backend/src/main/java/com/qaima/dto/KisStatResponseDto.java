@@ -1,9 +1,10 @@
 package com.qaima.dto;
 
+import com.qaima.external.KisRtHeader;
 import lombok.Data;
 
 @Data
-public class KisStatResponseDto {
+public class KisStatResponseDto implements KisRtHeader {
 
     // 처리 결과 코드 ("0" 이면 정상)
     private String rt_cd;

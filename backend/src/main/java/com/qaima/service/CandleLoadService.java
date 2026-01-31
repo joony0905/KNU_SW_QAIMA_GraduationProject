@@ -1,6 +1,7 @@
 package com.qaima.service;
 
-import com.qaima.service.CandleLoadResult;
+import com.qaima.common.ErrorCode;
+import com.qaima.common.ErrorException;
 import com.qaima.domain.CandleSource;
 import com.qaima.domain.Freq;
 import com.qaima.domain.PriceOhlcv;
@@ -35,7 +36,6 @@ public class CandleLoadService {
     ) {
         String stockCode = stock.getStockCode();
 
-        // DB 조회
         return Mono.fromCallable(() ->
                         priceOhlcvRepository.findByStockCodeAndFreqAndTsBetween(
                                 stockCode, freq, from, to
@@ -47,8 +47,7 @@ public class CandleLoadService {
                         return Mono.just(new CandleLoadResult(dbCandles, CandleSource.DB));
                     }
 
-                    return stockClient
-                            .fetchCandles(stock, freq, from, to)
+                    return stockClient.fetchCandles(stock, freq, from, to)
                             .flatMap(result ->
                                     save(stock, freq, result.getCandles())
                                             .map(list -> {
@@ -58,14 +57,30 @@ public class CandleLoadService {
                                                 return new CandleLoadResult(list, source);
                                             })
                             )
+                            .onErrorResume(ErrorException.class, e -> {
+                                // decode는 숨기지 말고 터뜨림
+                                if (e.getErrorCode() == ErrorCode.KIS_DECODE_ERROR) {
+                                    return Mono.error(e);
+                                }
+
+                                // http/biz/market_closed는 EMPTY로 폴백(컨트롤러에서 warning 판단)
+                                if (e.getErrorCode() == ErrorCode.KIS_HTTP_ERROR
+                                        || e.getErrorCode() == ErrorCode.KIS_BIZ_ERROR
+                                        || e.getErrorCode() == ErrorCode.KIS_MARKET_CLOSED) {
+                                    log.warn("[CANDLE] fallback to EMPTY. code={}, msg={}",
+                                            e.getErrorCode().code(), e.getMessage());
+                                    return Mono.just(new CandleLoadResult(List.of(), CandleSource.EMPTY));
+                                }
+
+                                return Mono.error(e);
+                            })
                             .onErrorResume(err -> {
-                                log.error("[CANDLE] KIS/Marketstack 모두 실패: {}", err.getMessage(), err);
+                                // 나머지 예상치 못한 예외는 일단 EMPTY (운영 정책에 따라 바꿔도 됨)
+                                log.error("[CANDLE] unexpected error: {}", err.getMessage(), err);
                                 return Mono.just(new CandleLoadResult(List.of(), CandleSource.EMPTY));
                             });
                 });
     }
-
-    /* ========================= */
 
     private Mono<List<PriceOhlcv>> save(Stock stock, Freq freq, List<PriceOhlcvDto> dtoList) {
         if (dtoList == null || dtoList.isEmpty()) {
@@ -83,7 +98,6 @@ public class CandleLoadService {
     }
 
     private PriceOhlcv toEntity(Stock stock, Freq freq, PriceOhlcvDto dto) {
-        // 외부 응답 dto에 freq가 없을 수 있으니, 요청 freq를 fallback으로 사용
         Freq resolvedFreq = (dto != null && dto.getFreq() != null) ? dto.getFreq() : freq;
         if (resolvedFreq == null) {
             throw new IllegalStateException("PriceOhlcv freq is null for stock=" + stock.getStockCode());
@@ -104,9 +118,6 @@ public class CandleLoadService {
         PriceOhlcv e = new PriceOhlcv();
         e.setId(id);
         e.setStock(stock);
-
-        //e.setFreq(resolvedFreq);
-
         e.setOpen(dto.getOpen());
         e.setHigh(dto.getHigh());
         e.setLow(dto.getLow());
