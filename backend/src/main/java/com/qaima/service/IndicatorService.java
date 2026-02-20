@@ -2,11 +2,13 @@ package com.qaima.service;
 
 import com.qaima.common.Blocking;
 import com.qaima.common.exception.ResourceNotFoundException;
+import com.qaima.domain.Exchange;
 import com.qaima.domain.Financial;
 import com.qaima.domain.MarketSnapshot;
 import com.qaima.domain.PeriodType;
 import com.qaima.domain.Stock;
 import com.qaima.dto.IndicatorSnapshotDto;
+import com.qaima.external.KrStockClient;
 import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.MarketSnapshotRepository;
 import com.qaima.repository.StockRepository;
@@ -25,7 +27,9 @@ public class IndicatorService {
     private final StockRepository stockRepository;
     private final FinancialRepository financialRepository;
     private final MarketSnapshotRepository marketSnapshotRepository;
-    private static final String DEFAULT_EXCHANGE_CODE = "KRX";
+    private final MarketSnapshotService marketSnapshotService;
+    private final KrStockClient krStockClient;
+    private static final String DEFAULT_EXCHANGE_CODE = "KOSPI";
 
     public Mono<IndicatorSnapshotDto> getIndicators(
             String stockCode,
@@ -43,7 +47,10 @@ public class IndicatorService {
                         .orElseThrow(() -> new IllegalArgumentException(
                                 "Unknown stockCode: " + stockCode + " (exchange=" + resolvedExchange + ")"
                         )))
-                .flatMap(stock -> Blocking.call(() -> buildSnapshot(stock, periodType, asOfDate)));
+                .flatMap(stock ->
+                        ensureSnapshotIfNeeded(stock, asOfDate)
+                                .then(Blocking.call(() -> buildSnapshot(stock, periodType, asOfDate)))
+                );
     }
 
     private IndicatorSnapshotDto buildSnapshot(Stock stock, PeriodType periodType, LocalDate asOfDate) {
@@ -142,6 +149,62 @@ public class IndicatorService {
         return v == null ? null : v.doubleValue();
     }
 
+    private Mono<Void> ensureSnapshotIfNeeded(Stock stock, LocalDate asOfDate) {
+        if (!isKisEligible(stock) || !isTodayOrNull(asOfDate)) {
+            return Mono.empty();
+        }
+
+        return Blocking.call(() -> loadSnapshot(stock, asOfDate))
+                .flatMap(snapshot -> {
+                    if (!isSnapshotIncomplete(snapshot)) {
+                        return Mono.empty();
+                    }
+
+                    String marketDivCode = toKisMarketDivCode(stock.getExchange());
+                    if ("B".equals(marketDivCode)) {
+                        return Mono.empty();
+                    }
+
+                    return krStockClient
+                            .fetchKisStatRaw(stock.getStockCode(), marketDivCode)
+                            .flatMap(output -> marketSnapshotService.upsertFromKis(stock, output, asOfDate))
+                            .then()
+                            .onErrorResume(e -> Mono.empty());
+                });
+    }
+
+    private boolean isSnapshotIncomplete(MarketSnapshot snapshot) {
+        if (snapshot == null) return true;
+        return snapshot.getMarketCap() == null
+                || snapshot.getPer() == null
+                || snapshot.getPbr() == null;
+    }
+
+    private boolean isKisEligible(Stock stock) {
+        if (stock == null || stock.getExchange() == null) return false;
+        String code = stock.getExchange().getCode();
+        if (code == null || code.isBlank()) return false;
+
+        return switch (code.trim().toUpperCase()) {
+            case "KRX", "KOSPI", "KOSDAQ", "KONEX" -> true;
+            default -> false;
+        };
+    }
+
+    private boolean isTodayOrNull(LocalDate asOfDate) {
+        return asOfDate == null || LocalDate.now().equals(asOfDate);
+    }
+
+    private String toKisMarketDivCode(Exchange exchange) {
+        if (exchange == null || exchange.getCode() == null) return "B";
+        return switch (exchange.getCode().toUpperCase()) {
+            case "KRX", "XKRX", "KOSPI" -> "J";
+            case "KOSDAQ", "XKOS" -> "Q";
+            case "KONEX" -> "K";
+            default -> "B";
+        };
+    }
+
     private String resolveExchangeCode(String exchangeCode) {
         String normalized = normalizeExchangeCode(exchangeCode);
         return normalized != null ? normalized : DEFAULT_EXCHANGE_CODE;
@@ -157,7 +220,7 @@ public class IndicatorService {
         }
 
         return switch (trimmed.toUpperCase()) {
-            case "XKRX" -> "KRX";
+            case "XKRX", "KRX" -> "KOSPI";
             case "XKOS" -> "KOSDAQ";
             case "XNYS" -> "NYSE";
             case "XNAS" -> "NASDAQ";

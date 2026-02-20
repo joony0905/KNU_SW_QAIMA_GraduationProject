@@ -23,7 +23,7 @@ public class StockService {
         return Mono.fromCallable(() ->
                         stockRepository.findById(stockId)
                                 .orElseThrow(() ->
-                                        new IllegalArgumentException("議댁옱?섏? ?딅뒗 醫낅ぉ ID: " + stockId)))
+                                        new IllegalArgumentException("존재하지 않는 종목 ID: " + stockId)))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(stockClient::fetchStock);
     }
@@ -137,7 +137,7 @@ public class StockService {
         if (trimmed.isBlank()) return null;
 
         return switch (trimmed.toUpperCase()) {
-            case "XKRX" -> "KRX";
+            case "XKRX", "KRX" -> "KOSPI";
             case "XKOS" -> "KOSDAQ";
             case "XNYS" -> "NYSE";
             case "XNAS" -> "NASDAQ";
@@ -148,7 +148,7 @@ public class StockService {
     private boolean isSupportedExchange(String exchangeCode) {
         if (exchangeCode == null || exchangeCode.isBlank()) return false;
         return switch (exchangeCode) {
-            case "KRX", "KOSDAQ", "NYSE", "NASDAQ" -> true;
+            case "KOSPI", "KOSDAQ", "NYSE", "NASDAQ" -> true;
             default -> false;
         };
     }

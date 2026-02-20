@@ -21,7 +21,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Slf4j
 @Component
@@ -68,13 +67,14 @@ public class KrStockClient {
      */
     public Mono<StockDto> fetchStock(Stock stock) {
         String code = stock.getStockCode();
+        String marketDivCode = resolveMarketDivCodeForStock(stock);
 
         return getAccessToken()
                 .flatMap(token ->
                         webClient.get()
                                 .uri(uriBuilder -> uriBuilder
                                         .path("/uapi/domestic-stock/v1/quotations/inquire-price")
-                                        .queryParam("FID_COND_MRKT_DIV_CODE", "J")
+                                        .queryParam("FID_COND_MRKT_DIV_CODE", marketDivCode)
                                         .queryParam("FID_INPUT_ISCD", code)
                                         .build()
                                 )
@@ -100,6 +100,7 @@ public class KrStockClient {
      * KIS 응답 스키마 기반으로 DTO 분리
      */
     public Mono<KisTickerMetaDto> fetchTickerMeta(String symbol) {
+        String marketDivCode = resolveMarketDivCodeFromSymbol(symbol);
         String cleanSymbol = symbol
                 .replace(".XKRX", "")
                 .replace(".XKOS", "");
@@ -109,7 +110,7 @@ public class KrStockClient {
                         webClient.get()
                                 .uri(uriBuilder -> uriBuilder
                                         .path("/api/domestic-stock/v1/quotations/inquire-price")
-                                        .queryParam("FID_COND_MRKT_DIV_CODE", "J")
+                                        .queryParam("FID_COND_MRKT_DIV_CODE", marketDivCode)
                                         .queryParam("FID_INPUT_ISCD", cleanSymbol)
                                         .build()
                                 )
@@ -159,28 +160,7 @@ public class KrStockClient {
 
     // raw output용 혅재가 시세 조회
     public Mono<KisStatResponseDto.Output> fetchKisStatRaw(String stockCode) {
-        return getAccessToken()
-                .flatMap(token ->
-                        webClient.get()
-                                .uri(uriBuilder -> uriBuilder
-                                        .path("/api/domestic-stock/v1/quotations/inquire-price")
-                                        .queryParam("FID_COND_MRKT_DIV_CODE", "J")
-                                        .queryParam("FID_INPUT_ISCD", stockCode)
-                                        .build()
-                                )
-                                .header("authorization", token)
-                                .header("appkey", appKey)
-                                .header("appsecret", appSecret)
-                                .header("tr_id", "FHKST01010100")
-                                .retrieve()
-                                .bodyToMono(KisStatResponseDto.class)
-                                .flatMap(resp -> {
-                                    if (resp.getOutput() == null) {
-                                        return Mono.error(new IllegalStateException("KIS 응답에 output 없음"));
-                                    }
-                                    return Mono.just(resp.getOutput());
-                                })
-                );
+        return fetchKisStatRaw(stockCode, "J");
     }
 
     //------------------------------------------
@@ -226,13 +206,14 @@ public class KrStockClient {
             OffsetDateTime to
     ) {
         String interval = toKisInterval(freq);
+        String mkt = normalizeMarketDivCode(marketDivCode);
 
         return getAccessToken()
                 .flatMap(token ->
                         webClient.get()
                                 .uri(uriBuilder -> uriBuilder
                                         .path("/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice")
-                                        .queryParam("FID_COND_MRKT_DIV_CODE", "J") // 추후 J에서 확장
+                                        .queryParam("FID_COND_MRKT_DIV_CODE", mkt)
                                         .queryParam("FID_INPUT_ISCD", stockCode)
                                         .queryParam("FID_PERIOD_DIV_CODE", interval) // "D","W","M"
                                         .queryParam("FID_INPUT_DATE_1", toKisDateString(from))
@@ -245,7 +226,6 @@ public class KrStockClient {
                                 .header("appsecret", appSecret)
                                 .header("tr_id", "FHKST03010100")
                                 .header("custtype", "P")
-                                .header("content-type", "application/json; charset=utf-8")
                                 .retrieve()
                                 // HTTP 4xx/5xx면 바로 에러로
                                 .onStatus(
@@ -326,6 +306,39 @@ public class KrStockClient {
         };
     }
 
+    private String normalizeMarketDivCode(String marketDivCode) {
+        if (marketDivCode == null) return "J";
+        String normalized = marketDivCode.trim().toUpperCase();
+        return switch (normalized) {
+            case "J", "Q", "K" -> normalized;
+            default -> "J";
+        };
+    }
+
+    private String resolveMarketDivCodeForStock(Stock stock) {
+        if (stock == null || stock.getExchange() == null || stock.getExchange().getCode() == null) {
+            return "J";
+        }
+
+        String exchangeCode = stock.getExchange().getCode().trim().toUpperCase();
+        return switch (exchangeCode) {
+            case "KOSPI", "KRX", "XKRX" -> "J";
+            case "KOSDAQ", "XKOS" -> "Q";
+            case "KONEX" -> "K";
+            default -> "J";
+        };
+    }
+
+    private String resolveMarketDivCodeFromSymbol(String symbol) {
+        if (symbol == null) return "J";
+        String normalized = symbol.trim().toUpperCase();
+
+        if (normalized.endsWith(".XKOS")) return "Q";
+        if (normalized.endsWith(".XKRX")) return "J";
+        if (normalized.endsWith(".KONEX")) return "K";
+        return "J";
+    }
+
 
     private List<PriceOhlcvDto> mapToPriceOhlcvDtoList(KisCandlesResponse resp, Freq freq) {
 
@@ -333,17 +346,18 @@ public class KrStockClient {
             return List.of();
         }
 
-        int rawCount = resp.getOutput2().size();
-        List<PriceOhlcvDto> candles = resp.getOutput2().stream()
-                .map(candle -> toPriceOhlcvDto(candle, freq))
-                .flatMap(Optional::stream)
+        return resp.getOutput2().stream()
+                .map(candle -> PriceOhlcvDto.builder()
+                        .ts(parseKisDate(candle.getStck_bsop_date()))
+                        .freq(freq)
+                        .open(parseBig(candle.getStck_oprc()))
+                        .high(parseBig(candle.getStck_hgpr()))
+                        .low(parseBig(candle.getStck_lwpr()))
+                        .close(parseBig(candle.getStck_clpr()))
+                        .volume(parseBig(candle.getAcml_vol()))
+                        .build()
+                )
                 .toList();
-
-        if (rawCount > 0 && candles.isEmpty()) {
-            log.warn("KIS candles dropped entirely. rawCount={}", rawCount);
-        }
-
-        return candles;
     }
 
 
@@ -378,32 +392,6 @@ public class KrStockClient {
         }
     }
 
-
-    private Optional<PriceOhlcvDto> toPriceOhlcvDto(KisCandlesResponse.Candle candle, Freq freq) {
-        OffsetDateTime ts = parseKisDate(candle.getStck_bsop_date());
-        if (ts == null) {
-            return Optional.empty();
-        }
-
-        BigDecimal open = parseBigOrNull(candle.getStck_oprc());
-        BigDecimal high = parseBigOrNull(candle.getStck_hgpr());
-        BigDecimal low = parseBigOrNull(candle.getStck_lwpr());
-        BigDecimal close = parseBigOrNull(candle.getStck_clpr());
-
-        if (open == null || high == null || low == null || close == null) {
-            return Optional.empty();
-        }
-
-        return Optional.of(PriceOhlcvDto.builder()
-                .ts(ts)
-                .open(open)
-                .high(high)
-                .low(low)
-                .close(close)
-                .volume(parseBigOrZero(candle.getAcml_vol()))
-                .build());
-    }
-
     private BigDecimal parseBig(String x) {
         try {
             if (x == null || x.isBlank()) return BigDecimal.ZERO;
@@ -411,19 +399,6 @@ public class KrStockClient {
         } catch (Exception e) {
             return BigDecimal.ZERO;
         }
-    }
-
-    private BigDecimal parseBigOrNull(String x) {
-        try {
-            if (x == null || x.isBlank()) return null;
-            return new BigDecimal(x.trim());
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private BigDecimal parseBigOrZero(String x) {
-        return parseBig(x);
     }
 
     private OffsetDateTime parseKisDate(String yyyymmdd) {

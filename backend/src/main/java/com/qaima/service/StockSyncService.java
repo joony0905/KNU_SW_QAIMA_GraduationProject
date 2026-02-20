@@ -36,11 +36,11 @@ public class StockSyncService {
     @Transactional
     public Mono<Void> syncMarketStackTickers(List<TickerData> tickersFromApi) {
         return Mono.fromCallable(() -> {
-                    log.info("Marketstack Ticker ?숆린???쒖옉. (珥?{}嫄?", tickersFromApi.size());
+                    log.info("Marketstack Ticker 동기화 시작. (총 {}건)", tickersFromApi.size());
 
                     for (TickerData dto : tickersFromApi) {
                         if (dto.getStock_exchange() == null) {
-                            log.warn("Exchange ?뺣낫媛 ?녿뒗 Ticker?낅땲?? {}", dto.getSymbol());
+                            log.warn("Exchange 정보가 없는 Ticker입니다: {}", dto.getSymbol());
                             continue;
                         }
 
@@ -54,7 +54,7 @@ public class StockSyncService {
 
                         Exchange exchange = exchangeRepository.findByCode(finalExchangeCode)
                                 .orElseGet(() -> {
-                                    log.info("?덈줈??Exchange ?앹꽦: {}", finalExchangeCode);
+                                    log.info("새로운 Exchange 생성: {}", finalExchangeCode);
                                     Exchange newEx = new Exchange();
                                     newEx.setCode(finalExchangeCode);
                                     newEx.setName(dto.getStock_exchange().getName());
@@ -64,7 +64,7 @@ public class StockSyncService {
 
                         Industry industry = industryRepository.findByName("Unknown")
                                 .orElseGet(() -> {
-                                    log.info("湲곕낯 Industry (Unknown) ?앹꽦");
+                                    log.info("기본 Industry (Unknown) 생성");
                                     Industry newInd = new Industry();
                                     newInd.setName("Unknown");
                                     return industryRepository.save(newInd);
@@ -84,7 +84,7 @@ public class StockSyncService {
 
                         stockRepository.save(stock);
                     }
-                    log.info("Ticker ?숆린???꾨즺.");
+                    log.info("Ticker 동기화 완료.");
                     return null;
                 })
                 .subscribeOn(Schedulers.boundedElastic())
@@ -118,6 +118,7 @@ public class StockSyncService {
             String normalized = exchangeCode.trim().toUpperCase();
             switch (normalized) {
                 case "KRX":
+                case "KOSPI":
                 case "KOSDAQ":
                 case "XKRX":
                 case "XKOS":

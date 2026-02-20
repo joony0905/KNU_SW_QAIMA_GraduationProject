@@ -1,9 +1,9 @@
 package com.qaima.api.stock;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.MarketStackTickersResponse;
 import com.qaima.dto.StockCodeMappingDto;
 import com.qaima.dto.StockDto;
+import com.qaima.dto.StockMeta;
 import com.qaima.external.StockClient;
 import com.qaima.service.StockMappingService;
 import com.qaima.service.StockService;
@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-//React에서 호출하는 Rest
+// 프론트엔드(React)에서 호출하는 REST 컨트롤러
 
 @RestController
 @RequestMapping("/api/v1/stocks")
@@ -63,7 +63,7 @@ public class StockController {
     }
 
     @GetMapping("/debug/ticker-meta")
-    public Mono<ApiResponse<MarketStackTickersResponse.TickerData>> getTickerMeta(
+    public Mono<ApiResponse<StockMeta>> getTickerMeta(
             @RequestParam(name = "stockCode") String stockCode
     ) {
         return stockClient.fetchTickerMeta(resolveStockCode(stockCode));

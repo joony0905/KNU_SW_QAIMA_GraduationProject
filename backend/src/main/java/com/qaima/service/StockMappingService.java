@@ -26,7 +26,7 @@ public class StockMappingService {
     private final StockRepository stockRepository;
     private final StockAliasRepository stockAliasRepository;
 
-    private static final String DEFAULT_EXCHANGE_CODE = "KRX";
+    private static final String DEFAULT_EXCHANGE_CODE = "KOSPI";
     private static final int SEARCH_LIMIT = 200;
     private static final int SEARCH_RESULT_LIMIT = 20;
 
@@ -304,7 +304,7 @@ public class StockMappingService {
         if (msExchange == null) return "UNKNOWN";
 
         return switch (msExchange.toUpperCase()) {
-            case "XKRX" -> "KRX";
+            case "XKRX", "KRX" -> "KOSPI";
             case "XKOS" -> "KOSDAQ";
             case "XNYS" -> "NYSE";
             case "XNAS" -> "NASDAQ";

@@ -83,13 +83,7 @@ public class KisController {
                 .retrieve()
                 .bodyToMono(String.class);
     }
-
-    /**
-     * 완전 프리한 raw 호출용 (디버그)
-     * 예: GET /api/v1/kis/raw?path=/uapi/...&symbol=005930
-     *
-     * - path, queryParam 을 바꿔가면서 응답 형태 탐색할 때 사용
-     */
+    
     @GetMapping("/raw")
     public Mono<String> getRaw(
             @RequestParam String path,

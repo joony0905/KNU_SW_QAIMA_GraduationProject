@@ -65,4 +65,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             String keyword,
             Pageable pageable
     );
+
+    @EntityGraph(attributePaths = "exchange")
+    List<Stock> findByExchange_CodeIgnoreCaseOrderByStockCodeAsc(String exchangeCode);
 }

@@ -126,7 +126,6 @@ public class GlobalStockClient {
             OffsetDateTime from,
             OffsetDateTime to
     ) {
-        //String interval = toMarketstackInterval(freq); 무료플랜은 X
         if (symbol != null && symbol.matches("^[0-9]{6}$")) {
             symbol = symbol + ".XKRX";
 
@@ -135,32 +134,17 @@ public class GlobalStockClient {
 
         return webClient.get()
                 .uri(uriBuilder -> uriBuilder
-                        // 일단 EOD 기준 – intraday 쓰고 싶으면 /intraday로 분리
                         .path("/eod")
                         .queryParam("access_key", accessKey)
                         .queryParam("symbols", symbolStr)
                         .queryParam("date_from", from.toLocalDate().toString())
                         .queryParam("date_to", to.toLocalDate().toString())
                         .queryParam("limit", 5000)
-                        // Marketstack 유료 플랜에서만 interval 제공
-                        // 해당 주석을 무료플랜에서 활성화하면 요청 파라미터 충족 불가능으로 422 에러가 출력됨.
-                        //.queryParam("interval", interval)
                         .build()
                 )
                 .retrieve()
                 .bodyToMono(MarketStackCandlesResponse.class)
                 .map(resp -> mapToPriceOhlcvDtoList(resp, freq));
-    }
-
-    private String toMarketstackInterval(Freq freq) {
-        // Marketstack에서 지원하는 interval에 맞게 매핑
-        return switch (freq) {
-            case ONE_D -> "1day";
-            case ONE_W -> "1week";   // marketstack은 1day 1min 15min 이런식임을 문서에서 확인함
-            case ONE_M -> "1month";
-            case ONE_H -> "1hour";
-            default -> "1day";
-        };
     }
 
     private List<PriceOhlcvDto> mapToPriceOhlcvDtoList(MarketStackCandlesResponse resp, Freq freq) {
@@ -217,7 +201,7 @@ public class GlobalStockClient {
         try {
             return Optional.of(OffsetDateTime.parse(raw, DateTimeFormatter.ISO_OFFSET_DATE_TIME));
         } catch (DateTimeParseException ignored) {
-            // try secondary format
+            // 보조 포맷으로 한 번 더 파싱 시도
         }
 
         try {
@@ -226,7 +210,7 @@ public class GlobalStockClient {
                     .toFormatter();
             return Optional.of(OffsetDateTime.parse(raw, formatter));
         } catch (DateTimeParseException ignored) {
-            // try local date only
+            // 날짜만 있는 포맷으로 한 번 더 파싱 시도
         }
 
         try {

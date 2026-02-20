@@ -16,7 +16,7 @@ public class StockDebugController {
     private final StockApiClient stockApiClient;
 
     @GetMapping("/api/debug/ticker-meta")
-    public Mono<ApiResponse<MarketStackTickersResponse.TickerData>> debugTicker(
+    public Mono<ApiResponse<StockMeta>> debugTicker(
             @RequestParam(name = "stockCode") String stockCode
     ) {
         return stockApiClient.fetchTickerMeta(resolveStockCode(stockCode));
