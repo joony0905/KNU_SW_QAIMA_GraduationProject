@@ -73,7 +73,7 @@ public class WatchlistService {
 
     public Mono<Void> removeStockFromWatchlist(Long watchlistItemId, Long userId) {
         return Blocking.call(() -> watchlistItemRepository.findOwnedByIdWithAll(watchlistItemId, userId)
-                        .orElseThrow(() -> new IllegalArgumentException("?꾩씠?쒖쓣 李얠쓣 ???놁뒿?덈떎.")))
+                        .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다.")))
                 .flatMap(item -> Blocking.run(() -> watchlistItemRepository.delete(item)));
     }
 
@@ -81,7 +81,7 @@ public class WatchlistService {
                                                               WatchlistItemUpdateDto requestDto,
                                                               Long userId) {
         return Blocking.call(() -> watchlistItemRepository.findOwnedByIdWithAll(watchlistItemId, userId)
-                        .orElseThrow(() -> new IllegalArgumentException("?꾩씠?쒖쓣 李얠쓣 ???놁뒿?덈떎.")))
+                        .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다.")))
                 .flatMap(item -> {
                     item.setNote(requestDto.getNote());
                     return Blocking.<WatchlistItem>call(() -> watchlistItemRepository.save(item))
@@ -111,7 +111,7 @@ public class WatchlistService {
         if (watchlistId != null) {
             return Blocking.call(() -> watchlistRepository
                     .findOwnedByIdWithUser(watchlistId, userId)
-                    .orElseThrow(() -> new IllegalArgumentException("愿?щぉ濡앹쓣 李얠쓣 ???놁뒿?덈떎.")));
+                    .orElseThrow(() -> new IllegalArgumentException("관심목록을 찾을 수 없습니다.")));
         }
         return getOrCreateDefaultWatchlist(userId);
     }
