@@ -136,7 +136,7 @@ public class StockAliasImportService {
         if (trimmed.isBlank()) return null;
 
         return switch (trimmed.toUpperCase()) {
-            case "XKRX" -> "KRX";
+            case "XKRX", "KRX" -> "KOSPI";
             case "XKOS" -> "KOSDAQ";
             case "XNYS" -> "NYSE";
             case "XNAS" -> "NASDAQ";

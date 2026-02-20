@@ -14,6 +14,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 
 @Slf4j
@@ -36,10 +37,34 @@ public class MarketSnapshotService {
             snap.setAsOfDate(baseDate);
             snap.setSource("KIS");
 
-            snap.setMarketCap(parseNullableBigDecimal(output.getHts_avls()));
-            snap.setPer(parseNullableBigDecimal(output.getPer()));
-            snap.setPbr(parseNullableBigDecimal(output.getPbr()));
-            snap.setSharesOutstanding(parseNullableBigDecimal(output.getLstn_stcn()));
+            BigDecimal marketCap = parseNullableBigDecimal(output.getHts_avls());
+            BigDecimal per = parseNullableBigDecimal(output.getPer());
+            BigDecimal pbr = parseNullableBigDecimal(output.getPbr());
+            BigDecimal sharesOutstanding = parseNullableBigDecimal(output.getLstn_stcn());
+
+            BigDecimal price = parseNullableBigDecimal(output.getStck_prpr());
+            BigDecimal eps = parseNullableBigDecimal(output.getEps());
+            BigDecimal bps = parseNullableBigDecimal(output.getBps());
+
+            // KIS hts_avls는 "억원" 단위로 제공되는 경우가 많으므로 원 단위로 통일
+            if (marketCap != null) {
+                marketCap = marketCap.multiply(BigDecimal.valueOf(100_000_000L));
+            }
+
+            if (marketCap == null && price != null && sharesOutstanding != null) {
+                marketCap = price.multiply(sharesOutstanding);
+            }
+            if (per == null && price != null && eps != null && eps.signum() != 0) {
+                per = price.divide(eps, 4, RoundingMode.HALF_UP);
+            }
+            if (pbr == null && price != null && bps != null && bps.signum() != 0) {
+                pbr = price.divide(bps, 4, RoundingMode.HALF_UP);
+            }
+
+            snap.setMarketCap(marketCap);
+            snap.setPer(per);
+            snap.setPbr(pbr);
+            snap.setSharesOutstanding(sharesOutstanding);
 
             MarketSnapshot saved = marketSnapshotRepository.save(snap);
 

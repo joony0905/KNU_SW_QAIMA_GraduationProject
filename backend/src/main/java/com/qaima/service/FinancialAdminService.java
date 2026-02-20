@@ -26,7 +26,7 @@ public class FinancialAdminService {
     private final FinancialRepository financialRepository;
     private final FinancialMapper financialMapper;
     private final PlatformTransactionManager transactionManager;
-    private static final String DEFAULT_EXCHANGE_CODE = "KRX";
+    private static final String DEFAULT_EXCHANGE_CODE = "KOSPI";
 
     public Mono<FinancialDto> create(String stockCode, String exchangeCode, FinancialDto dto) {
         return Blocking.call(() -> tx().execute(status -> {
@@ -186,7 +186,7 @@ public class FinancialAdminService {
         }
 
         return switch (trimmed.toUpperCase()) {
-            case "XKRX" -> "KRX";
+            case "XKRX", "KRX" -> "KOSPI";
             case "XKOS" -> "KOSDAQ";
             case "XNYS" -> "NYSE";
             case "XNAS" -> "NASDAQ";

@@ -22,7 +22,7 @@ public class FinancialReadService {
     private final StockRepository stockRepository;
     private final FinancialRepository financialRepository;
     private final FinancialMapper financialMapper;
-    private static final String DEFAULT_EXCHANGE_CODE = "KRX";
+    private static final String DEFAULT_EXCHANGE_CODE = "KOSPI";
 
     public Mono<List<FinancialDto>> getForLastNYears(
             String stockCode,
@@ -128,7 +128,7 @@ public class FinancialReadService {
         }
 
         return switch (trimmed.toUpperCase()) {
-            case "XKRX" -> "KRX";
+            case "XKRX", "KRX" -> "KOSPI";
             case "XKOS" -> "KOSDAQ";
             case "XNYS" -> "NYSE";
             case "XNAS" -> "NASDAQ";

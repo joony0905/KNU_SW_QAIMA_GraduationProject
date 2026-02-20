@@ -15,7 +15,7 @@ public class MetaController {
     private final StockClient stockClient;
 
     @GetMapping("/tickers")
-    public Mono<ApiResponse<MarketStackTickersResponse.TickerData>> getTickerMeta(
+    public Mono<ApiResponse<StockMeta>> getTickerMeta(
             @RequestParam(name = "stockCode") String stockCode
     ) {
         return stockClient.fetchTickerMeta(resolveStockCode(stockCode));
