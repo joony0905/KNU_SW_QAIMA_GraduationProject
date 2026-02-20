@@ -1,10 +1,11 @@
 package com.qaima.service;
 
 import com.qaima.common.Blocking;
-import com.qaima.domain.Stock;
 import com.qaima.domain.User;
+import com.qaima.domain.Stock;
 import com.qaima.domain.Watchlist;
 import com.qaima.domain.WatchlistItem;
+import com.qaima.dto.WatchlistDto;
 import com.qaima.dto.WatchlistItemUpdateDto;
 import com.qaima.dto.WatchlistRequestDto;
 import com.qaima.dto.WatchlistResponseDto;
@@ -13,6 +14,7 @@ import com.qaima.repository.UserRepository;
 import com.qaima.repository.WatchlistItemRepository;
 import com.qaima.repository.WatchlistRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -22,114 +24,67 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WatchlistService {
 
+    private static final String DEFAULT_WATCHLIST_NAME = "관심목록";
+    private static final String DEFAULT_EXCHANGE_CODE = "KOSPI";
+
     private final WatchlistRepository watchlistRepository;
     private final WatchlistItemRepository watchlistItemRepository;
-    private final UserRepository userRepository;
     private final StockRepository stockRepository;
-    private static final String DEFAULT_EXCHANGE_CODE = "KRX";
+    private final UserRepository userRepository;
 
     public Mono<WatchlistResponseDto> addStockToWatchlist(WatchlistRequestDto requestDto, Long userId) {
-        Mono<User> userMono = Blocking.call(() -> userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")));
+        Long watchlistId = requestDto.getWatchlistId();
 
         String stockCode = requestDto.getStockCode();
         if (stockCode == null || stockCode.isBlank()) {
             return Mono.error(new IllegalArgumentException("stockCode is required"));
         }
+
         String exchangeCode = normalizeExchangeCode(requestDto.getExchangeCode());
         String resolvedExchange = exchangeCode != null ? exchangeCode : DEFAULT_EXCHANGE_CODE;
+
+        Mono<Watchlist> watchlistMono = resolveTargetWatchlist(watchlistId, userId);
 
         Mono<Stock> stockMono = Blocking.call(() -> stockRepository
                 .findByExchangeCodeAndStockCodeIgnoreCase(resolvedExchange, stockCode)
                 .orElseThrow(() -> new IllegalArgumentException("Stock not found")));
 
-        Mono<Watchlist> watchlistMono = Blocking.call(() -> watchlistRepository.findById(requestDto.getWatchlistId())
-                .orElseThrow(() -> new IllegalArgumentException("관심목록을 찾을 수 없습니다.")));
-
-        return Mono.zip(userMono, stockMono, watchlistMono)
+        return Mono.zip(watchlistMono, stockMono)
                 .flatMap(tuple -> {
-                    User user = tuple.getT1();
+                    Watchlist watchlist = tuple.getT1();
                     Stock stock = tuple.getT2();
-                    Watchlist watchlist = tuple.getT3();
-                    if (watchlist.getUser() == null || watchlist.getUser().getUserId() == null ||
-                            !watchlist.getUser().getUserId().equals(user.getUserId())) {
-                        return Mono.error(new IllegalArgumentException("관심목록 접근 권한이 없습니다."));
-                    }
-
                     WatchlistItem newItem = new WatchlistItem(watchlist, stock);
-
-                    return Blocking.call(() -> watchlistItemRepository.save(newItem))
+                    return Blocking.<WatchlistItem>call(() -> watchlistItemRepository.save(newItem))
                             .map(WatchlistResponseDto::new);
                 });
     }
 
     public Mono<List<WatchlistResponseDto>> getWatchlistItems(Long watchlistId, Long userId) {
-        Mono<User> userMono = Blocking.call(() -> userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")));
-
-        Mono<Watchlist> watchlistMono = Blocking.call(() -> watchlistRepository.findById(watchlistId)
-                .orElseThrow(() -> new IllegalArgumentException("관심목록을 찾을 수 없습니다.")));
-
-        return Mono.zip(userMono, watchlistMono)
-                .flatMap(tuple -> {
-                    User user = tuple.getT1();
-                    Watchlist watchlist = tuple.getT2();
-
-                    if (watchlist.getUser() == null || watchlist.getUser().getUserId() == null ||
-                            !watchlist.getUser().getUserId().equals(user.getUserId())) {
-                        return Mono.error(new IllegalArgumentException("관심목록 접근 권한이 없습니다."));
-                    }
-
-                    return Blocking.call(() -> watchlistItemRepository.findByWatchlist(watchlist));
-                })
+        return Blocking.call(() -> watchlistItemRepository.findOwnedItemsByWatchlistIdWithStock(watchlistId, userId))
                 .map(items -> items.stream().map(WatchlistResponseDto::new).toList());
     }
 
+    public Mono<List<WatchlistDto>> getMyWatchlists(Long userId) {
+        return Blocking.call(() -> watchlistRepository.findByUser_UserIdOrderByWatchlistIdAsc(userId))
+                .map(list -> (list == null ? List.<Watchlist>of() : list).stream()
+                        .map(WatchlistDto::new)
+                        .toList());
+    }
+
     public Mono<Void> removeStockFromWatchlist(Long watchlistItemId, Long userId) {
-        Mono<User> userMono = Blocking.call(() -> userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")));
-
-        Mono<WatchlistItem> itemMono = Blocking.call(() -> watchlistItemRepository.findById(watchlistItemId)
-                .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다.")));
-
-        return Mono.zip(userMono, itemMono)
-                .flatMap(tuple -> {
-                    User user = tuple.getT1();
-                    WatchlistItem item = tuple.getT2();
-
-                    if (item.getWatchlist() == null || item.getWatchlist().getUser() == null ||
-                            item.getWatchlist().getUser().getUserId() == null ||
-                            !item.getWatchlist().getUser().getUserId().equals(user.getUserId())) {
-                        return Mono.error(new IllegalArgumentException("삭제 권한이 없습니다."));
-                    }
-
-                    return Blocking.run(() -> watchlistItemRepository.delete(item));
-                });
+        return Blocking.call(() -> watchlistItemRepository.findOwnedByIdWithAll(watchlistItemId, userId)
+                        .orElseThrow(() -> new IllegalArgumentException("?꾩씠?쒖쓣 李얠쓣 ???놁뒿?덈떎.")))
+                .flatMap(item -> Blocking.run(() -> watchlistItemRepository.delete(item)));
     }
 
     public Mono<WatchlistResponseDto> updateWatchlistItemNote(Long watchlistItemId,
                                                               WatchlistItemUpdateDto requestDto,
                                                               Long userId) {
-        Mono<User> userMono = Blocking.call(() -> userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다.")));
-
-        Mono<WatchlistItem> itemMono = Blocking.call(() -> watchlistItemRepository.findById(watchlistItemId)
-                .orElseThrow(() -> new IllegalArgumentException("아이템을 찾을 수 없습니다.")));
-
-        return Mono.zip(userMono, itemMono)
-                .flatMap(tuple -> {
-                    User user = tuple.getT1();
-                    WatchlistItem item = tuple.getT2();
-
-                    if (item.getWatchlist() == null || item.getWatchlist().getUser() == null ||
-                            item.getWatchlist().getUser().getUserId() == null ||
-                            !item.getWatchlist().getUser().getUserId().equals(user.getUserId())) {
-                        return Mono.error(new IllegalArgumentException("수정 권한이 없습니다."));
-                    }
-
+        return Blocking.call(() -> watchlistItemRepository.findOwnedByIdWithAll(watchlistItemId, userId)
+                        .orElseThrow(() -> new IllegalArgumentException("?꾩씠?쒖쓣 李얠쓣 ???놁뒿?덈떎.")))
+                .flatMap(item -> {
                     item.setNote(requestDto.getNote());
-
-                    return Blocking.call(() -> watchlistItemRepository.save(item))
+                    return Blocking.<WatchlistItem>call(() -> watchlistItemRepository.save(item))
                             .map(WatchlistResponseDto::new);
                 });
     }
@@ -144,11 +99,45 @@ public class WatchlistService {
         }
 
         return switch (trimmed.toUpperCase()) {
-            case "XKRX" -> "KRX";
+            case "XKRX", "KRX" -> "KOSPI";
             case "XKOS" -> "KOSDAQ";
             case "XNYS" -> "NYSE";
             case "XNAS" -> "NASDAQ";
             default -> trimmed.toUpperCase();
         };
+    }
+
+    private Mono<Watchlist> resolveTargetWatchlist(Long watchlistId, Long userId) {
+        if (watchlistId != null) {
+            return Blocking.call(() -> watchlistRepository
+                    .findOwnedByIdWithUser(watchlistId, userId)
+                    .orElseThrow(() -> new IllegalArgumentException("愿?щぉ濡앹쓣 李얠쓣 ???놁뒿?덈떎.")));
+        }
+        return getOrCreateDefaultWatchlist(userId);
+    }
+
+    private Mono<Watchlist> getOrCreateDefaultWatchlist(Long userId) {
+        return Blocking.call(() -> watchlistRepository.findByUser_UserIdOrderByWatchlistIdAsc(userId))
+                .flatMap(existing -> {
+                    if (existing != null && !existing.isEmpty()) {
+                        return Mono.just(existing.get(0));
+                    }
+
+                    User userRef = userRepository.getReferenceById(userId);
+                    Watchlist w = new Watchlist();
+                    w.setUser(userRef);
+                    w.setName(DEFAULT_WATCHLIST_NAME);
+
+                    return Blocking.call(() -> watchlistRepository.save(w))
+                            .onErrorResume(DataIntegrityViolationException.class, e ->
+                                    Blocking.call(() -> watchlistRepository.findByUser_UserIdOrderByWatchlistIdAsc(userId))
+                                            .flatMap(reloaded -> {
+                                                if (reloaded == null || reloaded.isEmpty()) {
+                                                    return Mono.error(e);
+                                                }
+                                                return Mono.just(reloaded.get(0));
+                                            })
+                            );
+                });
     }
 }

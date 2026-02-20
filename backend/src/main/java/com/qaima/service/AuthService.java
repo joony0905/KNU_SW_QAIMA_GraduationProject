@@ -24,7 +24,6 @@ public class AuthService {
     private final MailAuthService mailAuthService;
     private final AuthLoginLogService authLoginLogService;
     private final LoginSessionService loginSessionService;
-    private final WatchlistService watchlistService;
 
     public Mono<UserResponseDto> signup(SignupRequestDto requestDto, String ip, String ua) {
         final String email = requestDto.getEmail();
@@ -55,9 +54,7 @@ public class AuthService {
                         authLoginLogService.event("SIGNUP_CREATED", true, savedUser.getUserId(), savedUser.getEmail(), ip, ua, null, null)
                                 .onErrorResume(e -> Mono.empty())
                                 .then(
-                                        watchlistService.createDefaultWatchlistIfMissing(savedUser)
-                                                .onErrorResume(e -> Mono.empty())
-                                                .then(Blocking.run(() -> mailAuthService.requestEmailVerificationCode(savedUser.getEmail())))
+                                        Blocking.run(() -> mailAuthService.requestEmailVerificationCode(savedUser.getEmail()))
                                                 .then(
                                                         authLoginLogService.event("EMAIL_VERIFICATION_REQUESTED", true,
                                                                         savedUser.getUserId(), savedUser.getEmail(), ip, ua, null, null)
