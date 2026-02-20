@@ -3,7 +3,10 @@ package com.qaima.api.AuthController;
 import com.qaima.common.ApiResponse;
 import com.qaima.dto.LoginRequestDto;
 import com.qaima.dto.LoginResponseDto;
+import com.qaima.dto.LogoutRequestDto;
 import com.qaima.dto.SignupRequestDto;
+import com.qaima.dto.TokenRefreshRequestDto;
+import com.qaima.dto.TokenRefreshResponseDto;
 import com.qaima.dto.UserResponseDto;
 import com.qaima.service.AuthService;
 import jakarta.validation.Valid;
@@ -43,6 +46,31 @@ public class AuthController {
         String ip = extractClientIp(request);
         String ua = request.getHeaders().getFirst("User-Agent");
         return authService.login(requestDto, ip, ua).map(ApiResponse::success);
+    }
+
+    /**
+     * 액세스 토큰을 재발급하고 리프레시 토큰을 순환
+     * POST /api/v1/auth/refresh
+     */
+    @PostMapping("/refresh")
+    public Mono<ApiResponse<TokenRefreshResponseDto>> refresh(@Valid @RequestBody TokenRefreshRequestDto requestDto,
+                                                              ServerHttpRequest request) {
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+        return authService.refresh(requestDto.getRefreshToken(), ip, ua).map(ApiResponse::success);
+    }
+
+    /**
+     * 로그아웃 처리(리프레시 토큰 폐기)
+     * POST /api/v1/auth/logout
+     */
+    @PostMapping("/logout")
+    public Mono<ApiResponse<Void>> logout(@Valid @RequestBody LogoutRequestDto requestDto,
+                                          ServerHttpRequest request) {
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+        return authService.logout(requestDto.getRefreshToken(), ip, ua)
+                .thenReturn(ApiResponse.success(null));
     }
 
     private static String extractClientIp(ServerHttpRequest request) {

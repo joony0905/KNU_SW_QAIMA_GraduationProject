@@ -4,6 +4,7 @@ import com.qaima.common.Blocking;
 import com.qaima.domain.User;
 import com.qaima.dto.LoginRequestDto;
 import com.qaima.dto.LoginResponseDto;
+import com.qaima.dto.TokenRefreshResponseDto;
 import com.qaima.dto.SignupRequestDto;
 import com.qaima.dto.UserResponseDto;
 import com.qaima.repository.UserRepository;
@@ -22,6 +23,8 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final MailAuthService mailAuthService;
     private final AuthLoginLogService authLoginLogService;
+    private final LoginSessionService loginSessionService;
+    private final WatchlistService watchlistService;
 
     public Mono<UserResponseDto> signup(SignupRequestDto requestDto, String ip, String ua) {
         final String email = requestDto.getEmail();
@@ -52,7 +55,9 @@ public class AuthService {
                         authLoginLogService.event("SIGNUP_CREATED", true, savedUser.getUserId(), savedUser.getEmail(), ip, ua, null, null)
                                 .onErrorResume(e -> Mono.empty())
                                 .then(
-                                        Blocking.run(() -> mailAuthService.requestEmailVerificationCode(savedUser.getEmail()))
+                                        watchlistService.createDefaultWatchlistIfMissing(savedUser)
+                                                .onErrorResume(e -> Mono.empty())
+                                                .then(Blocking.run(() -> mailAuthService.requestEmailVerificationCode(savedUser.getEmail())))
                                                 .then(
                                                         authLoginLogService.event("EMAIL_VERIFICATION_REQUESTED", true,
                                                                         savedUser.getUserId(), savedUser.getEmail(), ip, ua, null, null)
@@ -95,21 +100,52 @@ public class AuthService {
                     String role = (user.getRole() == null) ? "USER" : user.getRole().name().toUpperCase();
                     String accessToken = jwtTokenProvider.createAccessToken(user.getUserId(), role);
 
-                    LoginResponseDto dto = new LoginResponseDto(
-                            user.getUserId(),
-                            user.getEmail(),
-                            user.getName(),
-                            accessToken
-                    );
+                    return loginSessionService.issueRefreshToken(user, ip, ua, null)
+                            .flatMap(refreshToken -> {
+                                LoginResponseDto dto = new LoginResponseDto(
+                                        user.getUserId(),
+                                        user.getEmail(),
+                                        user.getName(),
+                                        accessToken,
+                                        refreshToken
+                                );
 
-                    return authLoginLogService.success(user.getUserId(), user.getEmail(), ip, ua)
-                            .onErrorResume(e -> Mono.empty())
-                            .thenReturn(dto);
+                                return authLoginLogService.success(user.getUserId(), user.getEmail(), ip, ua)
+                                        .onErrorResume(e -> Mono.empty())
+                                        .thenReturn(dto);
+                            });
                 })
                 .onErrorResume(ex ->
                         authLoginLogService.failure(email, ip, ua, "AUTH_LOGIN_FAILED", ex.getMessage())
                                 .onErrorResume(e -> Mono.empty())
                                 .then(Mono.error(ex))
                 );
+    }
+
+    public Mono<TokenRefreshResponseDto> refresh(String refreshToken, String ip, String ua) {
+        return loginSessionService.rotateRefreshToken(refreshToken, ip, ua)
+                .flatMap(rotated -> {
+                    User user = rotated.user();
+                    String role = (user.getRole() == null) ? "USER" : user.getRole().name().toUpperCase();
+                    String accessToken = jwtTokenProvider.createAccessToken(user.getUserId(), role);
+
+                    TokenRefreshResponseDto dto = new TokenRefreshResponseDto(accessToken, rotated.refreshToken());
+
+                    return authLoginLogService.event("TOKEN_REFRESHED", true, user.getUserId(), user.getEmail(), ip, ua, null, null)
+                            .onErrorResume(e -> Mono.empty())
+                            .thenReturn(dto);
+                })
+                .onErrorResume(ex ->
+                        authLoginLogService.event("TOKEN_REFRESHED", false, null, null, ip, ua,
+                                        "TOKEN_REFRESH_FAILED", ex.getMessage())
+                                .onErrorResume(e -> Mono.empty())
+                                .then(Mono.error(ex))
+                );
+    }
+
+    public Mono<Void> logout(String refreshToken, String ip, String ua) {
+        return loginSessionService.revokeByRefreshToken(refreshToken)
+                .then(authLoginLogService.event("LOGOUT", true, null, null, ip, ua, null, null)
+                        .onErrorResume(e -> Mono.empty()));
     }
 }
