@@ -1,7 +1,7 @@
 # app/api/feature1.py
 from fastapi import APIRouter
 
-from models.feature1 import FeatOneRequestDto, FeatOneResponseTextDto
+from models.feature1 import Feature1Request, Feature1Response
 from services.llm_client import analyze_feature1
 
 router = APIRouter(
@@ -10,8 +10,8 @@ router = APIRouter(
 )
 
 
-@router.post("/stock", response_model=FeatOneResponseTextDto)
-async def analyze_stock(req: FeatOneRequestDto) -> FeatOneResponseTextDto:
+@router.post("/feature1", response_model=Feature1Response)
+async def analyze_stock(req: Feature1Request) -> Feature1Response:
     """
     QAIMA 기능1: 종목 심층 분석 엔드포인트.
     Spring → FastAPI 로 넘어온 JSON을 받아 LLM 분석 후 결과 텍스트 반환

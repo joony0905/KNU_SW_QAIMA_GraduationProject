@@ -1,18 +1,43 @@
 // src/types/analysis.ts
-export interface AnalysisResult {
-  summary: string;
-  business: string;
-  financial: string;
-  valuation: string;
-  risk: string;
-  outlook: string;
-  analysisText: string;
+export interface OhlcvSummary {
+  count: number;
+  from?: string | null;
+  to?: string | null;
+  last_close?: number | null;
+}
+
+export interface FinancialSummary {
+  years: number[];
+  revenue: Record<string, number | null>;
+  operating_income: Record<string, number | null>;
+  net_income: Record<string, number | null>;
+}
+
+export interface IndicatorsSlot {
+  valuation?: unknown;
+  growth?: unknown;
+  profitability?: unknown;
+}
+
+export interface AnalysisMetrics {
+  stock_code: string;
+  as_of: string;
+  ohlcv_summary: OhlcvSummary;
+  financial_summary: FinancialSummary;
+  indicators: IndicatorsSlot;
+  schema_version: string;
+}
+
+export interface AnalysisExplain {
+  text: string;
+}
+
+export interface AnalysisMeta {
+  warnings: string[];
 }
 
 export interface AnalysisResponse {
-  stock: any; // 일단 any로
-  candles: any[];
-  indicators: any[];
-  financials: any[];
-  analysis: AnalysisResult;
+  metrics: AnalysisMetrics;
+  explain?: AnalysisExplain | null;
+  meta?: AnalysisMeta | null;
 }

@@ -1,7 +1,5 @@
 package com.qaima.common;
 
-import com.qaima.dto.FeatOneResponseTextDto;
-
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.Collections;
