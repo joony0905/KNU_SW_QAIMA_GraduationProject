@@ -3,12 +3,21 @@ package com.qaima.service;
 import com.qaima.common.ErrorCode;
 import com.qaima.common.ErrorException;
 import com.qaima.domain.*;
-import com.qaima.dto.*;
+import com.qaima.dto.FeatOneAnalysisExplainDto;
+import com.qaima.dto.FeatOneAnalysisMetaDto;
+import com.qaima.dto.FeatOneAnalysisMetricsDto;
+import com.qaima.dto.FeatOneAnalysisResponseDto;
+import com.qaima.dto.FeatOneRequestDto;
+import com.qaima.dto.FinancialSummaryDto;
+import com.qaima.dto.FinancialSummaryMetricsDto;
+import com.qaima.dto.IndicatorSlotsDto;
+import com.qaima.dto.OhlcvItemDto;
+import com.qaima.dto.OhlcvSummaryDto;
+import com.qaima.dto.PriceOhlcvDto;
 import com.qaima.external.AnalysisApiClient;
 import com.qaima.external.GlobalStockClient;
 import com.qaima.external.KrStockClient;
 import com.qaima.repository.FinancialRepository;
-import com.qaima.repository.IndicatorValueRepository;
 import com.qaima.repository.PriceOhlcvRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -30,7 +39,6 @@ public class FeatOneService {
 
     private final StockService stockService;
     private final PriceOhlcvRepository priceOhlcvRepository;
-    private final IndicatorValueRepository indicatorValueRepository;
     private final FinancialRepository financialRepository;
 
     // Feature1은 (너가 현재 유지 중인 구조대로) 직접 KIS/Marketstack을 사용
@@ -42,21 +50,14 @@ public class FeatOneService {
             String stockCode,
             Freq freq,
             OffsetDateTime from,
-            OffsetDateTime to
+            OffsetDateTime to,
+            String marketDivCode,
+            Boolean includeExplain
     ) {
         Mono<Stock> stockMono = stockService.getOrCreateStockByCode(stockCode).cache();
 
         Mono<List<PriceOhlcv>> candlesMono = stockMono.flatMap(stock ->
-                loadCandlesWithFallback(stock, freq, from, to)
-        );
-
-        Mono<List<IndicatorValue>> indicatorsMono = stockMono.flatMap(stock ->
-                Mono.fromCallable(() ->
-                                indicatorValueRepository.findByStockAndFreqAndTsBetweenOrderByTs(
-                                        stock, freq, from, to
-                                )
-                        )
-                        .subscribeOn(Schedulers.boundedElastic())
+                loadCandlesWithFallback(stock, freq, from, to, marketDivCode)
         );
 
         int financialLimit = 5;
@@ -71,23 +72,25 @@ public class FeatOneService {
                         .subscribeOn(Schedulers.boundedElastic())
         );
 
-        return Mono.zip(stockMono, candlesMono, indicatorsMono, financialsMono)
+        return Mono.zip(stockMono, candlesMono, financialsMono)
                 .flatMap(tuple -> {
                     Stock stock = tuple.getT1();
                     List<PriceOhlcv> candles = tuple.getT2();
-                    List<IndicatorValue> indicators = tuple.getT3();
-                    List<Financial> financials = tuple.getT4();
+                    List<Financial> financials = tuple.getT3();
 
                     FeatOneRequestDto requestDto =
-                            buildFeatOneRequestDto(stock, candles, indicators, financials);
+                            buildFeatOneRequestDto(stock, freq, candles, financials, includeExplain);
 
                     return analysisApiClient.requestStockAnalysis(requestDto)
-                            .map(textDto -> {
-                                FeatOneResponseDataDto data =
-                                        buildFeatOneResponseDto(stock, candles, indicators, financials, textDto);
-
+                            .map(response -> {
                                 boolean chartUnavailable = (candles == null || candles.isEmpty());
-                                return new FeatOneResult(data, chartUnavailable);
+                                return new FeatOneResult(response, chartUnavailable);
+                            })
+                            .onErrorResume(ex -> {
+                                FeatOneAnalysisResponseDto fallback =
+                                        buildFallbackResponse(stock, candles, financials, includeExplain);
+                                boolean chartUnavailable = (candles == null || candles.isEmpty());
+                                return Mono.just(new FeatOneResult(fallback, chartUnavailable));
                             });
                 });
     }
@@ -103,10 +106,13 @@ public class FeatOneService {
             Stock stock,
             Freq freq,
             OffsetDateTime from,
-            OffsetDateTime to
+            OffsetDateTime to,
+            String marketDivCodeOverride
     ) {
         String stockCode = stock.getStockCode();
-        String marketDivCode = toKisMarketDivCode(stock.getExchange());
+        String marketDivCode = (marketDivCodeOverride != null && !marketDivCodeOverride.isBlank())
+                ? marketDivCodeOverride
+                : toKisMarketDivCode(stock.getExchange());
 
         return Mono.fromCallable(() ->
                         priceOhlcvRepository.findByStockCodeAndFreqAndTsBetween(stockCode, freq, from, to)
@@ -184,28 +190,6 @@ public class FeatOneService {
         return entity;
     }
 
-    private PriceOhlcvDto toPriceOhlcvDto(PriceOhlcv entity) {
-        return PriceOhlcvDto.builder()
-                .ts(entity.getId().getTs())
-                .freq(entity.getId().getFreq())
-                .open(entity.getOpen())
-                .high(entity.getHigh())
-                .low(entity.getLow())
-                .close(entity.getClose())
-                .volume(entity.getVolume())
-                .build();
-    }
-
-    private IndicatorValueDto toIndicatorValueDto(IndicatorValue iv) {
-        return IndicatorValueDto.builder()
-                .ts(iv.getTs())
-                .freq(iv.getFreq())
-                .key(iv.getKey())
-                .valueNum(iv.getValueNum())
-                .valueJson(iv.getValueJson())
-                .build();
-    }
-
     private FinancialSummaryDto toFinancialSummaryDto(Financial f) {
         Integer q = null;
         Integer h = null;
@@ -253,59 +237,24 @@ public class FeatOneService {
                 .build();
     }
 
-    private StockDto toStockDto(Stock stock) {
-        if (stock == null) return null;
-
-        return StockDto.builder()
-                .stockId(stock.getStockId())
-                .stockCode(stock.getStockCode())
-                .isin(stock.getIsin())
-                .companyName(stock.getCompanyName())
-                .exchangeId(stock.getExchange() != null ? stock.getExchange().getExchangeId() : null)
-                .exchangeCode(stock.getExchange() != null ? stock.getExchange().getCode() : null)
-                .assetType(stock.getAssetType())
-                .currency(stock.getCurrency())
-                .industryId(stock.getIndustry() != null ? stock.getIndustry().getIndustryId() : null)
-                .listedAt(stock.getListedAt())
-                .delistedAt(stock.getDelistedAt())
-                .build();
-    }
-
     private FeatOneRequestDto buildFeatOneRequestDto(
             Stock stock,
+            Freq freq,
             List<PriceOhlcv> candles,
-            List<IndicatorValue> indicators,
-            List<Financial> financials
+            List<Financial> financials,
+            Boolean includeExplain
     ) {
-        List<PriceOhlcvDto> candleDtos = candles.stream().map(this::toPriceOhlcvDto).toList();
-        List<IndicatorValueDto> indicatorDtos = indicators.stream().map(this::toIndicatorValueDto).toList();
+        List<OhlcvItemDto> ohlcvDtos = candles.stream()
+                .map(this::toOhlcvItemDto)
+                .toList();
         List<FinancialSummaryDto> financialDtos = financials.stream().map(this::toFinancialSummaryDto).toList();
 
         return FeatOneRequestDto.builder()
-                .stock(toStockDto(stock))
-                .candles(candleDtos)
-                .indicators(indicatorDtos)
+                .stockCode(stock.getStockCode())
+                .freq(freq)
+                .ohlcv(ohlcvDtos)
                 .financials(financialDtos)
-                .build();
-    }
-
-    private FeatOneResponseDataDto buildFeatOneResponseDto(
-            Stock stock,
-            List<PriceOhlcv> candles,
-            List<IndicatorValue> indicators,
-            List<Financial> financials,
-            FeatOneResponseTextDto textDto
-    ) {
-        List<PriceOhlcvDto> candleDtos = candles.stream().map(this::toPriceOhlcvDto).toList();
-        List<IndicatorValueDto> indicatorDtos = indicators.stream().map(this::toIndicatorValueDto).toList();
-        List<FinancialSummaryDto> financialDtos = financials.stream().map(this::toFinancialSummaryDto).toList();
-
-        return FeatOneResponseDataDto.builder()
-                .stock(toStockDto(stock))
-                .candles(candleDtos)
-                .indicators(indicatorDtos)
-                .financials(financialDtos)
-                .analysis(textDto)
+                .includeExplain(includeExplain != null && includeExplain)
                 .build();
     }
 
@@ -320,5 +269,127 @@ public class FeatOneService {
 
     private static Double bdToDouble(BigDecimal v) {
         return v == null ? null : v.doubleValue();
+    }
+
+    private OhlcvItemDto toOhlcvItemDto(PriceOhlcv entity) {
+        return OhlcvItemDto.builder()
+                .t(entity.getId().getTs())
+                .o(entity.getOpen())
+                .h(entity.getHigh())
+                .l(entity.getLow())
+                .c(entity.getClose())
+                .v(entity.getVolume())
+                .build();
+    }
+
+    private FeatOneAnalysisResponseDto buildFallbackResponse(
+            Stock stock,
+            List<PriceOhlcv> candles,
+            List<Financial> financials,
+            Boolean includeExplain
+    ) {
+        FeatOneAnalysisMetricsDto metrics = buildMetrics(stock.getStockCode(), candles, financials);
+
+        FeatOneAnalysisMetaDto meta = FeatOneAnalysisMetaDto.builder()
+                .warnings(buildWarnings(includeExplain, "ANALYSIS_API_FAILED"))
+                .build();
+
+        FeatOneAnalysisExplainDto explain = null;
+        if (includeExplain != null && includeExplain) {
+            explain = null;
+        }
+
+        return FeatOneAnalysisResponseDto.builder()
+                .metrics(metrics)
+                .explain(explain)
+                .meta(meta)
+                .build();
+    }
+
+    private FeatOneAnalysisMetricsDto buildMetrics(
+            String stockCode,
+            List<PriceOhlcv> candles,
+            List<Financial> financials
+    ) {
+        OhlcvSummaryDto ohlcvSummary = buildOhlcvSummary(candles);
+        FinancialSummaryMetricsDto financialSummary = buildFinancialSummary(financials);
+
+        return FeatOneAnalysisMetricsDto.builder()
+                .stockCode(stockCode)
+                .asOf(OffsetDateTime.now())
+                .ohlcvSummary(ohlcvSummary)
+                .financialSummary(financialSummary)
+                .indicators(IndicatorSlotsDto.builder().build())
+                .schemaVersion("0.1")
+                .build();
+    }
+
+    private OhlcvSummaryDto buildOhlcvSummary(List<PriceOhlcv> candles) {
+        if (candles == null || candles.isEmpty()) {
+            return OhlcvSummaryDto.builder()
+                    .count(0)
+                    .build();
+        }
+
+        PriceOhlcv first = candles.stream()
+                .min((a, b) -> a.getId().getTs().compareTo(b.getId().getTs()))
+                .orElse(candles.get(0));
+        PriceOhlcv last = candles.stream()
+                .max((a, b) -> a.getId().getTs().compareTo(b.getId().getTs()))
+                .orElse(candles.get(candles.size() - 1));
+
+        return OhlcvSummaryDto.builder()
+                .count(candles.size())
+                .from(first.getId().getTs())
+                .to(last.getId().getTs())
+                .lastClose(last.getClose())
+                .build();
+    }
+
+    private FinancialSummaryMetricsDto buildFinancialSummary(List<Financial> financials) {
+        if (financials == null || financials.isEmpty()) {
+            return FinancialSummaryMetricsDto.builder()
+                    .years(List.of())
+                    .revenue(new java.util.HashMap<>())
+                    .operatingIncome(new java.util.HashMap<>())
+                    .netIncome(new java.util.HashMap<>())
+                    .build();
+        }
+
+        java.util.Map<Integer, java.math.BigDecimal> revenue = new java.util.HashMap<>();
+        java.util.Map<Integer, java.math.BigDecimal> operatingIncome = new java.util.HashMap<>();
+        java.util.Map<Integer, java.math.BigDecimal> netIncome = new java.util.HashMap<>();
+
+        for (Financial f : financials) {
+            Integer year = f.getFiscalYear();
+            if (year == null) {
+                continue;
+            }
+            revenue.put(year, f.getRevenue());
+            operatingIncome.put(year, f.getOperatingIncome());
+            netIncome.put(year, f.getNetIncome());
+        }
+
+        List<Integer> years = revenue.keySet().stream().sorted().toList();
+
+        return FinancialSummaryMetricsDto.builder()
+                .years(years)
+                .revenue(revenue)
+                .operatingIncome(operatingIncome)
+                .netIncome(netIncome)
+                .build();
+    }
+
+    private java.util.List<String> buildWarnings(Boolean includeExplain, String baseWarning) {
+        java.util.List<String> warnings = new java.util.ArrayList<>();
+        if (baseWarning != null) {
+            warnings.add(baseWarning);
+        }
+        if (includeExplain == null || !includeExplain) {
+            warnings.add("LLM_EXPLAIN_SKIPPED");
+        } else {
+            warnings.add("LLM_EXPLAIN_FAILED");
+        }
+        return warnings;
     }
 }

@@ -1,9 +1,8 @@
 package com.qaima.api;
 
 import com.qaima.common.ApiResponse;
+import com.qaima.dto.FeatOneAnalysisResponseDto;
 import com.qaima.dto.FeatOneRequestDto;
-import com.qaima.dto.FeatOneResponseTextDto;
-import com.qaima.dto.StockDto;
 import com.qaima.external.AnalysisApiClient;
 import com.qaima.external.TestExternalClient;
 import lombok.RequiredArgsConstructor;
@@ -12,7 +11,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -62,25 +60,20 @@ public class HelloController {
         return ApiResponse.success(payload);
     }
 
-    StockDto dummyStock = StockDto.builder()
-            .stockId(1L)
-            .stockCode("AAPL")
-            .companyName("Apple Inc.")
-            .exchangeCode("NASDAQ")
-            .build();
     /**
      * GET /api/v1/test/feature1
      * FastAPI(기능1) 응답 테스트
      */
     @GetMapping("/api/v1/test/feature1")
-    public Mono<ApiResponse<FeatOneResponseTextDto>> testAnalysis() {
+    public Mono<ApiResponse<FeatOneAnalysisResponseDto>> testAnalysis() {
 
         // 최소 필드만 채운 더미 요청
         FeatOneRequestDto req = FeatOneRequestDto.builder()
-                .stock(dummyStock)
-                .candles(List.of())
-                .indicators(List.of())
-                .financials(List.of())
+                .stockCode("AAPL")
+                .freq(com.qaima.domain.Freq.ONE_D)
+                .ohlcv(java.util.List.of())
+                .financials(java.util.List.of())
+                .includeExplain(false)
                 .options(Map.of())
                 .build();
 

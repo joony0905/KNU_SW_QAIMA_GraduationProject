@@ -18,6 +18,7 @@ import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
 import { fetchCandles } from "../api/charts";
 import type { Candle } from "../types/candle";
+import type { AnalysisResponse } from "../types/analysis";
 
 function useKSTTime() {
   const [time, setTime] = useState("");
@@ -49,7 +50,9 @@ export default function StocksMockPage() {
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(
+    null
+  );
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -239,13 +242,28 @@ export default function StocksMockPage() {
     try {
       // mainStock.symbol은 이제 항상 stockCode로 유지됨
       const result = await fetchAnalysis(mainStock.symbol);
-      setAnalysisResult(result.analysis);
+      setAnalysisResult(result);
     } catch (e) {
       console.error("분석 결과 조회 실패:", e);
       setErr("분석 결과를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatNumber = (value?: number | null) => {
+    if (value === null || value === undefined) {
+      return "-";
+    }
+    return value.toLocaleString();
+  };
+
+  const formatDate = (value?: string | null) => {
+    if (!value) {
+      return "-";
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
   };
 
   /*
@@ -705,9 +723,137 @@ export default function StocksMockPage() {
               {err && <p className="text-sm sm:text-base text-red-600">{err}</p>}
 
               {analysisResult && (
-                <pre className="w-[90%] max-w-4xl bg-[#020617] text-white text-xs sm:text-sm p-4 sm:p-5 rounded-xl overflow-x-auto whitespace-pre-wrap">
-                  {JSON.stringify(analysisResult, null, 2)}
-                </pre>
+                <div className="w-[90%] max-w-4xl bg-white rounded-2xl shadow-sm border border-zinc-200 p-4 sm:p-6 flex flex-col gap-4">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                      설명
+                    </h3>
+                    {analysisResult.explain?.text ? (
+                      <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
+                        {analysisResult.explain.text}
+                      </p>
+                    ) : (
+                      <ul className="text-sm sm:text-base text-amber-700 mt-2 list-disc list-inside">
+                        {(analysisResult.meta?.warnings ?? []).length > 0 ? (
+                          analysisResult.meta?.warnings?.map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))
+                        ) : (
+                          <li>설명 텍스트가 준비되지 않았습니다.</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                      OHLCV 요약
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
+                      <div>
+                        캔들 수:{" "}
+                        {analysisResult.metrics.ohlcv_summary.count.toLocaleString()}
+                      </div>
+                      <div>
+                        기간:{" "}
+                        {formatDate(analysisResult.metrics.ohlcv_summary.from)}{" "}
+                        ~ {formatDate(analysisResult.metrics.ohlcv_summary.to)}
+                      </div>
+                      <div>
+                        마지막 종가:{" "}
+                        {formatNumber(
+                          analysisResult.metrics.ohlcv_summary.last_close
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                      재무 요약 (5개년)
+                    </h3>
+                    {analysisResult.metrics.financial_summary.years.length > 0 ? (
+                      <div className="overflow-x-auto mt-2">
+                        <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
+                          <thead className="bg-zinc-100 text-zinc-900">
+                            <tr>
+                              <th className="px-3 py-2 text-left border-b">
+                                구분
+                              </th>
+                              {analysisResult.metrics.financial_summary.years.map(
+                                (year) => (
+                                  <th
+                                    key={year}
+                                    className="px-3 py-2 text-right border-b"
+                                  >
+                                    {year}
+                                  </th>
+                                )
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td className="px-3 py-2 border-b">매출</td>
+                              {analysisResult.metrics.financial_summary.years.map(
+                                (year) => (
+                                  <td
+                                    key={`revenue-${year}`}
+                                    className="px-3 py-2 text-right border-b"
+                                  >
+                                    {formatNumber(
+                                      analysisResult.metrics.financial_summary.revenue[
+                                        String(year)
+                                      ]
+                                    )}
+                                  </td>
+                                )
+                              )}
+                            </tr>
+                            <tr>
+                              <td className="px-3 py-2 border-b">
+                                영업이익
+                              </td>
+                              {analysisResult.metrics.financial_summary.years.map(
+                                (year) => (
+                                  <td
+                                    key={`op-${year}`}
+                                    className="px-3 py-2 text-right border-b"
+                                  >
+                                    {formatNumber(
+                                      analysisResult.metrics.financial_summary
+                                        .operating_income[String(year)]
+                                    )}
+                                  </td>
+                                )
+                              )}
+                            </tr>
+                            <tr>
+                              <td className="px-3 py-2 border-b">순이익</td>
+                              {analysisResult.metrics.financial_summary.years.map(
+                                (year) => (
+                                  <td
+                                    key={`net-${year}`}
+                                    className="px-3 py-2 text-right border-b"
+                                  >
+                                    {formatNumber(
+                                      analysisResult.metrics.financial_summary
+                                        .net_income[String(year)]
+                                    )}
+                                  </td>
+                                )
+                              )}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-sm sm:text-base text-zinc-500 mt-2">
+                        재무 요약 데이터를 확보하지 못했습니다.
+                      </p>
+                    )}
+                  </div>
+                </div>
               )}
             </section>
           </main>

@@ -1,103 +1,81 @@
 # app/models/feature1.py
+from __future__ import annotations
+
 from datetime import date, datetime
-from typing import List, Optional, Literal, Dict, Any
+from typing import Dict, List, Optional
 
-from pydantic import BaseModel
-
-
-# ---- 공통 DTO들 (Java StockDto / PriceOhlcvDto / IndicatorValueDto / FinancialSummaryDto 대응) ----
-
-class StockDto(BaseModel):
-    stockId: Optional[int] = None
-    stockCode: str
-    isin: Optional[str] = None
-    companyName: str
-
-    exchangeId: Optional[int] = None
-    exchangeCode: Optional[str] = None
-
-    assetType: Optional[str] = None
-    currency: Optional[str] = None
-
-    industryId: Optional[int] = None
-
-    # 추후 확장 Optional
-    price: Optional[float] = None
-    changeRate: Optional[float] = None
-
-    listedAt: Optional[date] = None
-    delistedAt: Optional[date] = None
+from pydantic import BaseModel, Field
 
 
-class PriceOhlcvDto(BaseModel):
-    ts: datetime
-    freq: Literal["ONE_MIN", "FIVE_MIN", "FIFTEEN_MIN", "ONE_D", "ONE_W", "ONE_M", "ONE_H"]
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
+class OhlcvItem(BaseModel):
+    t: datetime
+    o: float
+    h: float
+    l: float
+    c: float
+    v: float
 
 
-class IndicatorValueDto(BaseModel):
-    ts: datetime
-    freq: Literal["ONE_MIN", "FIVE_MIN", "FIFTEEN_MIN", "ONE_D", "ONE_W", "ONE_M", "ONE_H"]
-
-    key: str
-    valueNum: Optional[float] = None
-    valueJson: Optional[Dict[str, Any]] = None
-
-
-class FinancialSummaryDto(BaseModel):
-    fiscalYear: int
-    fiscalQuarter: Optional[int] = None
-
-    reportDate: date
-
+class FinancialSummaryItem(BaseModel):
+    fiscal_year: Optional[int] = None
+    report_date: Optional[date] = None
     revenue: Optional[float] = None
-    operatingIncome: Optional[float] = None
-    netIncome: Optional[float] = None
+    operating_income: Optional[float] = None
+    net_income: Optional[float] = None
 
-    assets: Optional[float] = None
-    equity: Optional[float] = None
-    liabilities: Optional[float] = None
-
-    roe: Optional[float] = None
-    per: Optional[float] = None
-    pbr: Optional[float] = None
+    class Config:
+        extra = "allow"
 
 
-class RequestOptions(BaseModel):
-    outputLanguage: Literal["ko", "en"] = "ko"
-    promptVersion: Optional[str] = None
-    # 필요하면 나중에 옵션 더 추가
+class Feature1Request(BaseModel):
+    stock_code: str
+    freq: str
+    ohlcv: List[OhlcvItem]
+    financials: List[FinancialSummaryItem] = []
+    include_explain: bool = False
 
 
-# ---- Spring → FastAPI 요청 DTO ----
+class OhlcvSummary(BaseModel):
+    count: int
+    from_: Optional[datetime] = Field(default=None, alias="from")
+    to: Optional[datetime] = None
+    last_close: Optional[float] = None
 
-class FeatOneRequestDto(BaseModel):
-    stock: StockDto
-    candles: List[PriceOhlcvDto]
-    indicators: List[IndicatorValueDto] = []
-    financials: List[FinancialSummaryDto] = []
-
-    options: Optional[RequestOptions] = None
+    class Config:
+        allow_population_by_field_name = True
 
 
-# ---- FastAPI → Spring 응답 DTO (LLM 텍스트 섹션) ----
+class FinancialSummary(BaseModel):
+    years: List[int] = []
+    revenue: Dict[int, Optional[float]] = {}
+    operating_income: Dict[int, Optional[float]] = {}
+    net_income: Dict[int, Optional[float]] = {}
 
-class FeatOneResponseTextDto(BaseModel):
-    stockId: Optional[int] = None
-    stockCode: Optional[str] = None
 
-    summary: Optional[str] = None
-    business: Optional[str] = None
-    financial: Optional[str] = None
-    valuation: Optional[str] = None
-    risk: Optional[str] = None
-    outlook: Optional[str] = None
+class IndicatorSlots(BaseModel):
+    valuation: Optional[dict] = None
+    growth: Optional[dict] = None
+    profitability: Optional[dict] = None
 
-    rawPrompt: Optional[str] = None
 
-    # 전체 보고서 텍스트 (summary~outlook 합친 버전)
-    analysisText: Optional[str] = None
+class Feature1Metrics(BaseModel):
+    stock_code: str
+    as_of: datetime
+    ohlcv_summary: OhlcvSummary
+    financial_summary: FinancialSummary
+    indicators: IndicatorSlots
+    schema_version: str
+
+
+class Feature1Explain(BaseModel):
+    text: str
+
+
+class Feature1Meta(BaseModel):
+    warnings: List[str] = []
+
+
+class Feature1Response(BaseModel):
+    metrics: Feature1Metrics
+    explain: Optional[Feature1Explain] = None
+    meta: Optional[Feature1Meta] = None

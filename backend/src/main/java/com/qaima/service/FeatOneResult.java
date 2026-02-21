@@ -1,12 +1,12 @@
 package com.qaima.service;
 
-import com.qaima.dto.FeatOneResponseDataDto;
+import com.qaima.dto.FeatOneAnalysisResponseDto;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
 public class FeatOneResult {
-    private final FeatOneResponseDataDto data;
+    private final FeatOneAnalysisResponseDto data;
     private final boolean chartUnavailable;
 }

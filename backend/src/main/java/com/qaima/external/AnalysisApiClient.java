@@ -1,7 +1,7 @@
 package com.qaima.external;
 
+import com.qaima.dto.FeatOneAnalysisResponseDto;
 import com.qaima.dto.FeatOneRequestDto;
-import com.qaima.dto.FeatOneResponseTextDto;
 import reactor.core.publisher.Mono;
 
 /**
@@ -10,5 +10,5 @@ import reactor.core.publisher.Mono;
  */
 public interface AnalysisApiClient {
 
-    Mono<FeatOneResponseTextDto> requestStockAnalysis(FeatOneRequestDto request);
+    Mono<FeatOneAnalysisResponseDto> requestStockAnalysis(FeatOneRequestDto request);
 }

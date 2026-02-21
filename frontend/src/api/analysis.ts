@@ -4,9 +4,14 @@ import { ENDPOINTS } from "./endpoints";
 import type { AnalysisResponse } from "../types/analysis";
 
 interface ApiResponse<T> {
-  success: boolean;
+  meta: {
+    status: string;
+    warning?: string;
+    request_id?: string;
+    timestamp?: string;
+  };
   data: T;
-  error: string | null;
+  errors: { code: string; message: string }[];
 }
 
 export const fetchAnalysis = async (
@@ -16,8 +21,15 @@ export const fetchAnalysis = async (
   const to = new Date().toISOString();
   const from = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
 
-  const res = await api.get<ApiResponse<AnalysisResponse>>(
-    ENDPOINTS.analysis.getAnalysis(stockCode, "DAILY", from, to)
+  const res = await api.post<ApiResponse<AnalysisResponse>>(
+    ENDPOINTS.analysis.analyze(),
+    {
+      stockCode,
+      freq: "ONE_D",
+      from,
+      to,
+      includeExplain: true,
+    }
   );
   return res.data.data;
 };
