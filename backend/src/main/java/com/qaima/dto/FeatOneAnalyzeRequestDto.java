@@ -1,24 +1,21 @@
 package com.qaima.dto;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.qaima.domain.Freq;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
-
-import java.time.OffsetDateTime;
+import lombok.*;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class FeatOneAnalyzeRequestDto {
     private String stockCode;
     private Freq freq;
-    private OffsetDateTime from;
-    private OffsetDateTime to;
+    private String from;
+    private String to;
     private String marketDivCode;
     private Boolean includeExplain;
 }

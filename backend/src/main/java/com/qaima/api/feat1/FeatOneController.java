@@ -5,6 +5,7 @@ import com.qaima.dto.FeatOneAnalyzeRequestDto;
 import com.qaima.dto.FeatOneAnalysisResponseDto;
 import com.qaima.service.FeatOneResult;
 import com.qaima.service.FeatOneService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -20,6 +21,9 @@ public class FeatOneController {
     public Mono<ApiResponse<FeatOneAnalysisResponseDto>> analyze(
             @RequestBody FeatOneAnalyzeRequestDto request
     ) {
+        System.out.println(">>> ANALYZE REQUEST ENTERED <<<");
+        System.out.println("REQ stockCode=" + request.getStockCode());
+        System.out.println("REQ DTO class=" + request.getClass().getName());
         return featOneService.getFeatOneData(
                         request.getStockCode(),
                         request.getFreq(),
@@ -28,7 +32,7 @@ public class FeatOneController {
                         request.getMarketDivCode(),
                         request.getIncludeExplain()
                 )
-                .map(result -> toApiResponse(result));
+                .map(this::toApiResponse);
     }
 
     private ApiResponse<FeatOneAnalysisResponseDto> toApiResponse(FeatOneResult result) {

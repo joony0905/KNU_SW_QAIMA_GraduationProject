@@ -3,33 +3,39 @@ import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
 import type { AnalysisResponse } from "../types/analysis";
 
+export type Freq =
+  | "ONE_MIN"
+  | "FIVE_MIN"
+  | "FIFTEEN_MIN"
+  | "ONE_H"
+  | "ONE_D"
+  | "ONE_W"
+  | "ONE_M";
+
+export type FeatOneAnalyzeRequest = {
+  stockCode: string;
+  freq: Freq;
+  from: string;
+  to: string;
+  marketDivCode: string;
+  includeExplain: boolean;
+};
+
 interface ApiResponse<T> {
   meta: {
     status: string;
-    warning?: string;
-    request_id?: string;
-    timestamp?: string;
+    warning: string | null;
   };
   data: T;
-  errors: { code: string; message: string }[];
+  errors: Array<{ code: string; message: string }>;
 }
 
 export const fetchAnalysis = async (
-  stockCode: string
+  req: FeatOneAnalyzeRequest
 ): Promise<AnalysisResponse> => {
-  // 최근 1년 데이터 기준
-  const to = new Date().toISOString();
-  const from = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-
   const res = await api.post<ApiResponse<AnalysisResponse>>(
     ENDPOINTS.analysis.analyze(),
-    {
-      stockCode,
-      freq: "ONE_D",
-      from,
-      to,
-      includeExplain: true,
-    }
+    req
   );
   return res.data.data;
 };

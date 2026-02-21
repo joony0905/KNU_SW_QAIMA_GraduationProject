@@ -53,6 +53,22 @@ export default function StocksMockPage() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(
     null
   );
+
+  // ===== 분석 요청 파라미터 (차트와 동일한 기간/주기 사용) =====
+  const [analysisFreq, setAnalysisFreq] = useState<
+    | "ONE_MIN"
+    | "FIVE_MIN"
+    | "FIFTEEN_MIN"
+    | "ONE_H"
+    | "ONE_D"
+    | "ONE_W"
+    | "ONE_M"
+  >("ONE_D");
+  const [analysisFrom, setAnalysisFrom] = useState<string>("");
+  const [analysisTo, setAnalysisTo] = useState<string>("");
+  const [marketDivCode] = useState<string>("J");
+  const [includeExplain] = useState<boolean>(true);
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -74,10 +90,9 @@ export default function StocksMockPage() {
     return "text-black";
   };
 
-  // 특징주 리스트용 타입/데이터
   interface FeaturedStock {
     name: string;
-    symbol: string; // code/ticker 추가 (중요)
+    symbol: string;
     price: string;
     volume: string;
     change: string;
@@ -111,7 +126,6 @@ export default function StocksMockPage() {
     },
   ]);
 
-  // 메인 종목 (검색된 종목)
   const [mainStock, setMainStock] = useState({
     name: "삼성전자",
     symbol: "005930",
@@ -119,6 +133,26 @@ export default function StocksMockPage() {
     change: "+500",
     changeRate: "+0.72%",
   });
+
+  // ===== OHLCV(캔들) 기반 표시값 포맷 유틸 =====
+  const formatPrice = (n: number) => {
+    if (!Number.isFinite(n)) return "0";
+    return Math.round(n).toLocaleString("ko-KR");
+  };
+
+  const formatSignedNumber = (n: number) => {
+    if (!Number.isFinite(n)) return "0";
+    if (n === 0) return "0";
+    const sign = n > 0 ? "+" : "-";
+    return `${sign}${Math.abs(Math.round(n)).toLocaleString("ko-KR")}`;
+  };
+
+  const formatSignedPercent = (n: number) => {
+    if (!Number.isFinite(n)) return "0%";
+    if (n === 0) return "0%";
+    const sign = n > 0 ? "+" : "-";
+    return `${sign}${Math.abs(n).toFixed(2)}%`;
+  };
 
   const loadCandles = async (stockCode: string) => {
     setChartLoading(true);
@@ -129,17 +163,48 @@ export default function StocksMockPage() {
     fromDate.setDate(toDate.getDate() - 30);
 
     try {
+      const usedFreq = "ONE_D" as const;
+
+      // 차트 로딩과 동시에 분석 파라미터도 동일하게 맞춰둠
+      setAnalysisFreq(usedFreq);
+      setAnalysisFrom(fromDate.toISOString());
+      setAnalysisTo(toDate.toISOString());
+
       const response = await fetchCandles(
         stockCode,
-        "ONE_D",
+        usedFreq,
         fromDate.toISOString(),
         toDate.toISOString()
       );
 
-      if (response.data.length === 0) {
+      const data = response.data;
+
+      if (data.length === 0) {
         setChartError("차트 데이터가 없습니다.");
       }
-      setCandles(response.data);
+
+      setCandles(data);
+
+      // ===== 목업으로 들어가던 OHLCV 표시값(현재가/전일대비/등락률)을 실제 캔들 데이터로 계산하여 반영 =====
+      if (data.length > 0) {
+        const last = data[data.length - 1];
+        const prev = data.length > 1 ? data[data.length - 2] : null;
+
+        const lastClose = Number((last as any).c);
+        const prevClose = prev ? Number((prev as any).c) : lastClose;
+
+        if (Number.isFinite(lastClose) && Number.isFinite(prevClose)) {
+          const diff = lastClose - prevClose;
+          const rate = prevClose !== 0 ? (diff / prevClose) * 100 : 0;
+
+          setMainStock((prevState) => ({
+            ...prevState,
+            price: formatPrice(lastClose),
+            change: formatSignedNumber(diff),
+            changeRate: formatSignedPercent(rate),
+          }));
+        }
+      }
     } catch (e: any) {
       console.error("차트 데이터 조회 실패:", {
         message: e?.message,
@@ -157,9 +222,7 @@ export default function StocksMockPage() {
     }
   };
 
-  
   const looksLikeCode = (s: string) => {
-    // 005930 같은 국내코드(숫자 6자리) 또는 AAPL 같은 티커(영문/숫자/.-)
     return /^\d{6}$/.test(s) || /^[A-Za-z0-9.\-]{1,15}$/.test(s);
   };
 
@@ -188,10 +251,13 @@ export default function StocksMockPage() {
         symbol: stockInfo.stockCode,
         price: stockInfo.price?.toString() || "0",
         change: stockInfo.changeRate
-          ? (stockInfo.changeRate > 0 ? "+" : "") + stockInfo.changeRate.toFixed(2)
+          ? (stockInfo.changeRate > 0 ? "+" : "") +
+            stockInfo.changeRate.toFixed(2)
           : "0",
         changeRate: stockInfo.changeRate
-          ? (stockInfo.changeRate > 0 ? "+" : "") + stockInfo.changeRate.toFixed(2) + "%"
+          ? (stockInfo.changeRate > 0 ? "+" : "") +
+            stockInfo.changeRate.toFixed(2) +
+            "%"
           : "0%",
       });
     } catch (e) {
@@ -200,7 +266,6 @@ export default function StocksMockPage() {
       // 2) 실패 시: 입력값이 코드처럼 보이면 그걸로 진행, 아니면 중단
       if (looksLikeCode(q)) {
         resolvedCode = q;
-        // 코드로 직접 입력했을 때는 이름을 모르니 최소 표기
         setMainStock((prev) => ({
           ...prev,
           name: prev.name,
@@ -213,7 +278,6 @@ export default function StocksMockPage() {
       }
     }
 
-    // 여기부터는 무조건 stockCode만 사용
     const code = resolvedCode;
 
     // 3) 재무제표(실패해도 차트는 가게)
@@ -226,22 +290,33 @@ export default function StocksMockPage() {
       }
     } catch (e) {
       console.error("재무제표 조회 실패:", e);
-      // 여기서 return 금지 (차트는 보여줘야 함)
     }
 
     // 4) 차트는 항상 실행
     await loadCandles(code);
   };
 
-
   const handleAnalyzeClick = async () => {
     setLoading(true);
     setErr("");
     setAnalysisResult(null);
 
+    // 차트를 먼저 조회해서 from/to가 세팅되도록 유도 (미세한 타이밍 이슈 방어)
+    if (!analysisFrom || !analysisTo) {
+      setErr("먼저 종목을 검색해 차트 데이터를 불러온 뒤 분석을 실행해주세요.");
+      setLoading(false);
+      return;
+    }
+
     try {
-      // mainStock.symbol은 이제 항상 stockCode로 유지됨
-      const result = await fetchAnalysis(mainStock.symbol);
+      const result = await fetchAnalysis({
+        stockCode: mainStock.symbol,
+        freq: analysisFreq,
+        from: analysisFrom,
+        to: analysisTo,
+        marketDivCode,
+        includeExplain,
+      });
       setAnalysisResult(result);
     } catch (e) {
       console.error("분석 결과 조회 실패:", e);
@@ -266,26 +341,17 @@ export default function StocksMockPage() {
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
   };
 
-  /*
-  useEffect(() => {
-    void loadCandles(mainStock.symbol);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  */
   const featuredListWrapperRef = useRef<HTMLDivElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  // ★ 별 토글 상태 (상단 메인 종목용 - 관심 종목 등록)
   const [isInterested, setIsInterested] = useState(false);
 
-  // 특징주 리스트 패널 위치
   const [panelPos, setPanelPos] = useState<{
     top: number;
     left: number;
   } | null>(null);
 
-  // 바깥 클릭 시 특징주 리스트 닫힘
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -301,13 +367,11 @@ export default function StocksMockPage() {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-  // 토스트 메시지 상태
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
     message: "",
     visible: false,
   });
 
-  // 토스트 자동 숨김
   useEffect(() => {
     if (!toast.visible) return;
     const t = setTimeout(() => {
@@ -316,11 +380,9 @@ export default function StocksMockPage() {
     return () => clearTimeout(t);
   }, [toast.visible]);
 
-  // 관심 종목 토글 (상단 메인 종목용)
   const toggleInterest = async () => {
     console.log("★ toggleInterest clicked, isInterested =", isInterested);
     try {
-      // TODO: 실제 관심종목(워치리스트) API 연동
       setIsInterested((prev) => !prev);
       setToast({
         message: isInterested
@@ -333,7 +395,6 @@ export default function StocksMockPage() {
     }
   };
 
-  // 토픽(특징주 카테고리) 선택 상태
   const [topic, setTopic] = useState<
     | "상승종목"
     | "상한가 임박종목"
@@ -347,7 +408,6 @@ export default function StocksMockPage() {
   const [isTopicOpen, setIsTopicOpen] = useState(false);
   const topicRef = useRef<HTMLDivElement | null>(null);
 
-  // 바깥 클릭 시 토픽 닫힘
   useEffect(() => {
     const handleClickOutsideTopic = (e: MouseEvent) => {
       if (!topicRef.current) return;
@@ -359,7 +419,6 @@ export default function StocksMockPage() {
     return () => document.removeEventListener("click", handleClickOutsideTopic);
   }, []);
 
-  // mainStock용 색/방향 계산 (StockCard와 동일한 규칙)
   const mainColorClass = getColorClass(mainStock.changeRate);
   const mainNumericChange = Number(mainStock.change.replace(/,/g, "").trim());
   const mainDisplayRate =
@@ -377,7 +436,6 @@ export default function StocksMockPage() {
 
         {/* 종목 검색 / 특징주 리스트 영역 */}
         <section className="w-full flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          {/* 왼쪽: 국내 / 종목 입력 */}
           <div className="w-full lg:max-w-md bg-white rounded-[10px] outline outline-1 outline-stone-300 px-2 py-1 sm:px-2 sm:py-1 flex flex-col gap-2">
             <StockInputBox
               placeholder="종목을 입력해주세요"
@@ -385,12 +443,10 @@ export default function StocksMockPage() {
             />
           </div>
 
-          {/* 오른쪽: 특징주 카테고리 드롭다운 + 리스트 */}
           <div
             ref={featuredListWrapperRef}
             className="w-full lg:flex-1 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end"
           >
-            {/* 특징주 카테고리 드롭다운 */}
             <div ref={topicRef} className="relative w-40">
               <button
                 onClick={() => setIsTopicOpen((prev) => !prev)}
@@ -404,7 +460,6 @@ export default function StocksMockPage() {
                   relative
                 "
               >
-                {/* 가운데 정렬 텍스트 */}
                 <span
                   className="
                     flex-1 text-center truncate whitespace-nowrap
@@ -414,7 +469,6 @@ export default function StocksMockPage() {
                   {topic}
                 </span>
 
-                {/* 오른쪽 삼각형 */}
                 <span className="absolute right-1 sm:right-2 text-[10px] sm:text-xs">
                   {isTopicOpen ? "▲" : "▼"}
                 </span>
@@ -442,13 +496,11 @@ export default function StocksMockPage() {
                       onClick={() => {
                         setTopic(item as typeof topic);
                         setIsTopicOpen(false);
-                        // TODO: topic별 특징주 리스트 API 호출
                       }}
-                      className={`
+                      className="
                         w-full text-left px-3 py-2 text-sm sm:text-base
                         hover:bg-zinc-100
-                        ${topic === item ? "bg-zinc-100 font-semibold" : ""}
-                      `}
+                      "
                     >
                       {item}
                     </button>
@@ -457,9 +509,7 @@ export default function StocksMockPage() {
               )}
             </div>
 
-            {/* 대표 카드 + + 버튼 */}
             <div className="flex items-center gap-2 relative">
-              {/* 대표 카드: 항상 featuredStocks[0] */}
               <div
                 ref={cardRef}
                 className="inline-block w-[260px] sm:w-[280px] lg:w-[380px]"
@@ -476,7 +526,6 @@ export default function StocksMockPage() {
                 )}
               </div>
 
-              {/* + 버튼: 패널 열기 */}
               <button
                 onClick={() => {
                   setIsOpen((prev) => !prev);
@@ -506,7 +555,6 @@ export default function StocksMockPage() {
           </div>
         </section>
 
-        {/* 펼쳐진 특징주 리스트 패널: 대표 포함 통짜 리스트 */}
         {isOpen && panelPos && (
           <div
             ref={dropdownRef}
@@ -530,7 +578,6 @@ export default function StocksMockPage() {
                   key={idx}
                   onClick={() => {
                     setIsOpen(false);
-                    // code로 검색 (이름 금지)
                     handleSearch(stock.symbol);
                   }}
                   className="w-full text-left"
@@ -549,14 +596,11 @@ export default function StocksMockPage() {
           </div>
         )}
 
-        {/* ========== 메인 2열 레이아웃 ========== */}
         {hasSelectedStock && (
           <main className="w-full flex flex-col gap-4 sm:gap-5">
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)] gap-4 lg:gap-6 items-start">
-              {/* ---------- 왼쪽: 차트 + 요약 ---------- */}
               <div className="flex flex-col gap-3 sm:gap-4">
                 <section className="w-full bg-zinc-100 rounded-2xl p-3 sm:p-4 md:p-5 flex flex-col gap-3 xl:h-[520px]">
-                  {/* 종목 헤더 */}
                   <div className="flex flex-col gap-1.5">
                     <div className="flex flex-wrap items-end gap-1.5">
                       <h2 className="text-lg sm:text-xl md:text-2xl font-medium text-black">
@@ -565,7 +609,6 @@ export default function StocksMockPage() {
                       <span className="text-sm sm:text-base md:text-lg text-black">
                         ({mainStock.symbol})
                       </span>
-                      {/* 상단 관심 토글 버튼 */}
                       <button
                         onClick={toggleInterest}
                         className="ml-2 inline-block"
@@ -588,13 +631,8 @@ export default function StocksMockPage() {
                       </span>
 
                       <div className="flex items-center gap-1.5 text-sm md:text-base font-medium">
-                        <span className={mainColorClass}>
-                          {mainStock.change}
-                        </span>
-                        <span className={mainColorClass}>
-                          ({mainDisplayRate})
-                        </span>
-
+                        <span className={mainColorClass}>{mainStock.change}</span>
+                        <span className={mainColorClass}>({mainDisplayRate})</span>
                         {mainNumericChange > 0 && (
                           <div
                             className={`${mainColorClass} w-0 h-0 
@@ -603,7 +641,6 @@ export default function StocksMockPage() {
                             border-b-current`}
                           />
                         )}
-
                         {mainNumericChange < 0 && (
                           <div
                             className={`${mainColorClass} w-0 h-0 
@@ -612,7 +649,6 @@ export default function StocksMockPage() {
                             border-t-current`}
                           />
                         )}
-
                         {mainNumericChange === 0 && (
                           <span
                             className={`
@@ -629,20 +665,17 @@ export default function StocksMockPage() {
                     </div>
                   </div>
 
-                  {/* 차트 영역 */}
                   <div className="w-full flex-1 bg-white rounded-xl overflow-hidden flex items-center justify-center">
                     {chartLoading && (
                       <p className="text-sm sm:text-base text-gray-600">
                         차트를 불러오는 중입니다...
                       </p>
                     )}
-
                     {chartError && !chartLoading && (
                       <p className="text-sm sm:text-base text-red-600">
                         {chartError}
                       </p>
                     )}
-
                     {!chartLoading && !chartError && (
                       <TradingViewWidget candles={candles} />
                     )}
@@ -650,9 +683,7 @@ export default function StocksMockPage() {
                 </section>
               </div>
 
-              {/* ---------- 오른쪽: 재무제표 / 공매도 카드 ---------- */}
               <div className="w-full h-[520px] px-4 sm:px-6 py-8 bg-zinc-100 rounded-2xl flex flex-col items-center overflow-hidden">
-                {/* 탭 버튼 */}
                 <div className="flex w-full mb-4">
                   <button
                     className={`flex-1 text-[20px] py-2 font-semibold ${
@@ -672,7 +703,6 @@ export default function StocksMockPage() {
                   </button>
                 </div>
 
-                {/* 콘텐츠 영역 */}
                 <div className="w-full h-full overflow-y-auto flex flex-col gap-5 pr-2">
                   {activeTab === "재무제표" ? (
                     sections ? (
@@ -684,8 +714,8 @@ export default function StocksMockPage() {
                             section.sectionTitle === "수익성"
                               ? "3-2"
                               : section.sectionTitle === "가치(밸류에이션)"
-                                ? "2-2"
-                                : "2"
+                              ? "2-2"
+                              : "2"
                           }
                         />
                       ))
@@ -705,7 +735,6 @@ export default function StocksMockPage() {
               </div>
             </div>
 
-            {/* ========== 하단 분석 결과 영역 ========== */}
             <section className="w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex flex-col items-center justify-center gap-4 mt-2">
               <button
                 onClick={handleAnalyzeClick}
@@ -715,9 +744,7 @@ export default function StocksMockPage() {
               </button>
 
               {loading && (
-                <p className="text-sm sm:text-base text-gray-600">
-                  분석 중입니다...
-                </p>
+                <p className="text-sm sm:text-base text-gray-600">분석 중입니다...</p>
               )}
 
               {err && <p className="text-sm sm:text-base text-red-600">{err}</p>}
@@ -755,15 +782,12 @@ export default function StocksMockPage() {
                         {analysisResult.metrics.ohlcv_summary.count.toLocaleString()}
                       </div>
                       <div>
-                        기간:{" "}
-                        {formatDate(analysisResult.metrics.ohlcv_summary.from)}{" "}
-                        ~ {formatDate(analysisResult.metrics.ohlcv_summary.to)}
+                        기간: {formatDate(analysisResult.metrics.ohlcv_summary.from)} ~{" "}
+                        {formatDate(analysisResult.metrics.ohlcv_summary.to)}
                       </div>
                       <div>
                         마지막 종가:{" "}
-                        {formatNumber(
-                          analysisResult.metrics.ohlcv_summary.last_close
-                        )}
+                        {formatNumber(analysisResult.metrics.ohlcv_summary.last_close)}
                       </div>
                     </div>
                   </div>
@@ -777,72 +801,55 @@ export default function StocksMockPage() {
                         <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
                           <thead className="bg-zinc-100 text-zinc-900">
                             <tr>
-                              <th className="px-3 py-2 text-left border-b">
-                                구분
-                              </th>
-                              {analysisResult.metrics.financial_summary.years.map(
-                                (year) => (
-                                  <th
-                                    key={year}
-                                    className="px-3 py-2 text-right border-b"
-                                  >
-                                    {year}
-                                  </th>
-                                )
-                              )}
+                              <th className="px-3 py-2 text-left border-b">구분</th>
+                              {analysisResult.metrics.financial_summary.years.map((year) => (
+                                <th key={year} className="px-3 py-2 text-right border-b">
+                                  {year}
+                                </th>
+                              ))}
                             </tr>
                           </thead>
                           <tbody>
                             <tr>
                               <td className="px-3 py-2 border-b">매출</td>
-                              {analysisResult.metrics.financial_summary.years.map(
-                                (year) => (
-                                  <td
-                                    key={`revenue-${year}`}
-                                    className="px-3 py-2 text-right border-b"
-                                  >
-                                    {formatNumber(
-                                      analysisResult.metrics.financial_summary.revenue[
-                                        String(year)
-                                      ]
-                                    )}
-                                  </td>
-                                )
-                              )}
+                              {analysisResult.metrics.financial_summary.years.map((year) => (
+                                <td
+                                  key={`revenue-${year}`}
+                                  className="px-3 py-2 text-right border-b"
+                                >
+                                  {formatNumber(
+                                    analysisResult.metrics.financial_summary.revenue[String(year)]
+                                  )}
+                                </td>
+                              ))}
                             </tr>
                             <tr>
-                              <td className="px-3 py-2 border-b">
-                                영업이익
-                              </td>
-                              {analysisResult.metrics.financial_summary.years.map(
-                                (year) => (
-                                  <td
-                                    key={`op-${year}`}
-                                    className="px-3 py-2 text-right border-b"
-                                  >
-                                    {formatNumber(
-                                      analysisResult.metrics.financial_summary
-                                        .operating_income[String(year)]
-                                    )}
-                                  </td>
-                                )
-                              )}
+                              <td className="px-3 py-2 border-b">영업이익</td>
+                              {analysisResult.metrics.financial_summary.years.map((year) => (
+                                <td
+                                  key={`op-${year}`}
+                                  className="px-3 py-2 text-right border-b"
+                                >
+                                  {formatNumber(
+                                    analysisResult.metrics.financial_summary.operating_income[
+                                      String(year)
+                                    ]
+                                  )}
+                                </td>
+                              ))}
                             </tr>
                             <tr>
                               <td className="px-3 py-2 border-b">순이익</td>
-                              {analysisResult.metrics.financial_summary.years.map(
-                                (year) => (
-                                  <td
-                                    key={`net-${year}`}
-                                    className="px-3 py-2 text-right border-b"
-                                  >
-                                    {formatNumber(
-                                      analysisResult.metrics.financial_summary
-                                        .net_income[String(year)]
-                                    )}
-                                  </td>
-                                )
-                              )}
+                              {analysisResult.metrics.financial_summary.years.map((year) => (
+                                <td
+                                  key={`net-${year}`}
+                                  className="px-3 py-2 text-right border-b"
+                                >
+                                  {formatNumber(
+                                    analysisResult.metrics.financial_summary.net_income[String(year)]
+                                  )}
+                                </td>
+                              ))}
                             </tr>
                           </tbody>
                         </table>
@@ -859,7 +866,6 @@ export default function StocksMockPage() {
           </main>
         )}
 
-        {/* 토스트 메시지 */}
         {toast.visible && (
           <div
             className="

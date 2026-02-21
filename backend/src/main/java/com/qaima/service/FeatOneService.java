@@ -25,7 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-
+import java.util.Comparator;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
@@ -41,7 +41,7 @@ public class FeatOneService {
     private final PriceOhlcvRepository priceOhlcvRepository;
     private final FinancialRepository financialRepository;
 
-    // Feature1은 (너가 현재 유지 중인 구조대로) 직접 KIS/Marketstack을 사용
+    // Feature1은 직접 KIS/Marketstack을 사용
     private final KrStockClient krStockClient;
     private final GlobalStockClient globalStockClient;
     private final AnalysisApiClient analysisApiClient;
@@ -49,15 +49,32 @@ public class FeatOneService {
     public Mono<FeatOneResult> getFeatOneData(
             String stockCode,
             Freq freq,
-            OffsetDateTime from,
-            OffsetDateTime to,
+            String from, //Offset이 아닌 String으로 넘김. 분석 및 외부 출력용
+            String to,
             String marketDivCode,
             Boolean includeExplain
     ) {
+        if (stockCode == null || stockCode.isBlank() || freq == null || from == null || to == null || marketDivCode == null || includeExplain == null) {
+            System.out.println(
+                    "[FeatOneService param matching fail] " +
+                            "stockCode=" + stockCode +
+                            ", freq=" + freq +
+                            ", from=" + from +
+                            ", to=" + to +
+                            ", marketDivCode=" + marketDivCode +
+                            ", includeExplain=" + includeExplain
+            );
+            throw new ErrorException(ErrorCode.VALIDATION_ERROR);
+        }
+
+
+        OffsetDateTime fromDt = OffsetDateTime.parse(from);
+        OffsetDateTime toDt   = OffsetDateTime.parse(to); // 내부용은 offset
+
         Mono<Stock> stockMono = stockService.getOrCreateStockByCode(stockCode).cache();
 
         Mono<List<PriceOhlcv>> candlesMono = stockMono.flatMap(stock ->
-                loadCandlesWithFallback(stock, freq, from, to, marketDivCode)
+                loadCandlesWithFallback(stock, freq, fromDt, toDt, marketDivCode)
         );
 
         int financialLimit = 5;
@@ -244,17 +261,26 @@ public class FeatOneService {
             List<Financial> financials,
             Boolean includeExplain
     ) {
-        List<OhlcvItemDto> ohlcvDtos = candles.stream()
-                .map(this::toOhlcvItemDto)
-                .toList();
-        List<FinancialSummaryDto> financialDtos = financials.stream().map(this::toFinancialSummaryDto).toList();
+        List<OhlcvItemDto> ohlcvDtos =
+                (candles == null ? List.<PriceOhlcv>of() : candles).stream()
+                        //복합키의 ts 기준 오름차순 정렬
+                        .sorted(Comparator.comparing(o -> o.getId().getTs()))
+                        .map(this::toOhlcvItemDto)
+                        .toList();
+
+        List<FinancialSummaryDto> financialDtos =
+                (financials == null ? List.<Financial>of() : financials).stream()
+                        .map(this::toFinancialSummaryDto)
+                        .toList();
+
+        boolean explain = Boolean.TRUE.equals(includeExplain);
 
         return FeatOneRequestDto.builder()
                 .stockCode(stock.getStockCode())
                 .freq(freq)
                 .ohlcv(ohlcvDtos)
                 .financials(financialDtos)
-                .includeExplain(includeExplain != null && includeExplain)
+                .includeExplain(explain)
                 .build();
     }
 
