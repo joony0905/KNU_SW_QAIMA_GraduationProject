@@ -1,5 +1,6 @@
 package com.qaima.dto;
 
+import com.qaima.dto.indicator.IndicatorBundleDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -18,6 +19,7 @@ public class FeatOneAnalysisMetricsDto {
     private OffsetDateTime asOf;
     private OhlcvSummaryDto ohlcvSummary;
     private FinancialSummaryMetricsDto financialSummary;
-    private IndicatorSlotsDto indicators;
+    // metrics 안에 indicators를 포함하는 관통 계약의 ground truth
+    private IndicatorBundleDto indicators;
     private String schemaVersion;
 }

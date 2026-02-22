@@ -1,3 +1,5 @@
+// DEPRECATED: Feature1-specific analysis types moved to src/types/feature1/analysis.ts and common contracts under src/types/common.
+// Keep this file for backward compatibility with existing imports.
 // src/types/analysis.ts
 export interface OhlcvSummary {
   count: number;

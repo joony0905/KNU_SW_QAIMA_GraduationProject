@@ -10,7 +10,7 @@ import com.qaima.dto.FeatOneAnalysisResponseDto;
 import com.qaima.dto.FeatOneRequestDto;
 import com.qaima.dto.FinancialSummaryDto;
 import com.qaima.dto.FinancialSummaryMetricsDto;
-import com.qaima.dto.IndicatorSlotsDto;
+import com.qaima.dto.indicator.IndicatorBundleDto;
 import com.qaima.dto.OhlcvItemDto;
 import com.qaima.dto.OhlcvSummaryDto;
 import com.qaima.dto.PriceOhlcvDto;
@@ -345,7 +345,7 @@ public class FeatOneService {
                 .asOf(OffsetDateTime.now())
                 .ohlcvSummary(ohlcvSummary)
                 .financialSummary(financialSummary)
-                .indicators(IndicatorSlotsDto.builder().build())
+                .indicators(IndicatorBundleDto.builder().build())
                 .schemaVersion("0.1")
                 .build();
     }
