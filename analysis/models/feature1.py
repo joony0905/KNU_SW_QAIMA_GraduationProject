@@ -6,6 +6,8 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from models.indicator import IndicatorBundle
+
 
 class OhlcvItem(BaseModel):
     t: datetime
@@ -63,7 +65,7 @@ class Feature1Metrics(BaseModel):
     as_of: datetime
     ohlcv_summary: OhlcvSummary
     financial_summary: FinancialSummary
-    indicators: IndicatorSlots
+    indicators: Optional[IndicatorBundle] = None
     schema_version: str
 
 
