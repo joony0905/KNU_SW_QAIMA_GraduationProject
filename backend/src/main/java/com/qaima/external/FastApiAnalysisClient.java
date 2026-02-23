@@ -1,8 +1,8 @@
 package com.qaima.external;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.qaima.dto.FeatOneAnalysisResponseDto;
-import com.qaima.dto.FeatOneRequestDto;
+import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
+import com.qaima.dto.featone.FeatOneRequestDto;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;

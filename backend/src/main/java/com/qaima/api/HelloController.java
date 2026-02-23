@@ -1,8 +1,8 @@
 package com.qaima.api;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.FeatOneAnalysisResponseDto;
-import com.qaima.dto.FeatOneRequestDto;
+import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
+import com.qaima.dto.featone.FeatOneRequestDto;
 import com.qaima.external.AnalysisApiClient;
 import com.qaima.external.TestExternalClient;
 import lombok.RequiredArgsConstructor;

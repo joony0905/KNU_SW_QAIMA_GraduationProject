@@ -1,11 +1,10 @@
 package com.qaima.api.stock;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.StockDto;
-import com.qaima.dto.StockMeta;
-import com.qaima.dto.StockResponseDto;
+import com.qaima.dto.stock.StockDto;
+import com.qaima.dto.stock.StockResponseDto;
 import com.qaima.external.StockClient;
-import com.qaima.service.StockService;
+import com.qaima.service.stock.StockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;

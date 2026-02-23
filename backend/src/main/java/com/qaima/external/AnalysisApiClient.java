@@ -1,7 +1,7 @@
 package com.qaima.external;
 
-import com.qaima.dto.FeatOneAnalysisResponseDto;
-import com.qaima.dto.FeatOneRequestDto;
+import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
+import com.qaima.dto.featone.FeatOneRequestDto;
 import reactor.core.publisher.Mono;
 
 /**

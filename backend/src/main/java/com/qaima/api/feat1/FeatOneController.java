@@ -1,11 +1,10 @@
 package com.qaima.api.feat1;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.FeatOneAnalyzeRequestDto;
-import com.qaima.dto.FeatOneAnalysisResponseDto;
-import com.qaima.service.FeatOneResult;
-import com.qaima.service.FeatOneService;
-import jakarta.validation.Valid;
+import com.qaima.dto.featone.FeatOneAnalyzeRequestDto;
+import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
+import com.qaima.service.featone.FeatOneResult;
+import com.qaima.service.featone.FeatOneService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;

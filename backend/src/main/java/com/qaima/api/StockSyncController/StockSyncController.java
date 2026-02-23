@@ -1,9 +1,9 @@
 package com.qaima.api.StockSyncController;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.MarketStackTickersResponse;
+import com.qaima.dto.mkstack.MarketStackTickersResponse;
 import com.qaima.external.StockApiClient;
-import com.qaima.service.StockSyncService;
+import com.qaima.service.stock.StockSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

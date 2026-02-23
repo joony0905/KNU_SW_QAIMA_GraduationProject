@@ -2,11 +2,11 @@ package com.qaima.api.EmailController;
 
 import com.qaima.common.ApiResponse;
 import com.qaima.common.Blocking;
-import com.qaima.dto.EmailConfirmDto;
-import com.qaima.dto.EmailRequestDto;
-import com.qaima.dto.PwdResetRequestDto;
-import com.qaima.service.AuthLoginLogService;
-import com.qaima.service.MailAuthService;
+import com.qaima.dto.user.EmailConfirmDto;
+import com.qaima.dto.user.EmailRequestDto;
+import com.qaima.dto.user.PwdResetRequestDto;
+import com.qaima.service.auth.AuthLoginLogService;
+import com.qaima.service.auth.MailAuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;

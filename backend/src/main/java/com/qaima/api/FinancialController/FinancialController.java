@@ -1,8 +1,8 @@
 package com.qaima.api.FinancialController;
 
 import com.qaima.domain.PeriodType;
-import com.qaima.dto.FinancialDto;
-import com.qaima.service.FinancialReadService;
+import com.qaima.dto.financial.FinancialDto;
+import com.qaima.service.financial.FinancialReadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;

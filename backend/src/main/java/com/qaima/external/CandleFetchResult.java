@@ -1,7 +1,7 @@
 package com.qaima.external;
 
 import com.qaima.domain.CandleSource;
-import com.qaima.dto.PriceOhlcvDto;
+import com.qaima.dto.ohlcv.PriceOhlcvDto;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 

@@ -3,9 +3,9 @@ package com.qaima.external;
 import com.qaima.common.ApiResponse;
 import com.qaima.domain.Freq;
 import com.qaima.domain.Stock;
-import com.qaima.dto.MarketStackTickersResponse;
-import com.qaima.dto.StockMeta;
-import com.qaima.dto.StockDto;
+import com.qaima.dto.mkstack.MarketStackTickersResponse;
+import com.qaima.dto.stock.StockMeta;
+import com.qaima.dto.stock.StockDto;
 import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;

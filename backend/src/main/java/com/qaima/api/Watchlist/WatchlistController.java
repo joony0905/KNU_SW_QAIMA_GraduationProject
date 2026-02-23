@@ -1,10 +1,10 @@
 package com.qaima.api.Watchlist;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.WatchlistRequestDto;
-import com.qaima.dto.WatchlistResponseDto;
-import com.qaima.dto.WatchlistItemUpdateDto;
-import com.qaima.service.WatchlistService;
+import com.qaima.dto.watchlist.WatchlistRequestDto;
+import com.qaima.dto.watchlist.WatchlistResponseDto;
+import com.qaima.dto.watchlist.WatchlistItemUpdateDto;
+import com.qaima.service.watchlist.WatchlistService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;

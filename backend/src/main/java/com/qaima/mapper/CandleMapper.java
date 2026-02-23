@@ -1,7 +1,7 @@
 package com.qaima.mapper;
 
 import com.qaima.domain.PriceOhlcv;
-import com.qaima.dto.CandleDto;
+import com.qaima.dto.candle.CandleDto;
 import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;

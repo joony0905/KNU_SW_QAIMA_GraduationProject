@@ -1,7 +1,7 @@
 package com.qaima.filter;
 
 import com.qaima.domain.ApiRequestLog;
-import com.qaima.service.ApiRequestLogService;
+import com.qaima.service.auth.ApiRequestLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.core.Authentication;

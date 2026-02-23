@@ -1,7 +1,7 @@
 package com.qaima.api.FinancialAdminController;
 
-import com.qaima.dto.FinancialDto;
-import com.qaima.service.FinancialAdminService;
+import com.qaima.dto.financial.FinancialDto;
+import com.qaima.service.financial.FinancialAdminService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;

@@ -1,11 +1,11 @@
 package com.qaima.api.AuthController;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.LoginRequestDto;
-import com.qaima.dto.LoginResponseDto;
-import com.qaima.dto.SignupRequestDto;
-import com.qaima.dto.UserResponseDto;
-import com.qaima.service.AuthService;
+import com.qaima.dto.user.LoginRequestDto;
+import com.qaima.dto.user.LoginResponseDto;
+import com.qaima.dto.user.SignupRequestDto;
+import com.qaima.dto.user.UserResponseDto;
+import com.qaima.service.auth.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.server.reactive.ServerHttpRequest;

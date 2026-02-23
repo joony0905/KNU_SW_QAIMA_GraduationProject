@@ -2,7 +2,7 @@ package com.qaima.mapper;
 
 import com.qaima.domain.Financial;
 import com.qaima.domain.PeriodType;
-import com.qaima.dto.FinancialDto;
+import com.qaima.dto.financial.FinancialDto;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;

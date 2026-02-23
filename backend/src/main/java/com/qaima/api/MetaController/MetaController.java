@@ -1,7 +1,7 @@
 package com.qaima.api.MetaController;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.StockMeta;
+import com.qaima.dto.stock.StockMeta;
 import com.qaima.external.StockClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;

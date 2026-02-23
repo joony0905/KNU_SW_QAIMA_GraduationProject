@@ -2,10 +2,10 @@ package com.qaima.external;
 
 import com.qaima.domain.Freq;
 import com.qaima.domain.Stock;
-import com.qaima.dto.MarketStackCandlesResponse;
-import com.qaima.dto.MarketStackTickersResponse;
-import com.qaima.dto.PriceOhlcvDto;
-import com.qaima.dto.StockDto;
+import com.qaima.dto.mkstack.MarketStackCandlesResponse;
+import com.qaima.dto.mkstack.MarketStackTickersResponse;
+import com.qaima.dto.ohlcv.PriceOhlcvDto;
+import com.qaima.dto.stock.StockDto;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
