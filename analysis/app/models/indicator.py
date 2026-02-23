@@ -78,7 +78,7 @@ def calculate_bb(ohlcv: List, period: int = 20, k: float = 2.0) -> List[Bollinge
 
     for i, p in enumerate(ohlcv):
         if i < period - 1:
-            result.append(BollingerPoint(t=p.t, upper=None, middle=None, lower=None))
+            result.append(BollingerPoint(t=p.t, upper=None, mid=None, lower=None))
             continue
 
         window = [x.c for x in ohlcv[i - period + 1:i + 1]]
@@ -90,7 +90,7 @@ def calculate_bb(ohlcv: List, period: int = 20, k: float = 2.0) -> List[Bollinge
             BollingerPoint(
                 t=p.t,
                 upper=mean + k * std,
-                middle=mean,
+                mid=mean,
                 lower=mean - k * std,
             )
         )

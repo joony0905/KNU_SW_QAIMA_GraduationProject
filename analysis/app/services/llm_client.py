@@ -40,5 +40,6 @@ async def analyze_feature1(req: Feature1Request, metrics: Feature1Metrics) -> Fe
     else:
         warnings.append("LLM_EXPLAIN_SKIPPED")
 
-    meta = Feature1Meta(warnings=warnings) if warnings else None
+    deduped_warnings = list(dict.fromkeys(warnings))
+    meta = Feature1Meta(warnings=deduped_warnings) if deduped_warnings else None
     return Feature1Response(metrics=metrics, explain=explain, meta=meta)
