@@ -22,6 +22,7 @@ export interface Feat1Metrics {
   ohlcv_summary: OhlcvSummary;
   financial_summary: FinancialSummary;
   indicators: IndicatorBundle;
+  indicator_summary?: string | null;
   [key: string]: unknown;
 }
 

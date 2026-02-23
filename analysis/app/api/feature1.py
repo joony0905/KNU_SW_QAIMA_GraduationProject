@@ -28,6 +28,67 @@ router = APIRouter(
 )
 
 
+def _fmt_num(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:.4f}"
+
+
+def _latest_value(points, attr: str):
+    if not points:
+        return None
+    for point in reversed(points):
+        v = getattr(point, attr, None)
+        if v is not None:
+            return v
+    return None
+
+
+def build_indicator_summary(indicators: IndicatorBundle, last_close: float | None) -> str:
+    ema20 = _latest_value(indicators.ema.get("20", []), "value") if indicators.ema else None
+    ema60 = _latest_value(indicators.ema.get("60", []), "value") if indicators.ema else None
+    ema120 = _latest_value(indicators.ema.get("120", []), "value") if indicators.ema else None
+
+    if all(v is not None for v in [ema20, ema60, ema120]):
+        if ema20 > ema60 > ema120:
+            ema_trend = "bullish"
+        elif ema20 < ema60 < ema120:
+            ema_trend = "bearish"
+        else:
+            ema_trend = "mixed"
+    else:
+        ema_trend = "mixed"
+
+    bb_mid = _latest_value(indicators.bb20_2, "mid")
+    bb_upper = _latest_value(indicators.bb20_2, "upper")
+    bb_lower = _latest_value(indicators.bb20_2, "lower")
+
+    bb_width = None
+    bb_percent_b = None
+    if bb_upper is not None and bb_lower is not None:
+        bb_width = bb_upper - bb_lower
+        if bb_width != 0 and last_close is not None:
+            bb_percent_b = ((last_close - bb_lower) / bb_width) * 100
+
+    stoch_k = _latest_value(indicators.stoch14_3_3, "k")
+    stoch_d = _latest_value(indicators.stoch14_3_3, "d")
+    stoch_zone = "neutral"
+    if stoch_k is not None:
+        if stoch_k >= 80:
+            stoch_zone = "overbought"
+        elif stoch_k <= 20:
+            stoch_zone = "oversold"
+
+    k_minus_d = None
+    if stoch_k is not None and stoch_d is not None:
+        k_minus_d = stoch_k - stoch_d
+
+    return "\n".join([
+        f"EMA(20/60/120): 20={_fmt_num(ema20)}, 60={_fmt_num(ema60)}, 120={_fmt_num(ema120)}, alignment={ema_trend}",
+        f"BB20_2: mid={_fmt_num(bb_mid)}, upper={_fmt_num(bb_upper)}, lower={_fmt_num(bb_lower)}, width={_fmt_num(bb_width)}, percent_b={_fmt_num(bb_percent_b)}",
+        f"STO14_3_3: k={_fmt_num(stoch_k)}, d={_fmt_num(stoch_d)}, zone={stoch_zone}, k_minus_d={_fmt_num(k_minus_d)}",
+    ])
+
 @router.post("/feature1", response_model=Feature1Response)
 async def analyze_stock(req: Feature1Request) -> Feature1Response:
     """
@@ -104,6 +165,7 @@ async def analyze_stock(req: Feature1Request) -> Feature1Response:
         ohlcv_summary=ohlcv_summary,
         financial_summary=financial_summary,
         indicators=indicators,
+        indicator_summary=build_indicator_summary(indicators, ohlcv[-1].c if ohlcv else None),
         schema_version="1.0",
     )
 

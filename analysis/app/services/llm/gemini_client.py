@@ -84,6 +84,7 @@ class GeminiClient(LLMClient):
     def _build_prompt(self, req: Feature1Request, metrics: Feature1Metrics) -> str:
         o = metrics.ohlcv_summary
         f = metrics.financial_summary
+        indicator_summary = metrics.indicator_summary or "indicator summary unavailable"
 
         return (
             "아래 규칙을 반드시 지키고 JSON 객체만 출력하세요.\n"
@@ -110,7 +111,9 @@ class GeminiClient(LLMClient):
             f"ohlcv_count={o.count}\n"
             f"period_from={o.from_}\n"
             f"period_to={o.to}\n"
-            f"last_close={o.last_close}\n"
+            f"last_close={o.last_close}\n\n"
+            "INDICATORS:\n"
+            f"{indicator_summary}\n"
         )
     
 
