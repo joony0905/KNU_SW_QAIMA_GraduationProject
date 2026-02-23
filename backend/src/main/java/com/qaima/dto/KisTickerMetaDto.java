@@ -10,8 +10,8 @@ import java.math.BigDecimal;
 @Builder
 @AllArgsConstructor
 public class KisTickerMetaDto {
-    private String symbol;
-    private String name;
+    private String stockCode;
+    private String companyName;
     private BigDecimal price;
     private BigDecimal changeRate;
 }

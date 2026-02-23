@@ -93,25 +93,24 @@ public class KrStockClient {
                 .map(o -> mapToStockDto(stock, o));
     }
 
-    /* =========================
-       2) 디버그 티커 메타 (KIS inquire-price 재사용)
-       ========================= */
-
     public Mono<KisTickerMetaDto> fetchTickerMeta(String symbol) {
         String cleanSymbol = symbol.replace(".XKRX", "").replace(".XKOS", "");
 
         return fetchKisStatRaw(cleanSymbol, "J")
-                .map(o -> {
+                .map((KisStatResponseDto.Output out) -> {
                     KisTickerMetaDto.KisTickerMetaDtoBuilder b = KisTickerMetaDto.builder()
-                            .symbol(symbol)
-                            .name("KIS_" + cleanSymbol);
+                            .stockCode(cleanSymbol)     // ★ 항상 canonical (005930)
+                            .companyName(cleanSymbol);  // ★ 이 API엔 종목명 없음 → 일단 fallback
 
-                    if (o.getStck_prpr() != null && !o.getStck_prpr().isBlank()) {
-                        b.price(parseBig(o.getStck_prpr()));
+                    if (out != null) {
+                        if (out.getStck_prpr() != null && !out.getStck_prpr().isBlank()) {
+                            b.price(parseBig(out.getStck_prpr()));
+                        }
+                        if (out.getPrdy_ctrt() != null && !out.getPrdy_ctrt().isBlank()) {
+                            b.changeRate(parseBig(out.getPrdy_ctrt()));
+                        }
                     }
-                    if (o.getPrdy_ctrt() != null && !o.getPrdy_ctrt().isBlank()) {
-                        b.changeRate(parseBig(o.getPrdy_ctrt()));
-                    }
+
                     return b.build();
                 });
     }
@@ -145,17 +144,18 @@ public class KrStockClient {
 
                     return exchangeAndParse(spec, endpoint, KisStatResponseDto.class);
                 })
-                .map(raw -> {
+                .handle((raw, sink) -> {
                     KisStatResponseDto parsed = raw.parsed();
                     requireRtOk(parsed, endpoint, raw.rawBody());
 
                     if (parsed.getOutput() == null) {
-                        throw new ErrorException(
+                        sink.error(new ErrorException(
                                 ErrorCode.KIS_BIZ_ERROR,
                                 "KIS output is null. endpoint=" + endpoint + " body=" + truncate(raw.rawBody(), 800)
-                        );
+                        ));
+                        return;
                     }
-                    return parsed.getOutput();
+                    sink.next(parsed.getOutput());
                 });
     }
 
@@ -240,23 +240,23 @@ public class KrStockClient {
                             endpointName, status, safeHeaders(headers), truncate(raw, 4000));
 
                     if (!status.is2xxSuccessful()) {
-                        throw new ErrorException(
+                        return Mono.error(new ErrorException(
                                 ErrorCode.KIS_HTTP_ERROR,
                                 "KIS HTTP error. endpoint=" + endpointName
                                         + " status=" + status
                                         + " body=" + truncate(raw, 800)
-                        );
+                        ));
                     }
 
                     final T parsed;
                     try {
                         parsed = objectMapper.readValue(raw, clazz);
                     } catch (Exception ex) {
-                        throw new ErrorException(
+                        return Mono.error(new ErrorException(
                                 ErrorCode.KIS_DECODE_ERROR,
                                 "KIS decode error. endpoint=" + endpointName
                                         + " body=" + truncate(raw, 800)
-                        );
+                        ));
                     }
 
                     return Mono.just(new KisRaw<>(parsed, raw, headers, status));
@@ -292,7 +292,6 @@ public class KrStockClient {
 
     /* =========================
        Candles Response DTO (KisRtHeader implements)
-       - “니가 제시한 코드에 선언이 없었다” 이 부분 해결
        ========================= */
 
     @Getter

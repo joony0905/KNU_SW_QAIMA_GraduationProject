@@ -10,8 +10,8 @@ import java.math.BigDecimal;
 @Builder
 @AllArgsConstructor
 public class StockMeta {
-    private String symbol;
-    private String name;
+    private String stockCode;
+    private String companyName;
     private String exchangeCode;
     private String countryCode;
     private String currency;

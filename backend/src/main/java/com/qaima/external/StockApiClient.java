@@ -184,8 +184,8 @@ public class StockApiClient implements StockClient {
         String normalizedSymbol = normalizeSymbolForFetch(symbol);
 
         return StockMeta.builder()
-                .symbol(normalizedSymbol)
-                .name(kis.getName())
+                .stockCode(normalizedSymbol)
+                .companyName(kis.getCompanyName())
                 .exchangeCode(normalizeExchangeCode(extractExchangeCodeFromSymbol(normalizedSymbol)))
                 .countryCode("KR")
                 .currency("KRW")
@@ -208,8 +208,8 @@ public class StockApiClient implements StockClient {
         }
 
         return StockMeta.builder()
-                .symbol(normalizedSymbol)
-                .name(data.getName())
+                .stockCode(normalizedSymbol)
+                .companyName(data.getName())
                 .exchangeCode(normalizeExchangeCode(exchangeCode))
                 .countryCode(countryCode)
                 .currency(null)

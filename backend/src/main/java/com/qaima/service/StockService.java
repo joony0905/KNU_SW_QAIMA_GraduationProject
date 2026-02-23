@@ -121,7 +121,7 @@ public class StockService {
                                     .orElseGet(() -> {
                                         Stock stock = new Stock();
                                         stock.setStockCode(normalizedCode);
-                                        stock.setCompanyName(meta.getName());
+                                        stock.setCompanyName(meta.getCompanyName());
                                         stock.setAssetType("EQUITY");
                                         stock.setCurrency(meta.getCountryCode() != null ? meta.getCountryCode() : "USD");
                                         stock.setExchange(exchange);
