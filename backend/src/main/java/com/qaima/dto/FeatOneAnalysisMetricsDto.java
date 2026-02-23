@@ -16,7 +16,7 @@ import java.time.OffsetDateTime;
 @Builder
 public class FeatOneAnalysisMetricsDto {
     private String stockCode;
-    private OffsetDateTime asOf;
+    private String asOf;
     private OhlcvSummaryDto ohlcvSummary;
     private FinancialSummaryMetricsDto financialSummary;
     // metrics 안에 indicators를 포함하는 관통 계약의 ground truth

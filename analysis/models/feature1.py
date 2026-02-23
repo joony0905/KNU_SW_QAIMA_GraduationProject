@@ -1,13 +1,17 @@
 # app/models/feature1.py
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from models.indicator import IndicatorBundle
 
+
+# ======================
+# Input / Request Models
+# ======================
 
 class OhlcvItem(BaseModel):
     t: datetime
@@ -16,6 +20,14 @@ class OhlcvItem(BaseModel):
     l: float
     c: float
     v: float
+
+    @field_validator("t", mode="before")
+    @classmethod
+    def parse_t(cls, v):
+        # epoch seconds (int/float)
+        if isinstance(v, (int, float)):
+            return datetime.fromtimestamp(v, tz=timezone.utc)
+        return v
 
 
 class FinancialSummaryItem(BaseModel):
@@ -30,12 +42,19 @@ class FinancialSummaryItem(BaseModel):
 
 
 class Feature1Request(BaseModel):
-    stock_code: str
+    stock_code: str = Field(alias="stockCode")
     freq: str
     ohlcv: List[OhlcvItem]
     financials: List[FinancialSummaryItem] = []
-    include_explain: bool = False
+    include_explain: bool = Field(default=False, alias="includeExplain")
 
+    class Config:
+        populate_by_name = True  # pydantic v2
+
+
+# ======================
+# Derived / Summary Data
+# ======================
 
 class OhlcvSummary(BaseModel):
     count: int
@@ -44,7 +63,7 @@ class OhlcvSummary(BaseModel):
     last_close: Optional[float] = None
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 
 class FinancialSummary(BaseModel):
@@ -54,20 +73,22 @@ class FinancialSummary(BaseModel):
     net_income: Dict[int, Optional[float]] = {}
 
 
-class IndicatorSlots(BaseModel):
-    valuation: Optional[dict] = None
-    growth: Optional[dict] = None
-    profitability: Optional[dict] = None
-
+# ======================
+# Metrics / Analysis
+# ======================
 
 class Feature1Metrics(BaseModel):
     stock_code: str
-    as_of: datetime
+    as_of: str
     ohlcv_summary: OhlcvSummary
     financial_summary: FinancialSummary
-    indicators: Optional[IndicatorBundle] = None
+    indicators: IndicatorBundle
     schema_version: str
 
+
+# ======================
+# Explain / Meta
+# ======================
 
 class Feature1Explain(BaseModel):
     text: str
@@ -76,6 +97,10 @@ class Feature1Explain(BaseModel):
 class Feature1Meta(BaseModel):
     warnings: List[str] = []
 
+
+# ======================
+# Final Response
+# ======================
 
 class Feature1Response(BaseModel):
     metrics: Feature1Metrics

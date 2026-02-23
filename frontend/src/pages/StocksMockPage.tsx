@@ -16,9 +16,22 @@ import { buildSectionsFromDto } from "../mappers/financialMapper";
 import { fetchFinancials } from "../api/financial";
 import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
-import { fetchCandles } from "../api/charts";
+import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import type { AnalysisResponse } from "../types/analysis";
+
+/* =========================
+   Zoom-out Loading Policy
+========================= */
+
+// "왼쪽 끝이 거의 닿았을 때" 추가 로딩 단위(캔들 개수)
+const LOAD_MORE_LIMIT = 5;
+
+// 초기 표시 범위(일)
+const INITIAL_HISTORY_DAYS = 30;
+
+// 줌아웃 확장 가능한 최대 히스토리(일)
+const MAX_HISTORY_DAYS = 365;
 
 function useKSTTime() {
   const [time, setTime] = useState("");
@@ -44,17 +57,35 @@ function useKSTTime() {
   return time;
 }
 
+type IndicatorData = {
+  ema: Record<string, { t: string; value: number | null }[]> | null;
+  bb20_2: { t: string; mid: number | null; upper: number | null; lower: number | null }[] | null;
+  stoch14_3_3: { t: string; k: number | null; d: number | null }[] | null;
+  warnings: string[];
+};
+
+type MainStockState = {
+  name: string;
+  symbol: string;
+  price: number | null;
+  change: number | null;
+  changeRate: number | null;
+};
+
+type LoadMode = "INITIAL" | "ANALYZE";
+
 export default function StocksMockPage() {
   const currentTime = useKSTTime();
 
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(
-    null
-  );
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
 
-  // ===== 분석 요청 파라미터 (차트와 동일한 기간/주기 사용) =====
+  // 차트용 indicators state (analysisResult와 분리)
+  const [indicatorData, setIndicatorData] = useState<IndicatorData | null>(null);
+
+  // 분석 요청 파라미터
   const [analysisFreq, setAnalysisFreq] = useState<
     | "ONE_MIN"
     | "FIVE_MIN"
@@ -84,57 +115,41 @@ export default function StocksMockPage() {
 
   const [isOpen, setIsOpen] = useState(false);
 
+  const isLoadingMoreRef = useRef(false);
+  const requestedRangesRef = useRef<Set<string>>(new Set());
+
+  const chartRangeRef = useRef<{
+    stockCode: string;
+    freq: "ONE_D";
+    fromIso: string;
+    toIso: string;
+    absoluteMinFromIso: string; // 항상 1년 하한 (줌아웃 확장 허용)
+    mode: LoadMode;
+  } | null>(null);
+
   const getColorClass = (rate: string) => {
     if (rate.startsWith("+")) return "text-red-600";
     if (rate.startsWith("-")) return "text-blue-600";
     return "text-black";
   };
 
-  interface FeaturedStock {
-    name: string;
-    symbol: string;
-    price: string;
-    volume: string;
-    change: string;
-    changeRate: string;
-  }
+  const getColorClassByNumber = (n: number | null) => {
+    if (n === null || !Number.isFinite(n)) return "text-black";
+    if (n > 0) return "text-red-600";
+    if (n < 0) return "text-blue-600";
+    return "text-black";
+  };
 
-  const [featuredStocks, setFeaturedStocks] = useState<FeaturedStock[]>([
-    {
-      name: "삼성전자",
-      symbol: "005930",
-      price: "70,000",
-      volume: "12,345,678",
-      change: "500",
-      changeRate: "+0.72%",
-    },
-    {
-      name: "LG에너지솔루션",
-      symbol: "373220",
-      price: "400,000",
-      volume: "3,210,987",
-      change: "-2,000",
-      changeRate: "-0.50%",
-    },
-    {
-      name: "카카오",
-      symbol: "035720",
-      price: "55,000",
-      volume: "8,765,432",
-      change: "0",
-      changeRate: "0%",
-    },
-  ]);
-
-  const [mainStock, setMainStock] = useState({
+  // 초기값은 종목정보만, 가격/등락은 candles로만
+  const [mainStock, setMainStock] = useState<MainStockState>({
     name: "삼성전자",
     symbol: "005930",
-    price: "70,000",
-    change: "+500",
-    changeRate: "+0.72%",
+    price: null,
+    change: null,
+    changeRate: null,
   });
 
-  // ===== OHLCV(캔들) 기반 표시값 포맷 유틸 =====
+  // OHLCV 기반 표시값 포맷
   const formatPrice = (n: number) => {
     if (!Number.isFinite(n)) return "0";
     return Math.round(n).toLocaleString("ko-KR");
@@ -149,18 +164,21 @@ export default function StocksMockPage() {
 
   const formatSignedPercent = (n: number) => {
     if (!Number.isFinite(n)) return "0%";
-    if (n === 0) return "0%";
+    if (n === 0) return "0.00%";
     const sign = n > 0 ? "+" : "-";
     return `${sign}${Math.abs(n).toFixed(2)}%`;
   };
 
-  const loadCandles = async (stockCode: string) => {
+  // mode에 따라 초기 범위는 달리 로딩하되, 줌아웃 하한은 항상 1년으로 설정
+  const loadCandles = async (stockCode: string, mode: LoadMode) => {
     setChartLoading(true);
     setChartError(null);
 
     const toDate = new Date();
     const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - 30);
+
+    const days = mode === "ANALYZE" ? MAX_HISTORY_DAYS : INITIAL_HISTORY_DAYS;
+    fromDate.setDate(toDate.getDate() - (days - 1));
 
     try {
       const usedFreq = "ONE_D" as const;
@@ -185,7 +203,22 @@ export default function StocksMockPage() {
 
       setCandles(data);
 
-      // ===== 목업으로 들어가던 OHLCV 표시값(현재가/전일대비/등락률)을 실제 캔들 데이터로 계산하여 반영 =====
+      // 줌아웃 확장 하한은 항상 1년
+      const absoluteMin = new Date(toDate);
+      absoluteMin.setDate(absoluteMin.getDate() - MAX_HISTORY_DAYS);
+
+      chartRangeRef.current = {
+        stockCode,
+        freq: usedFreq,
+        fromIso: fromDate.toISOString(),
+        toIso: toDate.toISOString(),
+        absoluteMinFromIso: absoluteMin.toISOString(),
+        mode,
+      };
+
+      requestedRangesRef.current.clear();
+
+      // 현재가/전일대비/등락률은 candles 기반으로만 산출
       if (data.length > 0) {
         const last = data[data.length - 1];
         const prev = data.length > 1 ? data[data.length - 2] : null;
@@ -199,11 +232,28 @@ export default function StocksMockPage() {
 
           setMainStock((prevState) => ({
             ...prevState,
-            price: formatPrice(lastClose),
-            change: formatSignedNumber(diff),
-            changeRate: formatSignedPercent(rate),
+            symbol: stockCode,
+            price: lastClose,
+            change: diff,
+            changeRate: rate,
+          }));
+        } else {
+          setMainStock((prevState) => ({
+            ...prevState,
+            symbol: stockCode,
+            price: null,
+            change: null,
+            changeRate: null,
           }));
         }
+      } else {
+        setMainStock((prevState) => ({
+          ...prevState,
+          symbol: stockCode,
+          price: null,
+          change: null,
+          changeRate: null,
+        }));
       }
     } catch (e: any) {
       console.error("차트 데이터 조회 실패:", {
@@ -217,8 +267,72 @@ export default function StocksMockPage() {
       });
       setChartError("차트를 불러오지 못했습니다.");
       setCandles([]);
+
+      setMainStock((prevState) => ({
+        ...prevState,
+        symbol: stockCode,
+        price: null,
+        change: null,
+        changeRate: null,
+      }));
     } finally {
       setChartLoading(false);
+    }
+  };
+
+  const handleRequestMoreHistory = async () => {
+    if (isLoadingMoreRef.current) return;
+    if (!chartRangeRef.current) return;
+    if (!candles || candles.length === 0) return;
+
+    const { stockCode, freq, absoluteMinFromIso } = chartRangeRef.current;
+
+    const oldest = candles[0];
+    if (typeof oldest.t !== "number") return;
+
+    const oldestEpochSec = oldest.t;
+    const oldestIso = new Date(oldestEpochSec * 1000).toISOString();
+    const absoluteMinDate = new Date(absoluteMinFromIso);
+
+    // 1년 하한선 도달 시 중단
+    if (new Date(oldestIso) <= absoluteMinDate) return;
+
+    const rangeKey = `to=${oldestEpochSec}__limit=${LOAD_MORE_LIMIT}`;
+    if (requestedRangesRef.current.has(rangeKey)) return;
+    requestedRangesRef.current.add(rangeKey);
+
+    isLoadingMoreRef.current = true;
+    try {
+      const response = await fetchCandlesBefore(
+        stockCode,
+        freq,
+        oldestIso,
+        LOAD_MORE_LIMIT
+      );
+
+      const incoming: Candle[] = response.data ?? [];
+      if (incoming.length === 0) return;
+
+      setCandles((prev) => {
+        const map = new Map<number, Candle>();
+
+        for (const c of prev) map.set(c.t, c);
+        for (const c of incoming) map.set(c.t, c);
+
+        return Array.from(map.values()).sort((a, b) => a.t - b.t);
+      });
+
+      const minIncomingT = Math.min(...incoming.map((c) => c.t));
+      if (Number.isFinite(minIncomingT)) {
+        chartRangeRef.current = {
+          ...chartRangeRef.current!,
+          fromIso: new Date(minIncomingT * 1000).toISOString(),
+        };
+      }
+    } catch (e) {
+      console.error("추가 캔들 로딩 실패:", e);
+    } finally {
+      isLoadingMoreRef.current = false;
     }
   };
 
@@ -239,37 +353,42 @@ export default function StocksMockPage() {
     setErr("");
     setHasSelectedStock(true);
 
+    setAnalysisResult(null);
+    setIndicatorData(null);
+
+    setMainStock((prev) => ({
+      ...prev,
+      price: null,
+      change: null,
+      changeRate: null,
+    }));
+
     let resolvedCode: string | null = null;
 
-    // 1) 먼저 getStockByCode로 코드 확정 시도
     try {
       const stockInfo = await getStockByCode(q);
       resolvedCode = stockInfo.stockCode;
 
-      setMainStock({
+      setMainStock((prev) => ({
+        ...prev,
         name: stockInfo.companyName,
         symbol: stockInfo.stockCode,
-        price: stockInfo.price?.toString() || "0",
-        change: stockInfo.changeRate
-          ? (stockInfo.changeRate > 0 ? "+" : "") +
-            stockInfo.changeRate.toFixed(2)
-          : "0",
-        changeRate: stockInfo.changeRate
-          ? (stockInfo.changeRate > 0 ? "+" : "") +
-            stockInfo.changeRate.toFixed(2) +
-            "%"
-          : "0%",
-      });
+        price: null,
+        change: null,
+        changeRate: null,
+      }));
     } catch (e) {
       console.error("종목 정보 조회 실패(임시 무시):", e);
 
-      // 2) 실패 시: 입력값이 코드처럼 보이면 그걸로 진행, 아니면 중단
       if (looksLikeCode(q)) {
         resolvedCode = q;
+
         setMainStock((prev) => ({
           ...prev,
-          name: prev.name,
           symbol: q,
+          price: null,
+          change: null,
+          changeRate: null,
         }));
       } else {
         setErr("종목 코드를 확인할 수 없습니다. (예: 005930, AAPL)");
@@ -280,7 +399,6 @@ export default function StocksMockPage() {
 
     const code = resolvedCode;
 
-    // 3) 재무제표(실패해도 차트는 가게)
     try {
       const financials = await fetchFinancials(code, 5);
       if (financials.length > 0) {
@@ -292,32 +410,50 @@ export default function StocksMockPage() {
       console.error("재무제표 조회 실패:", e);
     }
 
-    // 4) 차트는 항상 실행
-    await loadCandles(code);
+    // 초기 표시만 30일
+    await loadCandles(code, "INITIAL");
   };
 
   const handleAnalyzeClick = async () => {
     setLoading(true);
     setErr("");
     setAnalysisResult(null);
+    setIndicatorData(null);
 
-    // 차트를 먼저 조회해서 from/to가 세팅되도록 유도 (미세한 타이밍 이슈 방어)
-    if (!analysisFrom || !analysisTo) {
-      setErr("먼저 종목을 검색해 차트 데이터를 불러온 뒤 분석을 실행해주세요.");
+    if (!mainStock.symbol) {
+      setErr("먼저 종목을 검색한 뒤 분석을 실행해주세요.");
       setLoading(false);
       return;
     }
 
     try {
+      // 분석 버튼에서만 1년 로딩으로 교체
+      await loadCandles(mainStock.symbol, "ANALYZE");
+
+      const range = chartRangeRef.current;
+      if (!range) {
+        throw new Error("Chart range is not ready");
+      }
+
       const result = await fetchAnalysis({
         stockCode: mainStock.symbol,
         freq: analysisFreq,
-        from: analysisFrom,
-        to: analysisTo,
+        from: range.fromIso,
+        to: range.toIso,
         marketDivCode,
         includeExplain,
       });
+
       setAnalysisResult(result);
+
+      const ind = result?.metrics?.indicators;
+
+      setIndicatorData({
+        ema: ind?.ema ?? null,
+        bb20_2: ind?.bb20_2 ?? null,
+        stoch14_3_3: ind?.stoch14_3_3 ?? null,
+        warnings: ind?.warnings ?? [],
+      });
     } catch (e) {
       console.error("분석 결과 조회 실패:", e);
       setErr("분석 결과를 불러오지 못했습니다.");
@@ -381,7 +517,7 @@ export default function StocksMockPage() {
   }, [toast.visible]);
 
   const toggleInterest = async () => {
-    console.log("★ toggleInterest clicked, isInterested =", isInterested);
+    console.log("toggleInterest clicked, isInterested =", isInterested);
     try {
       setIsInterested((prev) => !prev);
       setToast({
@@ -419,28 +555,40 @@ export default function StocksMockPage() {
     return () => document.removeEventListener("click", handleClickOutsideTopic);
   }, []);
 
-  const mainColorClass = getColorClass(mainStock.changeRate);
-  const mainNumericChange = Number(mainStock.change.replace(/,/g, "").trim());
-  const mainDisplayRate =
-    mainNumericChange === 0 ? "0.00%" : mainStock.changeRate;
+  const displayPrice =
+    mainStock.price !== null && Number.isFinite(mainStock.price)
+      ? formatPrice(mainStock.price)
+      : "-";
+
+  const mainNumericChange =
+    mainStock.change !== null && Number.isFinite(mainStock.change)
+      ? mainStock.change
+      : 0;
+
+  const displayChange =
+    mainStock.change !== null && Number.isFinite(mainStock.change)
+      ? formatSignedNumber(mainStock.change)
+      : "0";
+
+  const displayRate =
+    mainStock.changeRate !== null && Number.isFinite(mainStock.changeRate)
+      ? formatSignedPercent(mainStock.changeRate)
+      : "0.00%";
+
+  const mainColorClass = getColorClassByNumber(mainNumericChange);
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
-        {/* 헤더 */}
         <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
             심층분석
           </h1>
         </header>
 
-        {/* 종목 검색 / 특징주 리스트 영역 */}
         <section className="w-full flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="w-full lg:max-w-md bg-white rounded-[10px] outline outline-1 outline-stone-300 px-2 py-1 sm:px-2 sm:py-1 flex flex-col gap-2">
-            <StockInputBox
-              placeholder="종목을 입력해주세요"
-              onSearch={handleSearch}
-            />
+            <StockInputBox placeholder="종목을 입력해주세요" onSearch={handleSearch} />
           </div>
 
           <div
@@ -510,20 +658,15 @@ export default function StocksMockPage() {
             </div>
 
             <div className="flex items-center gap-2 relative">
-              <div
-                ref={cardRef}
-                className="inline-block w-[260px] sm:w-[280px] lg:w-[380px]"
-              >
-                {featuredStocks[0] && (
-                  <StockCard
-                    name={featuredStocks[0].name}
-                    price={featuredStocks[0].price}
-                    volume={featuredStocks[0].volume}
-                    change={featuredStocks[0].change}
-                    changeRate={featuredStocks[0].changeRate}
-                    getColorClass={getColorClass}
-                  />
-                )}
+              <div ref={cardRef} className="inline-block w-[260px] sm:w-[280px] lg:w-[380px]">
+                <StockCard
+                  name={mainStock.name}
+                  price={displayPrice === "-" ? "-" : displayPrice}
+                  volume={"-"}
+                  change={displayChange}
+                  changeRate={displayRate}
+                  getColorClass={getColorClass}
+                />
               </div>
 
               <button
@@ -573,25 +716,9 @@ export default function StocksMockPage() {
             }}
           >
             <div className="pr-3">
-              {featuredStocks.map((stock, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setIsOpen(false);
-                    handleSearch(stock.symbol);
-                  }}
-                  className="w-full text-left"
-                >
-                  <StockCard
-                    name={stock.name}
-                    price={stock.price}
-                    volume={stock.volume}
-                    change={stock.change}
-                    changeRate={stock.changeRate}
-                    getColorClass={getColorClass}
-                  />
-                </button>
-              ))}
+              <div className="px-3 py-3 text-sm text-zinc-600">
+                목업데이터 지운 상태임 이름, 종목코드 매핑후 순위 정렬해야함
+              </div>
             </div>
           </div>
         )}
@@ -600,7 +727,7 @@ export default function StocksMockPage() {
           <main className="w-full flex flex-col gap-4 sm:gap-5">
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)] gap-4 lg:gap-6 items-start">
               <div className="flex flex-col gap-3 sm:gap-4">
-                <section className="w-full bg-zinc-100 rounded-2xl p-3 sm:p-4 md:p-5 flex flex-col gap-3 xl:h-[520px]">
+                <section className="w-full bg-zinc-100 rounded-2xl p-3 sm:p-4 md:p-5 flex flex-col gap-3 xl:h-[520px] min-h-0">
                   <div className="flex flex-col gap-1.5">
                     <div className="flex flex-wrap items-end gap-1.5">
                       <h2 className="text-lg sm:text-xl md:text-2xl font-medium text-black">
@@ -609,10 +736,7 @@ export default function StocksMockPage() {
                       <span className="text-sm sm:text-base md:text-lg text-black">
                         ({mainStock.symbol})
                       </span>
-                      <button
-                        onClick={toggleInterest}
-                        className="ml-2 inline-block"
-                      >
+                      <button onClick={toggleInterest} className="ml-2 inline-block">
                         <Star
                           size={22}
                           className="relative -top-1 transition-colors text-yellow-400"
@@ -627,12 +751,12 @@ export default function StocksMockPage() {
 
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-2xl md:text-3xl font-medium text-black">
-                        {mainStock.price}
+                        {displayPrice}
                       </span>
 
                       <div className="flex items-center gap-1.5 text-sm md:text-base font-medium">
-                        <span className={mainColorClass}>{mainStock.change}</span>
-                        <span className={mainColorClass}>({mainDisplayRate})</span>
+                        <span className={mainColorClass}>{displayChange}</span>
+                        <span className={mainColorClass}>({displayRate})</span>
                         {mainNumericChange > 0 && (
                           <div
                             className={`${mainColorClass} w-0 h-0 
@@ -665,20 +789,33 @@ export default function StocksMockPage() {
                     </div>
                   </div>
 
-                  <div className="w-full flex-1 bg-white rounded-xl overflow-hidden flex items-center justify-center">
-                    {chartLoading && (
-                      <p className="text-sm sm:text-base text-gray-600">
-                        차트를 불러오는 중입니다...
-                      </p>
-                    )}
-                    {chartError && !chartLoading && (
-                      <p className="text-sm sm:text-base text-red-600">
-                        {chartError}
-                      </p>
-                    )}
-                    {!chartLoading && !chartError && (
-                      <TradingViewWidget candles={candles} />
-                    )}
+                  <div className="w-full flex-1 bg-white rounded-xl overflow-hidden min-h-0 flex flex-col">
+                    {/* 차트영역은 stretch + min-h-0 */}
+                    <div className="flex-1 min-h-0 w-full flex items-stretch">
+                      {chartLoading && (
+                        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                          <p className="text-sm sm:text-base text-gray-600">차트를 불러오는 중입니다...</p>
+                        </div>
+                      )}
+
+                      {chartError && !chartLoading && (
+                        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                          <p className="text-sm sm:text-base text-red-600">{chartError}</p>
+                        </div>
+                      )}
+
+                      {!chartLoading && !chartError && (
+                        <div className="flex-1 min-h-0 w-full">
+                          {/* TradingViewWidget 부모 높이를 100% 사용 */}
+                          <TradingViewWidget
+                            candles={candles}
+                            indicators={indicatorData}
+                            showSubPanes={Boolean(indicatorData)}
+                            onRequestMoreHistory={handleRequestMoreHistory}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </section>
               </div>
@@ -742,7 +879,7 @@ export default function StocksMockPage() {
               >
                 분석 결과 보기
               </button>
-
+    
               {loading && (
                 <p className="text-sm sm:text-base text-gray-600">분석 중입니다...</p>
               )}

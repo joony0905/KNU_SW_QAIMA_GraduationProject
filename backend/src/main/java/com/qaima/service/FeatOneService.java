@@ -25,11 +25,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-import java.util.Comparator;
+
+import java.time.ZoneOffset;
+import java.util.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
@@ -132,7 +133,7 @@ public class FeatOneService {
                 : toKisMarketDivCode(stock.getExchange());
 
         return Mono.fromCallable(() ->
-                        priceOhlcvRepository.findByStockCodeAndFreqAndTsBetween(stockCode, freq, from, to)
+                        priceOhlcvRepository.findRange(stockCode, freq, from, to)
                 )
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(existing -> {
@@ -314,16 +315,16 @@ public class FeatOneService {
             List<Financial> financials,
             Boolean includeExplain
     ) {
-        FeatOneAnalysisMetricsDto metrics = buildMetrics(stock.getStockCode(), candles, financials);
+        List<String> warnings = buildWarnings(includeExplain, "ANALYSIS_API_FAILED", "INDICATOR_CALC_FAILED");
+
+        // buildMetrics에 warnings 전달 (지표 번들도 같은 warnings를 공유)
+        FeatOneAnalysisMetricsDto metrics = buildMetrics(stock.getStockCode(), candles, financials, warnings);
 
         FeatOneAnalysisMetaDto meta = FeatOneAnalysisMetaDto.builder()
-                .warnings(buildWarnings(includeExplain, "ANALYSIS_API_FAILED"))
+                .warnings(warnings)
                 .build();
 
-        FeatOneAnalysisExplainDto explain = null;
-        if (includeExplain != null && includeExplain) {
-            explain = null;
-        }
+        FeatOneAnalysisExplainDto explain = null; // includeExplain true여도 fallback에서는 null 유지
 
         return FeatOneAnalysisResponseDto.builder()
                 .metrics(metrics)
@@ -335,19 +336,36 @@ public class FeatOneService {
     private FeatOneAnalysisMetricsDto buildMetrics(
             String stockCode,
             List<PriceOhlcv> candles,
-            List<Financial> financials
+            List<Financial> financials,
+            List<String> warnings
     ) {
         OhlcvSummaryDto ohlcvSummary = buildOhlcvSummary(candles);
         FinancialSummaryMetricsDto financialSummary = buildFinancialSummary(financials);
 
+        IndicatorBundleDto indicators = IndicatorBundleDto.builder()
+                .ema(Collections.emptyMap())      // EMA Map 계약
+                .bb20_2(null)
+                .stoch14_3_3(null)
+                .warnings(warnings != null ? warnings : new ArrayList<>())
+                .build();
+
         return FeatOneAnalysisMetricsDto.builder()
                 .stockCode(stockCode)
-                .asOf(OffsetDateTime.now())
+                .asOf(OffsetDateTime.now(ZoneOffset.UTC).toString())
                 .ohlcvSummary(ohlcvSummary)
                 .financialSummary(financialSummary)
-                .indicators(IndicatorBundleDto.builder().build())
+                .indicators(indicators)
                 .schemaVersion("0.1")
                 .build();
+    }
+
+    //overload
+    private FeatOneAnalysisMetricsDto buildMetrics(
+            String stockCode,
+            List<PriceOhlcv> candles,
+            List<Financial> financials
+    ) {
+        return buildMetrics(stockCode, candles, financials, new ArrayList<>());
     }
 
     private OhlcvSummaryDto buildOhlcvSummary(List<PriceOhlcv> candles) {
@@ -406,16 +424,18 @@ public class FeatOneService {
                 .build();
     }
 
-    private java.util.List<String> buildWarnings(Boolean includeExplain, String baseWarning) {
-        java.util.List<String> warnings = new java.util.ArrayList<>();
-        if (baseWarning != null) {
-            warnings.add(baseWarning);
+    private List<String> buildWarnings(Boolean includeExplain, String... warnings) {
+        List<String> result = new ArrayList<>();
+
+        if (warnings != null) {
+            result.addAll(Arrays.asList(warnings));
         }
-        if (includeExplain == null || !includeExplain) {
-            warnings.add("LLM_EXPLAIN_SKIPPED");
-        } else {
-            warnings.add("LLM_EXPLAIN_FAILED");
+
+        // explain 관련 warning 추가 가능
+        if (includeExplain != null && includeExplain) {
+            // 예: result.add("EXPLAIN_SKIPPED");
         }
-        return warnings;
+
+        return result;
     }
 }

@@ -11,14 +11,15 @@ import java.time.OffsetDateTime;
 @RequiredArgsConstructor
 public class ChartService {
 
-    private final StockService stockService;
-    private final CandleLoadService candleLoadService;
-
     /**
      * 원칙:
      * - Service는 데이터 로딩 결과만 반환 (source/empty 포함)
      * - ApiResponse / warning 판단은 Controller 책임
      */
+
+    private final StockService stockService;
+    private final CandleLoadService candleLoadService;
+
     public Mono<CandleLoadResult> getCandles(
             String stockCode,
             Freq freq,
@@ -27,5 +28,16 @@ public class ChartService {
     ) {
         return stockService.getOrCreateStockByCode(stockCode)
                 .flatMap(stock -> candleLoadService.load(stock, freq, from, to));
+    }
+
+    // 줌아웃시 과거 차트 불러오기
+    public Mono<CandleLoadResult> getCandlesBefore(
+            String stockCode,
+            Freq freq,
+            OffsetDateTime to,
+            int limit
+    ) {
+        return stockService.getOrCreateStockByCode(stockCode)
+                .flatMap(stock -> candleLoadService.loadBefore(stock, freq, to, limit));
     }
 }

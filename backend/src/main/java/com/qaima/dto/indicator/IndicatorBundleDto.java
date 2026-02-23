@@ -8,8 +8,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -17,9 +18,27 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class IndicatorBundleDto {
+
     private IndicatorSpecDto spec;
-    private List<IndicatorPoint1Dto> ema20;
+
+    /**
+     * EMA series by period
+     * key: "20", "60", "120"
+     */
+    @JsonProperty("ema")
+    private Map<String, List<IndicatorPoint1Dto>> ema;
+
+    /**
+     * Bollinger Bands (fixed: 20,2)
+     */
+    @JsonProperty("bb20_2")
     private List<BollingerPointDto> bb20_2;
+
+    /**
+     * Stochastic (fixed: 14,3,3)
+     */
+    @JsonProperty("stoch14_3_3")
     private List<StochPointDto> stoch14_3_3;
+
     private List<String> warnings;
 }

@@ -14,27 +14,34 @@ export interface IndicatorSpec {
 }
 
 export interface IndicatorPoint1 {
-  t: string;
+  t: string;               // ISO8601
   value: number | null;
 }
 
 export interface BollingerPoint {
-  t: string;
-  mid: number | null;
-  upper: number | null;
-  lower: number | null;
+  t: string;               // ISO8601
+  upper: number;
+  mid: number;
+  lower: number;
 }
 
 export interface StochPoint {
-  t: string;
-  k: number | null;
-  d: number | null;
+  t: string;               // ISO8601
+  k: number;
+  d: number;
 }
 
 export interface IndicatorBundle {
-  spec?: IndicatorSpec;
-  ema20?: IndicatorPoint1[];
-  bb20_2?: BollingerPoint[];
-  stoch14_3_3?: StochPoint[];
-  warnings?: string[];
+  // spec는 선택
+  spec?: IndicatorSpec | null;
+
+  // EMA는 Dict. fallback 시 {} (null 금지)
+  ema: Record<string, IndicatorPoint1[]>;
+
+  // BB/Stoch는 고정 파라미터. 미구현/스킵이면 null 허용
+  bb20_2: BollingerPoint[] | null;
+  stoch14_3_3: StochPoint[] | null;
+
+  // warnings는 항상 배열
+  warnings: string[];
 }

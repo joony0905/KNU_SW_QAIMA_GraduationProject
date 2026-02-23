@@ -1,6 +1,5 @@
 export interface AnalysisBase<TMetrics> {
   metrics: TMetrics;
-  explain?: string | null;
-  warnings?: string[];
-  meta?: Record<string, any>;
+  explain?: any | null;
+  meta?: { warnings?: string[]; [k: string]: any } | null;
 }

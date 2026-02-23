@@ -14,9 +14,9 @@ from models.feature1 import (
     Feature1Request,
     Feature1Response,
     FinancialSummary,
-    IndicatorSlots,
     OhlcvSummary,
 )
+from models.indicator import IndicatorBundle
 
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
@@ -24,7 +24,18 @@ DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_TIMEOUT = 6.0
 
 
+# =========================================================
+# Public API
+# =========================================================
+
 async def analyze_feature1(req: Feature1Request) -> Feature1Response:
+    """
+    Feature1 LLM 분석 진입점
+    - metrics는 항상 생성
+    - indicators는 여기서 계산하지 않음 (빈 bundle 유지)
+    - include_explain=true 인 경우에만 LLM 호출
+    """
+
     metrics = _build_metrics(req)
     warnings: List[str] = []
     explain: Optional[Feature1Explain] = None
@@ -42,16 +53,25 @@ async def analyze_feature1(req: Feature1Request) -> Feature1Response:
     return Feature1Response(metrics=metrics, explain=explain, meta=meta)
 
 
+# =========================================================
+# Metrics builders
+# =========================================================
+
 def _build_metrics(req: Feature1Request) -> Feature1Metrics:
+    """
+    LLM 단계에서의 metrics 구성
+    - indicators는 계산하지 않음
+    - 항상 빈 IndicatorBundle을 넣어 계약 유지
+    """
+    
     ohlcv_summary = _build_ohlcv_summary(req)
     financial_summary = _build_financial_summary(req)
-
     return Feature1Metrics(
         stock_code=req.stock_code,
-        as_of=datetime.now(timezone.utc),
+        as_of = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         ohlcv_summary=ohlcv_summary,
         financial_summary=financial_summary,
-        indicators=IndicatorSlots(),
+        indicators=IndicatorBundle(),
         schema_version="0.1",
     )
 
@@ -81,9 +101,11 @@ def _build_financial_summary(req: Feature1Request) -> FinancialSummary:
     for item in req.financials:
         if item.fiscal_year is None:
             continue
+
         year = int(item.fiscal_year)
         if year not in years:
             years.append(year)
+
         revenue[year] = item.revenue
         operating_income[year] = item.operating_income
         net_income[year] = item.net_income
@@ -97,8 +119,13 @@ def _build_financial_summary(req: Feature1Request) -> FinancialSummary:
     )
 
 
+# =========================================================
+# LLM explain
+# =========================================================
+
 async def _generate_explain_text(
-    req: Feature1Request, metrics: Feature1Metrics
+    req: Feature1Request,
+    metrics: Feature1Metrics,
 ) -> Tuple[Optional[str], Optional[str]]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -134,6 +161,7 @@ async def _generate_explain_text(
                 json=payload,
             )
             response.raise_for_status()
+
             data = response.json()
             content = (
                 data.get("choices", [{}])[0]
@@ -141,9 +169,12 @@ async def _generate_explain_text(
                 .get("content", "")
                 .strip()
             )
+
             if not content:
                 return None, "LLM_EXPLAIN_FAILED"
+
             return content, None
+
     except (httpx.HTTPError, ValueError):
         return None, "LLM_EXPLAIN_FAILED"
 

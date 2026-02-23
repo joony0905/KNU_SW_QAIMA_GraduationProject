@@ -19,6 +19,8 @@ import reactor.core.scheduler.Schedulers;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
+import java.util.Comparator;
 
 @Slf4j
 @Service
@@ -37,7 +39,7 @@ public class CandleLoadService {
         String stockCode = stock.getStockCode();
 
         return Mono.fromCallable(() ->
-                        priceOhlcvRepository.findByStockCodeAndFreqAndTsBetween(
+                        priceOhlcvRepository.findRange(
                                 stockCode, freq, from, to
                         )
                 )
@@ -95,6 +97,96 @@ public class CandleLoadService {
                     return priceOhlcvRepository.saveAll(entities);
                 })
                 .subscribeOn(Schedulers.boundedElastic());
+    }
+
+
+    public Mono<CandleLoadResult> loadBefore(
+            Stock stock,
+            Freq freq,
+            OffsetDateTime to,
+            int limit
+    ) {
+        String stockCode = stock.getStockCode();
+
+        // to, limit 분기 check
+        if (to == null || limit <= 0) {
+            return Mono.just(new CandleLoadResult(List.of(), CandleSource.EMPTY));
+        }
+
+        return Mono.fromCallable(() ->
+                        priceOhlcvRepository.findBefore(
+                                stockCode,
+                                freq,
+                                to,
+                                PageRequest.of(0, limit)
+                        )
+                )
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(dbCandles -> {
+
+                    // DB 히트
+                    if (dbCandles != null && !dbCandles.isEmpty()) {
+                        System.out.println("Candle DB히트");
+                        List<PriceOhlcv> asc = dbCandles.stream()
+                                .sorted(Comparator.comparing(p -> p.getId().getTs()))
+                                .toList();
+
+                        return Mono.just(new CandleLoadResult(asc, CandleSource.DB));
+                    }
+
+                    // DB 미스 → 외부 fetch(lookback range) → 저장 → 다시 DB slice
+                    OffsetDateTime from = computeLookbackFrom(freq, to, limit);
+
+                    return stockClient.fetchCandles(stock, freq, from, to)
+                            .flatMap(result ->
+                                    save(stock, freq, result.getCandles())
+                                            .then(
+                                                    Mono.fromCallable(() ->
+                                                                    priceOhlcvRepository.findBefore(
+                                                                            stockCode,
+                                                                            freq,
+                                                                            to,
+                                                                            PageRequest.of(0, limit)
+                                                                    )
+                                                            )
+                                                            .subscribeOn(Schedulers.boundedElastic())
+                                                            .map(list -> {
+                                                                if (list == null || list.isEmpty()) {
+                                                                    return new CandleLoadResult(List.of(), result.getSource());
+                                                                }
+
+                                                                List<PriceOhlcv> asc = list.stream()
+                                                                        .sorted(Comparator.comparing(p -> p.getId().getTs()))
+                                                                        .toList();
+
+                                                                return new CandleLoadResult(asc, result.getSource());
+                                                            })
+                                            )
+                            )
+                            .onErrorResume(err ->
+                                    Mono.just(new CandleLoadResult(List.of(), CandleSource.EMPTY))
+                            );
+                });
+    }
+
+    /**
+     * 외부 API(KIS/Marketstack)는 from/to 둘 다 필요한 경우가 많아서,
+     * before 로딩은 to 기준으로 넉넉한 lookback 구간을 잡아 range fetch 후 DB에서 slice 한다.
+     */
+    private OffsetDateTime computeLookbackFrom(Freq freq, OffsetDateTime to, int limit) {
+        // limit=5라도 외부 API가 "limit"을 직접 지원하지 않으면
+        // 충분한 윈도우를 잡아야 5개를 안정적으로 확보할 수 있다.
+        int n = Math.max(limit * 200, 200);
+
+        return switch (freq) {
+            case ONE_MIN      -> to.minusMinutes(n);          // 1분봉
+            case FIVE_MIN     -> to.minusMinutes(5L * n);     // 5분봉
+            case FIFTEEN_MIN  -> to.minusMinutes(15L * n);    // 15분봉
+            case ONE_H        -> to.minusHours(n);             // 1시간봉
+            case ONE_D        -> to.minusDays(n);              // 일봉
+            case ONE_W        -> to.minusWeeks(n);             // 주봉
+            case ONE_M        -> to.minusMonths(n);            // 월봉
+        };
     }
 
     private PriceOhlcv toEntity(Stock stock, Freq freq, PriceOhlcvDto dto) {
