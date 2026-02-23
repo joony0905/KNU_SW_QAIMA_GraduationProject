@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter
 
 
-from models.feature1 import (
+from app.models.feature1 import (
     Feature1Request,
     Feature1Response,
     Feature1Metrics,
@@ -12,14 +12,14 @@ from models.feature1 import (
     OhlcvSummary,
     FinancialSummary,
 )
-from models.indicator import (
+from app.models.indicator import (
     IndicatorBundle,
     calculate_ema,
     calculate_bb,
     calculate_stoch,
 )
 
-from services.llm_client import analyze_feature1 as analyze_feature1_llm
+from app.services.llm_client import analyze_feature1 as analyze_feature1_llm
 
 
 router = APIRouter(
@@ -111,12 +111,20 @@ async def analyze_stock(req: Feature1Request) -> Feature1Response:
     # Explain (LLM - optional)
     # ======================
     explain = None
+
     if req.include_explain:
-        try:
-            explain_text = await analyze_feature1_llm(req, metrics)
-            explain = Feature1Explain(text=explain_text)
-        except Exception:
-            warnings.append("LLM_EXPLAIN_FAILED")
+        llm_res = await analyze_feature1_llm(req, metrics)  # Feature1Response 리턴
+
+        # explain
+        explain = llm_res.explain
+
+        # warnings merge (router warnings + llm warnings)
+        if llm_res.meta and llm_res.meta.warnings:
+            warnings.extend(llm_res.meta.warnings)
+    else:
+        # includeExplain=false면 서비스에서도 SKIPPED 넣지만,
+        # 라우터 레벨에서도 정책적으로 남기고 싶으면 유지
+        warnings.append("LLM_EXPLAIN_SKIPPED")
 
     # ======================
     # Final Response

@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import Dict, List, Optional
-
+from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field, field_validator
 
-from models.indicator import IndicatorBundle
+from app.models.indicator import IndicatorBundle
 
 
 # ======================
@@ -91,7 +90,10 @@ class Feature1Metrics(BaseModel):
 # ======================
 
 class Feature1Explain(BaseModel):
-    text: str
+    # 기존 프론트가 text만 써도 계속 동작하도록 유지
+    text: str = Field(..., description="LLM raw text (may be JSON string)")
+    # 새로 추가: 프론트가 구조 렌더링할 때 사용
+    json: Optional[Dict[str, Any]] = Field(default=None, description="Parsed JSON result when available")
 
 
 class Feature1Meta(BaseModel):

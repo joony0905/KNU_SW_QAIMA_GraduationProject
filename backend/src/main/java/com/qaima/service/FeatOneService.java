@@ -2,7 +2,13 @@ package com.qaima.service;
 
 import com.qaima.common.ErrorCode;
 import com.qaima.common.ErrorException;
-import com.qaima.domain.*;
+import com.qaima.domain.Exchange;
+import com.qaima.domain.Financial;
+import com.qaima.domain.Freq;
+import com.qaima.domain.PeriodType;
+import com.qaima.domain.PriceOhlcv;
+import com.qaima.domain.PriceOhlcvId;
+import com.qaima.domain.Stock;
 import com.qaima.dto.FeatOneAnalysisExplainDto;
 import com.qaima.dto.FeatOneAnalysisMetaDto;
 import com.qaima.dto.FeatOneAnalysisMetricsDto;
@@ -10,33 +16,49 @@ import com.qaima.dto.FeatOneAnalysisResponseDto;
 import com.qaima.dto.FeatOneRequestDto;
 import com.qaima.dto.FinancialSummaryDto;
 import com.qaima.dto.FinancialSummaryMetricsDto;
-import com.qaima.dto.indicator.IndicatorBundleDto;
 import com.qaima.dto.OhlcvItemDto;
 import com.qaima.dto.OhlcvSummaryDto;
 import com.qaima.dto.PriceOhlcvDto;
+import com.qaima.dto.indicator.IndicatorBundleDto;
 import com.qaima.external.AnalysisApiClient;
 import com.qaima.external.GlobalStockClient;
 import com.qaima.external.KrStockClient;
 import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.PriceOhlcvRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.codec.DecodingException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import java.time.ZoneOffset;
-import java.util.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.ConnectException;
+import java.net.UnknownHostException;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class FeatOneService {
+
+    private static final Logger log = LoggerFactory.getLogger(FeatOneService.class);
+
+    private static final int DEFAULT_FINANCIAL_LIMIT = 5;
+    private static final String SCHEMA_VERSION = "0.1"; //network에서 0.1로 떨어지면 백엔드 오류
 
     private final StockService stockService;
     private final PriceOhlcvRepository priceOhlcvRepository;
@@ -50,27 +72,25 @@ public class FeatOneService {
     public Mono<FeatOneResult> getFeatOneData(
             String stockCode,
             Freq freq,
-            String from, //Offset이 아닌 String으로 넘김. 분석 및 외부 출력용
+            String from, // Offset이 아닌 String으로 넘김. 분석 및 외부 출력용
             String to,
             String marketDivCode,
             Boolean includeExplain
     ) {
-        if (stockCode == null || stockCode.isBlank() || freq == null || from == null || to == null || marketDivCode == null || includeExplain == null) {
-            System.out.println(
-                    "[FeatOneService param matching fail] " +
-                            "stockCode=" + stockCode +
-                            ", freq=" + freq +
-                            ", from=" + from +
-                            ", to=" + to +
-                            ", marketDivCode=" + marketDivCode +
-                            ", includeExplain=" + includeExplain
-            );
+        if (stockCode == null || stockCode.isBlank()
+                || freq == null
+                || from == null
+                || to == null
+                || marketDivCode == null
+                || includeExplain == null) {
+
+            log.warn("[FeatOneService param validation fail] stockCode={}, freq={}, from={}, to={}, marketDivCode={}, includeExplain={}",
+                    stockCode, freq, from, to, marketDivCode, includeExplain);
             throw new ErrorException(ErrorCode.VALIDATION_ERROR);
         }
 
-
         OffsetDateTime fromDt = OffsetDateTime.parse(from);
-        OffsetDateTime toDt   = OffsetDateTime.parse(to); // 내부용은 offset
+        OffsetDateTime toDt = OffsetDateTime.parse(to);
 
         Mono<Stock> stockMono = stockService.getOrCreateStockByCode(stockCode).cache();
 
@@ -78,13 +98,11 @@ public class FeatOneService {
                 loadCandlesWithFallback(stock, freq, fromDt, toDt, marketDivCode)
         );
 
-        int financialLimit = 5;
-
         Mono<List<Financial>> financialsMono = stockMono.flatMap(stock ->
                 Mono.fromCallable(() ->
                                 financialRepository.findByStockOrderByReportDateDescVersionDesc(
                                         stock,
-                                        PageRequest.of(0, financialLimit)
+                                        PageRequest.of(0, DEFAULT_FINANCIAL_LIMIT)
                                 )
                         )
                         .subscribeOn(Schedulers.boundedElastic())
@@ -105,8 +123,15 @@ public class FeatOneService {
                                 return new FeatOneResult(response, chartUnavailable);
                             })
                             .onErrorResume(ex -> {
+                                // indicator가 사라지는 현상은 여기로 떨어져 fallback이 내려가면서 발생한다.
+                                String apiWarn = toAnalysisApiWarn(ex);
+
+                                log.error("[Feature1] Analysis API failed. stockCode={}, freq={}, from={}, to={}, includeExplain={}, warn={}",
+                                        stockCode, freq, from, to, includeExplain, apiWarn, ex);
+
                                 FeatOneAnalysisResponseDto fallback =
-                                        buildFallbackResponse(stock, candles, financials, includeExplain);
+                                        buildFallbackResponse(stock, candles, financials, includeExplain, apiWarn);
+
                                 boolean chartUnavailable = (candles == null || candles.isEmpty());
                                 return Mono.just(new FeatOneResult(fallback, chartUnavailable));
                             });
@@ -132,9 +157,7 @@ public class FeatOneService {
                 ? marketDivCodeOverride
                 : toKisMarketDivCode(stock.getExchange());
 
-        return Mono.fromCallable(() ->
-                        priceOhlcvRepository.findRange(stockCode, freq, from, to)
-                )
+        return Mono.fromCallable(() -> priceOhlcvRepository.findRange(stockCode, freq, from, to))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(existing -> {
                     if (!existing.isEmpty()) {
@@ -264,7 +287,7 @@ public class FeatOneService {
     ) {
         List<OhlcvItemDto> ohlcvDtos =
                 (candles == null ? List.<PriceOhlcv>of() : candles).stream()
-                        //복합키의 ts 기준 오름차순 정렬
+                        // 복합키의 ts 기준 오름차순 정렬
                         .sorted(Comparator.comparing(o -> o.getId().getTs()))
                         .map(this::toOhlcvItemDto)
                         .toList();
@@ -313,11 +336,15 @@ public class FeatOneService {
             Stock stock,
             List<PriceOhlcv> candles,
             List<Financial> financials,
-            Boolean includeExplain
+            Boolean includeExplain,
+            String analysisApiWarn
     ) {
-        List<String> warnings = buildWarnings(includeExplain, "ANALYSIS_API_FAILED", "INDICATOR_CALC_FAILED");
+        List<String> warnings = buildWarnings(
+                includeExplain,
+                (analysisApiWarn != null && !analysisApiWarn.isBlank()) ? analysisApiWarn : "ANALYSIS_API_FAILED",
+                "INDICATOR_CALC_FAILED"
+        );
 
-        // buildMetrics에 warnings 전달 (지표 번들도 같은 warnings를 공유)
         FeatOneAnalysisMetricsDto metrics = buildMetrics(stock.getStockCode(), candles, financials, warnings);
 
         FeatOneAnalysisMetaDto meta = FeatOneAnalysisMetaDto.builder()
@@ -343,7 +370,7 @@ public class FeatOneService {
         FinancialSummaryMetricsDto financialSummary = buildFinancialSummary(financials);
 
         IndicatorBundleDto indicators = IndicatorBundleDto.builder()
-                .ema(Collections.emptyMap())      // EMA Map 계약
+                .ema(Collections.emptyMap()) // EMA Map 계약
                 .bb20_2(null)
                 .stoch14_3_3(null)
                 .warnings(warnings != null ? warnings : new ArrayList<>())
@@ -355,11 +382,11 @@ public class FeatOneService {
                 .ohlcvSummary(ohlcvSummary)
                 .financialSummary(financialSummary)
                 .indicators(indicators)
-                .schemaVersion("0.1")
+                .schemaVersion(SCHEMA_VERSION)
                 .build();
     }
 
-    //overload
+    // overload
     private FeatOneAnalysisMetricsDto buildMetrics(
             String stockCode,
             List<PriceOhlcv> candles,
@@ -400,15 +427,14 @@ public class FeatOneService {
                     .build();
         }
 
-        java.util.Map<Integer, java.math.BigDecimal> revenue = new java.util.HashMap<>();
-        java.util.Map<Integer, java.math.BigDecimal> operatingIncome = new java.util.HashMap<>();
-        java.util.Map<Integer, java.math.BigDecimal> netIncome = new java.util.HashMap<>();
+        Map<Integer, BigDecimal> revenue = new java.util.HashMap<>();
+        Map<Integer, BigDecimal> operatingIncome = new java.util.HashMap<>();
+        Map<Integer, BigDecimal> netIncome = new java.util.HashMap<>();
 
         for (Financial f : financials) {
             Integer year = f.getFiscalYear();
-            if (year == null) {
-                continue;
-            }
+            if (year == null) continue;
+
             revenue.put(year, f.getRevenue());
             operatingIncome.put(year, f.getOperatingIncome());
             netIncome.put(year, f.getNetIncome());
@@ -437,5 +463,53 @@ public class FeatOneService {
         }
 
         return result;
+    }
+
+    /**
+     * AnalysisApiClient(WebClient) 호출 실패 원인을 warnings에 실어 보내기 위한 변환기.
+     * 실제 원인은 이 문자열 1개로 확정 가능해진다.
+     */
+    private String toAnalysisApiWarn(Throwable ex) {
+        if (ex == null) return "ANALYSIS_API_FAILED";
+
+        // WebClientResponseException: HTTP status + body 보유
+        if (ex instanceof org.springframework.web.reactive.function.client.WebClientResponseException wex) {
+            String body = wex.getResponseBodyAsString();
+            if (body == null) body = "";
+            body = body.replace("\n", " ").trim();
+            if (body.length() > 250) body = body.substring(0, 250);
+
+            int code = wex.getStatusCode().value();
+            return "ANALYSIS_API_HTTP_" + code + ":" + body;
+        }
+
+        // timeout
+        if (ex instanceof TimeoutException
+                || ex instanceof io.netty.handler.timeout.ReadTimeoutException
+                || ex instanceof io.netty.handler.timeout.WriteTimeoutException) {
+            return "ANALYSIS_API_TIMEOUT";
+        }
+
+        // connect refused / DNS
+        if (ex instanceof ConnectException) {
+            return "ANALYSIS_API_CONNECT_FAILED:" + safeMsg(ex);
+        }
+        if (ex instanceof UnknownHostException) {
+            return "ANALYSIS_API_DNS_FAILED:" + safeMsg(ex);
+        }
+
+        // json decode / mapping
+        if (ex instanceof DecodingException) {
+            return "ANALYSIS_API_DECODE_FAILED:" + safeMsg(ex);
+        }
+
+        return "ANALYSIS_API_EXCEPTION:" + ex.getClass().getSimpleName() + ":" + safeMsg(ex);
+    }
+
+    private String safeMsg(Throwable ex) {
+        String m = ex.getMessage();
+        if (m == null) return "";
+        m = m.replace("\n", " ").trim();
+        return m.length() > 120 ? m.substring(0, 120) : m;
     }
 }
