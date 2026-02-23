@@ -1,7 +1,8 @@
 // src/api/analysis.ts
 import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
-import type { AnalysisResponse } from "../types/analysis";
+import type { AnalysisResponse, AnalysisResponseWire } from "../types/analysis";
+import { mapAnalysisWireToCamel } from "../mappers/analysisMapper";
 
 export type Freq =
   | "ONE_MIN"
@@ -33,9 +34,9 @@ interface ApiResponse<T> {
 export const fetchAnalysis = async (
   req: FeatOneAnalyzeRequest
 ): Promise<AnalysisResponse> => {
-  const res = await api.post<ApiResponse<AnalysisResponse>>(
+  const res = await api.post<ApiResponse<AnalysisResponseWire>>(
     ENDPOINTS.analysis.analyze(),
     req
   );
-  return res.data.data;
+  return mapAnalysisWireToCamel(res.data.data);
 };

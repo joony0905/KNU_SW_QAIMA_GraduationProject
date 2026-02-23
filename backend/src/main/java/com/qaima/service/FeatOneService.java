@@ -382,6 +382,7 @@ public class FeatOneService {
                 .ohlcvSummary(ohlcvSummary)
                 .financialSummary(financialSummary)
                 .indicators(indicators)
+                .indicatorSummary(null)
                 .schemaVersion(SCHEMA_VERSION)
                 .build();
     }

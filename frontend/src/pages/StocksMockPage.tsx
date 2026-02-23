@@ -18,7 +18,7 @@ import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
-import type { AnalysisResponse } from "../types/analysis";
+import type { AnalysisResponse, ParsedExplainText } from "../types/analysis";
 
 /* =========================
    Zoom-out Loading Policy
@@ -73,6 +73,18 @@ type MainStockState = {
 };
 
 type LoadMode = "INITIAL" | "ANALYZE";
+
+const parseExplainText = (text?: string | null): ParsedExplainText | null => {
+  if (!text || !text.trim()) return null;
+
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? (parsed as ParsedExplainText) : null;
+  } catch (error) {
+    console.warn("[analysis] explain JSON parse failed", error);
+    return null;
+  }
+};
 
 export default function StocksMockPage() {
   const currentTime = useKSTTime();
@@ -892,21 +904,51 @@ export default function StocksMockPage() {
                     <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
                       설명
                     </h3>
-                    {analysisResult.explain?.text ? (
-                      <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
-                        {analysisResult.explain.text}
-                      </p>
-                    ) : (
-                      <ul className="text-sm sm:text-base text-amber-700 mt-2 list-disc list-inside">
-                        {(analysisResult.meta?.warnings ?? []).length > 0 ? (
-                          analysisResult.meta?.warnings?.map((warning) => (
-                            <li key={warning}>{warning}</li>
-                          ))
-                        ) : (
-                          <li>설명 텍스트가 준비되지 않았습니다.</li>
-                        )}
-                      </ul>
-                    )}
+                    {(() => {
+                      const parsedExplain = parseExplainText(analysisResult.explain?.text);
+                      const rawExplain = analysisResult.explain?.text;
+
+                      if (parsedExplain) {
+                        return (
+                          <div className="mt-2 text-sm sm:text-base text-zinc-700 flex flex-col gap-2">
+                            <div>
+                              <p className="font-medium text-zinc-900">요약</p>
+                              <ul className="list-disc list-inside">
+                                {(parsedExplain.summary ?? []).slice(0, 3).map((item, idx) => (
+                                  <li key={`summary-${idx}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <p className="font-medium text-zinc-900">리스크</p>
+                              <ul className="list-disc list-inside">
+                                {(parsedExplain.risks ?? []).slice(0, 2).map((item, idx) => (
+                                  <li key={`risk-${idx}`}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <p className="font-medium text-zinc-900">결론</p>
+                              <p>{parsedExplain.conclusion ?? "-"}</p>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      if (rawExplain && rawExplain.trim()) {
+                        return (
+                          <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
+                            {rawExplain}
+                          </p>
+                        );
+                      }
+
+                      return (
+                        <p className="text-sm sm:text-base text-zinc-500 mt-2">
+                          설명 생성이 비활성화되었거나 실패했습니다.
+                        </p>
+                      );
+                    })()}
                   </div>
 
                   <div>
@@ -916,30 +958,41 @@ export default function StocksMockPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
                       <div>
                         캔들 수:{" "}
-                        {analysisResult.metrics.ohlcv_summary.count.toLocaleString()}
+                        {analysisResult.metrics.ohlcvSummary.count.toLocaleString()}
                       </div>
                       <div>
-                        기간: {formatDate(analysisResult.metrics.ohlcv_summary.from)} ~{" "}
-                        {formatDate(analysisResult.metrics.ohlcv_summary.to)}
+                        기간: {formatDate(analysisResult.metrics.ohlcvSummary.from)} ~{" "}
+                        {formatDate(analysisResult.metrics.ohlcvSummary.to)}
                       </div>
                       <div>
                         마지막 종가:{" "}
-                        {formatNumber(analysisResult.metrics.ohlcv_summary.last_close)}
+                        {formatNumber(analysisResult.metrics.ohlcvSummary.lastClose)}
                       </div>
                     </div>
                   </div>
 
                   <div>
                     <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                      Indicator Summary
+                    </h3>
+                    <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
+                      {analysisResult.metrics.indicatorSummary?.trim()
+                        ? analysisResult.metrics.indicatorSummary
+                        : "지표 요약 데이터를 생성하지 못했습니다."}
+                    </p>
+                  </div>
+
+                  <div>
+                    <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
                       재무 요약 (5개년)
                     </h3>
-                    {analysisResult.metrics.financial_summary.years.length > 0 ? (
+                    {analysisResult.metrics.financialSummary.years.length > 0 ? (
                       <div className="overflow-x-auto mt-2">
                         <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
                           <thead className="bg-zinc-100 text-zinc-900">
                             <tr>
                               <th className="px-3 py-2 text-left border-b">구분</th>
-                              {analysisResult.metrics.financial_summary.years.map((year) => (
+                              {analysisResult.metrics.financialSummary.years.map((year) => (
                                 <th key={year} className="px-3 py-2 text-right border-b">
                                   {year}
                                 </th>
@@ -949,41 +1002,39 @@ export default function StocksMockPage() {
                           <tbody>
                             <tr>
                               <td className="px-3 py-2 border-b">매출</td>
-                              {analysisResult.metrics.financial_summary.years.map((year) => (
+                              {analysisResult.metrics.financialSummary.years.map((year) => (
                                 <td
                                   key={`revenue-${year}`}
                                   className="px-3 py-2 text-right border-b"
                                 >
                                   {formatNumber(
-                                    analysisResult.metrics.financial_summary.revenue[String(year)]
+                                    analysisResult.metrics.financialSummary.revenue[String(year)]
                                   )}
                                 </td>
                               ))}
                             </tr>
                             <tr>
                               <td className="px-3 py-2 border-b">영업이익</td>
-                              {analysisResult.metrics.financial_summary.years.map((year) => (
+                              {analysisResult.metrics.financialSummary.years.map((year) => (
                                 <td
                                   key={`op-${year}`}
                                   className="px-3 py-2 text-right border-b"
                                 >
                                   {formatNumber(
-                                    analysisResult.metrics.financial_summary.operating_income[
-                                      String(year)
-                                    ]
+                                    analysisResult.metrics.financialSummary.operatingIncome[String(year)]
                                   )}
                                 </td>
                               ))}
                             </tr>
                             <tr>
                               <td className="px-3 py-2 border-b">순이익</td>
-                              {analysisResult.metrics.financial_summary.years.map((year) => (
+                              {analysisResult.metrics.financialSummary.years.map((year) => (
                                 <td
                                   key={`net-${year}`}
                                   className="px-3 py-2 text-right border-b"
                                 >
                                   {formatNumber(
-                                    analysisResult.metrics.financial_summary.net_income[String(year)]
+                                    analysisResult.metrics.financialSummary.netIncome[String(year)]
                                   )}
                                 </td>
                               ))}
@@ -997,6 +1048,17 @@ export default function StocksMockPage() {
                       </p>
                     )}
                   </div>
+
+                  {(analysisResult.meta?.warnings ?? []).length > 0 && (
+                    <div>
+                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">경고</h3>
+                      <ul className="text-sm sm:text-base text-amber-700 mt-2 list-disc list-inside">
+                        {analysisResult.meta?.warnings?.map((warning) => (
+                          <li key={warning}>{warning}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
             </section>

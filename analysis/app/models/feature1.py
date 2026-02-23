@@ -82,6 +82,7 @@ class Feature1Metrics(BaseModel):
     ohlcv_summary: OhlcvSummary
     financial_summary: FinancialSummary
     indicators: IndicatorBundle
+    indicator_summary: Optional[str] = None
     schema_version: str
 
 
