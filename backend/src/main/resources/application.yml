@@ -3,13 +3,24 @@ analysis:
 
 spring:
   profiles:
-    active: h2   # h2 <-> mysql 변경해서 사용
+    active: mysql #h2 <-> mysql 변경해서 사용
 
   jackson:
     property-naming-strategy: SNAKE_CASE
 
   config:
     import: optional:application-secret.yml
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+  sql:
+    init:
+      mode: never
+
+  flyway:
+    enabled: false
 
 logging:
   level:
