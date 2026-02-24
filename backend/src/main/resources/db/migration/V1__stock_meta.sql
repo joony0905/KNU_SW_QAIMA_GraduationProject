@@ -1,4 +1,4 @@
--- V1__init.sql
+-- V1__stock_meta.sql
 -- Core tables: exchange, sector, industry, stock
 
 CREATE TABLE IF NOT EXISTS exchange (

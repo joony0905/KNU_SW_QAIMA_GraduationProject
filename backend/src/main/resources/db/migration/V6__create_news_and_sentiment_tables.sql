@@ -8,7 +8,7 @@ CREATE TABLE news (
     summary TEXT NULL,
     content_uri VARCHAR(1000) NULL,
     PRIMARY KEY (news_id),
-    UNIQUE KEY uk_news_url (url)
+    UNIQUE KEY uk_news_url (url(255))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE news_security_map (

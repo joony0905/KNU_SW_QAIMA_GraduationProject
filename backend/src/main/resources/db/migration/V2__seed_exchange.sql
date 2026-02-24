@@ -1,4 +1,4 @@
--- V3__seed_exchange.sql
+-- V2__seed_exchange.sql
 -- Minimal seed so StockService.createAndSaveStockFromMeta()가 exchangeRepository.findByCode(...)에 성공하도록
 
 INSERT INTO exchange(code, name, timezone, country) VALUES

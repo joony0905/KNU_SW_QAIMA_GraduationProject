@@ -6,7 +6,7 @@ CREATE TABLE users (
     phone VARCHAR(30) NULL,
     experience VARCHAR(20) NULL,
     birthdate VARCHAR(6) NULL,
-    role VARCHAR(20) NOT NULL,
+    role ENUM('user','admin') NOT NULL,
     status VARCHAR(20) NOT NULL,
     email_verified BIT(1) NOT NULL,
     email_verified_at DATETIME(6) NULL,
