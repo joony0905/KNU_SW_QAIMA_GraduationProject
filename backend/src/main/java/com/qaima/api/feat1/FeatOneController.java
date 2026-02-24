@@ -20,7 +20,7 @@ public class FeatOneController {
     public Mono<ApiResponse<FeatOneAnalysisResponseDto>> analyze(
             @RequestBody FeatOneAnalyzeRequestDto request
     ) {
-        System.out.println(">>> ANALYZE REQUEST ENTERED <<<");
+        System.out.println(">>> FEAT1 ANALYZE REQUEST ENTERED <<<");
         System.out.println("REQ stockCode=" + request.getStockCode());
         System.out.println("REQ DTO class=" + request.getClass().getName());
         return featOneService.getFeatOneData(

@@ -1,10 +1,14 @@
 package com.qaima.dto.feature2;
 
-import lombok.Builder;
-import lombok.Getter;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.*;
 
 @Getter
-@Builder
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+
 public class Feature2AnalyzeRequestDto {
-    private final String stockCode;
+    @JsonProperty("stockCode")
+    private String stockCode;
 }

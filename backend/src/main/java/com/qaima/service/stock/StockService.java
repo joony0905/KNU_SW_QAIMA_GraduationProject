@@ -123,7 +123,7 @@ public class StockService {
                                         stock.setStockCode(normalizedCode);
                                         stock.setCompanyName(meta.getCompanyName());
                                         stock.setAssetType("EQUITY");
-                                        stock.setCurrency(meta.getCountryCode() != null ? meta.getCountryCode() : "USD");
+                                        stock.setCurrency(meta.getCurrency() != null ? meta.getCurrency() : "USD");
                                         stock.setExchange(exchange);
                                         stock.setIsin(null);
 
