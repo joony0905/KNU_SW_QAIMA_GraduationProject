@@ -79,19 +79,16 @@ public class StockService {
                 })
                 .onErrorResume(ex -> {
                     String msg = ex.getMessage();
-                    // 유니크 인덱스 에러일 경우 한 번 더 조회해서 리턴
-                    // 동시 요청이 생길 경우 안전 방지
-                    if (msg != null && msg.contains("UK_EXCHANGE_STOCK_CODE_INDEX")) {
-                        log.warn("[loadOrCreateStock] 유니크 충돌 감지 → 재조회 시도: {}", normalizedCode);
-                        return Mono.fromCallable(() ->
-                                        stockRepository.findByStockCodeWithExchange(normalizedCode)
-                                )
+                    String lower = (msg == null) ? "" : msg.toLowerCase();
+                    log.warn("[loadOrCreateStock] unique test cause={}", ex.toString(), ex);
+                    if (lower.contains("uk_exchange_stock_code")) {
+                        log.warn("[loadOrCreateStock] unique conflict on (exchange_id, stock_code) -> re-fetch. code={}", normalizedCode);
+                        return Mono.fromCallable(() -> stockRepository.findByStockCodeWithExchange(normalizedCode))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMap(opt -> opt
                                         .map(Mono::just)
-                                        .orElseGet(() -> Mono.error(
-                                                new IllegalStateException("유니크 충돌 이후에도 종목을 찾을 수 없음: " + normalizedCode)
-                                        )));
+                                        .orElseGet(() -> Mono.error(new IllegalStateException("유니크 충돌 이후에도 종목을 찾을 수 없음: " + normalizedCode)))
+                                );
                     }
                     return Mono.error(ex);
                 });
@@ -122,7 +119,7 @@ public class StockService {
                                         Stock stock = new Stock();
                                         stock.setStockCode(normalizedCode);
                                         stock.setCompanyName(meta.getCompanyName());
-                                        stock.setAssetType("EQUITY");
+                                        stock.setAssetType("EQUITY"); //TODO: 추후수정
                                         stock.setCurrency(meta.getCurrency() != null ? meta.getCurrency() : "USD");
                                         stock.setExchange(exchange);
                                         stock.setIsin(null);

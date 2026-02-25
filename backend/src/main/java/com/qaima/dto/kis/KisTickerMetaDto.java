@@ -12,6 +12,8 @@ import java.math.BigDecimal;
 public class KisTickerMetaDto {
     private String stockCode;
     private String companyName;
+    private String exchangeCode;
+    private String currency;
     private BigDecimal price;
     private BigDecimal changeRate;
 }

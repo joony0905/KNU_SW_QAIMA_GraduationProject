@@ -59,56 +59,72 @@ public class StockApiClient implements StockClient {
     }
 
     @Override
-    public Mono<ApiResponse<StockMeta>> fetchTickerMeta(String rawSymbol) {
-        String symbol = normalizeSymbolForFetch(rawSymbol);
+    public Mono<ApiResponse<StockMeta>> fetchTickerMeta(String rawStockCode) {
+        String stockCode = normalizeCodeForFetch(rawStockCode);
 
-        if (symbol == null || symbol.isBlank()) {
-            return Mono.just(ApiResponse.internalError("INVALID_SYMBOL", "심볼이 비어있습니다."));
+        if (stockCode == null || stockCode.isBlank()) {
+            return Mono.just(ApiResponse.internalError(
+                    "INVALID_STOCK_CODE",
+                    "[fetchTickerMeta] 종목코드가 비어있습니다."
+            ));
         }
 
-        boolean isKorean = symbol.matches("^[0-9]{6}\\.(XKRX|XKOS)$");
+        // normalizeCodeForFetch가 국내면 6자리 또는 6자리.(XKRX|XKOS) 형태를 만들어줌
+        boolean isKorean = stockCode.matches("^[0-9]{6}\\.(XKRX|XKOS)$");
 
         Mono<StockMeta> fromKis = Mono.empty();
         if (isKorean) {
-            fromKis = krClient.fetchTickerMeta(symbol) // Mono<KisTickerMetaDto>
+            fromKis = krClient.fetchTickerMeta(stockCode) // Mono<KisTickerMetaDto>
                     .timeout(KIS_TIMEOUT)
-                    .map(kis -> toStockMetaFromKis(kis, symbol))
+                    .map(kis -> toStockMetaFromKis(kis, stockCode))
                     .onErrorResume(ErrorException.class, e -> {
                         // 디코드 에러는 숨기면 안 됨(내부 버그/스키마 불일치)
                         if (e.getErrorCode() == ErrorCode.KIS_DECODE_ERROR) return Mono.error(e);
 
                         // http/biz/market_closed 는 폴백 허용
-                        log.warn("[StockApiClient] KIS meta fallback allowed. symbol={}, code={}, msg={}",
-                                symbol, e.getErrorCode().code(), e.getMessage());
+                        log.warn("[StockApiClient] KIS meta fallback allowed. stockCode={}, ec={}, msg={}",
+                                stockCode, e.getErrorCode().code(), e.getMessage());
                         return Mono.empty();
                     })
                     .onErrorResume(ex -> {
-                        log.warn("[StockApiClient] KIS meta failed -> empty. symbol={}, cause={}",
-                                symbol, ex.getMessage());
+                        log.warn("[StockApiClient] KIS meta failed -> empty. stockCode={}, cause={}",
+                                stockCode, ex.getMessage());
                         return Mono.empty();
                     });
         }
 
-        Mono<StockMeta> fromGlobal = globalClient.fetchTickerMeta(symbol) // Mono<TickerData>
-                .timeout(MARKETSTACK_TIMEOUT)
-                .map(this::toStockMetaFromMarketstack)
-                .onErrorResume(ex -> {
-                    log.warn("[StockApiClient] Marketstack meta failed -> empty. symbol={}, cause={}",
-                            symbol, ex.getMessage());
-                    return Mono.empty();
-                });
-
-        Mono<StockMeta> source = isKorean ? fromKis.switchIfEmpty(fromGlobal) : fromGlobal;
+        // 국내 kis 실패시 폴백
+        Mono<StockMeta> fromGlobal =
+                globalClient.fetchTickerMeta(stockCode)
+                        .timeout(MARKETSTACK_TIMEOUT)
+                        .map(this::toStockMetaFromMarketstack)
+                        .onErrorResume(ex -> {
+                            log.warn("[StockApiClient] Marketstack meta failed -> empty. stockCode={}, cause={}",
+                                    stockCode, ex.getMessage());
+                            return Mono.empty();
+                        });
+        
+        // 국내: KIS 우선, 비면(허용된 케이스) 글로벌 폴백
+        // 해외: 글로벌만
+        Mono<StockMeta> source = isKorean
+                ? fromKis.switchIfEmpty(fromGlobal) // 국내 KIS 실패 시 글로벌 폴백
+                : fromGlobal;
 
         return source
                 .map(ApiResponse::success)
                 .switchIfEmpty(Mono.just(
-                        ApiResponse.internalError("META_NOT_FOUND", "티커 메타 정보를 가져오지 못했습니다: " + symbol)
+                        ApiResponse.internalError(
+                                "META_NOT_FOUND",
+                                "[fetchTickerMeta] 티커 메타 정보를 가져오지 못했습니다: " + stockCode
+                        )
                 ))
                 .onErrorResume(ex -> {
-                    log.error("[StockApiClient] fetchTickerMeta fatal error. symbol={}, cause={}",
-                            symbol, ex.getMessage(), ex);
-                    return Mono.just(ApiResponse.internalError("META_INTERNAL_ERROR", safe(ex.getMessage())));
+                    log.error("[StockApiClient] fetchTickerMeta fatal error. stockCode={}, cause={}",
+                            stockCode, ex.getMessage(), ex);
+                    return Mono.just(ApiResponse.internalError(
+                            "META_INTERNAL_ERROR",
+                            safe(ex.getMessage())
+                    ));
                 });
     }
 
@@ -159,7 +175,7 @@ public class StockApiClient implements StockClient {
        helpers
        ========================= */
 
-    private String normalizeSymbolForFetch(String raw) {
+    private String normalizeCodeForFetch(String raw) {
         if (raw == null) return null;
 
         String clean = raw.trim().toUpperCase();
@@ -180,15 +196,15 @@ public class StockApiClient implements StockClient {
         };
     }
 
-    private StockMeta toStockMetaFromKis(KisTickerMetaDto kis, String symbol) {
-        String normalizedSymbol = normalizeSymbolForFetch(symbol);
+    private StockMeta toStockMetaFromKis(KisTickerMetaDto kis, String StockCode) {
+        String normalizedStockCode = normalizeCodeForFetch(StockCode);
 
         return StockMeta.builder()
-                .stockCode(normalizedSymbol)
+                .stockCode(normalizedStockCode)
                 .companyName(kis.getCompanyName())
-                .exchangeCode(normalizeExchangeCode(extractExchangeCodeFromSymbol(normalizedSymbol)))
+                .exchangeCode(kis.getExchangeCode())
                 .countryCode("KR")
-                .currency("KRW")
+                .currency(kis.getCurrency())
                 .price(kis.getPrice())
                 .changeRate(kis.getChangeRate())
                 .source("KIS")
@@ -200,7 +216,7 @@ public class StockApiClient implements StockClient {
 
         String exchangeCode = null;
         String countryCode = null;
-        String normalizedSymbol = normalizeSymbolForFetch(data.getSymbol());
+        String normalizedStockCode = normalizeCodeForFetch(data.getSymbol()); //symbol = StockCode
 
         if (exchange != null) {
             exchangeCode = exchange.getAcronym() != null ? exchange.getAcronym() : exchange.getMic();
@@ -208,7 +224,7 @@ public class StockApiClient implements StockClient {
         }
 
         return StockMeta.builder()
-                .stockCode(normalizedSymbol)
+                .stockCode(normalizedStockCode)
                 .companyName(data.getName())
                 .exchangeCode(normalizeExchangeCode(exchangeCode))
                 .countryCode(countryCode)
@@ -219,26 +235,20 @@ public class StockApiClient implements StockClient {
                 .build();
     }
 
-    private String extractExchangeCodeFromSymbol(String symbol) {
-        if (symbol == null) return null;
-        if (symbol.endsWith(".XKOS")) return "KOSDAQ";
-        if (symbol.endsWith(".XKRX")) return "KRX";
-        return null;
-    }
 
     private String normalizeExchangeCode(String exchangeCode) {
         if (exchangeCode == null) return null;
 
-        String normalized = exchangeCode.trim().toUpperCase();
-        String condensed = normalized.replace(" ", "");
+        String c = exchangeCode.trim().toUpperCase().replace(" ", "");
 
-        return switch (condensed) {
-            case "XKRX", "KRX", "KRXSM" -> "KRX";
-            case "XKOS" -> "KOSDAQ";
-            case "XKON" -> "KONEX";
-            case "XNYS" -> "NYSE";
-            case "XNAS" -> "NASDAQ";
-            default -> normalized;
+        return switch (c) {
+            case "KOSPI" -> "KOSPI";
+            case "KOSDAQ" -> "KOSDAQ";
+            case "KONEX" -> "KONEX";
+            case "KRX", "XKRX" -> "KRX";
+            case "NASDAQ", "XNAS" -> "NASDAQ";
+            case "NYSE", "XNYS" -> "NYSE";
+            default -> c; // throw 금지
         };
     }
 

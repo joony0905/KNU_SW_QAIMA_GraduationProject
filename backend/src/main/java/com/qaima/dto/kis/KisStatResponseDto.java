@@ -1,5 +1,6 @@
 package com.qaima.dto.kis;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.qaima.external.KisRtHeader;
 import lombok.Data;
 

@@ -96,10 +96,12 @@ public class KrStockClient {
         String cleanSymbol = symbol.replace(".XKRX", "").replace(".XKOS", "");
 
         return fetchKisStatRaw(cleanSymbol, "J")
-                .map((KisStatResponseDto.Output out) -> {
+                .map(out -> {
                     KisTickerMetaDto.KisTickerMetaDtoBuilder b = KisTickerMetaDto.builder()
-                            .stockCode(cleanSymbol)     // ★ 항상 canonical (005930)
-                            .companyName(cleanSymbol);  // ★ 이 API엔 종목명 없음 → 일단 fallback
+                            .stockCode(cleanSymbol)
+                            .companyName(cleanSymbol) // fallback 유지
+                            .exchangeCode(resolveDomesticExchangeCode(out))
+                            .currency("KRW");
 
                     if (out != null) {
                         if (out.getStck_prpr() != null && !out.getStck_prpr().isBlank()) {
@@ -109,7 +111,6 @@ public class KrStockClient {
                             b.changeRate(parseBig(out.getPrdy_ctrt()));
                         }
                     }
-
                     return b.build();
                 });
     }
@@ -445,6 +446,29 @@ public class KrStockClient {
             copy.put(k, v);
         });
         return copy.toString();
+    }
+
+    private String resolveDomesticExchangeCode(KisStatResponseDto.Output out) {
+        log.info("[resolveDomesticExchangeCode] out = {}" ,out);
+        if (out == null) return "KRX";
+        String name = out.getRprs_mrkt_kor_name();
+        if (name == null || name.isBlank()) return "KRX";
+
+        // 공백/대소문자 normalize
+        String n = name.trim();
+        String u = n.toUpperCase(Locale.ROOT);
+
+        // 1) 영문 우선 (KOSPI200 같은 케이스 처리)
+        if (u.contains("KOSPI")) return "KOSPI";
+        if (u.contains("KOSDAQ")) return "KOSDAQ";
+        if (u.contains("KONEX")) return "KONEX";
+
+        // 2) 한글 보조
+        if (n.contains("코스피") || n.contains("유가")) return "KOSPI";
+        if (n.contains("코스닥")) return "KOSDAQ";
+        if (n.contains("코넥스")) return "KONEX";
+
+        return "KRX";
     }
 
     private String safeMsg(String msg) {
