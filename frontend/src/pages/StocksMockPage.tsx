@@ -467,6 +467,8 @@ export default function StocksMockPage() {
         change: null,
         changeRate: null,
       }));
+      console.log("getStockByCode raw:", stockInfo);
+      console.log("keys:", Object.keys(stockInfo || {}));
     } catch (e) {
       console.error("종목 정보 조회 실패(임시 무시):", e);
 

@@ -179,7 +179,7 @@ public class FeatOneService {
                                 if (e.getErrorCode() == ErrorCode.KIS_HTTP_ERROR
                                         || e.getErrorCode() == ErrorCode.KIS_BIZ_ERROR
                                         || e.getErrorCode() == ErrorCode.KIS_MARKET_CLOSED) {
-                                    return globalStockClient.fetchCandles(stockCode, freq, from, to);
+                                    return globalStockClient.fetchCandlesByMkstackCode(stockCode, freq, from, to);
                                 }
 
                                 return Mono.error(e);

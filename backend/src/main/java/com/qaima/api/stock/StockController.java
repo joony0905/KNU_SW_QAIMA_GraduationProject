@@ -9,13 +9,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/v1/stocks")
-@RequiredArgsConstructor
 public class StockController {
 
     private final StockService stockService;
-    private final StockClient stockClient;
 
     @GetMapping("/{stockId}")
     public Mono<ApiResponse<StockResponseDto>> getStock(@PathVariable Long stockId) {
@@ -24,8 +23,13 @@ public class StockController {
                 .map(ApiResponse::success);
     }
 
+    /**
+     * code 기반 조회
+     * - DB 없으면 생성
+     * - 내부적으로 ticker-meta + inquire-price 수행
+     */
     @GetMapping("/code/{stockCode}")
-    public Mono<ApiResponse<StockResponseDto>> getStockByCode(
+    public Mono<ApiResponse<StockResponseDto>> getOrCreateStockByCode(
             @PathVariable String stockCode
     ) {
         return stockService.getStockWithRealtimeByCode(stockCode)
@@ -33,19 +37,6 @@ public class StockController {
                 .map(ApiResponse::success);
     }
 
-    /*
-    @GetMapping("/debug/ticker-meta")
-    public Mono<ApiResponse<StockMeta>> getTickerMeta(
-            @RequestParam String symbol
-    ) {
-        return stockClient.fetchTickerMeta(symbol)
-                .map(ApiResponse::success);
-    }
-    */
-
-    /**
-     * 내부 StockDto → 프론트 계약 DTO response
-     */
     private StockResponseDto toResponse(StockDto s) {
         return new StockResponseDto(
                 s.getStockId(),

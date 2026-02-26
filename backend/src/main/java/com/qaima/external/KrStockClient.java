@@ -3,9 +3,11 @@ package com.qaima.external;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.common.ErrorCode;
 import com.qaima.common.ErrorException;
+import com.qaima.domain.Exchange;
 import com.qaima.domain.Freq;
 import com.qaima.domain.Stock;
 import com.qaima.dto.kis.KisResponseDto;
+import com.qaima.dto.kis.KisSearchInfoResponseDto;
 import com.qaima.dto.kis.KisStatResponseDto;
 import com.qaima.dto.kis.KisTickerMetaDto;
 import com.qaima.dto.ohlcv.PriceOhlcvDto;
@@ -51,55 +53,66 @@ public class KrStockClient {
     @Value("${kis.app-secret}")
     private String appSecret;
 
-    private volatile String cachedToken; // 간단 캐시(운영은 TTL 권장)
+    private volatile String cachedToken;
 
-    /* =========================
-       Token
-       ========================= */
+    // token single-flight
+    private Mono<String> tokenMono;
 
-    private Mono<String> getAccessToken() {
+    private synchronized Mono<String> getAccessToken() {
         if (cachedToken != null) return Mono.just(cachedToken);
+        if (tokenMono != null) return tokenMono;
 
-        Map<String, String> body = new HashMap<>();
-        body.put("grant_type", "client_credentials");
-        body.put("appkey", appKey);
-        body.put("appsecret", appSecret);
-
-        return webClient.post()
+        tokenMono = webClient.post()
                 .uri("/oauth2/tokenP")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(body)
+                .accept(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "grant_type", "client_credentials",
+                        "appkey", appKey,
+                        "appsecret", appSecret
+                ))
                 .retrieve()
                 .bodyToMono(KisResponseDto.class)
                 .map(resp -> {
                     cachedToken = "Bearer " + resp.getAccessToken();
                     return cachedToken;
                 })
-                .onErrorMap(e -> new ErrorException(
-                        ErrorCode.KIS_HTTP_ERROR,
-                        "KIS token error: " + safeMsg(e.getMessage())
-                ));
+                .doFinally(sig -> tokenMono = null)
+                .cache();
+
+        return tokenMono;
     }
 
     /* =========================
-       1) 종목 시세 -> StockDto (KR)
+       1) 현재가 inquire-price
        ========================= */
 
     public Mono<StockDto> fetchStock(Stock stock) {
         String code = stock.getStockCode();
-        // 국내는 보통 "J"(주식). 필요하면 exchange 기반으로 변환해서 넣어도 됨.
-        return fetchKisStatRaw(code, "J")
+        String marketDivCode = toKisMarketDivCode(stock.getExchange()); // J/Q/K
+        return fetchKisStatRaw(code, marketDivCode)
                 .map(o -> mapToStockDto(stock, o));
+    }
+
+    /**
+     * StockApiClient에서 "canonical + exchange"로 호출하고 싶을 때 쓰는 형태
+     */
+    public Mono<StockDto> fetchStockByCanonical(String canonicalStockCode, Exchange exchangeOrNull) {
+        Stock stub = new Stock();
+        stub.setStockCode(canonicalStockCode);
+        stub.setExchange(exchangeOrNull);
+        return fetchStock(stub);
     }
 
     public Mono<KisTickerMetaDto> fetchTickerMeta(String symbol) {
         String cleanSymbol = symbol.replace(".XKRX", "").replace(".XKOS", "");
 
+        // ticker meta는 exchange 판단을 위해 inquire-price가 필요
         return fetchKisStatRaw(cleanSymbol, "J")
                 .map(out -> {
                     KisTickerMetaDto.KisTickerMetaDtoBuilder b = KisTickerMetaDto.builder()
                             .stockCode(cleanSymbol)
-                            .companyName(cleanSymbol) // fallback 유지
+                            .companyName(cleanSymbol) // fallback 유지 (StockApiClient에서 search-info prdt_name으로 덮어씀)
                             .exchangeCode(resolveDomesticExchangeCode(out))
                             .currency("KRW");
 
@@ -115,12 +128,6 @@ public class KrStockClient {
                 });
     }
 
-    /* =========================
-       3) raw output용 현재가 조회 (KIS)
-       - overloading 제공 (기존 코드 호환)
-       ========================= */
-
-    // 기존 코드 호환: marketDivCode 없이 호출하면 "J"
     public Mono<KisStatResponseDto.Output> fetchKisStatRaw(String stockCode) {
         return fetchKisStatRaw(stockCode, "J");
     }
@@ -140,7 +147,8 @@ public class KrStockClient {
                             .header("authorization", token)
                             .header("appkey", appKey)
                             .header("appsecret", appSecret)
-                            .header("tr_id", "FHKST01010100");
+                            .header("tr_id", "FHKST01010100")
+                            .accept(MediaType.APPLICATION_JSON);
 
                     return exchangeAndParse(spec, endpoint, KisStatResponseDto.class);
                 })
@@ -159,24 +167,58 @@ public class KrStockClient {
                 });
     }
 
-    // 코드 확장시 사용
-    public enum KisMarketDivCode {
-        KRX("J"), ETF("Q"), ETN("U"), KONEX("K");
+    /* =========================
+       2) search-info / search-stock-info (CTPF1002R)
+       - 너 로그의 '상품번호 필수'를 해결하기 위해 PDNO로 호출
+       ========================= */
 
-        private final String code;
+    public Mono<KisSearchInfoResponseDto.Output> fetchSearchInfoRaw(String stockCode, String marketDivCode) {
+        final String endpoint = "search-stock-info";
 
-        KisMarketDivCode(String code) {
-            this.code = code;
-        }
+        return getAccessToken()
+                .flatMap(token -> {
+                    var spec = webClient.get()
+                            .uri(uriBuilder -> uriBuilder
+                                    .path("/uapi/domestic-stock/v1/quotations/search-stock-info")
+                                    .queryParam("FID_COND_MRKT_DIV_CODE", marketDivCode)
+                                    .queryParam("PDNO", stockCode)
+                                    .queryParam("PRDT_TYPE_CD", "300")
+                                    .build()
+                            )
+                            .header("authorization", token)
+                            .header("appkey", appKey)
+                            .header("appsecret", appSecret)
+                            .header("tr_id", "CTPF1002R")
+                            .header("custtype", "P")
+                            .accept(MediaType.APPLICATION_JSON);
 
-        public String getCode() {
-            return code;
-        }
+                    return exchangeAndParse(spec, endpoint, KisSearchInfoResponseDto.class);
+
+                })
+                .handle((raw, sink) -> {
+                    KisSearchInfoResponseDto parsed = raw.parsed();
+                    log.info("[KIS {}] rt_cd={} msg_cd={} msg1={} body={}",
+                            endpoint,
+                            parsed != null ? parsed.getRt_cd() : null,
+                            parsed != null ? parsed.getMsg_cd() : null,
+                            parsed != null ? parsed.getMsg1() : null,
+                            raw.rawBody()
+                    );
+                    requireRtOk(parsed, endpoint, raw.rawBody());
+
+                    if (parsed.getOutput() == null) {
+                        sink.error(new ErrorException(
+                                ErrorCode.KIS_BIZ_ERROR,
+                                "KIS output is null. endpoint=" + endpoint + " body=" + truncate(raw.rawBody(), 800)
+                        ));
+                        return;
+                    }
+                    sink.next(parsed.getOutput());
+                });
     }
 
-
     /* =========================
-       4) 캔들(OHLCV) 조회 (KIS)
+       3) 캔들
        ========================= */
 
     public Mono<List<PriceOhlcvDto>> fetchCandles(
@@ -188,14 +230,15 @@ public class KrStockClient {
     ) {
         final String endpoint = "inquire-daily-itemchartprice";
         final String interval = toKisInterval(freq);
+
         return getAccessToken()
                 .flatMap(token -> {
                     var spec = webClient.get()
                             .uri(uriBuilder -> uriBuilder
                                     .path("/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice")
-                                    .queryParam("FID_COND_MRKT_DIV_CODE", "J") //나중에 marketDivcode로 변환
+                                    .queryParam("FID_COND_MRKT_DIV_CODE", marketDivCode)
                                     .queryParam("FID_INPUT_ISCD", stockCode)
-                                    .queryParam("FID_PERIOD_DIV_CODE", interval) // D/W/M
+                                    .queryParam("FID_PERIOD_DIV_CODE", interval)
                                     .queryParam("FID_INPUT_DATE_1", toKisDateString(from))
                                     .queryParam("FID_INPUT_DATE_2", toKisDateString(to))
                                     .queryParam("FID_ORG_ADJ_PRC", "0")
@@ -206,7 +249,7 @@ public class KrStockClient {
                             .header("appsecret", appSecret)
                             .header("tr_id", "FHKST03010100")
                             .header("custtype", "P")
-                            .header("content-type", "application/json; charset=utf-8");
+                            .accept(MediaType.APPLICATION_JSON);
 
                     return exchangeAndParse(spec, endpoint, KisCandlesResponse.class);
                 })
@@ -218,7 +261,7 @@ public class KrStockClient {
     }
 
     /* =========================
-       [표준 템플릿] status + headers + raw body + rt_cd 분기
+       Template
        ========================= */
 
     private <T> Mono<KisRaw<T>> exchangeAndParse(
@@ -263,13 +306,10 @@ public class KrStockClient {
                 });
     }
 
-    /** 200이어도 rt_cd로 실패 */
     private void requireRtOk(KisRtHeader parsed, String endpointName, String rawBody) {
         String rt = parsed.getRt_cd();
         if (rt == null || rt.isBlank() || !"0".equals(rt)) {
             String msg1 = parsed.getMsg1();
-
-            // 시장 운영시간/휴장 감지 (패턴은 운영 msg1 보고 더 정밀화 가능)
             if (msg1 != null && (msg1.contains("장") && msg1.contains("시간"))) {
                 throw new ErrorException(
                         ErrorCode.KIS_MARKET_CLOSED,
@@ -291,7 +331,7 @@ public class KrStockClient {
     }
 
     /* =========================
-       Candles Response DTO (KisRtHeader implements)
+       Candles Response
        ========================= */
 
     @Getter
@@ -355,7 +395,7 @@ public class KrStockClient {
             case ONE_D -> "D";
             case ONE_W -> "W";
             case ONE_M -> "M";
-            case ONE_H -> "60M";  // 분봉 엔드포인트로 분리 시 재설계
+            case ONE_H -> "60M";
             default -> "D";
         };
     }
@@ -387,7 +427,7 @@ public class KrStockClient {
 
         return Optional.of(PriceOhlcvDto.builder()
                 .ts(ts)
-                .freq(freq) // 저장 안정성 위해 freq 채움
+                .freq(freq)
                 .open(open)
                 .high(high)
                 .low(low)
@@ -448,27 +488,39 @@ public class KrStockClient {
         return copy.toString();
     }
 
+    // Exchange 단일진실원: rprs_mrkt_kor_name
     private String resolveDomesticExchangeCode(KisStatResponseDto.Output out) {
-        log.info("[resolveDomesticExchangeCode] out = {}" ,out);
         if (out == null) return "KRX";
         String name = out.getRprs_mrkt_kor_name();
         if (name == null || name.isBlank()) return "KRX";
 
-        // 공백/대소문자 normalize
         String n = name.trim();
         String u = n.toUpperCase(Locale.ROOT);
 
-        // 1) 영문 우선 (KOSPI200 같은 케이스 처리)
         if (u.contains("KOSPI")) return "KOSPI";
         if (u.contains("KOSDAQ")) return "KOSDAQ";
         if (u.contains("KONEX")) return "KONEX";
 
-        // 2) 한글 보조
         if (n.contains("코스피") || n.contains("유가")) return "KOSPI";
         if (n.contains("코스닥")) return "KOSDAQ";
         if (n.contains("코넥스")) return "KONEX";
 
         return "KRX";
+    }
+
+    // DB/엔티티 exchange.code -> KIS market div code
+    private String toKisMarketDivCode(Exchange exchange) {
+        if (exchange == null) return "J";
+        String code = exchange.getCode();
+        if (code == null || code.isBlank()) return "J";
+
+        return switch (code) {
+            case "KOSPI" -> "J";
+            case "KOSDAQ" -> "Q";
+            case "KONEX" -> "K";
+            case "KRX" -> "J";
+            default -> "J";
+        };
     }
 
     private String safeMsg(String msg) {
