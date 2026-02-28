@@ -1,7 +1,9 @@
 // backend/src/main/java/com/qaima/service/feature2/Feature2AnalyzeService.java
 package com.qaima.service.feature2;
 
+import com.qaima.common.ErrorCode;
 import com.qaima.common.Feat2WarningCode;
+import com.qaima.domain.Freq;
 import com.qaima.domain.Industry;
 import com.qaima.domain.Stock;
 import com.qaima.dto.feature2.Feature2AnalyzeRequestDto;
@@ -29,18 +31,29 @@ public class Feature2AnalyzeService {
     private final StockService stockService;              // Mono<Stock> getOrCreateStockByCode(...)
     private final StockRepository stockRepository;        // JPA (blocking)
     private final IndustryRepository industryRepository;  // JPA (blocking)
+    private final IndustryIndexService industryIndexService;
+    private final PeerClusterService peerClusterService;  // Redis only (현재)
+
+    // MVP 고정 파라미터
+    private static final Freq INDEX_FREQ = Freq.ONE_D;
+    private static final int  INDEX_LIMIT = 120;
+
+    private static final Freq PEER_FREQ = Freq.ONE_D;
+    private static final int  PEER_WINDOW = 90;
 
     public Mono<Feature2AnalyzeResponseDto> analyze(Feature2AnalyzeRequestDto req) {
         log.info("[Feat2] stockService impl={}", stockService.getClass().getName());
-        log.info("[Feat2] about to call getOrCreate stockCode={}", req.getStockCode());
-        Feature2MetaDto meta = Feature2MetaDto.empty();
-        Feature2MetricsDto metrics = Feature2MetricsDto.empty();
 
-        String stockCode = (req == null) ? null : req.getStockCode();
+        final Feature2MetaDto meta = Feature2MetaDto.empty();
+        final Feature2MetricsDto metrics = Feature2MetricsDto.empty();
+
+        final String stockCode = (req == null) ? null : req.getStockCode();
         if (stockCode == null || stockCode.isBlank()) {
             meta.addWarning(Feat2WarningCode.STOCK_NOT_FOUND);
             return Mono.just(buildResponse(metrics, meta));
         }
+
+        log.info("[Feat2] about to call getOrCreate stockCode={}", stockCode);
 
         // 1) Stock resolve/upsert (DB miss -> 외부 메타 -> 저장) : StockService가 Mono로 제공
         return resolveOrCreateStock(stockCode, meta)
@@ -49,64 +62,105 @@ public class Feature2AnalyzeService {
                         return Mono.just(buildResponse(metrics, meta));
                     }
 
-                    Stock stock = optStock.get();
+                    final Stock stock = optStock.get();
 
                     // 1-1) exchange fetch join 재조회 (안전)
                     return refetchWithExchange(stock)
                             .flatMap(s -> {
                                 metrics.setStock(toStockMetaFromEntity(s, "DB"));
+                                return resolveIndustryAndAttachDownstream(s, metrics, meta);
+                            })
+                            .onErrorResume(ex -> {
+                                // exchange 재조회 실패는 부분 성공 유지
+                                log.warn("[Feat2] fetch-join(exchange) re-fetch failed. code={}, cause={}",
+                                        stock.getStockCode(), ex.getMessage());
 
-                                // 2) Industry resolve (id만 안전하게 추출 후 재조회)
-                                return resolveIndustryIdSafe(s, meta)
-                                        .flatMap(optIndustryId -> {
-                                            if (optIndustryId.isEmpty()) {
-                                                return Mono.just(buildResponse(metrics, meta));
+                                // 최소한 stock 메타는 채우고, industry/index/peer는 가능한 만큼 시도
+                                metrics.setStock(toStockMetaFromEntity(stock, "DB"));
+                                return resolveIndustryAndAttachDownstream(stock, metrics, meta);
+                            });
+                })
+                .onErrorResume(ex -> {
+                    // 최상위 보호막 (절대 throw 안 함)
+                    log.warn("[Feat2AnalyzeService] analyze top-level failure. code={}, cause={}", stockCode, ex.getMessage());
+                    meta.addWarning(String.valueOf(ErrorCode.INTERNAL_ERROR));
+                    return Mono.just(buildResponse(metrics, meta));
+                });
+    }
+
+    /**
+     * Industry resolve + (IndustryIndex -> PeerCluster)까지 붙이는 공용 흐름
+     * - 여기서부터는 "가능한 만큼 채우고" 마지막에 response를 한 번만 만든다.
+     */
+    private Mono<Feature2AnalyzeResponseDto> resolveIndustryAndAttachDownstream(
+            Stock stock,
+            Feature2MetricsDto metrics,
+            Feature2MetaDto meta
+    ) {
+        // 2) Industry resolve (id만 안전하게 추출 후 재조회)
+        return resolveIndustryIdSafe(stock, meta)
+                .flatMap(optIndustryId -> {
+                    if (optIndustryId.isEmpty()) {
+                        return Mono.just(buildResponse(metrics, meta));
+                    }
+                    final Long industryId = optIndustryId.get();
+
+                    // Industry 엔티티 재조회 (blocking -> boundedElastic)
+                    return Mono.fromCallable(() -> industryRepository.findById(industryId))
+                            .subscribeOn(Schedulers.boundedElastic())
+                            .flatMap(optIndustry -> {
+                                if (optIndustry.isEmpty()) {
+                                    meta.addWarning(Feat2WarningCode.INDUSTRY_MISSING);
+                                    return Mono.just(buildResponse(metrics, meta));
+                                }
+
+                                final Industry industry = optIndustry.get();
+                                metrics.setIndustry(toIndustryMeta(industry));
+
+                                // =========================
+                                // Feature2: Industry Index 연결
+                                // =========================
+                                return industryIndexService
+                                        .loadIndustryIndex(
+                                                industry.getIndustryId(),
+                                                meta,
+                                                INDEX_FREQ,
+                                                INDEX_LIMIT
+                                        )
+                                        .defaultIfEmpty(null)
+                                        .flatMap(indexBlock -> {
+                                            if (indexBlock != null) {
+                                                metrics.setIndustryIndex(indexBlock);
                                             }
-                                            Long industryId = optIndustryId.get();
 
-                                            return Mono.fromCallable(() -> industryRepository.findById(industryId))
-                                                    .subscribeOn(Schedulers.boundedElastic())
-                                                    .map(optIndustry -> {
-                                                        if (optIndustry.isEmpty()) {
-                                                            meta.addWarning(Feat2WarningCode.INDUSTRY_MISSING);
-                                                        } else {
-                                                            metrics.setIndustry(toIndustryMeta(optIndustry.get()));
+                                            // =========================
+                                            // Feature2: Peer Cluster 연결 (Redis only)
+                                            // =========================
+                                            return peerClusterService
+                                                    .getPeerCluster(industry.getIndustryId(), PEER_FREQ, PEER_WINDOW)
+                                                    .map(result -> {
+                                                        metrics.setPeerCluster(result.getPeerCluster()); // nullable OK
+
+                                                        if (result.getWarnings() != null && !result.getWarnings().isEmpty()) {
+                                                            // Feature2MetaDto.warnings가 List<String>이면 addAll 가능
+                                                            meta.getWarnings().addAll(result.getWarnings());
                                                         }
                                                         return buildResponse(metrics, meta);
                                                     })
                                                     .onErrorResume(ex -> {
-                                                        meta.addWarning(Feat2WarningCode.INDUSTRY_MISSING);
+                                                        log.warn("[Feat2] peerCluster load failed. industryId={}, cause={}",
+                                                                industry.getIndustryId(), ex.getMessage());
+                                                        meta.addWarning(Feat2WarningCode.PEER_CLUSTER_MISSING);
+                                                        metrics.setPeerCluster(null);
                                                         return Mono.just(buildResponse(metrics, meta));
                                                     });
                                         });
                             })
                             .onErrorResume(ex -> {
-                                // exchange 재조회 실패는 부분 성공 유지
-                                log.warn("[Feature2] fetch-join(exchange) re-fetch failed. code={}, cause={}",
+                                log.warn("[Feat2] industry fetch failed. code={}, cause={}",
                                         stock.getStockCode(), ex.getMessage());
-                                metrics.setStock(toStockMetaFromEntity(stock, "DB"));
-                                // industry까지는 시도(가능하면)
-                                return resolveIndustryIdSafe(stock, meta)
-                                        .flatMap(optIndustryId -> {
-                                            if (optIndustryId.isEmpty()) {
-                                                return Mono.just(buildResponse(metrics, meta));
-                                            }
-                                            Long industryId = optIndustryId.get();
-                                            return Mono.fromCallable(() -> industryRepository.findById(industryId))
-                                                    .subscribeOn(Schedulers.boundedElastic())
-                                                    .map(optIndustry -> {
-                                                        if (optIndustry.isEmpty()) {
-                                                            meta.addWarning(Feat2WarningCode.INDUSTRY_MISSING);
-                                                        } else {
-                                                            metrics.setIndustry(toIndustryMeta(optIndustry.get()));
-                                                        }
-                                                        return buildResponse(metrics, meta);
-                                                    })
-                                                    .onErrorResume(e2 -> {
-                                                        meta.addWarning(Feat2WarningCode.INDUSTRY_MISSING);
-                                                        return Mono.just(buildResponse(metrics, meta));
-                                                    });
-                                        });
+                                meta.addWarning(Feat2WarningCode.INDUSTRY_MISSING);
+                                return Mono.just(buildResponse(metrics, meta));
                             });
                 });
     }
@@ -120,7 +174,7 @@ public class Feature2AnalyzeService {
         return stockService.getOrCreateStockByCode(rawStockCode)
                 .map(Optional::of)
                 .onErrorResume(ex -> {
-                    log.warn("[Feature2] stock resolve/create failed -> warnings only. rawCode={}, cause={}",
+                    log.warn("[Feat2] stock resolve/create failed -> warnings only. rawCode={}, cause={}",
                             rawStockCode, ex.getMessage());
                     meta.addWarning(Feat2WarningCode.STOCK_NOT_FOUND);
 
@@ -162,9 +216,9 @@ public class Feature2AnalyzeService {
 
     private Feature2AnalyzeResponseDto buildResponse(Feature2MetricsDto metrics, Feature2MetaDto meta) {
         return Feature2AnalyzeResponseDto.builder()
-                .metrics(metrics)
-                .explain(null) // FR-21 includeExplain 붙일 때만
-                .meta(meta)
+                .metrics(metrics)     // 항상 존재
+                .explain(null)        // FR-21 includeExplain 붙일 때만
+                .meta(meta)           // warnings 누적
                 .build();
     }
 

@@ -22,6 +22,12 @@ spring:
   flyway:
     enabled: false
 
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+
 logging:
   level:
     reactor.netty.http.client: DEBUG

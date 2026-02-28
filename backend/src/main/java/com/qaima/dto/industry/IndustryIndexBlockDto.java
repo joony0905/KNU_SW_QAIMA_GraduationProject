@@ -9,6 +9,12 @@ import java.util.List;
 @Getter
 @Builder
 public class IndustryIndexBlockDto {
-    private final IndustryIndexMetaDto meta;
-    private final List<CandleDto> ohlcv; // 렌더링 표준으로 통일
+
+    private final Long indexId;
+    private final String name;
+    private final String code;
+    private final String currency;
+
+    // 시각화/비교용 (%)
+    private final List<RelativePointDto> series;
 }
