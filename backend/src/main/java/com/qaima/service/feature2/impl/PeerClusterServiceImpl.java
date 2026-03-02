@@ -1,11 +1,13 @@
+// backend/src/main/java/com/qaima/service/feature2/impl/PeerClusterServiceImpl.java
 package com.qaima.service.feature2.impl;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.qaima.domain.Freq;
 import com.qaima.common.Feat2WarningCode;
-import com.qaima.dto.industry.PeerClusterDto;
-import com.qaima.repository.PeerClusterCacheRepository;
+import com.qaima.domain.Freq;
+import com.qaima.dto.peercluster.PeerClusterRequestDto;
+import com.qaima.dto.peercluster.PeerClusterResponseDto;
+import com.qaima.dto.peercluster.PeerClusterDto;
+import com.qaima.external.PeerClusterClient;
 import com.qaima.service.feature2.PeerClusterResult;
 import com.qaima.service.feature2.PeerClusterService;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 
@@ -28,17 +29,24 @@ public class PeerClusterServiceImpl implements PeerClusterService {
 
     private final ReactiveStringRedisTemplate redis;
     private final ObjectMapper objectMapper;
-
-    // DB fallback 템플릿
-    private final PeerClusterCacheRepository peerClusterCacheRepository;
+    private final PeerClusterClient fastApiClient;
 
     @Override
-    public Mono<PeerClusterResult> getPeerCluster(Long industryId, Freq freq, int window) {
-        if (industryId == null) {
-            return Mono.just(PeerClusterResult.emptyWithWarning(Feat2WarningCode.PEER_CLUSTER_MISSING.name()));
+    public Mono<PeerClusterResult> getPeerCluster(
+            Long industryId,
+            String anchorStockCode,
+            Freq freq,
+            int window,
+            int peerCount,
+            int maxLag
+    ) {
+        if (industryId == null || anchorStockCode == null) {
+            return Mono.just(PeerClusterResult.empty(
+                    Feat2WarningCode.PEER_CLUSTER_MISSING.name()
+            ));
         }
 
-        final String key = cacheKey(industryId, freq, window);
+        final String key = cacheKey(industryId, freq, window, peerCount, maxLag);
 
         // 1) Redis hit
         return redis.opsForValue()
@@ -46,79 +54,87 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                 .flatMap(json -> {
                     try {
                         PeerClusterDto dto = objectMapper.readValue(json, PeerClusterDto.class);
-                        return Mono.just(PeerClusterResult.builder().peerCluster(dto).build());
+                        return Mono.just(PeerClusterResult.builder()
+                                .peerCluster(dto)
+                                .build());
                     } catch (Exception e) {
-                        log.warn("[PeerCluster] Redis JSON parse failed. key={}", key, e);
-                        // JSON 파싱 실패면 fallback 시도
-                        return fromDbFallback(industryId, freq, window)
-                                .map(r -> r.addWarning(Feat2WarningCode.PEER_CLUSTER_JSON_PARSE_FAILED.name()));
+                        return Mono.empty();
                     }
                 })
+
+                // 2) Redis miss → FastAPI 계산
                 .switchIfEmpty(
-                        // 2) Redis miss -> DB fallback
-                        fromDbFallback(industryId, freq, window)
+                        callFastApi(industryId, anchorStockCode, freq, window, peerCount, maxLag)
+                                .flatMap(result -> {
+                                    if (result.getPeerCluster() != null) {
+                                        writeRedisBestEffort(key, result.getPeerCluster());
+                                    }
+                                    return Mono.just(result);
+                                })
                 )
+
+                // 3) 최상위 보호
                 .onErrorResume(e -> {
-                    log.warn("[PeerCluster] cache read failed. industryId={}", industryId, e);
-                    // throw 금지: 경고만 추가하고 null 반환
-                    return Mono.just(PeerClusterResult.emptyWithWarning(Feat2WarningCode.PEER_CLUSTER_CACHE_READ_FAILED.name()));
+                    log.warn("[PeerCluster] unexpected failure", e);
+                    return Mono.just(
+                            PeerClusterResult.empty(
+                                    Feat2WarningCode.PEER_CLUSTER_INTERNAL_ERROR.name()
+                            )
+                    );
                 });
     }
 
-    private Mono<PeerClusterResult> fromDbFallback(Long industryId, Freq freq, int window) {
-        // MVP에서는 "최신 1건"만 가져오고, freq/window는 paramsJson로만 확인(또는 무시)하는 템플릿
-        return Mono.fromCallable(() ->
-                        peerClusterCacheRepository.findTopByIdIndustryIdAndIdMethodOrderByIdTsDesc(industryId, METHOD)
-                                .orElse(null)
-                )
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(row -> {
-                    if (row == null) {
-                        return Mono.just(PeerClusterResult.emptyWithWarning(Feat2WarningCode.PEER_CLUSTER_DB_EMPTY.name()));
-                    }
+    private Mono<PeerClusterResult> callFastApi(
+            Long industryId,
+            String anchorStockCode,
+            Freq freq,
+            int window,
+            int peerCount,
+            int maxLag
+    ) {
+        PeerClusterRequestDto req = PeerClusterRequestDto.builder()
+                .industryId(industryId)
+                .anchorStockCode(anchorStockCode)
+                .freq(freq)
+                .window(window)
+                .peerCount(peerCount)
+                .maxLag(maxLag)
+                .build();
 
-                    final String json = row.getClusterJson();
-                    try {
-                        PeerClusterDto dto = objectMapper.readValue(json, PeerClusterDto.class);
+        return fastApiClient.requestPeerCluster(req)
+                .map(resp -> {
+                    PeerClusterResult r = PeerClusterResult.builder()
+                            .peerCluster(resp.getPeerCluster())
+                            .build();
 
-                        // DB hit -> Redis write-through (best-effort)
-                        return writeRedisBestEffort(cacheKey(industryId, freq, window), dto)
-                                .thenReturn(PeerClusterResult.builder()
-                                        .peerCluster(dto)
-                                        .build());
-                    } catch (Exception e) {
-                        log.warn("[PeerCluster] DB JSON parse failed. industryId={}", industryId, e);
-                        return Mono.just(PeerClusterResult.emptyWithWarning(Feat2WarningCode.PEER_CLUSTER_JSON_PARSE_FAILED.name()));
+                    if (resp.getWarnings() != null) {
+                        r.getWarnings().addAll(resp.getWarnings());
                     }
+                    return r;
                 })
-                .onErrorResume(e -> {
-                    log.warn("[PeerCluster] DB read failed. industryId={}", industryId, e);
-                    return Mono.just(PeerClusterResult.emptyWithWarning(Feat2WarningCode.PEER_CLUSTER_DB_READ_FAILED.name()));
-                });
+                .onErrorResume(e ->
+                        Mono.just(PeerClusterResult.empty(
+                                Feat2WarningCode.PEER_CLUSTER_MISSING.name()
+                        ))
+                );
     }
 
-    private Mono<Void> writeRedisBestEffort(String key, PeerClusterDto dto) {
+    private void writeRedisBestEffort(String key, PeerClusterDto dto) {
         try {
             String json = objectMapper.writeValueAsString(dto);
-            return redis.opsForValue()
-                    .set(key, json, TTL)
-                    .then()
-                    .onErrorResume(e -> {
-                        log.warn("[PeerCluster] Redis write failed. key={}", key, e);
-                        return Mono.empty();
-                    });
-        } catch (JsonProcessingException e) {
-            log.warn("[PeerCluster] Redis serialize failed. key={}", key, e);
-            return Mono.empty();
+            redis.opsForValue().set(key, json, TTL).subscribe();
+        } catch (Exception e) {
+            log.warn("[PeerCluster] redis write failed", e);
         }
     }
 
-    private String cacheKey(Long industryId, Freq freq, int window) {
-        // key에 version/method/freq/window 포함 (스키마 변경 대비)
-        return "peer_cluster_cache:" + VERSION +
+    private String cacheKey(Long industryId, Freq freq, int window, int peerCount, int maxLag) {
+        return "peer_cluster:" + VERSION +
                 ":" + METHOD +
-                ":industryId=" + industryId +
-                ":freq=" + (freq == null ? "D" : freq.name()) +
-                ":window=" + window;
+                ":industry=" + industryId +
+                ":freq=" + freq.name() +
+                ":window=" + window +
+                ":peers=" + peerCount +
+                ":lag=" + maxLag;
     }
 }

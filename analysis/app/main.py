@@ -4,7 +4,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from app.api.feature1 import router as feature1_router
-# from api.feature2 import router as feature2_router
+from app.api.feature2 import router as feature2_router
+from app.services.clustering import set_market_data_provider
+from app.services.market_data_spring import SpringMarketDataProvider, SpringClientConfig
 # from api.feature3 import router as feature3_router
 import traceback
 from fastapi.responses import JSONResponse
@@ -17,9 +19,12 @@ app = FastAPI(
     version="0.0.1",
 )
 
+SPRING_BASE_URL = os.getenv("SPRING_BASE_URL")
+set_market_data_provider(SpringMarketDataProvider(SpringClientConfig(base_url=SPRING_BASE_URL)))
 print("GEMINI_API_KEY loaded:", bool(os.getenv("GEMINI_API_KEY")))
 print("LLM_VENDOR:", os.getenv("LLM_VENDOR"))
 print("GEMINI_MODEL:", os.getenv("GEMINI_MODEL"))
+print("SPRING_LOCAL:", os.getenv("SPRING_BASE_URL"))
 
 # 개발 단계니 일단 전체 허용함. 나중에 세팅ㄱ
 app.add_middleware(
@@ -42,7 +47,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 # 라우터 등록
 app.include_router(feature1_router)
-# app.include_router(feature2_router)
+app.include_router(feature2_router)
 # app.include_router(feature3_router)
 
 

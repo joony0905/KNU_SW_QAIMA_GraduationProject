@@ -3,11 +3,10 @@ package com.qaima.service.feature2;
 import com.qaima.common.Feat2WarningCode;
 import com.qaima.domain.Freq;
 import com.qaima.domain.IndustryIndex;
-import com.qaima.domain.IndustryIndexMap;
 import com.qaima.domain.IndustryIndexOhlcv;
 import com.qaima.dto.feature2.Feature2MetaDto;
 import com.qaima.dto.industry.IndustryIndexBlockDto;
-import com.qaima.dto.industry.RelativePointDto;
+import com.qaima.dto.peercluster.RelativePointDto;
 import com.qaima.repository.IndustryIndexMapRepository;
 import com.qaima.repository.IndustryIndexOhlcvRepository;
 import com.qaima.repository.IndustryIndexRepository;
@@ -53,7 +52,7 @@ public class IndustryIndexService {
             return Mono.empty();
         }
 
-        // 1️⃣ industry_id → industry_index_map
+        // 1. industry_id → industry_index_map
         return Mono.fromCallable(() ->
                         indexMapRepository.findFirstByIdIndustryId(industryId)
                 )
@@ -66,7 +65,7 @@ public class IndustryIndexService {
                     return Mono.just(optMap.get());
                 })
 
-                // 2️⃣ index 메타 조회
+                // 2. index 메타 조회
                 .flatMap(map ->
                         Mono.fromCallable(() ->
                                         indexRepository.findById(
@@ -92,7 +91,7 @@ public class IndustryIndexService {
     }
 
     /**
-     * 3️⃣ index OHLCV 조회 + 상대% 리베이스
+     * 3. index OHLCV 조회 + 상대% 리베이스
      */
     private Mono<IndustryIndexBlockDto> loadOhlcvAndBuild(
             IndustryIndex index,

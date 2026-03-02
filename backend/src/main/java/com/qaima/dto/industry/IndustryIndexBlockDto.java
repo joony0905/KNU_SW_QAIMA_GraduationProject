@@ -1,6 +1,6 @@
 package com.qaima.dto.industry;
 
-import com.qaima.dto.candle.CandleDto;
+import com.qaima.dto.peercluster.RelativePointDto;
 import lombok.Builder;
 import lombok.Getter;
 

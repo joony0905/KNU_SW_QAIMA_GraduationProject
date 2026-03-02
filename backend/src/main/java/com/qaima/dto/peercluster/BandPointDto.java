@@ -1,4 +1,4 @@
-package com.qaima.dto.industry;
+package com.qaima.dto.peercluster;
 
 import lombok.Builder;
 import lombok.Data;

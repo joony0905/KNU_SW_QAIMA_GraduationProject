@@ -3,7 +3,7 @@ package com.qaima.dto.feature2;
 
 import com.qaima.dto.industry.IndustryIndexBlockDto;
 import com.qaima.dto.industry.IndustryMetaDto;
-import com.qaima.dto.industry.PeerClusterDto;
+import com.qaima.dto.peercluster.PeerClusterDto;
 import com.qaima.dto.news.NewsItemDto;
 import com.qaima.dto.stock.StockMeta;
 import lombok.AllArgsConstructor;

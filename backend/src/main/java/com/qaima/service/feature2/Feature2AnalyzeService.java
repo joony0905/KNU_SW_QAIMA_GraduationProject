@@ -136,8 +136,14 @@ public class Feature2AnalyzeService {
                                             // =========================
                                             // Feature2: Peer Cluster 연결 (Redis only)
                                             // =========================
-                                            return peerClusterService
-                                                    .getPeerCluster(industry.getIndustryId(), PEER_FREQ, PEER_WINDOW)
+                                            return peerClusterService.getPeerCluster(
+                                                            industry.getIndustryId(),
+                                                            stock.getStockCode(),
+                                                            PEER_FREQ,
+                                                            PEER_WINDOW,
+                                                            8,      // peerCount (MVP)
+                                                            5       // maxLag (MVP)
+                                                    )
                                                     .map(result -> {
                                                         metrics.setPeerCluster(result.getPeerCluster()); // nullable OK
 
