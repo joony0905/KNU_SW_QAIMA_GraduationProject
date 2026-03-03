@@ -1,4 +1,4 @@
-package com.qaima.dto;
+package com.qaima.dto.user;
 
 import lombok.Getter;
 import lombok.Setter;

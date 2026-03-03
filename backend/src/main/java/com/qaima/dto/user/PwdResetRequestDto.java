@@ -1,4 +1,4 @@
-package com.qaima.dto;
+package com.qaima.dto.user;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;

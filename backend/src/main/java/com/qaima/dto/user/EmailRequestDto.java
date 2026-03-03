@@ -1,4 +1,4 @@
-package com.qaima.dto;
+package com.qaima.dto.user;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -7,12 +7,10 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class EmailConfirmDto {
+public class EmailRequestDto {
 
     @NotBlank
     @Email
     private String email;
 
-    @NotBlank
-    private String code; // 6자리
 }

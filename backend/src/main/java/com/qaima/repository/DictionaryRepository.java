@@ -1,7 +1,7 @@
 package com.qaima.repository;
 
 import com.qaima.domain.DictionaryTerm;
-import com.qaima.dto.DictionaryInitialCountDto;
+import com.qaima.dto.dictionary.DictionaryInitialCountDto;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -21,7 +21,7 @@ public interface DictionaryRepository extends JpaRepository<DictionaryTerm, Stri
     List<DictionaryTerm> findByInitialAndTermContainingIgnoreCaseOrderByTermAsc(String initial, String q, Pageable pageable);
 
     @Query("""
-        select new com.qaima.dto.DictionaryInitialCountDto(d.initial, count(d))
+        select new com.qaima.dto.dictionary.DictionaryInitialCountDto(d.initial, count(d))
         from DictionaryTerm d
         group by d.initial
         order by d.initial asc

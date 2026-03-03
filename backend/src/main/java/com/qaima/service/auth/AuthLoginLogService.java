@@ -1,4 +1,4 @@
-package com.qaima.service;
+package com.qaima.service.auth;
 
 import com.qaima.common.Blocking;
 import com.qaima.domain.AuthLoginLog;

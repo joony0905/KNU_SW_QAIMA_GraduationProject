@@ -1,4 +1,4 @@
-package com.qaima.dto;
+package com.qaima.dto.dictionary;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
@@ -24,4 +24,3 @@ public class DictionaryUpsertRequestDto {
 
     private String tag;
 }
-

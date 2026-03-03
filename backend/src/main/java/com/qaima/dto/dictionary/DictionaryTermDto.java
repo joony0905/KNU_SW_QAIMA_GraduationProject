@@ -1,4 +1,4 @@
-package com.qaima.dto;
+package com.qaima.dto.dictionary;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,4 +22,3 @@ public class DictionaryTermDto {
     private Instant createdAt;
     private Instant updatedAt;
 }
-

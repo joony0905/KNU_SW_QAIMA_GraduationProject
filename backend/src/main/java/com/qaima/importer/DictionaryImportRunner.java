@@ -20,8 +20,8 @@ public class DictionaryImportRunner implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         String csvArg = Arrays.stream(args)
-                .filter(a -> a != null && !a.isBlank())
-                .filter(a -> !a.startsWith("--"))
+                .filter(arg -> arg != null && !arg.isBlank())
+                .filter(arg -> !arg.startsWith("--"))
                 .findFirst()
                 .orElse(null);
 
@@ -35,10 +35,4 @@ public class DictionaryImportRunner implements CommandLineRunner {
         importService.importFromCsv(csvPath);
         log.info("Dictionary CSV import done");
     }
-
-    /**
-     * 사용 예시:
-     * SPRING_PROFILES_ACTIVE=mysql,import-dictionary-csv \
-     * ./gradlew bootRun --args='data/dictionary_seed_sample.csv'
-     */
 }

@@ -1,4 +1,4 @@
-package com.qaima.dto;
+package com.qaima.dto.user;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class TokenRefreshRequestDto {
+
     @NotBlank(message = "refreshToken is required")
     private String refreshToken;
 }
-

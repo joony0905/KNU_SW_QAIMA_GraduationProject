@@ -1,4 +1,4 @@
-package com.qaima.dto;
+package com.qaima.dto.dictionary;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -13,4 +13,3 @@ public class DictionaryInitialCountDto {
     private String initial;
     private Long count;
 }
-

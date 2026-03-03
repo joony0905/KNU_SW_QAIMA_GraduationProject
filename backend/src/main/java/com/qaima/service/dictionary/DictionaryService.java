@@ -1,12 +1,12 @@
-package com.qaima.service;
+package com.qaima.service.dictionary;
 
 import com.qaima.common.Blocking;
 import com.qaima.common.DictionaryTermNormalizer;
 import com.qaima.common.exception.ResourceNotFoundException;
 import com.qaima.domain.DictionaryTerm;
-import com.qaima.dto.DictionaryInitialCountDto;
-import com.qaima.dto.DictionaryTermDto;
-import com.qaima.dto.DictionaryUpsertRequestDto;
+import com.qaima.dto.dictionary.DictionaryInitialCountDto;
+import com.qaima.dto.dictionary.DictionaryTermDto;
+import com.qaima.dto.dictionary.DictionaryUpsertRequestDto;
 import com.qaima.repository.DictionaryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -37,8 +37,8 @@ public class DictionaryService {
     }
 
     public Mono<List<DictionaryTermDto>> search(String q, String initial, Integer page, Integer size) {
-        final String query = normalizeQuery(q);
-        final String initialKey = normalizeInitial(initial);
+        String query = normalizeQuery(q);
+        String initialKey = normalizeInitial(initial);
 
         int resolvedSize = clamp(size, DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
         int resolvedPage = Math.max(page == null ? 0 : page, 0);
@@ -66,12 +66,10 @@ public class DictionaryService {
         int resolvedSize = clamp(size, DEFAULT_AUTOCOMPLETE_SIZE, 1, MAX_AUTOCOMPLETE_SIZE);
         Pageable pageable = PageRequest.of(0, resolvedSize);
 
-        return Blocking.call(() ->
-                dictionaryRepository.findByTermStartingWithIgnoreCaseOrderByTermAsc(prefix, pageable)
-                        .stream()
-                        .map(DictionaryTerm::getTerm)
-                        .toList()
-        );
+        return Blocking.call(() -> dictionaryRepository.findByTermStartingWithIgnoreCaseOrderByTermAsc(prefix, pageable)
+                .stream()
+                .map(DictionaryTerm::getTerm)
+                .toList());
     }
 
     public Mono<List<DictionaryInitialCountDto>> initialCounts() {
@@ -110,16 +108,16 @@ public class DictionaryService {
         });
     }
 
-    private static DictionaryTermDto toDto(DictionaryTerm e) {
-        if (e == null) return null;
+    private static DictionaryTermDto toDto(DictionaryTerm entity) {
+        if (entity == null) return null;
         return DictionaryTermDto.builder()
-                .term(e.getTerm())
-                .initial(e.getInitial())
-                .description(e.getDescription())
-                .source(e.getSource())
-                .tag(e.getTag())
-                .createdAt(e.getCreatedAt())
-                .updatedAt(e.getUpdatedAt())
+                .term(entity.getTerm())
+                .initial(entity.getInitial())
+                .description(entity.getDescription())
+                .source(entity.getSource())
+                .tag(entity.getTag())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
                 .build();
     }
 
@@ -138,22 +136,22 @@ public class DictionaryService {
         return "#".equals(key) ? null : key;
     }
 
-    private static String normalizeRequired(String v, String msg) {
-        if (v == null) throw new IllegalArgumentException(msg);
-        String trimmed = v.trim();
-        if (trimmed.isBlank()) throw new IllegalArgumentException(msg);
+    private static String normalizeRequired(String value, String message) {
+        if (value == null) throw new IllegalArgumentException(message);
+        String trimmed = value.trim();
+        if (trimmed.isBlank()) throw new IllegalArgumentException(message);
         return trimmed;
     }
 
-    private static String normalizeOptional(String v) {
-        if (v == null) return null;
-        String trimmed = v.trim();
+    private static String normalizeOptional(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
     }
 
-    private static int clamp(Integer v, int defaultValue, int min, int max) {
-        if (v == null) return defaultValue;
-        if (v < min) return min;
-        return Math.min(v, max);
+    private static int clamp(Integer value, int defaultValue, int min, int max) {
+        if (value == null) return defaultValue;
+        if (value < min) return min;
+        return Math.min(value, max);
     }
 }

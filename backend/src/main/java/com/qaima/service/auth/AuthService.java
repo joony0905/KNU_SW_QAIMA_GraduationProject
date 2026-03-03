@@ -1,12 +1,12 @@
-package com.qaima.service;
+package com.qaima.service.auth;
 
 import com.qaima.common.Blocking;
 import com.qaima.domain.User;
-import com.qaima.dto.LoginRequestDto;
-import com.qaima.dto.LoginResponseDto;
-import com.qaima.dto.TokenRefreshResponseDto;
-import com.qaima.dto.SignupRequestDto;
-import com.qaima.dto.UserResponseDto;
+import com.qaima.dto.user.LoginRequestDto;
+import com.qaima.dto.user.LoginResponseDto;
+import com.qaima.dto.user.SignupRequestDto;
+import com.qaima.dto.user.TokenRefreshResponseDto;
+import com.qaima.dto.user.UserResponseDto;
 import com.qaima.repository.UserRepository;
 import com.qaima.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;

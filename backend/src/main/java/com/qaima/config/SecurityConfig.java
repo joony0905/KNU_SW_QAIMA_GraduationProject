@@ -2,6 +2,7 @@ package com.qaima.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.common.ApiResponse;
+import com.qaima.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,7 +12,13 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -20,16 +27,18 @@ import reactor.core.publisher.Mono;
 public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
+    private final JwtAuthFilter jwtAuthFilter;
 
     @Bean
     public SecurityWebFilterChain filterChain(ServerHttpSecurity http) {
         return http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+                .addFilterAt(jwtAuthFilter, SecurityWebFiltersOrder.AUTHENTICATION)
 
                 .authorizeExchange(ex -> ex
-
                         // 공개
                         .pathMatchers("/api/v1/auth/**").permitAll()
                         .pathMatchers("/api/v1/email/**").permitAll()
@@ -37,6 +46,8 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/dictionary/**").permitAll()
                         .pathMatchers("/api/v1/health/**").permitAll()
                         .pathMatchers("/api/v1/test/ping").permitAll()
+                        .pathMatchers("/api/v1/charts/**").permitAll()
+                        .pathMatchers("/api/v1/stocks/**").permitAll()
 
                         // 관리자
                         .pathMatchers("/api/v1/admin/**").hasRole("ADMIN")
@@ -58,6 +69,29 @@ public class SecurityConfig {
                 )
 
                 .build();
+    }
+
+    //CORS 설정 (프론트 dev 서버 포트에 맞춰 허용)
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+
+        // 쿠키/인증 쓰면 true 필요 (지금은 토큰 방식이어도 켜놔도 무방)
+        config.setAllowCredentials(true);
+
+        // Vite(5173) / CRA(3000) 둘 다 허용
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:5173",
+                "http://localhost:3000"
+        ));
+
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("*"));
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 
     private Mono<Void> writeJson(org.springframework.web.server.ServerWebExchange exchange,

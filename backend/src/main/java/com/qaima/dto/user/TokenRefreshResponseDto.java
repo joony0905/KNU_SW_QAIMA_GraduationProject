@@ -1,9 +1,10 @@
-package com.qaima.dto;
+package com.qaima.dto.user;
 
 import lombok.Getter;
 
 @Getter
 public class TokenRefreshResponseDto {
+
     private final String accessToken;
     private final String refreshToken;
 
@@ -12,4 +13,3 @@ public class TokenRefreshResponseDto {
         this.refreshToken = refreshToken;
     }
 }
-

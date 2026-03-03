@@ -2,19 +2,13 @@ package com.qaima.common;
 
 import java.util.Locale;
 
-/**
- * 용어를 저장/조회할 때 일관되게 사용하도록 정규화합니다.
- *
- * 규칙:
- * - 앞뒤 공백 제거 + 연속 공백 축약
- * - 대문자 변환(금융 용어는 대소문자 비구분이 일반적)
- * - ㄱ~ㅎ / A~Z 인덱스 UI용 initial 계산
- */
 public final class DictionaryTermNormalizer {
 
     private static final String[] CHOSEONG = {
-            "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ",
-            "ㅅ", "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"
+            "\u3131", "\u3132", "\u3134", "\u3137", "\u3138",
+            "\u3139", "\u3141", "\u3142", "\u3143", "\u3145",
+            "\u3146", "\u3147", "\u3148", "\u3149", "\u314A",
+            "\u314B", "\u314C", "\u314D", "\u314E"
     };
 
     private DictionaryTermNormalizer() {}
@@ -29,12 +23,10 @@ public final class DictionaryTermNormalizer {
 
     public static String computeInitial(String normalizedTerm) {
         if (normalizedTerm == null) return "#";
-        String t = normalizedTerm.trim();
-        if (t.isEmpty()) return "#";
+        String term = normalizedTerm.trim();
+        if (term.isEmpty()) return "#";
 
-        char ch = t.charAt(0);
-
-        // 한글 완성형 음절(가~힣)
+        char ch = term.charAt(0);
         if (ch >= 0xAC00 && ch <= 0xD7A3) {
             int base = ch - 0xAC00;
             int index = base / (21 * 28);
@@ -44,15 +36,14 @@ public final class DictionaryTermNormalizer {
             return "#";
         }
 
-        // 한글 자음 자모(ㄱ~ㅎ 등)
         if (ch >= 0x3131 && ch <= 0x314E) {
             return String.valueOf(ch);
         }
 
-        // 영문 대문자 A-Z
         if (ch >= 'A' && ch <= 'Z') {
             return String.valueOf(ch);
         }
+
         if (ch >= 'a' && ch <= 'z') {
             return String.valueOf(Character.toUpperCase(ch));
         }

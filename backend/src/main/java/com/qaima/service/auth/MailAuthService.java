@@ -1,4 +1,4 @@
-package com.qaima.service;
+package com.qaima.service.auth;
 
 import com.qaima.domain.EmailVerification;
 import com.qaima.domain.PwdReset;

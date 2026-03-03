@@ -1,4 +1,4 @@
-package com.qaima.dto;
+package com.qaima.dto.user;
 
 import com.qaima.domain.User;
 import lombok.Getter;

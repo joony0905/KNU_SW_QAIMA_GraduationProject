@@ -23,10 +23,6 @@ import java.time.Instant;
 @Table(name = "dictionary")
 public class DictionaryTerm {
 
-    /**
-     * 표준 용어 키입니다.
-     * - 서비스/임포터에서 정규화(앞뒤 공백 제거 + 연속 공백 축약 + 대문자화) 후 저장됩니다.
-     */
     @Id
     @Column(name = "term", length = 255, nullable = false, unique = true)
     private String term;
@@ -45,11 +41,11 @@ public class DictionaryTerm {
     private String tag;
 
     @CreationTimestamp
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @UpdateTimestamp
-    @Column(nullable = false)
+    @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
     public DictionaryTerm(String term) {

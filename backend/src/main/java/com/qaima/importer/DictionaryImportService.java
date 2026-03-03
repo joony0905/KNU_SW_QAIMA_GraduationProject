@@ -35,8 +35,8 @@ public class DictionaryImportService {
     private EntityManager em;
 
     public void importFromCsv(Path csvPath) throws IOException {
-        TransactionTemplate tt = new TransactionTemplate(transactionManager);
-        tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+        tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         int lineNo = 0;
         int ok = 0;
@@ -50,18 +50,16 @@ public class DictionaryImportService {
                 return;
             }
 
-            Map<String, Integer> idx = buildHeaderIndex(headerLine);
-
+            Map<String, Integer> indexMap = buildHeaderIndex(headerLine);
             String line;
             while ((line = reader.readLine()) != null) {
                 lineNo++;
                 if (line.isBlank()) continue;
 
                 List<String> cols = parseCsvLine(line);
-
                 try {
-                    tt.execute(status -> {
-                        importSingleRow(idx, cols);
+                    tx.execute(status -> {
+                        importSingleRow(indexMap, cols);
                         dictionaryRepository.flush();
                         if (em != null) em.clear();
                         return null;
@@ -95,8 +93,10 @@ public class DictionaryImportService {
         String term = DictionaryTermNormalizer.normalizeTerm(termRaw);
         if (term == null) throw new IllegalArgumentException("term is required");
 
-        String description = (descriptionRaw == null) ? null : descriptionRaw.trim();
-        if (description == null || description.isBlank()) throw new IllegalArgumentException("description is required");
+        String description = descriptionRaw == null ? null : descriptionRaw.trim();
+        if (description == null || description.isBlank()) {
+            throw new IllegalArgumentException("description is required");
+        }
 
         String source = normalizeOptional(sourceRaw);
         String tag = normalizeOptional(tagRaw);
@@ -110,29 +110,25 @@ public class DictionaryImportService {
     }
 
     private Map<String, Integer> buildHeaderIndex(String headerLine) {
-        headerLine = headerLine.replace("\uFEFF", ""); // BOM 제거
+        headerLine = headerLine.replace("\uFEFF", "");
         List<String> headers = parseCsvLine(headerLine);
-        Map<String, Integer> map = new HashMap<>();
+        Map<String, Integer> indexMap = new HashMap<>();
         for (int i = 0; i < headers.size(); i++) {
             String key = headers.get(i) == null ? "" : headers.get(i).trim();
-            map.put(key, i);
+            indexMap.put(key, i);
         }
-        return map;
+        return indexMap;
     }
 
     private String getString(List<String> cols, Map<String, Integer> idx, String colName) {
         Integer i = idx.get(colName);
         if (i == null || i < 0 || i >= cols.size()) return null;
-        String v = cols.get(i);
-        if (v == null) return null;
-        String trimmed = v.trim();
+        String value = cols.get(i);
+        if (value == null) return null;
+        String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    /**
-     * 간단한 CSV 파서(따옴표 필드 + 이스케이프된 따옴표 지원)입니다.
-     * 설명(description)에 쉼표가 있어도 파싱이 깨지지 않도록 합니다.
-     */
     private static List<String> parseCsvLine(String line) {
         List<String> out = new ArrayList<>();
         StringBuilder sb = new StringBuilder();
@@ -141,9 +137,9 @@ public class DictionaryImportService {
         for (int i = 0; i < line.length(); i++) {
             char c = line.charAt(i);
             if (inQuotes) {
-                if (c == '\"') {
-                    if (i + 1 < line.length() && line.charAt(i + 1) == '\"') {
-                        sb.append('\"');
+                if (c == '"') {
+                    if (i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                        sb.append('"');
                         i++;
                     } else {
                         inQuotes = false;
@@ -152,7 +148,7 @@ public class DictionaryImportService {
                     sb.append(c);
                 }
             } else {
-                if (c == '\"') {
+                if (c == '"') {
                     inQuotes = true;
                 } else if (c == ',') {
                     out.add(sb.toString());
@@ -166,21 +162,22 @@ public class DictionaryImportService {
         return out;
     }
 
-    private static String normalizeOptional(String v) {
-        if (v == null) return null;
-        String trimmed = v.trim();
+    private static String normalizeOptional(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
     }
 
     private String rootMessage(Throwable t) {
-        Throwable cur = t;
-        while (cur.getCause() != null) cur = cur.getCause();
-        return cur.getMessage();
+        Throwable current = t;
+        while (current.getCause() != null) current = current.getCause();
+        return current.getMessage();
     }
 
     private void safeClear() {
         try {
             if (em != null) em.clear();
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 }

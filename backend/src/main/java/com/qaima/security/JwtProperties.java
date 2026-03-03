@@ -10,13 +10,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 public class JwtProperties {
 
-    // application.yml의 jwt.secret-key 값
+    // application.yml: jwt.secret-key
     private String secretKey;
 
-    // application.yml의 jwt.access-token-validity-seconds 값
+    // application.yml: jwt.access-token-validity-seconds
     private long accessTokenValiditySeconds;
 
-    // 선택 값이며 미설정 시 기본 30일 사용
-    // application.yml의 jwt.refresh-token-validity-seconds 값
+    // application.yml: jwt.refresh-token-validity-seconds
     private long refreshTokenValiditySeconds = 60L * 60L * 24L * 30L;
 }
