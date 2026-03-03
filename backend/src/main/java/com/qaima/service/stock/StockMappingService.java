@@ -1,34 +1,30 @@
-package com.qaima.service;
+package com.qaima.service.stock;
 
 import com.qaima.common.Blocking;
 import com.qaima.common.CompanyNameNormalizer;
 import com.qaima.common.exception.ResourceNotFoundException;
 import com.qaima.domain.Stock;
 import com.qaima.domain.StockAlias;
-import com.qaima.dto.StockCodeMappingDto;
+import com.qaima.dto.stock.StockCodeMappingDto;
 import com.qaima.repository.StockAliasRepository;
 import com.qaima.repository.StockRepository;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class StockMappingService {
+
+    private static final int SEARCH_LIMIT = 200;
+    private static final int SEARCH_RESULT_LIMIT = 20;
 
     private final StockRepository stockRepository;
     private final StockAliasRepository stockAliasRepository;
-
-    private static final String DEFAULT_EXCHANGE_CODE = "KOSPI";
-    private static final int SEARCH_LIMIT = 200;
-    private static final int SEARCH_RESULT_LIMIT = 20;
 
     public Mono<StockCodeMappingDto> normalizeStockCodeByName(
             String companyName,
@@ -37,19 +33,17 @@ public class StockMappingService {
     ) {
         SymbolParts parts = parseSymbolIfPresent(symbol);
         if (parts != null) {
-            return findMappingBySymbol(parts)
-                    .switchIfEmpty(Mono.error(new ResourceNotFoundException("Unknown symbol: " + symbol)));
+            return findMappingBySymbol(parts);
         }
 
-        String normalizedName = normalizeCompanyNameKey(companyName);
+        String normalizedName = CompanyNameNormalizer.normalizeKey(companyName);
         if (normalizedName.isBlank()) {
             return Mono.error(new IllegalArgumentException("companyName is required when symbol is empty"));
         }
 
         String normalizedExchange = normalizeExchangeFilter(exchangeCode);
-        String resolvedExchange = (normalizedExchange != null) ? normalizedExchange : DEFAULT_EXCHANGE_CODE;
-        return fetchStocksByName(companyName, normalizedName, resolvedExchange)
-                .flatMap(matches -> resolveSingleMatch(matches, companyName, resolvedExchange));
+        return fetchStocksByName(companyName, normalizedName, normalizedExchange)
+                .flatMap(matches -> resolveSingleMatch(matches, companyName, normalizedExchange));
     }
 
     public Mono<List<StockCodeMappingDto>> listMappingsByName(
@@ -62,7 +56,7 @@ public class StockMappingService {
             return listMappingsBySymbol(parts);
         }
 
-        String normalizedName = normalizeCompanyNameKey(companyName);
+        String normalizedName = CompanyNameNormalizer.normalizeKey(companyName);
         if (normalizedName.isBlank()) {
             return Mono.error(new IllegalArgumentException("companyName is required when symbol is empty"));
         }
@@ -75,44 +69,46 @@ public class StockMappingService {
     }
 
     public Mono<List<StockCodeMappingDto>> searchStockMappings(String query) {
-        String keyword = extractSearchKeyword(query);
+        String keyword = CompanyNameNormalizer.extractSearchKeyword(query);
         if (keyword.isBlank()) {
             return Mono.just(List.of());
         }
 
-        String normalizedKey = normalizeCompanyNameKey(query);
+        String normalizedKey = CompanyNameNormalizer.normalizeKey(query);
 
         return Blocking.call(() -> {
-                    Map<Long, Stock> merged = new LinkedHashMap<>();
-                    List<Stock> fromName = stockRepository
-                            .findTop20ByCompanyNameContainingIgnoreCaseOrderByCompanyNameAsc(keyword);
-                    for (Stock stock : fromName) {
-                        if (stock.getStockId() != null) {
-                            merged.putIfAbsent(stock.getStockId(), stock);
-                        }
-                    }
+            Map<Long, Stock> merged = new LinkedHashMap<>();
 
-                    if (!normalizedKey.isBlank()) {
-                        List<StockAlias> aliases = stockAliasRepository.findByNormalizedAlias(normalizedKey);
-                        for (StockAlias alias : aliases) {
-                            Stock stock = alias.getStock();
-                            if (stock != null && stock.getStockId() != null) {
-                                merged.putIfAbsent(stock.getStockId(), stock);
-                            }
-                        }
-                    }
+            List<Stock> fromName = stockRepository
+                    .findTop20ByCompanyNameContainingIgnoreCaseOrderByCompanyNameAsc(keyword);
+            for (Stock stock : fromName) {
+                if (stock.getStockId() != null) {
+                    merged.putIfAbsent(stock.getStockId(), stock);
+                }
+            }
 
-                    return merged.values().stream()
-                            .limit(SEARCH_RESULT_LIMIT)
-                            .toList();
-                })
-                .map(matches -> matches.stream()
-                        .map(this::toMappingDto)
-                        .toList());
+            if (!normalizedKey.isBlank()) {
+                List<StockAlias> aliases = stockAliasRepository.findByNormalizedAlias(normalizedKey);
+                for (StockAlias alias : aliases) {
+                    Stock stock = alias.getStock();
+                    if (stock != null && stock.getStockId() != null) {
+                        merged.putIfAbsent(stock.getStockId(), stock);
+                    }
+                }
+            }
+
+            return merged.values().stream()
+                    .limit(SEARCH_RESULT_LIMIT)
+                    .map(this::toMappingDto)
+                    .toList();
+        });
     }
 
     private StockCodeMappingDto toMappingDto(Stock stock) {
-        if (stock == null) return null;
+        if (stock == null) {
+            return null;
+        }
+
         String exchangeCode = stock.getExchange() != null ? stock.getExchange().getCode() : null;
         String stockCode = stock.getStockCode();
         return StockCodeMappingDto.builder()
@@ -123,37 +119,12 @@ public class StockMappingService {
                 .build();
     }
 
-    private String toSymbol(String exchangeCode, String stockCode) {
-        if (exchangeCode == null || exchangeCode.isBlank()) return null;
-        if (stockCode == null || stockCode.isBlank()) return null;
-        return exchangeCode + ":" + stockCode;
-    }
-
-    private String normalizeCompanyNameKey(String companyName) {
-        return CompanyNameNormalizer.normalizeKey(companyName);
-    }
-
-    private String extractSearchKeyword(String companyName) {
-        return CompanyNameNormalizer.extractSearchKeyword(companyName);
-    }
-
-    private String normalizeExchangeFilter(String exchangeCode) {
-        if (exchangeCode == null) {
-            return null;
-        }
-        String trimmed = exchangeCode.trim();
-        if (trimmed.isBlank()) {
-            return null;
-        }
-        return normalizeExchangeCode(trimmed);
-    }
-
     private Mono<List<Stock>> fetchStocksByName(
             String companyName,
             String normalizedKey,
             String exchangeCode
     ) {
-        String keyword = extractSearchKeyword(companyName);
+        String keyword = CompanyNameNormalizer.extractSearchKeyword(companyName);
         if (keyword.isBlank()) {
             return Mono.just(List.of());
         }
@@ -173,7 +144,7 @@ public class StockMappingService {
             String normalizedKey,
             String exchangeCode
     ) {
-        String keyword = extractSearchKeyword(companyName);
+        String keyword = CompanyNameNormalizer.extractSearchKeyword(companyName);
         if (keyword.isBlank()) {
             return Mono.just(List.of());
         }
@@ -182,23 +153,16 @@ public class StockMappingService {
             List<Stock> candidates = loadCandidates(keyword, exchangeCode);
             List<Stock> matches = filterByNormalizedKey(candidates, normalizedKey);
             if (!matches.isEmpty()) {
-                return matches;
+                return limitCandidates(matches);
             }
 
             List<Stock> aliasMatches = findByAliasNormalized(normalizedKey, exchangeCode);
             if (!aliasMatches.isEmpty()) {
-                return aliasMatches;
+                return limitCandidates(aliasMatches);
             }
 
             return limitCandidates(candidates);
         });
-    }
-
-    private List<Stock> limitCandidates(List<Stock> candidates) {
-        if (candidates.size() <= SEARCH_RESULT_LIMIT) {
-            return candidates;
-        }
-        return candidates.subList(0, SEARCH_RESULT_LIMIT);
     }
 
     private List<Stock> loadCandidates(String keyword, String exchangeCode) {
@@ -206,6 +170,7 @@ public class StockMappingService {
         if (exchangeCode == null) {
             return stockRepository.findByCompanyNameContainingIgnoreCaseOrderByCompanyNameAsc(keyword, pageRequest);
         }
+
         return stockRepository.findByExchange_CodeIgnoreCaseAndCompanyNameContainingIgnoreCaseOrderByCompanyNameAsc(
                 exchangeCode,
                 keyword,
@@ -217,8 +182,9 @@ public class StockMappingService {
         if (normalizedKey == null || normalizedKey.isBlank()) {
             return List.of();
         }
+
         return candidates.stream()
-                .filter(stock -> normalizedKey.equals(normalizeCompanyNameKey(stock.getCompanyName())))
+                .filter(stock -> normalizedKey.equals(CompanyNameNormalizer.normalizeKey(stock.getCompanyName())))
                 .toList();
     }
 
@@ -226,18 +192,25 @@ public class StockMappingService {
         if (normalizedKey == null || normalizedKey.isBlank()) {
             return List.of();
         }
+
         List<StockAlias> aliases = stockAliasRepository.findByNormalizedAlias(normalizedKey);
         if (aliases.isEmpty()) {
             return List.of();
         }
+
         return aliases.stream()
                 .map(StockAlias::getStock)
                 .filter(stock -> stock != null)
                 .filter(stock -> {
-                    if (exchangeCode == null) return true;
-                    if (stock.getExchange() == null || stock.getExchange().getCode() == null) return false;
+                    if (exchangeCode == null) {
+                        return true;
+                    }
+                    if (stock.getExchange() == null || stock.getExchange().getCode() == null) {
+                        return false;
+                    }
                     return stock.getExchange().getCode().equalsIgnoreCase(exchangeCode);
                 })
+                .distinct()
                 .toList();
     }
 
@@ -257,25 +230,63 @@ public class StockMappingService {
     }
 
     private Mono<StockCodeMappingDto> findMappingBySymbol(SymbolParts parts) {
-        return Blocking.call(() ->
-                        stockRepository.findByExchangeCodeAndStockCodeIgnoreCase(parts.exchangeCode, parts.stockCode)
-                )
-                .flatMap(optional -> optional
-                        .map(stock -> Mono.just(toMappingDto(stock)))
-                        .orElseGet(Mono::empty));
+        if (parts.exchangeCode() != null) {
+            return Blocking.call(() ->
+                            stockRepository.findByExchangeCodeAndStockCodeIgnoreCase(parts.exchangeCode(), parts.stockCode()))
+                    .flatMap(optional -> optional
+                            .map(stock -> Mono.just(toMappingDto(stock)))
+                            .orElseGet(() -> Mono.error(new ResourceNotFoundException("Unknown symbol: " + parts.rawSymbol()))));
+        }
+
+        return Blocking.call(() -> stockRepository.findByStockCodeIgnoreCaseWithExchange(parts.stockCode()))
+                .flatMap(matches -> {
+                    if (matches.isEmpty()) {
+                        return Mono.error(new ResourceNotFoundException("Unknown symbol: " + parts.rawSymbol()));
+                    }
+                    if (matches.size() > 1) {
+                        return Mono.error(new IllegalArgumentException("Ambiguous symbol: " + parts.rawSymbol()));
+                    }
+                    return Mono.just(toMappingDto(matches.get(0)));
+                });
     }
 
     private Mono<List<StockCodeMappingDto>> listMappingsBySymbol(SymbolParts parts) {
-        return Blocking.call(() ->
-                        stockRepository.findByExchangeCodeAndStockCodeIgnoreCase(parts.exchangeCode, parts.stockCode)
-                )
-                .map(optional -> optional
-                        .map(stock -> List.of(toMappingDto(stock)))
-                        .orElseGet(List::of));
+        if (parts.exchangeCode() != null) {
+            return Blocking.call(() ->
+                            stockRepository.findByExchangeCodeAndStockCodeIgnoreCase(parts.exchangeCode(), parts.stockCode()))
+                    .map(optional -> optional
+                            .map(stock -> List.of(toMappingDto(stock)))
+                            .orElseGet(List::of));
+        }
+
+        return Blocking.call(() -> stockRepository.findByStockCodeIgnoreCaseWithExchange(parts.stockCode()))
+                .map(matches -> matches.stream()
+                        .map(this::toMappingDto)
+                        .toList());
+    }
+
+    private List<Stock> limitCandidates(List<Stock> candidates) {
+        if (candidates.size() <= SEARCH_RESULT_LIMIT) {
+            return candidates;
+        }
+        return candidates.subList(0, SEARCH_RESULT_LIMIT);
+    }
+
+    private String toSymbol(String exchangeCode, String stockCode) {
+        if (exchangeCode == null || exchangeCode.isBlank()) {
+            return null;
+        }
+        if (stockCode == null || stockCode.isBlank()) {
+            return null;
+        }
+        return exchangeCode + ":" + stockCode;
     }
 
     private SymbolParts parseSymbolIfPresent(String symbol) {
-        if (symbol == null || symbol.isBlank()) return null;
+        if (symbol == null || symbol.isBlank()) {
+            return null;
+        }
+
         String trimmed = symbol.trim();
         int colon = trimmed.indexOf(':');
         if (colon > 0 && colon < trimmed.length() - 1) {
@@ -284,7 +295,7 @@ public class StockMappingService {
             if (exchange.isBlank() || stockCode.isBlank()) {
                 throw new IllegalArgumentException("symbol must be EXCHANGE:CODE");
             }
-            return new SymbolParts(normalizeExchangeCode(exchange), stockCode);
+            return new SymbolParts(normalizeExchangeFilter(exchange), stockCode, trimmed);
         }
 
         int dot = trimmed.indexOf('.');
@@ -294,23 +305,34 @@ public class StockMappingService {
             if (exchange.isBlank() || stockCode.isBlank()) {
                 throw new IllegalArgumentException("symbol must be EXCHANGE:CODE");
             }
-            return new SymbolParts(normalizeExchangeCode(exchange), stockCode);
+            return new SymbolParts(normalizeExchangeFilter(exchange), stockCode, trimmed);
         }
 
         throw new IllegalArgumentException("symbol must be EXCHANGE:CODE");
     }
 
-    private String normalizeExchangeCode(String msExchange) {
-        if (msExchange == null) return "UNKNOWN";
+    private String normalizeExchangeFilter(String exchangeCode) {
+        if (exchangeCode == null) {
+            return null;
+        }
 
-        return switch (msExchange.toUpperCase()) {
-            case "XKRX", "KRX" -> "KOSPI";
-            case "XKOS" -> "KOSDAQ";
-            case "XNYS" -> "NYSE";
-            case "XNAS" -> "NASDAQ";
-            default -> msExchange;
+        String trimmed = exchangeCode.trim();
+        if (trimmed.isBlank()) {
+            return null;
+        }
+
+        String normalized = trimmed.toUpperCase().replace(" ", "");
+        return switch (normalized) {
+            case "KOSPI" -> "KOSPI";
+            case "KOSDAQ", "XKOS" -> "KOSDAQ";
+            case "KONEX", "XKON" -> "KONEX";
+            case "NASDAQ", "XNAS" -> "NASDAQ";
+            case "NYSE", "XNYS" -> "NYSE";
+            case "KRX", "XKRX", "KRXSM" -> null;
+            default -> trimmed.toUpperCase();
         };
     }
 
-    private record SymbolParts(String exchangeCode, String stockCode) {}
+    private record SymbolParts(String exchangeCode, String stockCode, String rawSymbol) {
+    }
 }

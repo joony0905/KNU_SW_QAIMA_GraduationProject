@@ -1,21 +1,20 @@
-package com.qaima.service;
+package com.qaima.service.stock;
 
 import com.qaima.common.Blocking;
 import com.qaima.domain.MarketSnapshot;
 import com.qaima.domain.Stock;
-import com.qaima.dto.KisStatResponseDto;
-import com.qaima.dto.MarketSnapshotDto;
+import com.qaima.dto.kis.KisStatResponseDto;
+import com.qaima.dto.stock.MarketSnapshotDto;
 import com.qaima.repository.MarketSnapshotRepository;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
-
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDate;
 
 @Slf4j
 @Service
@@ -26,16 +25,23 @@ public class MarketSnapshotService {
     private final PlatformTransactionManager transactionManager;
 
     public Mono<MarketSnapshot> upsertFromKis(Stock stock, KisStatResponseDto.Output output, LocalDate asOfDate) {
+        if (stock == null) {
+            return Mono.error(new IllegalArgumentException("stock is required"));
+        }
+        if (output == null) {
+            return Mono.error(new IllegalArgumentException("kis output is required"));
+        }
+
         return Blocking.call(() -> tx().execute(status -> {
             LocalDate baseDate = (asOfDate != null ? asOfDate : LocalDate.now());
 
-            MarketSnapshot snap = marketSnapshotRepository
+            MarketSnapshot snapshot = marketSnapshotRepository
                     .findByStockAndAsOfDate(stock, baseDate)
                     .orElseGet(MarketSnapshot::new);
 
-            snap.setStock(stock);
-            snap.setAsOfDate(baseDate);
-            snap.setSource("KIS");
+            snapshot.setStock(stock);
+            snapshot.setAsOfDate(baseDate);
+            snapshot.setSource("KIS");
 
             BigDecimal marketCap = parseNullableBigDecimal(output.getHts_avls());
             BigDecimal per = parseNullableBigDecimal(output.getPer());
@@ -46,7 +52,6 @@ public class MarketSnapshotService {
             BigDecimal eps = parseNullableBigDecimal(output.getEps());
             BigDecimal bps = parseNullableBigDecimal(output.getBps());
 
-            // KIS hts_avls는 "억원" 단위로 제공되는 경우가 많으므로 원 단위로 통일
             if (marketCap != null) {
                 marketCap = marketCap.multiply(BigDecimal.valueOf(100_000_000L));
             }
@@ -61,40 +66,43 @@ public class MarketSnapshotService {
                 pbr = price.divide(bps, 4, RoundingMode.HALF_UP);
             }
 
-            snap.setMarketCap(marketCap);
-            snap.setPer(per);
-            snap.setPbr(pbr);
-            snap.setSharesOutstanding(sharesOutstanding);
+            snapshot.setMarketCap(marketCap);
+            snapshot.setPer(per);
+            snapshot.setPbr(pbr);
+            snapshot.setSharesOutstanding(sharesOutstanding);
 
-            MarketSnapshot saved = marketSnapshotRepository.save(snap);
-
-            log.info("[MarketSnapshotService] upsert 완료: stockCode={}, asOfDate={}",
+            MarketSnapshot saved = marketSnapshotRepository.save(snapshot);
+            log.info("[MarketSnapshotService] upsert complete: stockCode={}, asOfDate={}",
                     stock.getStockCode(), baseDate);
-
             return saved;
         }));
     }
 
     public Mono<MarketSnapshotDto> getLatestDto(Stock stock, LocalDate asOfDate) {
+        if (stock == null) {
+            return Mono.justOrEmpty((MarketSnapshotDto) null);
+        }
+
         return Blocking.call(() -> {
-            var opt = (asOfDate == null)
+            var snapshot = (asOfDate == null)
                     ? marketSnapshotRepository.findTopByStockOrderByAsOfDateDesc(stock)
                     : marketSnapshotRepository.findTopByStockAndAsOfDateLessThanEqualOrderByAsOfDateDesc(stock, asOfDate);
-
-            return opt.map(this::toDto).orElse(null);
+            return snapshot.map(this::toDto).orElse(null);
         });
     }
 
-    public MarketSnapshotDto toDto(MarketSnapshot s) {
-        if (s == null) return null;
+    public MarketSnapshotDto toDto(MarketSnapshot snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
 
         return MarketSnapshotDto.builder()
-                .asOfDate(s.getAsOfDate())
-                .marketCap(s.getMarketCap())
-                .per(bdToDouble(s.getPer()))
-                .pbr(bdToDouble(s.getPbr()))
-                .sharesOutstanding(s.getSharesOutstanding())
-                .source(s.getSource())
+                .asOfDate(snapshot.getAsOfDate())
+                .marketCap(snapshot.getMarketCap())
+                .per(toDouble(snapshot.getPer()))
+                .pbr(toDouble(snapshot.getPbr()))
+                .sharesOutstanding(snapshot.getSharesOutstanding())
+                .source(snapshot.getSource())
                 .build();
     }
 
@@ -102,23 +110,24 @@ public class MarketSnapshotService {
         return new TransactionTemplate(transactionManager);
     }
 
-    private static BigDecimal parseNullableBigDecimal(String s) {
-        if (s == null) return null;
-        String t = s.trim();
-        if (t.isEmpty()) return null;
-        t = t.replace(",", "");
-        try { return new BigDecimal(t); } catch (NumberFormatException e) { return null; }
+    private static BigDecimal parseNullableBigDecimal(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim().replace(",", "");
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        try {
+            return new BigDecimal(trimmed);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
-    private static Double parseNullableDouble(String s) {
-        if (s == null) return null;
-        String t = s.trim();
-        if (t.isEmpty()) return null;
-        t = t.replace(",", "");
-        try { return Double.parseDouble(t); } catch (NumberFormatException e) { return null; }
-    }
-
-    private static Double bdToDouble(BigDecimal v) {
-        return v == null ? null : v.doubleValue();
+    private static Double toDouble(BigDecimal value) {
+        return value == null ? null : value.doubleValue();
     }
 }

@@ -2,10 +2,9 @@ package com.qaima.repository;
 
 import com.qaima.domain.MarketSnapshot;
 import com.qaima.domain.Stock;
-import org.springframework.data.jpa.repository.JpaRepository;
-
 import java.time.LocalDate;
 import java.util.Optional;
+import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MarketSnapshotRepository extends JpaRepository<MarketSnapshot, Long> {
 

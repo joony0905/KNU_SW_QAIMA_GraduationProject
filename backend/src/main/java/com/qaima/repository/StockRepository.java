@@ -1,43 +1,31 @@
 package com.qaima.repository;
 
+import com.qaima.domain.Exchange;
 import com.qaima.domain.Stock;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import com.qaima.domain.Exchange;
-
-import java.util.List;
-import java.util.Optional;
 
 public interface StockRepository extends JpaRepository<Stock, Long> {
 
     @Query("""
         select s from Stock s
         join fetch s.exchange e
+        left join fetch s.industry i
+        where s.stockCode = :stockCode
+    """)
+    Optional<Stock> findByStockCodeWithExchange(@Param("stockCode") String stockCode);
+
+    @Query("""
+        select s from Stock s
+        join fetch s.exchange e
         where lower(s.stockCode) = lower(:stockCode)
-    """) //TODO: Stock id 조회후 exchange 조인해서 거래상장소 확인 쿼리 예시입니다. db생성하시고 바꿀거있으면 바꿔주세요.
+    """)
     List<Stock> findByStockCodeIgnoreCaseWithExchange(@Param("stockCode") String stockCode);
-    Optional<Stock> findByExchangeAndStockCode(Exchange exchange, String stockCode);
-
-    @Query("""
-        select s from Stock s
-        join fetch s.exchange e
-        where lower(s.companyName) = lower(:companyName)
-    """)
-    List<Stock> findByCompanyNameWithExchangeIgnoreCase(@Param("companyName") String companyName);
-
-    @Query("""
-        select s from Stock s
-        join fetch s.exchange e
-        where lower(s.companyName) = lower(:companyName)
-          and lower(e.code) = lower(:exchangeCode)
-    """)
-    List<Stock> findByCompanyNameAndExchangeCodeIgnoreCase(
-            @Param("companyName") String companyName,
-            @Param("exchangeCode") String exchangeCode
-    );
 
     @Query("""
         select s from Stock s
@@ -68,4 +56,9 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
 
     @EntityGraph(attributePaths = "exchange")
     List<Stock> findByExchange_CodeIgnoreCaseOrderByStockCodeAsc(String exchangeCode);
+
+    @EntityGraph(attributePaths = "exchange")
+    List<Stock> findAllByOrderByStockCodeAsc();
+
+    Optional<Stock> findByExchangeAndStockCode(Exchange exchange, String stockCode);
 }

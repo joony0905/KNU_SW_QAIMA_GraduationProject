@@ -1,4 +1,8 @@
-package com.qaima.dto;
+package com.qaima.dto.featone;
+import com.qaima.dto.financial.FinancialSummaryDto;
+import com.qaima.dto.indicator.IndicatorValueDto;
+import com.qaima.dto.ohlcv.PriceOhlcvDto;
+import com.qaima.dto.stock.StockDto;
 import lombok.*;
 
 import java.util.List;
@@ -25,9 +29,6 @@ public class FeatOneResponseDataDto {
 
     // LLM 분석 결과 (FastAPI → GPT)
     private FeatOneResponseTextDto analysis;
-
-    // 시장 스냅샷 - KIS 기반 (시총/PER/PBR 등)
-    private MarketSnapshotDto marketSnapshot;
 
 
 }

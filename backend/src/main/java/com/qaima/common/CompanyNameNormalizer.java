@@ -5,6 +5,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class CompanyNameNormalizer {
+
     private static final Pattern KOR_CORP_PATTERN = Pattern.compile(
             "(?i)\\(\\s*\\uC8FC\\s*\\)|" +
             "\\(\\s*\\uC720\\s*\\)|" +
@@ -17,12 +18,8 @@ public final class CompanyNameNormalizer {
     private static final Pattern KOR_PREFERRED_PATTERN = Pattern.compile(
             "\\uC6B0\\uC120\\uC8FC|\\uC6B0\\uC120|\\uC885\\uB958\\uC8FC|\\uC885\\uB958"
     );
-    private static final Pattern KOR_COMMON_PATTERN = Pattern.compile(
-            "\\uBCF4\\uD1B5\\uC8FC"
-    );
-    private static final Pattern PREFERRED_NUM_SUFFIX_PATTERN = Pattern.compile(
-            "\\uC6B0\\s*(\\d+)"
-    );
+    private static final Pattern KOR_COMMON_PATTERN = Pattern.compile("\\uBCF4\\uD1B5\\uC8FC");
+    private static final Pattern PREFERRED_NUM_SUFFIX_PATTERN = Pattern.compile("\\uC6B0\\s*(\\d+)");
     private static final Pattern ENG_CORP_PATTERN = Pattern.compile(
             "(?i)\\b(inc|inc\\.|corp|corp\\.|co|co\\.|company|ltd|ltd\\.|limited|plc|llc)\\b"
     );
@@ -31,11 +28,14 @@ public final class CompanyNameNormalizer {
     private static final Pattern BRACKET_PATTERN = Pattern.compile("[\\[\\]\\{\\}<>]");
     private static final Pattern PUNCT_OR_SPACE = Pattern.compile("[\\s\\p{Punct}\\u00B7\\u2022\\u318D]");
 
-    private CompanyNameNormalizer() {}
+    private CompanyNameNormalizer() {
+    }
 
     public static String normalizeKey(String input) {
         String cleaned = clean(input);
-        if (cleaned.isEmpty()) return "";
+        if (cleaned.isEmpty()) {
+            return "";
+        }
 
         cleaned = stripCorporateSuffixes(cleaned);
         cleaned = normalizePreferredShare(cleaned);
@@ -48,7 +48,9 @@ public final class CompanyNameNormalizer {
 
     public static String extractSearchKeyword(String input) {
         String cleaned = clean(input);
-        if (cleaned.isEmpty()) return "";
+        if (cleaned.isEmpty()) {
+            return "";
+        }
 
         cleaned = stripCorporateSuffixes(cleaned);
         cleaned = normalizePreferredShare(cleaned);
@@ -57,11 +59,12 @@ public final class CompanyNameNormalizer {
         cleaned = ENG_CORP_PATTERN.matcher(cleaned).replaceAll(" ");
         cleaned = PUNCT_OR_SPACE.matcher(cleaned).replaceAll(" ");
         cleaned = cleaned.trim();
-        if (cleaned.isEmpty()) return "";
+        if (cleaned.isEmpty()) {
+            return "";
+        }
 
-        String[] tokens = cleaned.split("\\s+");
         String longest = "";
-        for (String token : tokens) {
+        for (String token : cleaned.split("\\s+")) {
             if (token.length() > longest.length()) {
                 longest = token;
             }
@@ -71,15 +74,21 @@ public final class CompanyNameNormalizer {
 
     public static String normalizeSearchQuery(String input) {
         String cleaned = clean(input);
-        if (cleaned.isEmpty()) return "";
-        cleaned = normalizePreferredShare(cleaned);
-        return cleaned.trim();
+        if (cleaned.isEmpty()) {
+            return "";
+        }
+        return normalizePreferredShare(cleaned).trim();
     }
 
     private static String clean(String input) {
-        if (input == null) return "";
+        if (input == null) {
+            return "";
+        }
+
         String trimmed = input.trim();
-        if (trimmed.isEmpty()) return "";
+        if (trimmed.isEmpty()) {
+            return "";
+        }
 
         return trimmed
                 .replace('\uFF08', '(')

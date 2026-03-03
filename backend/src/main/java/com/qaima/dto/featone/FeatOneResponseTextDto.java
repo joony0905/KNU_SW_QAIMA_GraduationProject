@@ -1,4 +1,4 @@
-package com.qaima.dto;
+package com.qaima.dto.featone;
 
 import lombok.*;
 

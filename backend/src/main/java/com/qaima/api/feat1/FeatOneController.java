@@ -1,38 +1,46 @@
 package com.qaima.api.feat1;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.domain.Freq;
-import com.qaima.dto.FeatOneResponseDataDto;
-import com.qaima.service.FeatOneService;
+import com.qaima.dto.featone.FeatOneAnalyzeRequestDto;
+import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
+import com.qaima.service.featone.FeatOneResult;
+import com.qaima.service.featone.FeatOneService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-import java.time.OffsetDateTime;
-
-/**
- * 기능1 – 심층 종목 분석
- * 예시:
- * GET /api/v1/feature1/stock?code=005930&freq=DAY&from=2025-01-01T00:00:00+09:00&to=2025-02-01T00:00:00+09:00
- */
 
 @RestController
-@RequestMapping("/api/v1/feature1/stock")
+@RequestMapping("/api/v1/feature1")
 @RequiredArgsConstructor
 public class FeatOneController {
 
     private final FeatOneService featOneService;
 
-    @GetMapping
-    public Mono<ApiResponse<FeatOneResponseDataDto>> getFeatOne(
-            @RequestParam String stockCode,
-            @RequestParam Freq freq,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to
+    @PostMapping("/analyze")
+    public Mono<ApiResponse<FeatOneAnalysisResponseDto>> analyze(
+            @RequestBody FeatOneAnalyzeRequestDto request
     ) {
-        // 예외를 위로 던져서 GlobalExceptionHandler로 통일
-        return featOneService.getFeatOneData(stockCode, freq, from, to)
-                .map(ApiResponse::success);
+        System.out.println(">>> FEAT1 ANALYZE REQUEST ENTERED <<<");
+        System.out.println("REQ stockCode=" + request.getStockCode());
+        System.out.println("REQ DTO class=" + request.getClass().getName());
+        return featOneService.getFeatOneData(
+                        request.getStockCode(),
+                        request.getFreq(),
+                        request.getFrom(),
+                        request.getTo(),
+                        request.getMarketDivCode(),
+                        request.getIncludeExplain()
+                )
+                .map(this::toApiResponse);
+    }
+
+    private ApiResponse<FeatOneAnalysisResponseDto> toApiResponse(FeatOneResult result) {
+        if (result.isChartUnavailable()) {
+            return ApiResponse.successWithWarning(
+                    result.getData(),
+                    "CHART_DATA_UNAVAILABLE"
+            );
+        }
+        return ApiResponse.success(result.getData());
     }
 }
-
