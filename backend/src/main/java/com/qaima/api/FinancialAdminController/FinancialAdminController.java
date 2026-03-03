@@ -1,7 +1,7 @@
 package com.qaima.api.FinancialAdminController;
 
-import com.qaima.dto.FinancialDto;
-import com.qaima.service.FinancialAdminService;
+import com.qaima.dto.financial.FinancialDto;
+import com.qaima.service.financial.FinancialAdminService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -12,14 +12,13 @@ import reactor.core.publisher.Mono;
 public class FinancialAdminController {
 
     private final FinancialAdminService financialCommandService;
-
+    
     @PostMapping("/stocks/{stockCode}/financials")
     public Mono<FinancialDto> createFinancial(
             @PathVariable String stockCode,
-            @RequestParam(name = "exchange", required = false) String exchange,
             @RequestBody FinancialDto dto
     ) {
-        return financialCommandService.create(stockCode, exchange, dto);
+        return financialCommandService.create(stockCode, dto);
     }
 
     @PutMapping("/financials/{id}")

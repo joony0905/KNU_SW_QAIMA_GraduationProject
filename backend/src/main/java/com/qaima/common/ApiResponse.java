@@ -1,22 +1,15 @@
+// backend/src/main/java/com/qaima/common/ApiResponse.java
 package com.qaima.common;
 
-import com.qaima.dto.FeatOneResponseTextDto;
-
-import java.time.Instant;
-import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 /**
  * QAIMA 공통 응답 클래스
  *
- * - 모든 API 응답은 이 형식을 따른다.
  * - data: 실제 응답 데이터
- * - meta: 요청 ID, 상태, 타임스탬프 등 메타 정보
+ * - meta: 요청 ID, 상태, 타임스탬프, warnings
  * - errors: 에러 목록 (성공 시 비어 있음)
- *
- * @param <T> 응답 데이터의 타입
  */
 public class ApiResponse<T> {
 
@@ -38,10 +31,24 @@ public class ApiResponse<T> {
         return new ApiResponse<>(meta, data, Collections.emptyList());
     }
 
-    /** 200이지만 fallback 동작시 로그 확인용으로 만듦. */
+    /**
+     * 성공(부분 성공 포함) + warning 1개 추가 (레거시 호환 포함)
+     * - 신규 정책: meta.warnings에 누적
+     */
     public static <T> ApiResponse<T> successWithWarning(T data, String warning) {
         Meta meta = Meta.success();
-        meta.setWarning(warning);
+        meta.addWarning(warning);
+        return new ApiResponse<>(meta, data, Collections.emptyList());
+    }
+
+    /**
+     * 성공(부분 성공 포함) + warnings 여러 개 추가 (신규)
+     */
+    public static <T> ApiResponse<T> successWithWarnings(T data, List<String> warnings) {
+        Meta meta = Meta.success();
+        if (warnings != null) {
+            for (String w : warnings) meta.addWarning(w);
+        }
         return new ApiResponse<>(meta, data, Collections.emptyList());
     }
 
@@ -54,17 +61,12 @@ public class ApiResponse<T> {
 
     public static <T> ApiResponse<T> internalError(String code, String message) {
         ApiError error = new ApiError(code, message);
-        return new ApiResponse<>(
-                Meta.failure(),   // status = failure, timestamp, requestId 생성
-                null,                // data
-                List.of(error)       // errors
-        );
+        return new ApiResponse<>(Meta.failure(), null, List.of(error));
     }
 
     public boolean isSuccess() {
         return meta != null && "success".equalsIgnoreCase(meta.getStatus());
     }
-
 
     public Meta getMeta() { return meta; }
     public void setMeta(Meta meta) { this.meta = meta; }

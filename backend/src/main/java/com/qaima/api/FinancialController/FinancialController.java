@@ -1,8 +1,8 @@
 package com.qaima.api.FinancialController;
 
 import com.qaima.domain.PeriodType;
-import com.qaima.dto.FinancialDto;
-import com.qaima.service.FinancialReadService;
+import com.qaima.dto.financial.FinancialDto;
+import com.qaima.service.financial.FinancialReadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -30,10 +30,9 @@ public class FinancialController {
      * - TTM: periodType=TTM (periodNo는 생략하거나 0)
      */
 
-    @GetMapping("/{stockCode}/financials")
+    @GetMapping("/{ticker}/financials")
     public Mono<List<FinancialDto>> getFinancialsForLastNYears(
-            @PathVariable("stockCode") String stockCode,
-            @RequestParam(name = "exchange", required = false) String exchange,
+            @PathVariable String ticker,
             @RequestParam(name = "years", defaultValue = "5") int years,
             @RequestParam(name = "asOfDate", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
@@ -41,7 +40,7 @@ public class FinancialController {
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-        return financialQueryService.getForLastNYears(stockCode, exchange, pt, periodNo, years, asOfDate);
+        return financialQueryService.getForLastNYears(ticker, pt, periodNo, years, asOfDate);
     }
 
     /**
@@ -52,15 +51,15 @@ public class FinancialController {
      * 예: GET /api/v1/stocks/005930/financials/2023?periodType=H&periodNo=2
      */
 
-    @GetMapping("/{stockCode}/financials/{year}")
+    @GetMapping("/{ticker}/financials/{year}")
     public Mono<List<FinancialDto>> getFinancialsForYear(
-            @PathVariable("stockCode") String stockCode,
+            @PathVariable String ticker,
             @PathVariable int year,
-            @RequestParam(name = "exchange", required = false) String exchange,
             @RequestParam(name = "periodType", required = false) PeriodType periodType,
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-        return financialQueryService.getForYear(stockCode, exchange, pt, periodNo, year);
+        return financialQueryService.getForYear(ticker, pt, periodNo, year);
     }
 }
+

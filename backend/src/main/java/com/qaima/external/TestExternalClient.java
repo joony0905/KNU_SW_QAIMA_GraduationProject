@@ -15,11 +15,11 @@ public class TestExternalClient {
                 .build();
     }
 
-    public Mono<String> getPost(int id) {
+    public String getPost(int id) {
         return webClient.get()
                 .uri("/posts/{id}", id)
                 .retrieve()
-                .bodyToMono(String.class);
+                .bodyToMono(String.class)
+                .block();  // 테스트니까 block() 해도 됨
     }
-
 }

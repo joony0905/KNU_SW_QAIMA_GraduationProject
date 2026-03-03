@@ -1,4 +1,3 @@
-// backend/src/main/java/com/qaima/domain/Financial.java
 package com.qaima.domain;
 
 import jakarta.persistence.*;
@@ -102,6 +101,24 @@ public class Financial {
     @Column(precision = 20, scale = 2)
     private BigDecimal cashAndEquivalents;
 
+    @Column(precision = 20, scale = 2)
+    private BigDecimal marketCap;
+
+    @Column(precision = 10, scale = 4)
+    private BigDecimal operatingMargin;
+
+    @Column(precision = 10, scale = 4)
+    private BigDecimal netMargin;
+
+    @Column(precision = 10, scale = 4)
+    private BigDecimal roe;
+
+    @Column(precision = 10, scale = 4)
+    private BigDecimal per;
+
+    @Column(precision = 10, scale = 4)
+    private BigDecimal pbr;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -125,16 +142,22 @@ public class Financial {
                 this.fiscalQuarter = null;
             }
             case Q -> {
+                // quarter가 있으면 그걸 최우선
                 if (this.fiscalQuarter != null && this.fiscalQuarter >= 1 && this.fiscalQuarter <= 4) {
                     this.periodNo = this.fiscalQuarter;
                 } else {
+                    // quarter가 없으면 기존 periodNo가 1~4면 유지, 아니면 1
                     if (this.periodNo < 1 || this.periodNo > 4) this.periodNo = 1;
+                    // 필요하면 호환성을 위해 quarter도 맞춰줌
                     this.fiscalQuarter = this.periodNo;
                 }
             }
             case H -> {
+                // CSV 서비스에서 periodNo(1/2)를 넣었다면 그대로 유지
                 if (this.periodNo == 1 || this.periodNo == 2) {
+                    // ok
                 } else {
+                    // 없으면 reportDate 월로 유추
                     int m = (this.reportDate != null) ? this.reportDate.getMonthValue() : 1;
                     this.periodNo = (m <= 6) ? 1 : 2;
                 }

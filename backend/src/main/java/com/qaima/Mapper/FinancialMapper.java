@@ -2,7 +2,7 @@ package com.qaima.mapper;
 
 import com.qaima.domain.Financial;
 import com.qaima.domain.PeriodType;
-import com.qaima.dto.FinancialDto;
+import com.qaima.dto.financial.FinancialDto;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -18,7 +18,7 @@ public class FinancialMapper {
     public FinancialDto toDto(Financial f) {
         if (f == null) return null;
 
-        // periodType/periodNo 기반으로 quarter/half 파생
+        // periodType/periodNo
         Integer quarter = null;
         Integer half = null;
 
@@ -42,13 +42,11 @@ public class FinancialMapper {
                 // 식별/메타
                 .financialId(f.getFinancialId())
                 .stockId(f.getStock().getStockId())
-                .stockCode(f.getStock().getStockCode())
+                .ticker(f.getStock().getStockCode())
                 .companyName(f.getStock().getCompanyName())
-
                 .year(f.getFiscalYear())
                 .quarter(quarter)
                 .half(half)
-
                 .periodType(pt != null ? pt.name() : null)
                 .periodNo(f.getPeriodNo())
                 .reportDate(f.getReportDate())
@@ -58,14 +56,21 @@ public class FinancialMapper {
                 .grossProfit(f.getGrossProfit())
                 .operatingIncome(f.getOperatingIncome())
                 .netIncome(f.getNetIncome())
-
                 .assets(f.getAssets())
                 .liabilities(f.getLiabilities())
                 .equity(f.getEquity())
-
                 .capitalStock(f.getCapitalStock())
                 .retainedEarnings(f.getRetainedEarnings())
                 .cashAndEquivalents(f.getCashAndEquivalents())
+                .marketCap(f.getMarketCap())
+
+                // 비율/배수(Double)
+                .operatingMargin(bdToDouble(f.getOperatingMargin()))
+                .netMargin(bdToDouble(f.getNetMargin()))
+                .roe(bdToDouble(f.getRoe()))
+                .per(bdToDouble(f.getPer()))
+                .pbr(bdToDouble(f.getPbr()))
+                .debtRatio(debtRatio)
 
                 .build();
     }

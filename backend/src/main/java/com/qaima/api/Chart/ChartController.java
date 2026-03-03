@@ -3,10 +3,10 @@ package com.qaima.api.Chart;
 import com.qaima.common.ApiResponse;
 import com.qaima.domain.CandleSource;
 import com.qaima.domain.Freq;
-import com.qaima.dto.CandleSeriesResponse;
+import com.qaima.dto.candle.CandleSeriesResponse;
+import com.qaima.service.candle.CandleLoadResult;
+import com.qaima.service.chart.ChartService;
 import com.qaima.mapper.CandleMapper;
-import com.qaima.service.CandleLoadResult;
-import com.qaima.service.ChartService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -24,11 +24,16 @@ public class ChartController {
     public Mono<ApiResponse<CandleSeriesResponse>> getCandles(
             @RequestParam String stockCode,
             @RequestParam Freq freq,
-            @RequestParam OffsetDateTime from,
-            @RequestParam OffsetDateTime to
+            @RequestParam(required = false) OffsetDateTime from,
+            @RequestParam OffsetDateTime to,
+            @RequestParam(required = false) Integer limit
     ) {
-        return chartService.getCandles(stockCode, freq, from, to) // Mono<CandleLoadResult>
-                .map(result -> toApiResponse(stockCode, freq, result));
+        Mono<CandleLoadResult> resultMono =
+                (limit != null)
+                        ? chartService.getCandlesBefore(stockCode, freq, to, limit)
+                        : chartService.getCandles(stockCode, freq, from, to);
+
+        return resultMono.map(result -> toApiResponse(stockCode, freq, result));
     }
 
     private ApiResponse<CandleSeriesResponse> toApiResponse(
@@ -48,9 +53,8 @@ public class ChartController {
             return ApiResponse.successWithWarning(data, "NO_DATA");
         }
 
-        // 폴백시 warning
         if (result.getSource() == CandleSource.MARKETSTACK) {
-             return ApiResponse.successWithWarning(data, "CHART_FALLBACK_TO_GLOBAL");
+            return ApiResponse.successWithWarning(data, "CHART_FALLBACK_TO_GLOBAL");
         }
 
         return ApiResponse.success(data);

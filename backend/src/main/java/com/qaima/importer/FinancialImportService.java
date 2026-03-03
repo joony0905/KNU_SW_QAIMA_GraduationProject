@@ -32,8 +32,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class FinancialImportService {
 
-    private static final String DEFAULT_EXCHANGE_CODE = "KOSPI";
-
     private final StockRepository stockRepository;
     private final FinancialRepository financialRepository;
     private final ExchangeRepository exchangeRepository;
@@ -44,28 +42,19 @@ public class FinancialImportService {
 
 
     public void importFromCsv(Path csvPath) throws IOException {
-        importFromCsv(csvPath, null);
-    }
-
-    public void importFromCsv(Path csvPath, String exchangeCode) throws IOException {
         TransactionTemplate tt = new TransactionTemplate(transactionManager);
         tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         int lineNo = 0;
         int ok = 0;
         int fail = 0;
-        String normalizedDefaultExchange = normalizeExchangeCode(exchangeCode);
-        if (normalizedDefaultExchange == null || normalizedDefaultExchange.isBlank()) {
-            normalizedDefaultExchange = DEFAULT_EXCHANGE_CODE;
-        }
-        final String defaultExchangeCode = normalizedDefaultExchange;
 
         try (BufferedReader reader = Files.newBufferedReader(csvPath, StandardCharsets.UTF_8)) {
 
             String headerLine = reader.readLine();
             lineNo++;
             if (headerLine == null) {
-                log.warn("Empty CSV file: {}", csvPath);
+                log.warn("빈 CSV 파일입니다: {}", csvPath);
                 return;
             }
             Map<String, Integer> idx = buildHeaderIndex(headerLine);
@@ -79,19 +68,19 @@ public class FinancialImportService {
 
                 try {
                     tt.execute(status -> {
-                        importSingleRow(idx, cols, defaultExchangeCode);
-                        financialRepository.flush();
-                        em.clear();
+                        importSingleRow(idx, cols);     // 내부에서 save() 수행
+                        financialRepository.flush();    // 제약 위반 즉시 노출
+                        em.clear();                     // 영속성 컨텍스트 오염/메모리 누수 방지
                         return null;
                     });
                     ok++;
                 } catch (DataIntegrityViolationException e) {
                     fail++;
-                    log.warn("CSV {}:{} duplicate skipped (DB constraint): {}", csvPath, lineNo, rootMessage(e));
+                    log.warn("CSV {}:{} 저장 스킵 (DB 제약 위반): {}", csvPath, lineNo, rootMessage(e));
                     safeClear();
                 } catch (Exception e) {
                     fail++;
-                    log.error("CSV {}:{} line error: {}", csvPath, lineNo, e.getMessage(), e);
+                    log.error("CSV {}:{} 라인 처리 중 오류: {}", csvPath, lineNo, e.getMessage(), e);
                     safeClear();
                 }
 
@@ -105,29 +94,24 @@ public class FinancialImportService {
         }
     }
 
-    private void importSingleRow(Map<String, Integer> idx, String[] cols, String defaultExchangeCode) {
+    private void importSingleRow(Map<String, Integer> idx, String[] cols) {
         String stockCode = getString(cols, idx, "stock_code");
         if (stockCode == null || stockCode.isBlank()) {
-            throw new IllegalArgumentException("stock_code is required.");
+            throw new IllegalArgumentException("stock_code 가 비어 있습니다.");
         }
 
         String stockName = getString(cols, idx, "name");
 
-        String normalizedExchangeCode = normalizeExchangeCode(getString(cols, idx, "exchange_code"));
-        String exchangeCode = (normalizedExchangeCode == null || normalizedExchangeCode.isBlank())
-                ? defaultExchangeCode
-                : normalizedExchangeCode;
-
-        Stock stock = stockRepository.findByExchangeCodeAndStockCodeIgnoreCase(exchangeCode, stockCode)
+        Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
                 .orElseGet(() -> {
-                    Exchange exchange = exchangeRepository.findByCode(exchangeCode)
-                            .orElseThrow(() -> new IllegalStateException("exchange table missing code=" + exchangeCode));
+                    Exchange krx = exchangeRepository.findByCode("KRX")
+                            .orElseThrow(() -> new IllegalStateException("exchange 테이블에 code=KRX가 없습니다."));
 
                     Stock s = new Stock();
                     s.setStockCode(stockCode);
                     if (stockName != null && !stockName.isBlank()) s.setCompanyName(stockName);
-                    s.setExchange(exchange);
-                    log.warn("stock auto-created: {} ({}, {})", stockCode, stockName, exchangeCode);
+                    s.setExchange(krx);
+                    log.warn("stock 자동 생성: {} ({})", stockCode, stockName);
                     return stockRepository.save(s);
                 });
 
@@ -136,7 +120,7 @@ public class FinancialImportService {
 
         // NOT NULL
         LocalDate reportDate = parseLocalDate(getString(cols, idx, "report_date"));
-        if (reportDate == null) throw new IllegalArgumentException("report_date is required.");
+        if (reportDate == null) throw new IllegalArgumentException("report_date 가 비어 있습니다.");
         f.setReportDate(reportDate);
 
         Integer version = parseInteger(getString(cols, idx, "version"));
@@ -145,14 +129,14 @@ public class FinancialImportService {
         f.setFiscalYear(requiredInt(cols, idx, "fiscal_year"));
         f.setPeriodType(parsePeriodType(getString(cols, idx, "period_type")));
 
-        // CSV period_no support (avoid half-year label conflicts)
+        // CSV period_no 반영 (반기 H2 유지/유니크 충돌 방지)
         Integer periodNo = parseInteger(getString(cols, idx, "period_no"));
         if (periodNo != null) f.setPeriodNo(periodNo);
 
-        // quarter
+        // 호환용
         f.setFiscalQuarter(parseInteger(getString(cols, idx, "fiscal_quarter")));
 
-        // optional
+        // 선택
         f.setFilingDate(parseLocalDate(getString(cols, idx, "filing_date")));
         f.setCurrency(getString(cols, idx, "currency"));
         f.setSource(getString(cols, idx, "source"));
@@ -167,6 +151,13 @@ public class FinancialImportService {
         f.setCapitalStock(parseBigDecimal(getString(cols, idx, "capital_stock")));
         f.setRetainedEarnings(parseBigDecimal(getString(cols, idx, "retained_earnings")));
         f.setCashAndEquivalents(parseBigDecimal(getString(cols, idx, "cash_and_equivalents")));
+        f.setMarketCap(parseBigDecimal(getString(cols, idx, "market_cap")));
+
+        f.setOperatingMargin(parseBigDecimal(getString(cols, idx, "operating_margin")));
+        f.setNetMargin(parseBigDecimal(getString(cols, idx, "net_margin")));
+        f.setRoe(parseBigDecimal(getString(cols, idx, "roe")));
+        f.setPer(parseBigDecimal(getString(cols, idx, "per")));
+        f.setPbr(parseBigDecimal(getString(cols, idx, "pbr")));
 
         financialRepository.save(f);
     }
@@ -188,23 +179,9 @@ public class FinancialImportService {
         return v.isEmpty() ? null : v;
     }
 
-    private String normalizeExchangeCode(String exchangeCode) {
-        if (exchangeCode == null) return null;
-        String trimmed = exchangeCode.trim();
-        if (trimmed.isBlank()) return null;
-
-        return switch (trimmed.toUpperCase()) {
-            case "XKRX", "KRX" -> "KOSPI";
-            case "XKOS" -> "KOSDAQ";
-            case "XNYS" -> "NYSE";
-            case "XNAS" -> "NASDAQ";
-            default -> trimmed.toUpperCase();
-        };
-    }
-
     private Integer requiredInt(String[] cols, Map<String, Integer> idx, String colName) {
         String v = getString(cols, idx, colName);
-        if (v == null) throw new IllegalArgumentException(colName + " is required and must be an integer.");
+        if (v == null) throw new IllegalArgumentException(colName + " 는 필수 정수값입니다.");
         return Integer.parseInt(v);
     }
 
