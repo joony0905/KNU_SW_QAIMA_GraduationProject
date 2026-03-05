@@ -1,135 +1,102 @@
-# analysis/app/models/feature2.py
+# app/api/feature2.py
 from __future__ import annotations
 
-from datetime import datetime
-from typing import List, Optional, Literal
+import logging
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from fastapi import APIRouter
+from pydantic import ValidationError
 
+from app.models.feature2 import PeerClusterRequest, PeerClusterResponse
+from app.services.clustering import compute_peer_cluster_v1
 
-# =========================
-# Common
-# =========================
-# MVP에서는 ONE_D만 사용 (ONE_W는 확장 대비)
-Freq = Literal["ONE_D", "ONE_W"]
+log = logging.getLogger(__name__)
 
-
-# =========================
-# Time-series DTOs
-# =========================
-class RelativePoint(BaseModel):
-    """
-    Rebased relative series point.
-    value: 기준 시점 대비 상대 변화율
-    예) +0.012 = +1.2%
-    """
-    model_config = ConfigDict(extra="forbid")
-
-    t: datetime
-    value: float
+router = APIRouter(prefix="/feature2", tags=["feature2"])
 
 
-class BandPoint(BaseModel):
-    """
-    Distribution band at time t.
-    p20/p80: peer 분포 분위수
-    """
-    model_config = ConfigDict(extra="forbid")
-
-    t: datetime
-    p20: float
-    p80: float
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
 
-# =========================
-# Peer summary
-# =========================
-class PeerItem(BaseModel):
-    """
-    Selected peer summary (설명/디버깅/툴팁용).
-    """
-    model_config = ConfigDict(extra="forbid")
-
-    stock_code: str
-    company_name: Optional[str] = None
-
-    # --- screening / liquidity ---
-    market_cap: Optional[float] = None
-    avg_turnover: Optional[float] = None   # 평균 거래대금
-    avg_volume: Optional[float] = None     # 평균 거래량
-
-    # --- similarity / scoring ---
-    corr: Optional[float] = None           # 수익률 상관계수
-    cap_score: Optional[float] = None      # |log(Mi / M0)|
-    score: Optional[float] = None          # 최종 score (정렬 기준)
+def _safe_int(v: Any) -> Optional[int]:
+    try:
+        if v is None:
+            return None
+        return int(v)
+    except Exception:
+        return None
 
 
-# =========================
-# Request
-# =========================
-class PeerClusterRequest(BaseModel):
-    """
-    PeerCluster v1 request (rule-based).
+def _safe_str(v: Any) -> Optional[str]:
+    try:
+        if v is None:
+            return None
+        s = str(v).strip()
+        return s if s else None
+    except Exception:
+        return None
 
-    - industry_id: 산업 ID
-    - anchor_stock_code: 기준 종목
-    - freq/window: 시계열 조건
-    - peer_count: 선택할 peer 개수
 
-    Liquidity filters (v1 scope):
-    - 거래대금 / 거래량 기준 필터
-    """
-    model_config = ConfigDict(extra="forbid")
-
-    industry_id: int = Field(..., ge=1)
-    anchor_stock_code: str = Field(..., min_length=1)
-
-    freq: Freq = Field(default="ONE_D")
-    window: int = Field(default=90, ge=30, le=365)
-    peer_count: int = Field(default=8, ge=3, le=30)
-
-    # --- Liquidity filters ---
-    liquidity_min_turnover: Optional[float] = Field(
-        default=None, ge=0, description="평균 거래대금 하한"
-    )
-    liquidity_min_volume: Optional[float] = Field(
-        default=None, ge=0, description="평균 거래량 하한"
-    )
-
-    # 거래대금 기준 상위 K개만 사전 필터링 (선택)
-    liquidity_top_k_turnover: Optional[int] = Field(
-        default=None, ge=5, le=500
+def _default_response(
+    *,
+    industry_id: int,
+    freq: str,
+    window: int,
+    peer_count: int,
+    warnings: list[str],
+) -> PeerClusterResponse:
+    return PeerClusterResponse(
+        method="INDUSTRY_CORR_V1",
+        industry_id=industry_id,
+        freq=freq,  # must be "ONE_D" | "ONE_W"
+        window=window,
+        peer_count=peer_count,
+        centroid=[],
+        band=[],
+        peers=[],
+        as_of=_now_utc(),
+        warnings=warnings,
     )
 
 
-# =========================
-# Response
-# =========================
-class PeerClusterResponse(BaseModel):
+@router.post("/peer-cluster", response_model=PeerClusterResponse)
+def peer_cluster(req_raw: Dict[str, Any]) -> PeerClusterResponse:
     """
-    PeerCluster v1 response.
-
-    Spring-side PeerClusterDto / Redis 캐시와 1:1 대응.
+    PeerCluster v1 (rule-based)
+    - throw 금지
+    - 항상 200 (FastAPI validation 422를 피하기 위해 raw dict로 받고 내부에서 검증)
     """
-    model_config = ConfigDict(extra="forbid")
+    # 1) raw에서 가능한 값들만 "관측용"으로 먼저 추출 (validation 실패해도 echo 가능)
+    raw_industry_id = _safe_int(req_raw.get("industry_id") or req_raw.get("industryId")) or 0
+    raw_freq = _safe_str(req_raw.get("freq")) or "ONE_D"
+    raw_window = _safe_int(req_raw.get("window")) or 0
+    raw_peer_count = _safe_int(req_raw.get("peer_count") or req_raw.get("peerCount")) or 0
 
-    # 알고리즘 식별자 (버전 고정)
-    method: str = Field(default="INDUSTRY_CORR_V1")
+    # 2) Pydantic 검증 + 정상 계산
+    try:
+        req = PeerClusterRequest.model_validate(req_raw)
+        try:
+            return compute_peer_cluster_v1(req)
+        except Exception as e:
+            # 계산 실패(런타임) — 서버에만 스택트레이스 남기고 응답은 짧은 코드로
+            log.exception("peer_cluster compute failed")
+            return _default_response(
+                industry_id=req.industry_id,
+                freq=req.freq,
+                window=req.window,
+                peer_count=req.peer_count,  # 요청 echo
+                warnings=["PEER_CLUSTER_FAILED", e.__class__.__name__],
+            )
 
-    industry_id: int
-    freq: Freq
-    window: int
-    peer_count: int
-
-    # --- chart data ---
-    centroid: List[RelativePoint] = Field(default_factory=list)
-    band: List[BandPoint] = Field(default_factory=list)
-
-    # --- peer list ---
-    peers: List[PeerItem] = Field(default_factory=list)
-
-    # 계산 기준 시각
-    as_of: datetime
-
-    # partial success / 실패 사유
-    warnings: List[str] = Field(default_factory=list)
+    except ValidationError:
+        # 요청 자체가 불량이어도 200 유지
+        # (여기서 detail을 길게 넣지 말고, 코드 중심으로)
+        return _default_response(
+            industry_id=raw_industry_id,
+            freq=raw_freq if raw_freq in ("ONE_D", "ONE_W") else "ONE_D",
+            window=raw_window,
+            peer_count=raw_peer_count,
+            warnings=["PEER_CLUSTER_BAD_REQUEST"],
+        )

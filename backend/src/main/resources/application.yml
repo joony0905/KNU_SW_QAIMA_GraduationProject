@@ -32,3 +32,5 @@ logging:
   level:
     reactor.netty.http.client: DEBUG
     org.springframework.web.reactive.function.client: TRACE
+    org.springframework: DEBUG
+    com.qaima: DEBUG

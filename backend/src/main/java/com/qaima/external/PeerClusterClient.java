@@ -5,6 +5,7 @@ import com.qaima.dto.peercluster.PeerClusterResponseDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -22,7 +23,8 @@ public class PeerClusterClient {
 
     public Mono<PeerClusterResponseDto> requestPeerCluster(PeerClusterRequestDto req) {
         return webClient.post()
-                .uri("/feature2/peer-cluster")
+                .uri("/api/v1/feature2/peer-cluster")
+                .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(req)
                 .retrieve()
                 .bodyToMono(PeerClusterResponseDto.class)

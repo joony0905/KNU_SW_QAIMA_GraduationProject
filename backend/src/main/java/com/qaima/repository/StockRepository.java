@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import com.qaima.domain.Exchange;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface StockRepository extends JpaRepository<Stock, Long> {
@@ -18,5 +19,6 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     """)
     Optional<Stock> findByStockCodeWithExchange(@Param("stockCode") String stockCode);
     Optional<Stock> findByExchangeAndStockCode(Exchange exchange, String stockCode);
+    List<Stock> findAllByIndustryIndustryId(Long industryId);
 }
 
