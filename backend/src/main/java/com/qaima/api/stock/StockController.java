@@ -1,10 +1,12 @@
 package com.qaima.api.stock;
 
 import com.qaima.common.ApiResponse;
+import com.qaima.dto.stock.StockCodeMappingDto;
 import com.qaima.dto.stock.StockDto;
 import com.qaima.dto.stock.StockResponseDto;
-import com.qaima.external.StockClient;
+import com.qaima.service.stock.StockMappingService;
 import com.qaima.service.stock.StockService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -15,6 +17,7 @@ import reactor.core.publisher.Mono;
 public class StockController {
 
     private final StockService stockService;
+    private final StockMappingService stockMappingService;
 
     @GetMapping("/{stockId}")
     public Mono<ApiResponse<StockResponseDto>> getStock(@PathVariable Long stockId) {
@@ -34,6 +37,34 @@ public class StockController {
     ) {
         return stockService.getStockWithRealtimeByCode(stockCode)
                 .map(this::toResponse)
+                .map(ApiResponse::success);
+    }
+
+    @GetMapping("/normalize")
+    public Mono<ApiResponse<StockCodeMappingDto>> normalizeStockCode(
+            @RequestParam(name = "name", required = false) String name,
+            @RequestParam(name = "exchange", required = false) String exchange,
+            @RequestParam(name = "symbol", required = false) String symbol
+    ) {
+        return stockMappingService.normalizeStockCodeByName(name, exchange, symbol)
+                .map(ApiResponse::success);
+    }
+
+    @GetMapping("/normalize/candidates")
+    public Mono<ApiResponse<List<StockCodeMappingDto>>> normalizeCandidates(
+            @RequestParam(name = "name", required = false) String name,
+            @RequestParam(name = "exchange", required = false) String exchange,
+            @RequestParam(name = "symbol", required = false) String symbol
+    ) {
+        return stockMappingService.listMappingsByName(name, exchange, symbol)
+                .map(ApiResponse::success);
+    }
+
+    @GetMapping("/search")
+    public Mono<ApiResponse<List<StockCodeMappingDto>>> searchStocks(
+            @RequestParam(name = "q", required = false) String query
+    ) {
+        return stockMappingService.searchStockMappings(query)
                 .map(ApiResponse::success);
     }
 
