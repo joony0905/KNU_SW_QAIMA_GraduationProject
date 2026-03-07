@@ -11,6 +11,6 @@ public class ExternalTestService {
     private final TestExternalClient client;
 
     public Mono<String> getPost(int id) {
-        return Mono.just(client.getPost(id));
+        return client.getPost(id);
     }
 }

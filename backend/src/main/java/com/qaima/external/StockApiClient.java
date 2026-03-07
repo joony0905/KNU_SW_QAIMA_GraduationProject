@@ -56,6 +56,10 @@ public class StockApiClient implements StockClient {
                 .onErrorResume(ex -> Mono.empty());
 
         return fromKis.switchIfEmpty(fromGlobal)
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[fetchStock] quote source unavailable, fallback to DB static data. stockCode={}", canonical);
+                    return Mono.just(StockDto.builder().build());
+                }))
                 .map(quote -> mergeStaticFromDb(stock, quote))
                 .switchIfEmpty(Mono.error(new IllegalStateException(
                         "KIS/Marketstack 모두에서 종목 정보를 가져오지 못했습니다: " + canonical

@@ -44,6 +44,7 @@ import java.net.UnknownHostException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -93,8 +94,11 @@ public class FeatOneService {
             throw new ErrorException(ErrorCode.VALIDATION_ERROR);
         }
 
-        OffsetDateTime fromDt = OffsetDateTime.parse(from);
-        OffsetDateTime toDt = OffsetDateTime.parse(to);
+        OffsetDateTime fromDt = parseRequestDateTime(from, false);
+        OffsetDateTime toDt = parseRequestDateTime(to, true);
+        if (toDt.isBefore(fromDt)) {
+            throw new IllegalArgumentException("to must be same as or after from.");
+        }
 
         Mono<Stock> stockMono = stockService.getOrCreateStockByCode(stockCode).cache();
 
@@ -554,5 +558,25 @@ public class FeatOneService {
         if (m == null) return "";
         m = m.replace("\n", " ").trim();
         return m.length() > 120 ? m.substring(0, 120) : m;
+    }
+
+    private OffsetDateTime parseRequestDateTime(String raw, boolean endOfDayForDateOnly) {
+        try {
+            return OffsetDateTime.parse(raw);
+        } catch (DateTimeParseException ignored) {
+            // fall through: support date-only inputs from legacy clients
+        }
+
+        try {
+            LocalDate date = LocalDate.parse(raw);
+            if (endOfDayForDateOnly) {
+                return date.atTime(23, 59, 59).atOffset(ZoneOffset.UTC);
+            }
+            return date.atStartOfDay().atOffset(ZoneOffset.UTC);
+        } catch (DateTimeParseException ignored) {
+            throw new IllegalArgumentException(
+                    "from/to must be ISO-8601 datetime (e.g. 2025-01-10T00:00:00Z) or date (e.g. 2025-01-10)."
+            );
+        }
     }
 }

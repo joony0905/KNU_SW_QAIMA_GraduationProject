@@ -16,6 +16,14 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
         select s from Stock s
         join fetch s.exchange e
         left join fetch s.industry i
+        where s.stockId = :stockId
+    """)
+    Optional<Stock> findByIdWithExchangeAndIndustry(@Param("stockId") Long stockId);
+
+    @Query("""
+        select s from Stock s
+        join fetch s.exchange e
+        left join fetch s.industry i
         where s.stockCode = :stockCode
     """)
     Optional<Stock> findByStockCodeWithExchange(@Param("stockCode") String stockCode);

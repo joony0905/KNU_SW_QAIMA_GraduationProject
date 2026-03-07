@@ -7,15 +7,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.ServerWebInputException;
 import reactor.core.publisher.Mono;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /**
-     * 표준 에러
-     */
     @ExceptionHandler(ErrorException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleQaima(ErrorException e, ServerWebExchange exchange) {
         ErrorCode ec = e.getErrorCode();
@@ -24,9 +23,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ec.code(), e.getMessage())));
     }
 
-    /**
-     * 분석 API 실패
-     */
     @ExceptionHandler(AnalysisApiException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleAnalysisApi(AnalysisApiException e, ServerWebExchange exchange) {
         exchange.getAttributes().put("errorCode", "ANALYSIS_API_FAILED");
@@ -34,9 +30,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("ANALYSIS_API_FAILED", "분석 결과를 불러올 수 없습니다.")));
     }
 
-    /**
-     * 리소스 없음
-     */
     @ExceptionHandler(ResourceNotFoundException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleNotFound(ResourceNotFoundException e, ServerWebExchange exchange) {
         exchange.getAttributes().put("errorCode", "RESOURCE_NOT_FOUND");
@@ -44,9 +37,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("RESOURCE_NOT_FOUND", e.getMessage())));
     }
 
-    /**
-     * 입력값 검증 실패 (WebFlux 바인딩/검증 예외)
-     */
     @ExceptionHandler(WebExchangeBindException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleBind(WebExchangeBindException e, ServerWebExchange exchange) {
         exchange.getAttributes().put("errorCode", "VALIDATION_ERROR");
@@ -55,9 +45,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("VALIDATION_ERROR", msg)));
     }
 
-    /**
-     * 사용자 입력/비즈니스 검증 실패
-     */
+    @ExceptionHandler(ServerWebInputException.class)
+    public Mono<ResponseEntity<ApiResponse<Void>>> handleInput(ServerWebInputException e, ServerWebExchange exchange) {
+        exchange.getAttributes().put("errorCode", "VALIDATION_ERROR");
+        return Mono.just(ResponseEntity.badRequest()
+                .body(ApiResponse.error("VALIDATION_ERROR", safeMessage(e.getReason(), "Validation error"))));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleIllegalArgument(IllegalArgumentException e, ServerWebExchange exchange) {
         exchange.getAttributes().put("errorCode", "VALIDATION_ERROR");
@@ -65,9 +59,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("VALIDATION_ERROR", safeMessage(e.getMessage(), "Validation error"))));
     }
 
-    /**
-     * 처리 실패/상태 이상 (메일 발송 실패 등)
-     */
     @ExceptionHandler(IllegalStateException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleIllegalState(IllegalStateException e, ServerWebExchange exchange) {
         exchange.getAttributes().put("errorCode", "INTERNAL_ERROR");
@@ -75,9 +66,32 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("INTERNAL_ERROR", safeMessage(e.getMessage(), "서버 내부 오류"))));
     }
 
-    /**
-     * 나머지 예외 (내부)
-     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public Mono<ResponseEntity<ApiResponse<Void>>> handleResponseStatus(ResponseStatusException e, ServerWebExchange exchange) {
+        int statusValue = e.getStatusCode().value();
+        HttpStatus status = HttpStatus.resolve(statusValue);
+        if (status == null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+
+        String code = switch (statusValue) {
+            case 400 -> "BAD_REQUEST";
+            case 401 -> "UNAUTHORIZED";
+            case 403 -> "FORBIDDEN";
+            case 404 -> "NOT_FOUND";
+            case 405 -> "METHOD_NOT_ALLOWED";
+            case 406 -> "NOT_ACCEPTABLE";
+            case 409 -> "CONFLICT";
+            case 415 -> "UNSUPPORTED_MEDIA_TYPE";
+            case 422 -> "UNPROCESSABLE_ENTITY";
+            default -> "HTTP_" + statusValue;
+        };
+
+        exchange.getAttributes().put("errorCode", code);
+        return Mono.just(ResponseEntity.status(status)
+                .body(ApiResponse.error(code, safeMessage(e.getReason(), status.getReasonPhrase()))));
+    }
+
     @ExceptionHandler(Exception.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleException(Exception e, ServerWebExchange exchange) {
         exchange.getAttributes().put("errorCode", "INTERNAL_ERROR");
