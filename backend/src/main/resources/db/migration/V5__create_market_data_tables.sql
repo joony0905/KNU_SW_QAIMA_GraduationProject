@@ -9,7 +9,7 @@ CREATE TABLE financial (
                            fiscal_year INT NOT NULL,
                            period_no INT NOT NULL,
                            fiscal_quarter INT NULL,
-                           period_type ENUM('q','h','a','ttm') NOT NULL,
+                           period_type VARCHAR(10) NOT NULL,
                            filing_date DATE NULL,
                            currency VARCHAR(10) NULL,
                            source VARCHAR(50) NULL,
