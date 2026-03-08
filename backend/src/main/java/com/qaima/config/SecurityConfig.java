@@ -2,6 +2,7 @@ package com.qaima.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.common.ApiResponse;
+import com.qaima.security.JwtAuthFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,6 +12,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -25,6 +27,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
+    private final JwtAuthFilter jwtAuthFilter;
 
     @Bean
     public SecurityWebFilterChain filterChain(ServerHttpSecurity http) {
@@ -33,12 +36,14 @@ public class SecurityConfig {
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+                .addFilterAt(jwtAuthFilter, SecurityWebFiltersOrder.AUTHENTICATION)
 
                 .authorizeExchange(ex -> ex
                         // 공개
                         .pathMatchers("/api/v1/auth/**").permitAll()
                         .pathMatchers("/api/v1/email/**").permitAll()
                         .pathMatchers("/api/v1/meta/**").permitAll()
+                        .pathMatchers("/api/v1/dictionary/**").permitAll()
                         .pathMatchers("/api/v1/health/**").permitAll()
                         .pathMatchers("/api/v1/test/ping").permitAll()
                         .pathMatchers("/api/v1/charts/**").permitAll()

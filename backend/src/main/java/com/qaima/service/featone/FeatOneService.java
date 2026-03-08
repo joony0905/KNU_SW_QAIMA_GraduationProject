@@ -25,6 +25,7 @@ import com.qaima.external.GlobalStockClient;
 import com.qaima.external.KrStockClient;
 import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.PriceOhlcvRepository;
+import com.qaima.service.stock.MarketSnapshotService;
 import com.qaima.service.stock.StockService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -40,8 +41,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -64,6 +67,7 @@ public class FeatOneService {
     private final StockService stockService;
     private final PriceOhlcvRepository priceOhlcvRepository;
     private final FinancialRepository financialRepository;
+    private final MarketSnapshotService marketSnapshotService;
 
     // Feature1은 직접 KIS/Marketstack을 사용
     private final KrStockClient krStockClient;
@@ -90,8 +94,11 @@ public class FeatOneService {
             throw new ErrorException(ErrorCode.VALIDATION_ERROR);
         }
 
-        OffsetDateTime fromDt = OffsetDateTime.parse(from);
-        OffsetDateTime toDt = OffsetDateTime.parse(to);
+        OffsetDateTime fromDt = parseRequestDateTime(from, false);
+        OffsetDateTime toDt = parseRequestDateTime(to, true);
+        if (toDt.isBefore(fromDt)) {
+            throw new IllegalArgumentException("to must be same as or after from.");
+        }
 
         Mono<Stock> stockMono = stockService.getOrCreateStockByCode(stockCode).cache();
 
@@ -109,7 +116,11 @@ public class FeatOneService {
                         .subscribeOn(Schedulers.boundedElastic())
         );
 
-        return Mono.zip(stockMono, candlesMono, financialsMono)
+        Mono<Boolean> marketSnapshotMono = stockMono
+                .flatMap(stock -> refreshMarketSnapshot(stock, marketDivCode))
+                .defaultIfEmpty(Boolean.TRUE);
+
+        return Mono.zip(stockMono, candlesMono, financialsMono, marketSnapshotMono)
                 .flatMap(tuple -> {
                     Stock stock = tuple.getT1();
                     List<PriceOhlcv> candles = tuple.getT2();
@@ -137,6 +148,40 @@ public class FeatOneService {
                                 return Mono.just(new FeatOneResult(fallback, chartUnavailable));
                             });
                 });
+    }
+
+    private Mono<Boolean> refreshMarketSnapshot(Stock stock, String marketDivCodeOverride) {
+        if (stock == null || stock.getExchange() == null) {
+            return Mono.just(Boolean.TRUE);
+        }
+
+        String marketDivCode = (marketDivCodeOverride != null && !marketDivCodeOverride.isBlank())
+                ? marketDivCodeOverride
+                : toKisMarketDivCode(stock.getExchange());
+
+        if ("B".equals(marketDivCode)) {
+            return Mono.just(Boolean.TRUE);
+        }
+
+        LocalDate baseDate = LocalDate.now();
+
+        return krStockClient.fetchKisStatRaw(stock.getStockCode(), marketDivCode)
+                .flatMap(output -> marketSnapshotService
+                        .upsertFromKis(stock, output, baseDate)
+                        .thenReturn(Boolean.TRUE))
+                .doOnError(ex -> log.warn(
+                        "[FeatOneService] market snapshot refresh failed. stockCode={}, marketDivCode={}",
+                        stock.getStockCode(), marketDivCode, ex
+                ))
+                .onErrorResume(ex -> marketSnapshotService.getLatestDto(stock, baseDate)
+                        .thenReturn(Boolean.TRUE)
+                        .onErrorResume(fallbackEx -> {
+                            log.warn(
+                                    "[FeatOneService] market snapshot fallback read failed. stockCode={}",
+                                    stock.getStockCode(), fallbackEx
+                            );
+                            return Mono.just(Boolean.TRUE);
+                        }));
     }
 
     /**
@@ -513,5 +558,25 @@ public class FeatOneService {
         if (m == null) return "";
         m = m.replace("\n", " ").trim();
         return m.length() > 120 ? m.substring(0, 120) : m;
+    }
+
+    private OffsetDateTime parseRequestDateTime(String raw, boolean endOfDayForDateOnly) {
+        try {
+            return OffsetDateTime.parse(raw);
+        } catch (DateTimeParseException ignored) {
+            // fall through: support date-only inputs from legacy clients
+        }
+
+        try {
+            LocalDate date = LocalDate.parse(raw);
+            if (endOfDayForDateOnly) {
+                return date.atTime(23, 59, 59).atOffset(ZoneOffset.UTC);
+            }
+            return date.atStartOfDay().atOffset(ZoneOffset.UTC);
+        } catch (DateTimeParseException ignored) {
+            throw new IllegalArgumentException(
+                    "from/to must be ISO-8601 datetime (e.g. 2025-01-10T00:00:00Z) or date (e.g. 2025-01-10)."
+            );
+        }
     }
 }

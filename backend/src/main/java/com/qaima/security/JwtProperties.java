@@ -15,4 +15,7 @@ public class JwtProperties {
 
     // application.yml: jwt.access-token-validity-seconds
     private long accessTokenValiditySeconds;
+
+    // application.yml: jwt.refresh-token-validity-seconds
+    private long refreshTokenValiditySeconds = 60L * 60L * 24L * 30L;
 }
