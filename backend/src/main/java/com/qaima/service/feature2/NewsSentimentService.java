@@ -1,4 +1,4 @@
-package com.qaima.service;
+package com.qaima.service.feature2;
 
 import org.springframework.stereotype.Service;
 

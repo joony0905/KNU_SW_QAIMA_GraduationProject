@@ -903,6 +903,7 @@ export default function StocksMockPage() {
                             candles={candles}
                             indicators={indicatorData}
                             showSubPanes={Boolean(indicatorData)}
+                            markerMode="triple" // "sto_ema" | "bb_sto" | "both"
                             onRequestMoreHistory={handleRequestMoreHistory}
                           />
                         </div>

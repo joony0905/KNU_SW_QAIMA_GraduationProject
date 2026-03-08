@@ -4,5 +4,14 @@ import com.qaima.domain.PeerClusterCache;
 import com.qaima.domain.PeerClusterCacheId;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface PeerClusterCacheRepository extends JpaRepository<PeerClusterCache, PeerClusterCacheId> {
+import java.util.Optional;
+
+public interface PeerClusterCacheRepository
+        extends JpaRepository<PeerClusterCache, PeerClusterCacheId> {
+
+    Optional<PeerClusterCache>
+    findTopByIdIndustryIdAndIdMethodOrderByIdTsDesc(
+            Long industryId,
+            String method
+    );
 }

@@ -22,7 +22,15 @@ spring:
   flyway:
     enabled: false
 
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+
 logging:
   level:
     reactor.netty.http.client: DEBUG
     org.springframework.web.reactive.function.client: TRACE
+    org.springframework: DEBUG
+    com.qaima: DEBUG

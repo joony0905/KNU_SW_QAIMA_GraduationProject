@@ -11,7 +11,21 @@ import java.util.List;
 import org.springframework.data.domain.Pageable;
 
 public interface PriceOhlcvRepository extends JpaRepository<PriceOhlcv, PriceOhlcvId> {
-
+    @Query("""
+    select p
+    from PriceOhlcv p
+    where p.stock.stockCode in :stockCodes
+      and p.id.freq = :freq
+      and p.id.ts >= :from
+      and p.id.ts < :to
+    order by p.stock.stockCode asc, p.id.ts asc
+    """)
+    List<PriceOhlcv> findRangeBulk(
+            @org.springframework.data.repository.query.Param("stockCodes") List<String> stockCodes,
+            @org.springframework.data.repository.query.Param("freq") Freq freq,
+            @org.springframework.data.repository.query.Param("from") java.time.OffsetDateTime from,
+            @org.springframework.data.repository.query.Param("to") java.time.OffsetDateTime to
+    );
     @Query("""
     select p
     from PriceOhlcv p
