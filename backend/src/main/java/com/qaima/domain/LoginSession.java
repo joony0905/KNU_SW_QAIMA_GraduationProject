@@ -3,9 +3,15 @@ package com.qaima.domain;
 import org.hibernate.annotations.CreationTimestamp;
 import jakarta.persistence.*;
 import java.time.Instant;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "login_session")
+@Getter
+@Setter
+@NoArgsConstructor
 public class LoginSession {
 
     @Id

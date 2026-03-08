@@ -13,10 +13,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
-/**
- * 테스트용 컨트롤러
- * - 서버 동작, 공통 응답 포맷, 외부 API 연동, FastAPI 연동 테스트
- */
 @RestController
 @RequestMapping
 @RequiredArgsConstructor
@@ -30,10 +26,6 @@ public class HelloController {
         return "Welcome! QAIMA backend is running";
     }
 
-    /**
-     * GET /api/v1/test/ping
-     * 서버 헬스체크용 엔드포인트
-     */
     @GetMapping("/api/v1/test/ping")
     public ApiResponse<Map<String, Object>> ping() {
         Map<String, Object> payload = Map.of(
@@ -44,30 +36,25 @@ public class HelloController {
         return ApiResponse.success(payload);
     }
 
-    /**
-     * GET /api/v1/test/external
-     * 외부(예시) API 통신 테스트
-     */
     @GetMapping("/api/v1/test/external")
-    public ApiResponse<Map<String, Object>> testExternal() {
-        String result = externalClient.getPost(1);
-
-        Map<String, Object> payload = Map.of(
-                "ok", true,
-                "source", "jsonplaceholder.typicode.com/posts/1",
-                "response", result
-        );
-        return ApiResponse.success(payload);
+    public Mono<ApiResponse<Map<String, Object>>> testExternal() {
+        return externalClient.getPost(1)
+                .map(result -> {
+                    Map<String, Object> payload = Map.of(
+                            "ok", true,
+                            "source", "jsonplaceholder.typicode.com/posts/1",
+                            "response", result
+                    );
+                    return ApiResponse.success(payload);
+                })
+                .onErrorResume(e -> Mono.just(ApiResponse.<Map<String, Object>>internalError(
+                        "EXTERNAL_TEST_FAILED",
+                        "External test failed: " + safeMessage(e.getMessage())
+                )));
     }
 
-    /**
-     * GET /api/v1/test/feature1
-     * FastAPI(기능1) 응답 테스트
-     */
     @GetMapping("/api/v1/test/feature1")
     public Mono<ApiResponse<FeatOneAnalysisResponseDto>> testAnalysis() {
-
-        // 최소 필드만 채운 더미 요청
         FeatOneRequestDto req = FeatOneRequestDto.builder()
                 .stockCode("AAPL")
                 .freq(com.qaima.domain.Freq.ONE_D)
@@ -78,12 +65,17 @@ public class HelloController {
                 .build();
 
         return analysisApiClient.requestStockAnalysis(req)
-                .map(ApiResponse::success)               // 성공 시 공통 성공 응답으로 감싸기
-                .onErrorResume(e ->                      // 실패 시 공통 실패 응답으로 감싸기
-                        Mono.just(ApiResponse.internalError(
-                                "FASTAPI_ERROR",
-                                "FastAPI 분석 요청 실패: " + e.getMessage()
-                        ))
-                );
+                .map(ApiResponse::success)
+                .onErrorResume(e -> Mono.just(ApiResponse.internalError(
+                        "FASTAPI_ERROR",
+                        "FastAPI analysis failed: " + safeMessage(e.getMessage())
+                )));
+    }
+
+    private String safeMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "n/a";
+        }
+        return message.length() > 200 ? message.substring(0, 200) : message;
     }
 }

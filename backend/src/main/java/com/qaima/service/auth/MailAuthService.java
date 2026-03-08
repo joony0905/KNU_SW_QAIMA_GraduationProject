@@ -8,6 +8,7 @@ import com.qaima.repository.PwdResetRepository;
 import com.qaima.repository.UserRepository;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -21,9 +22,11 @@ import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MailAuthService {
 
     private final UserRepository userRepository;
@@ -38,6 +41,9 @@ public class MailAuthService {
 
     @Value("${qaima.mail.from:noreply@qaima.local}")
     private String fromAddress;
+
+    @Value("${qaima.mail.dry-run:false}")
+    private boolean mailDryRun;
 
     // 이메일 인증 코드는 짧게(보통 5~15분)
     private static final Duration VERIFY_TTL = Duration.ofMinutes(10);
@@ -183,6 +189,11 @@ public class MailAuthService {
 
     private void sendTextMail(String to, String subject, String text) {
         try {
+            if (shouldSkipDelivery(to)) {
+                log.info("[MailAuthService] skip mail delivery. to={}, subject={}", to, subject);
+                return;
+            }
+
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, false, StandardCharsets.UTF_8.name());
             helper.setTo(to);
@@ -193,6 +204,17 @@ public class MailAuthService {
         } catch (Exception e) {
             throw new IllegalStateException("메일 발송에 실패했습니다.");
         }
+    }
+
+    private boolean shouldSkipDelivery(String to) {
+        if (mailDryRun) {
+            return true;
+        }
+        if (to == null) {
+            return false;
+        }
+        String normalized = to.trim().toLowerCase(Locale.ROOT);
+        return normalized.endsWith("@example.com");
     }
 
     private static String generate6DigitCode() {

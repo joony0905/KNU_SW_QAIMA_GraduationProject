@@ -3,7 +3,10 @@ package com.qaima.api.AuthController;
 import com.qaima.common.ApiResponse;
 import com.qaima.dto.user.LoginRequestDto;
 import com.qaima.dto.user.LoginResponseDto;
+import com.qaima.dto.user.LogoutRequestDto;
 import com.qaima.dto.user.SignupRequestDto;
+import com.qaima.dto.user.TokenRefreshRequestDto;
+import com.qaima.dto.user.TokenRefreshResponseDto;
 import com.qaima.dto.user.UserResponseDto;
 import com.qaima.service.auth.AuthService;
 import jakarta.validation.Valid;
@@ -43,6 +46,23 @@ public class AuthController {
         String ip = extractClientIp(request);
         String ua = request.getHeaders().getFirst("User-Agent");
         return authService.login(requestDto, ip, ua).map(ApiResponse::success);
+    }
+
+    @PostMapping("/refresh")
+    public Mono<ApiResponse<TokenRefreshResponseDto>> refresh(@Valid @RequestBody TokenRefreshRequestDto requestDto,
+                                                              ServerHttpRequest request) {
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+        return authService.refresh(requestDto.getRefreshToken(), ip, ua).map(ApiResponse::success);
+    }
+
+    @PostMapping("/logout")
+    public Mono<ApiResponse<Void>> logout(@Valid @RequestBody LogoutRequestDto requestDto,
+                                          ServerHttpRequest request) {
+        String ip = extractClientIp(request);
+        String ua = request.getHeaders().getFirst("User-Agent");
+        return authService.logout(requestDto.getRefreshToken(), ip, ua)
+                .thenReturn(ApiResponse.success(null));
     }
     
     private static String extractClientIp(ServerHttpRequest request) {

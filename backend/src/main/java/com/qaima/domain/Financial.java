@@ -59,7 +59,7 @@ public class Financial {
     @Column(name = "fiscal_quarter")
     private Integer fiscalQuarter;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = PeriodTypeConverter.class)
     @Column(name = "period_type", length = 10, nullable = false)
     private PeriodType periodType;
 

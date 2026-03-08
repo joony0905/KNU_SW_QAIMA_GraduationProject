@@ -43,7 +43,7 @@ public class StockService {
 
     public Mono<StockDto> getStockWithRealtime(Long stockId) {
         return Mono.fromCallable(() ->
-                        stockRepository.findById(stockId)
+                        stockRepository.findByIdWithExchangeAndIndustry(stockId)
                                 .orElseThrow(() ->
                                         new IllegalArgumentException("존재하지 않는 종목 ID: " + stockId)))
                 .subscribeOn(Schedulers.boundedElastic())

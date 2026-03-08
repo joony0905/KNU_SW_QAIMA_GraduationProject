@@ -6,7 +6,10 @@ import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.service.featone.FeatOneResult;
 import com.qaima.service.featone.FeatOneService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -20,9 +23,6 @@ public class FeatOneController {
     public Mono<ApiResponse<FeatOneAnalysisResponseDto>> analyze(
             @RequestBody FeatOneAnalyzeRequestDto request
     ) {
-        System.out.println(">>> FEAT1 ANALYZE REQUEST ENTERED <<<");
-        System.out.println("REQ stockCode=" + request.getStockCode());
-        System.out.println("REQ DTO class=" + request.getClass().getName());
         return featOneService.getFeatOneData(
                         request.getStockCode(),
                         request.getFreq(),
@@ -31,7 +31,11 @@ public class FeatOneController {
                         request.getMarketDivCode(),
                         request.getIncludeExplain()
                 )
-                .map(this::toApiResponse);
+                .map(this::toApiResponse)
+                .onErrorResume(ex -> Mono.just(ApiResponse.internalError(
+                        "FEATURE1_ANALYZE_FAILED",
+                        "Feature1 분석 처리 실패: " + safeMessage(ex.getMessage())
+                )));
     }
 
     private ApiResponse<FeatOneAnalysisResponseDto> toApiResponse(FeatOneResult result) {
@@ -42,5 +46,12 @@ public class FeatOneController {
             );
         }
         return ApiResponse.success(result.getData());
+    }
+
+    private String safeMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "n/a";
+        }
+        return message.length() > 200 ? message.substring(0, 200) : message;
     }
 }

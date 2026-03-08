@@ -5,6 +5,7 @@ import com.qaima.domain.User;
 import com.qaima.dto.user.LoginRequestDto;
 import com.qaima.dto.user.LoginResponseDto;
 import com.qaima.dto.user.SignupRequestDto;
+import com.qaima.dto.user.TokenRefreshResponseDto;
 import com.qaima.dto.user.UserResponseDto;
 import com.qaima.repository.UserRepository;
 import com.qaima.security.JwtTokenProvider;
@@ -22,6 +23,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final MailAuthService mailAuthService;
     private final AuthLoginLogService authLoginLogService;
+    private final LoginSessionService loginSessionService;
 
     public Mono<UserResponseDto> signup(SignupRequestDto requestDto, String ip, String ua) {
         final String email = requestDto.getEmail();
@@ -95,21 +97,52 @@ public class AuthService {
                     String role = (user.getRole() == null) ? "USER" : user.getRole().name().toUpperCase();
                     String accessToken = jwtTokenProvider.createAccessToken(user.getUserId(), role);
 
-                    LoginResponseDto dto = new LoginResponseDto(
-                            user.getUserId(),
-                            user.getEmail(),
-                            user.getName(),
-                            accessToken
-                    );
+                    return loginSessionService.issueRefreshToken(user, ip, ua, null)
+                            .flatMap(refreshToken -> {
+                                LoginResponseDto dto = new LoginResponseDto(
+                                        user.getUserId(),
+                                        user.getEmail(),
+                                        user.getName(),
+                                        accessToken,
+                                        refreshToken
+                                );
 
-                    return authLoginLogService.success(user.getUserId(), user.getEmail(), ip, ua)
-                            .onErrorResume(e -> Mono.empty())
-                            .thenReturn(dto);
+                                return authLoginLogService.success(user.getUserId(), user.getEmail(), ip, ua)
+                                        .onErrorResume(e -> Mono.empty())
+                                        .thenReturn(dto);
+                            });
                 })
                 .onErrorResume(ex ->
                         authLoginLogService.failure(email, ip, ua, "AUTH_LOGIN_FAILED", ex.getMessage())
                                 .onErrorResume(e -> Mono.empty())
                                 .then(Mono.error(ex))
                 );
+    }
+
+    public Mono<TokenRefreshResponseDto> refresh(String refreshToken, String ip, String ua) {
+        return loginSessionService.rotateRefreshToken(refreshToken, ip, ua)
+                .flatMap(rotated -> {
+                    User user = rotated.user();
+                    String role = (user.getRole() == null) ? "USER" : user.getRole().name().toUpperCase();
+                    String accessToken = jwtTokenProvider.createAccessToken(user.getUserId(), role);
+
+                    TokenRefreshResponseDto dto = new TokenRefreshResponseDto(accessToken, rotated.refreshToken());
+
+                    return authLoginLogService.event("TOKEN_REFRESHED", true, user.getUserId(), user.getEmail(), ip, ua, null, null)
+                            .onErrorResume(e -> Mono.empty())
+                            .thenReturn(dto);
+                })
+                .onErrorResume(ex ->
+                        authLoginLogService.event("TOKEN_REFRESHED", false, null, null, ip, ua,
+                                        "TOKEN_REFRESH_FAILED", ex.getMessage())
+                                .onErrorResume(e -> Mono.empty())
+                                .then(Mono.error(ex))
+                );
+    }
+
+    public Mono<Void> logout(String refreshToken, String ip, String ua) {
+        return loginSessionService.revokeByRefreshToken(refreshToken)
+                .then(authLoginLogService.event("LOGOUT", true, null, null, ip, ua, null, null)
+                        .onErrorResume(e -> Mono.empty()));
     }
 }
