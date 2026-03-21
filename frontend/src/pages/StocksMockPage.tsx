@@ -18,6 +18,9 @@ import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
 import { fetchCandles } from "../api/charts";
 import type { Candle } from "../types/candle";
+import jsPDF from "jspdf";
+import downloadIcon from "../assets/download_button.png";
+import zoomIcon from "../assets/zoom_button.png";
 
 function useKSTTime() {
   const [time, setTime] = useState("");
@@ -50,6 +53,22 @@ export default function StocksMockPage() {
   const [chartError, setChartError] = useState<string | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const dummyAnalysis = {
+    summary:
+      "이 기업은 안정적인 실적 성장과 양호한 재무구조를 보이고 있습니다.",
+    highlights: [
+      "매출과 영업이익이 3년 연속 증가",
+      "부채비율이 업종 평균 대비 낮은 수준",
+      "배당성향이 점진적으로 상승",
+    ],
+    risks: [
+      "글로벌 경기 둔화에 따른 수요 감소 가능성",
+      "원자재 가격 변동성 확대",
+    ],
+    rating: "BUY",
+    targetPrice: 90000,
+  };
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -62,6 +81,10 @@ export default function StocksMockPage() {
     stabilitySection,
     liquiditySection,
   ]);
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
+  const [analysisZoom, setAnalysisZoom] = useState(1); // 1 = 100%
+  const [displayText, setDisplayText] = useState("");
 
   const [isOpen, setIsOpen] = useState(false);
 
@@ -130,7 +153,7 @@ export default function StocksMockPage() {
         stockCode,
         "ONE_D",
         fromDate.toISOString(),
-        toDate.toISOString()
+        toDate.toISOString(),
       );
 
       if (response.data.length === 0) {
@@ -154,7 +177,6 @@ export default function StocksMockPage() {
     }
   };
 
-  
   const looksLikeCode = (s: string) => {
     // 005930 같은 국내코드(숫자 6자리) 또는 AAPL 같은 티커(영문/숫자/.-)
     return /^\d{6}$/.test(s) || /^[A-Za-z0-9.\-]{1,15}$/.test(s);
@@ -185,10 +207,13 @@ export default function StocksMockPage() {
         symbol: stockInfo.stockCode,
         price: stockInfo.price?.toString() || "0",
         change: stockInfo.changeRate
-          ? (stockInfo.changeRate > 0 ? "+" : "") + stockInfo.changeRate.toFixed(2)
+          ? (stockInfo.changeRate > 0 ? "+" : "") +
+            stockInfo.changeRate.toFixed(2)
           : "0",
         changeRate: stockInfo.changeRate
-          ? (stockInfo.changeRate > 0 ? "+" : "") + stockInfo.changeRate.toFixed(2) + "%"
+          ? (stockInfo.changeRate > 0 ? "+" : "") +
+            stockInfo.changeRate.toFixed(2) +
+            "%"
           : "0%",
       });
     } catch (e) {
@@ -230,21 +255,85 @@ export default function StocksMockPage() {
     await loadCandles(code);
   };
 
-
   const handleAnalyzeClick = async () => {
     setLoading(true);
     setErr("");
     setAnalysisResult(null);
 
     try {
-      // mainStock.symbol은 이제 항상 stockCode로 유지됨
-      const result = await fetchAnalysis(mainStock.symbol);
-      setAnalysisResult(result.analysis);
+      await new Promise((r) => setTimeout(r, 500));
+      setAnalysisResult(dummyAnalysis);
+      setShowAnalyzeButton(false); // ✅ 결과가 생기면 버튼 숨김
+      setDisplayText(""); // 타이핑용 초기화
     } catch (e) {
-      console.error("분석 결과 조회 실패:", e);
       setErr("분석 결과를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadClick = () => {
+    if (!analysisResult) return;
+
+    const doc = new jsPDF();
+
+    const title = `${mainStock.name} (${mainStock.symbol}) 심층 분석`;
+    const summary = analysisResult.summary ?? "";
+    const rating = analysisResult.rating ?? "";
+    const highlights = (analysisResult.highlights ?? []).join("\n- ");
+    const risks = (analysisResult.risks ?? []).join("\n- ");
+
+    let y = 20;
+
+    doc.setFontSize(16);
+    doc.text(title, 10, y);
+    y += 10;
+
+    doc.setFontSize(12);
+    doc.text(`투자의견: ${rating}`, 10, y);
+    y += 10;
+
+    if (summary) {
+      doc.setFontSize(12);
+      doc.text("요약", 10, y);
+      y += 7;
+      doc.setFontSize(11);
+      const summaryLines = doc.splitTextToSize(summary, 180);
+      doc.text(summaryLines, 10, y);
+      y += summaryLines.length * 6 + 5;
+    }
+
+    if (highlights) {
+      doc.setFontSize(12);
+      doc.text("핵심 포인트", 10, y);
+      y += 7;
+      doc.setFontSize(11);
+      const lines = doc.splitTextToSize(`- ${highlights}`, 180);
+      doc.text(lines, 10, y);
+      y += lines.length * 6 + 5;
+    }
+
+    if (risks) {
+      doc.setFontSize(12);
+      doc.text("리스크", 10, y);
+      y += 7;
+      doc.setFontSize(11);
+      const lines = doc.splitTextToSize(`- ${risks}`, 180);
+      doc.text(lines, 10, y);
+    }
+
+    const fileName = `${mainStock.symbol}_analysis.pdf`;
+    doc.save(fileName);
+  };
+
+  const handleFullscreenClick = () => {
+    const elem = document.documentElement;
+    if (!document.fullscreenElement) {
+      elem.requestFullscreen().catch((err) => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
     }
   };
 
@@ -340,6 +429,45 @@ export default function StocksMockPage() {
     document.addEventListener("click", handleClickOutsideTopic);
     return () => document.removeEventListener("click", handleClickOutsideTopic);
   }, []);
+
+  // 타이핑 효과
+  useEffect(() => {
+    if (!analysisResult) {
+      setDisplayText("");
+      return;
+    }
+
+    // 여기서 어떤 텍스트를 타이핑할지 정의
+    const fullText: string =
+      typeof analysisResult === "string"
+        ? analysisResult
+        : [
+            analysisResult.summary,
+            "",
+            "핵심 포인트:",
+            ...(analysisResult.highlights ?? []).map((h: string) => `- ${h}`),
+            "",
+            "리스크:",
+            ...(analysisResult.risks ?? []).map((r: string) => `- ${r}`),
+          ]
+            .filter(Boolean)
+            .join("\n");
+
+    setDisplayText(""); // 초기화
+
+    let index = 0;
+    const speed = 20; // ms, 숫자 줄이면 더 빨리 타이핑됨
+
+    const timer = setInterval(() => {
+      index += 1;
+      setDisplayText((prev) => prev + fullText.charAt(index - 1));
+      if (index >= fullText.length) {
+        clearInterval(timer);
+      }
+    }, speed);
+
+    return () => clearInterval(timer);
+  }, [analysisResult]);
 
   // mainStock용 색/방향 계산 (StockCard와 동일한 규칙)
   const mainColorClass = getColorClass(mainStock.changeRate);
@@ -686,31 +814,116 @@ export default function StocksMockPage() {
                 </div>
               </div>
             </div>
-
             {/* ========== 하단 분석 결과 영역 ========== */}
-            <section className="w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex flex-col items-center justify-center gap-4 mt-2">
-              <button
-                onClick={handleAnalyzeClick}
-                className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium"
-              >
-                분석 결과 보기
-              </button>
+            <section className="w-full bg-zinc-100 rounded-2xl py-6 sm:py-8 flex flex-col items-center gap-4 mt-2">
+              {/* 상단 헤더 바 */}
+              <div className="w-[90%] max-w-4xl flex items-center justify-end">
+                <div className="flex items-center gap-3">
+                  {/* 다운로드 버튼 */}
+                  <button
+                    onClick={handleDownloadClick}
+                    className="w-7 h-7 sm:w-8 sm:h-8"
+                  >
+                    <img
+                      src={downloadIcon}
+                      alt="다운로드"
+                      className="w-full h-full object-contain"
+                    />
+                  </button>
 
-              {loading && (
-                <p className="text-sm sm:text-base text-gray-600">
-                  분석 중입니다...
-                </p>
+                  <button
+                    onClick={() => {
+                      if (!analysisResult) return;
+                      setAnalysisZoom(1);
+                      setIsAnalysisModalOpen(true);
+                    }}
+                    className="w-6 h-6 sm:w-7 sm:h-7"
+                  >
+                    <img
+                      src={zoomIcon}
+                      alt="확대"
+                      className="w-full h-full object-contain"
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* 분석 실행 버튼 */}
+              {showAnalyzeButton && (
+                <button
+                  onClick={handleAnalyzeClick}
+                  className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium"
+                >
+                  분석 결과 보기
+                </button>
               )}
-
-              {err && <p className="text-sm sm:text-base text-red-600">{err}</p>}
-
+              {err && (
+                <p className="text-sm sm:text-base text-red-600">{err}</p>
+              )}
               {analysisResult && (
-                <pre className="w-[90%] max-w-4xl bg-[#020617] text-white text-xs sm:text-sm p-4 sm:p-5 rounded-xl overflow-x-auto whitespace-pre-wrap">
-                  {JSON.stringify(analysisResult, null, 2)}
-                </pre>
+                <div className="w-[90%] max-w-4xl bg-white rounded-2xl shadow-sm border border-zinc-200 p-5 sm:p-6">
+                  <div className="text-sm sm:text-base leading-relaxed text-zinc-900 whitespace-pre-wrap">
+                    {displayText}
+                  </div>
+                </div>
               )}
             </section>
           </main>
+        )}
+
+        {isAnalysisModalOpen && analysisResult && (
+          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center">
+            <div className="bg-[#020617] rounded-xl w-[90%] max-w-5xl max-h-[80vh] flex flex-col">
+              {/* 상단 바 */}
+              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
+                <span className="text-sm text-gray-200">
+                  {mainStock.name} ({mainStock.symbol}) 분석 결과
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setAnalysisZoom((z) => Math.min(2, z + 0.1))}
+                    className="px-2 py-1 text-xs bg-gray-800 text-white rounded"
+                  >
+                    +
+                  </button>
+                  <button
+                    onClick={() =>
+                      setAnalysisZoom((z) => Math.max(0.5, z - 0.1))
+                    }
+                    className="px-2 py-1 text-xs bg-gray-800 text-white rounded"
+                  >
+                    -
+                  </button>
+                  <button
+                    onClick={() => setAnalysisZoom(1)}
+                    className="px-2 py-1 text-xs bg-gray-800 text-white rounded"
+                  >
+                    100%
+                  </button>
+                  <button
+                    onClick={() => setIsAnalysisModalOpen(false)}
+                    className="text-gray-300 hover:text-white text-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* 내용 영역 */}
+              <div className="flex-1 overflow-auto p-4">
+                <div
+                  style={{
+                    transform: `scale(${analysisZoom})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  <pre className="text-xs sm:text-sm text-white whitespace-pre-wrap">
+                    {JSON.stringify(analysisResult, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* 토스트 메시지 */}
@@ -770,7 +983,10 @@ type IndicatorSectionBlockProps = {
   layout: "3-2" | "2-2" | "2";
 };
 
-function IndicatorSectionBlock({ section, layout }: IndicatorSectionBlockProps) {
+function IndicatorSectionBlock({
+  section,
+  layout,
+}: IndicatorSectionBlockProps) {
   const rows = section.rows;
 
   if (layout === "3-2") {
