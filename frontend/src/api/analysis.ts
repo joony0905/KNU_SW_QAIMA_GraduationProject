@@ -1,23 +1,42 @@
 // src/api/analysis.ts
 import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
-import type { AnalysisResponse } from "../types/analysis";
+import type { AnalysisResponse, AnalysisResponseWire } from "../types/analysis";
+import { mapAnalysisWireToCamel } from "../mappers/analysisMapper";
+
+export type Freq =
+  | "ONE_MIN"
+  | "FIVE_MIN"
+  | "FIFTEEN_MIN"
+  | "ONE_H"
+  | "ONE_D"
+  | "ONE_W"
+  | "ONE_M";
+
+export type FeatOneAnalyzeRequest = {
+  stockCode: string;
+  freq: Freq;
+  from: string;
+  to: string;
+  marketDivCode: string;
+  includeExplain: boolean;
+};
 
 interface ApiResponse<T> {
-  success: boolean;
+  meta: {
+    status: string;
+    warning: string | null;
+  };
   data: T;
-  error: string | null;
+  errors: Array<{ code: string; message: string }>;
 }
 
 export const fetchAnalysis = async (
-  stockCode: string
+  req: FeatOneAnalyzeRequest
 ): Promise<AnalysisResponse> => {
-  // 최근 1년 데이터 기준
-  const to = new Date().toISOString();
-  const from = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
-
-  const res = await api.get<ApiResponse<AnalysisResponse>>(
-    ENDPOINTS.analysis.getAnalysis(stockCode, "DAILY", from, to)
+  const res = await api.post<ApiResponse<AnalysisResponseWire>>(
+    ENDPOINTS.analysis.analyze(),
+    req
   );
-  return res.data.data;
+  return mapAnalysisWireToCamel(res.data.data);
 };

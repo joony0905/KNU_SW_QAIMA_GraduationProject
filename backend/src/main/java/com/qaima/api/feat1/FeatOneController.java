@@ -1,16 +1,16 @@
 package com.qaima.api.feat1;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.domain.Freq;
-import com.qaima.dto.FeatOneResponseDataDto;
-import com.qaima.service.FeatOneResult;
-import com.qaima.service.FeatOneService;
+import com.qaima.dto.featone.FeatOneAnalyzeRequestDto;
+import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
+import com.qaima.service.featone.FeatOneResult;
+import com.qaima.service.featone.FeatOneService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
-
-import java.time.OffsetDateTime;
 
 @RestController
 @RequestMapping("/api/v1/feature1")
@@ -19,20 +19,26 @@ public class FeatOneController {
 
     private final FeatOneService featOneService;
 
-    @GetMapping
-    public Mono<ApiResponse<FeatOneResponseDataDto>> getFeatOne(
-            @RequestParam String stockCode,
-            @RequestParam Freq freq,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-            OffsetDateTime from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-            OffsetDateTime to
+    @PostMapping("/analyze")
+    public Mono<ApiResponse<FeatOneAnalysisResponseDto>> analyze(
+            @RequestBody FeatOneAnalyzeRequestDto request
     ) {
-        return featOneService.getFeatOneData(stockCode, freq, from, to)
-                .map(result -> toApiResponse(result));
+        return featOneService.getFeatOneData(
+                        request.getStockCode(),
+                        request.getFreq(),
+                        request.getFrom(),
+                        request.getTo(),
+                        request.getMarketDivCode(),
+                        request.getIncludeExplain()
+                )
+                .map(this::toApiResponse)
+                .onErrorResume(ex -> Mono.just(ApiResponse.internalError(
+                        "FEATURE1_ANALYZE_FAILED",
+                        "Feature1 분석 처리 실패: " + safeMessage(ex.getMessage())
+                )));
     }
 
-    private ApiResponse<FeatOneResponseDataDto> toApiResponse(FeatOneResult result) {
+    private ApiResponse<FeatOneAnalysisResponseDto> toApiResponse(FeatOneResult result) {
         if (result.isChartUnavailable()) {
             return ApiResponse.successWithWarning(
                     result.getData(),
@@ -40,5 +46,12 @@ public class FeatOneController {
             );
         }
         return ApiResponse.success(result.getData());
+    }
+
+    private String safeMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "n/a";
+        }
+        return message.length() > 200 ? message.substring(0, 200) : message;
     }
 }

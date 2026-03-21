@@ -1,38 +1,82 @@
 package com.qaima.api.stock;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.StockMeta;
-import com.qaima.dto.StockDto;
-import com.qaima.external.StockClient;
-import com.qaima.service.StockService;
+import com.qaima.dto.stock.StockCodeMappingDto;
+import com.qaima.dto.stock.StockDto;
+import com.qaima.dto.stock.StockResponseDto;
+import com.qaima.service.stock.StockMappingService;
+import com.qaima.service.stock.StockService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-//React에서 호출하는 Rest
 
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/v1/stocks")
-@RequiredArgsConstructor
 public class StockController {
 
     private final StockService stockService;
-    private final StockClient stockClient;
+    private final StockMappingService stockMappingService;
 
     @GetMapping("/{stockId}")
-    public Mono<StockDto> getStock(@PathVariable Long stockId) {
-        return stockService.getStockWithRealtime(stockId);
+    public Mono<ApiResponse<StockResponseDto>> getStock(@PathVariable Long stockId) {
+        return stockService.getStockWithRealtime(stockId)
+                .map(this::toResponse)
+                .map(ApiResponse::success);
     }
 
+    /**
+     * code 기반 조회
+     * - DB 없으면 생성
+     * - 내부적으로 ticker-meta + inquire-price 수행
+     */
     @GetMapping("/code/{stockCode}")
-    public Mono<StockDto> getStockByCode(@PathVariable String stockCode) {
-        return stockService.getStockWithRealtimeByCode(stockCode);
+    public Mono<ApiResponse<StockResponseDto>> getOrCreateStockByCode(
+            @PathVariable String stockCode
+    ) {
+        return stockService.getStockWithRealtimeByCode(stockCode)
+                .map(this::toResponse)
+                .map(ApiResponse::success);
     }
 
-
-    @GetMapping("/debug/ticker-meta")
-    public Mono<ApiResponse<StockMeta>> getTickerMeta(
-            @RequestParam String symbol
+    @GetMapping("/normalize")
+    public Mono<ApiResponse<StockCodeMappingDto>> normalizeStockCode(
+            @RequestParam(name = "name", required = false) String name,
+            @RequestParam(name = "exchange", required = false) String exchange,
+            @RequestParam(name = "symbol", required = false) String symbol
     ) {
-        return stockClient.fetchTickerMeta(symbol);
+        return stockMappingService.normalizeStockCodeByName(name, exchange, symbol)
+                .map(ApiResponse::success);
+    }
+
+    @GetMapping("/normalize/candidates")
+    public Mono<ApiResponse<List<StockCodeMappingDto>>> normalizeCandidates(
+            @RequestParam(name = "name", required = false) String name,
+            @RequestParam(name = "exchange", required = false) String exchange,
+            @RequestParam(name = "symbol", required = false) String symbol
+    ) {
+        return stockMappingService.listMappingsByName(name, exchange, symbol)
+                .map(ApiResponse::success);
+    }
+
+    @GetMapping("/search")
+    public Mono<ApiResponse<List<StockCodeMappingDto>>> searchStocks(
+            @RequestParam(name = "q", required = false) String query
+    ) {
+        return stockMappingService.searchStockMappings(query)
+                .map(ApiResponse::success);
+    }
+
+    private StockResponseDto toResponse(StockDto s) {
+        return new StockResponseDto(
+                s.getStockId(),
+                s.getStockCode(),
+                s.getCompanyName(),
+                s.getPrice(),
+                s.getChangeRate(),
+                s.getExchangeCode(),
+                s.getCurrency()
+        );
     }
 }

@@ -8,21 +8,52 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.springframework.data.domain.Pageable;
 
 public interface PriceOhlcvRepository extends JpaRepository<PriceOhlcv, PriceOhlcvId> {
-
     @Query("""
-        select p
-        from PriceOhlcv p
-        where p.stock.stockCode = :stockCode
-          and p.id.freq = :freq
-          and p.id.ts between :from and :to
-        order by p.id.ts
-        """) // 복합키 PK 레스고
-    List<PriceOhlcv> findByStockCodeAndFreqAndTsBetween(
+    select p
+    from PriceOhlcv p
+    where p.stock.stockCode in :stockCodes
+      and p.id.freq = :freq
+      and p.id.ts >= :from
+      and p.id.ts < :to
+    order by p.stock.stockCode asc, p.id.ts asc
+    """)
+    List<PriceOhlcv> findRangeBulk(
+            @org.springframework.data.repository.query.Param("stockCodes") List<String> stockCodes,
+            @org.springframework.data.repository.query.Param("freq") Freq freq,
+            @org.springframework.data.repository.query.Param("from") java.time.OffsetDateTime from,
+            @org.springframework.data.repository.query.Param("to") java.time.OffsetDateTime to
+    );
+    @Query("""
+    select p
+    from PriceOhlcv p
+    where p.stock.stockCode = :stockCode
+      and p.id.freq = :freq
+      and p.id.ts >= :from
+      and p.id.ts < :to
+    order by p.id.ts
+    """)
+    List<PriceOhlcv> findRange(
             String stockCode,
             Freq freq,
             OffsetDateTime from,
             OffsetDateTime to
+    );
+
+        @Query("""
+        select p
+        from PriceOhlcv p
+        where p.stock.stockCode = :stockCode
+          and p.id.freq = :freq
+          and p.id.ts < :to
+        order by p.id.ts desc
+    """)
+    List<PriceOhlcv> findBefore(
+            String stockCode,
+            Freq freq,
+            OffsetDateTime to,
+            Pageable pageable
     );
 }

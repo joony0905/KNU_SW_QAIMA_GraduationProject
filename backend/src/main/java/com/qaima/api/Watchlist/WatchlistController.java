@@ -1,10 +1,11 @@
 package com.qaima.api.Watchlist;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.WatchlistRequestDto;
-import com.qaima.dto.WatchlistResponseDto;
-import com.qaima.dto.WatchlistItemUpdateDto;
-import com.qaima.service.WatchlistService;
+import com.qaima.dto.watchlist.WatchlistRequestDto;
+import com.qaima.dto.watchlist.WatchlistResponseDto;
+import com.qaima.dto.watchlist.WatchlistItemUpdateDto;
+import com.qaima.service.watchlist.WatchlistService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -36,7 +37,7 @@ public class WatchlistController {
      * POST /api/v1/watchlist/items
      */
     @PostMapping("/items")
-    public Mono<ApiResponse<WatchlistResponseDto>> addStockToWatchlist(@RequestBody WatchlistRequestDto requestDto) {
+    public Mono<ApiResponse<WatchlistResponseDto>> addStockToWatchlist(@Valid @RequestBody WatchlistRequestDto requestDto) {
         Long currentUserId = 1L;
         return watchlistService.addStockToWatchlist(requestDto, currentUserId)
                 .map(ApiResponse::success);

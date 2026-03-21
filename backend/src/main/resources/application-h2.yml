@@ -1,4 +1,6 @@
 spring:
+  flyway:
+    enabled: true
   datasource:
     url: jdbc:h2:mem:qaima;MODE=MYSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
@@ -7,7 +9,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: create          # mysql이랑 동일하게 맞춤 (create)
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
@@ -15,7 +17,7 @@ spring:
 
   sql:
     init:
-      mode: always
+      mode: never
 
   h2:
     console:

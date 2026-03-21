@@ -3,11 +3,12 @@ import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
 import type { StockDto } from "../types/stock";
 
-interface ApiResponse<T> {
-  success: boolean;
+type ApiResponse<T> = {
+  meta: any;
   data: T;
-  error: string | null;
-}
+  errors: any[];
+  success: boolean;
+};
 
 export const getStockByCode = async (stockCode: string): Promise<StockDto> => {
   const res = await api.get<ApiResponse<StockDto>>(

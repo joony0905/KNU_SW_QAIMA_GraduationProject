@@ -1,9 +1,9 @@
 analysis:
-  base-url: "http://localhost:8001"
+  base-url: "http://localhost:8000"
 
 spring:
   profiles:
-    active: h2   # h2 <-> mysql 변경해서 사용
+    active: mysql #h2 <-> mysql 변경해서 사용
 
   jackson:
     property-naming-strategy: SNAKE_CASE
@@ -11,7 +11,26 @@ spring:
   config:
     import: optional:application-secret.yml
 
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+  sql:
+    init:
+      mode: never
+
+  flyway:
+    enabled: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+
 logging:
   level:
     reactor.netty.http.client: DEBUG
     org.springframework.web.reactive.function.client: TRACE
+    org.springframework: DEBUG
+    com.qaima: DEBUG

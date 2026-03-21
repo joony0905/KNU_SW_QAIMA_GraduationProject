@@ -19,11 +19,13 @@ export const ENDPOINTS = {
     updateItem: (itemId: number) => `/watchlist/items/${itemId}`,
   },
   analysis: {
-    getAnalysis: (stockCode: string, freq: string, from: string, to: string) =>
-      `/feature1?stockCode=${stockCode}&freq=${freq}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    analyze: () => "/feature1/analyze",
   },
   charts: {
     candles: (stockCode: string, freq: string, from: string, to: string) =>
       `/charts/candles?stockCode=${stockCode}&freq=${freq}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+
+    candlesBefore: (stockCode: string, freq: string, to: string, limit: number) =>
+      `/charts/candles?stockCode=${stockCode}&freq=${encodeURIComponent(freq)}&to=${encodeURIComponent(to)}&limit=${encodeURIComponent(String(limit))}`,
   },
 };

@@ -2,16 +2,19 @@ package com.qaima.api.EmailController;
 
 import com.qaima.common.ApiResponse;
 import com.qaima.common.Blocking;
-import com.qaima.dto.EmailConfirmDto;
-import com.qaima.dto.EmailRequestDto;
-import com.qaima.dto.PwdResetRequestDto;
-import com.qaima.service.AuthLoginLogService;
-import com.qaima.service.MailAuthService;
+import com.qaima.dto.user.EmailConfirmDto;
+import com.qaima.dto.user.EmailRequestDto;
+import com.qaima.dto.user.PwdResetRequestDto;
+import com.qaima.service.auth.AuthLoginLogService;
+import com.qaima.service.auth.MailAuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -22,7 +25,6 @@ public class EmailController {
     private final MailAuthService mailAuthService;
     private final AuthLoginLogService authLoginLogService;
 
-    // 회원가입 이메일 인증번호 발송
     @PostMapping("/verification/request")
     public Mono<ApiResponse<Void>> requestVerification(@Valid @RequestBody EmailRequestDto dto,
                                                        ServerHttpRequest request) {
@@ -42,7 +44,6 @@ public class EmailController {
                 );
     }
 
-    // 회원가입 이메일 인증번호 확인
     @PostMapping("/verification/confirm")
     public Mono<ApiResponse<Void>> confirmVerification(@Valid @RequestBody EmailConfirmDto dto,
                                                        ServerHttpRequest request) {
@@ -62,7 +63,6 @@ public class EmailController {
                 );
     }
 
-    // 비밀번호 재설정 링크 발송
     @PostMapping("/pwdreset/request")
     public Mono<ApiResponse<Void>> requestPasswordReset(@Valid @RequestBody EmailRequestDto dto,
                                                         ServerHttpRequest request) {
@@ -82,7 +82,6 @@ public class EmailController {
                 );
     }
 
-    // 링크 클릭하면 뜨는 비밀번호 입력 폼
     @GetMapping(value = "/pwdreset/form", produces = "text/html; charset=UTF-8")
     public Mono<String> passwordResetForm(@RequestParam("token") String token) {
         return Mono.just("""
@@ -102,19 +101,31 @@ public class EmailController {
             """.formatted(escapeHtml(token)));
     }
 
-    // 폼 제출 처리
     @PostMapping(
             value = "/pwdreset/confirm-form",
             consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
             produces = "text/html; charset=UTF-8"
     )
-    public Mono<String> confirmPasswordResetForm(@RequestParam("token") String token,
-                                                 @RequestParam("newPassword") String newPassword,
+    public Mono<String> confirmPasswordResetForm(ServerWebExchange exchange,
                                                  ServerHttpRequest request) {
         String ip = extractClientIp(request);
         String ua = request.getHeaders().getFirst("User-Agent");
 
-        return Blocking.run(() -> mailAuthService.confirmPasswordReset(token, newPassword))
+        return exchange.getFormData()
+                .defaultIfEmpty(new LinkedMultiValueMap<>())
+                .flatMap(form -> {
+                    String token = trimToNull(form.getFirst("token"));
+                    String newPassword = trimToNull(form.getFirst("newPassword"));
+
+                    if (token == null) {
+                        return Mono.error(new IllegalArgumentException("token is required"));
+                    }
+                    if (newPassword == null) {
+                        return Mono.error(new IllegalArgumentException("newPassword is required"));
+                    }
+
+                    return Blocking.run(() -> mailAuthService.confirmPasswordReset(token, newPassword));
+                })
                 .then(authLoginLogService.event("PASSWORD_RESET_CONFIRMED", true, null, null, ip, ua, null, null)
                         .onErrorResume(e -> Mono.empty()))
                 .thenReturn("""
@@ -132,7 +143,6 @@ public class EmailController {
                 );
     }
 
-    // JSON 기반 비밀번호 변경
     @PostMapping("/pwdreset/confirm")
     public Mono<ApiResponse<Void>> confirmPasswordResetJson(@Valid @RequestBody PwdResetRequestDto dto,
                                                             ServerHttpRequest request) {
@@ -164,5 +174,11 @@ public class EmailController {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&#39;");
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

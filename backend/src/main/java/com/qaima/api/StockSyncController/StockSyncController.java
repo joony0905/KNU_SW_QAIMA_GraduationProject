@@ -1,9 +1,9 @@
 package com.qaima.api.StockSyncController;
 
 import com.qaima.common.ApiResponse;
-import com.qaima.dto.MarketStackTickersResponse;
+import com.qaima.dto.mkstack.MarketStackTickersResponse;
 import com.qaima.external.StockApiClient;
-import com.qaima.service.StockSyncService;
+import com.qaima.service.stock.StockSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,25 +17,31 @@ import java.util.List;
 @RequiredArgsConstructor
 public class StockSyncController {
 
-    private final StockApiClient StockApiClient;
-    private final StockSyncService StockSyncService;
+    private final StockApiClient stockApiClient;
+    private final StockSyncService stockSyncService;
 
-    /**
-     * (★실행 버튼★)
-     * Marketstack API에서 Ticker를 받아와 DB에 동기화(Upsert)
-     * POST /api/v1/sync/tickers
-     */
     @PostMapping("/tickers")
     public Mono<ApiResponse<String>> syncTickers() {
-        return StockApiClient.fetchTickers()
+        return stockApiClient.fetchTickers()
                 .flatMap(response -> {
                     if (response != null && response.getData() != null && !response.getData().isEmpty()) {
                         List<MarketStackTickersResponse.TickerData> tickers = response.getData();
 
-                        return StockSyncService.syncMarketStackTickers(tickers)
-                                .thenReturn(ApiResponse.success(tickers.size() + "개의 Ticker 동기화 완료"));
+                        return stockSyncService.syncMarketStackTickers(tickers)
+                                .thenReturn(ApiResponse.success(tickers.size() + "媛쒖쓽 Ticker ?숆린???꾨즺"));
                     }
-                    return Mono.just(ApiResponse.error("SYNC_ERROR", "API에서 Ticker를 가져오지 못했습니다."));
-                });
+                    return Mono.just(ApiResponse.<String>error("SYNC_ERROR", "API?먯꽌 Ticker瑜?媛?몄삤吏 紐삵뻽?듬땲??"));
+                })
+                .onErrorResume(ex -> Mono.just(ApiResponse.<String>error(
+                        "SYNC_ERROR",
+                        "Ticker ?숆린???ㅽ뙣: " + safeMessage(ex.getMessage())
+                )));
+    }
+
+    private String safeMessage(String message) {
+        if (message == null || message.isBlank()) {
+            return "n/a";
+        }
+        return message.length() > 200 ? message.substring(0, 200) : message;
     }
 }
