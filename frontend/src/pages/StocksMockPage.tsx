@@ -18,6 +18,9 @@ import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
+import jsPDF from "jspdf";
+import downloadIcon from "../assets/download_button.png";
+import zoomIcon from "../assets/zoom_button.png";
 import type { AnalysisResponse, ParsedExplainText } from "../types/analysis";
 
 /* =========================
@@ -202,6 +205,10 @@ export default function StocksMockPage() {
     stabilitySection,
     liquiditySection,
   ]);
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
+  const [analysisZoom, setAnalysisZoom] = useState(1); // 1 = 100%
+  const [displayText, setDisplayText] = useState("");
 
   const [isOpen, setIsOpen] = useState(false);
 
@@ -282,7 +289,7 @@ export default function StocksMockPage() {
         stockCode,
         usedFreq,
         fromDate.toISOString(),
-        toDate.toISOString()
+        toDate.toISOString(),
       );
 
       const data = response.data;
@@ -460,15 +467,13 @@ export default function StocksMockPage() {
       resolvedCode = stockInfo.stockCode;
 
       setMainStock((prev) => ({
-        ...prev,
-        name: stockInfo.companyName,
-        symbol: stockInfo.stockCode,
-        price: null,
-        change: null,
-        changeRate: null,
-      }));
-      console.log("getStockByCode raw:", stockInfo);
-      console.log("keys:", Object.keys(stockInfo || {}));
+  ...prev,
+  name: stockInfo.companyName,
+  symbol: stockInfo.stockCode,
+  price: stockInfo.price ?? null,            // number 그대로
+  change: stockInfo.change ?? null,          // number 그대로 (필드명 확인 필요)
+  changeRate: stockInfo.changeRate ?? null,  // number 그대로
+}));
     } catch (e) {
       console.error("종목 정보 조회 실패(임시 무시):", e);
 
@@ -519,6 +524,8 @@ export default function StocksMockPage() {
     }
 
     try {
+      setShowAnalyzeButton(false); // ✅ 결과가 생기면 버튼 숨김
+      setDisplayText(""); // 타이핑용 초기화
       // 분석 버튼에서만 1년 로딩으로 교체
       await loadCandles(mainStock.symbol, "ANALYZE");
 
@@ -547,13 +554,83 @@ export default function StocksMockPage() {
         warnings: ind?.warnings ?? [],
       });
     } catch (e) {
-      console.error("분석 결과 조회 실패:", e);
       setErr("분석 결과를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDownloadClick = () => {
+    if (!analysisResult) return;
+
+    const doc = new jsPDF();
+
+    const title = `${mainStock.name} (${mainStock.symbol}) 심층 분석`;
+    const summary = analysisResult.summary ?? "";
+    const rating = analysisResult.rating ?? "";
+    const highlights = (analysisResult.highlights ?? []).join("\n- ");
+    const risks = (analysisResult.risks ?? []).join("\n- ");
+
+    let y = 20;
+
+    doc.setFontSize(16);
+    doc.text(title, 10, y);
+    y += 10;
+
+    doc.setFontSize(12);
+    doc.text(`투자의견: ${rating}`, 10, y);
+    y += 10;
+
+    if (summary) {
+      doc.setFontSize(12);
+      doc.text("요약", 10, y);
+      y += 7;
+      doc.setFontSize(11);
+      const summaryLines = doc.splitTextToSize(summary, 180);
+      doc.text(summaryLines, 10, y);
+      y += summaryLines.length * 6 + 5;
+    }
+
+    if (highlights) {
+      doc.setFontSize(12);
+      doc.text("핵심 포인트", 10, y);
+      y += 7;
+      doc.setFontSize(11);
+      const lines = doc.splitTextToSize(`- ${highlights}`, 180);
+      doc.text(lines, 10, y);
+      y += lines.length * 6 + 5;
+    }
+
+    if (risks) {
+      doc.setFontSize(12);
+      doc.text("리스크", 10, y);
+      y += 7;
+      doc.setFontSize(11);
+      const lines = doc.splitTextToSize(`- ${risks}`, 180);
+      doc.text(lines, 10, y);
+    }
+
+    const fileName = `${mainStock.symbol}_analysis.pdf`;
+    doc.save(fileName);
+  };
+
+  const handleFullscreenClick = () => {
+    const elem = document.documentElement;
+    if (!document.fullscreenElement) {
+      elem.requestFullscreen().catch((err) => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
+
+  /*
+  useEffect(() => {
+    void loadCandles(mainStock.symbol);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  */
   const formatNumber = (value?: number | null) => {
     if (value === null || value === undefined) {
       return "-";
@@ -647,27 +724,66 @@ export default function StocksMockPage() {
     return () => document.removeEventListener("click", handleClickOutsideTopic);
   }, []);
 
-  const displayPrice =
-    mainStock.price !== null && Number.isFinite(mainStock.price)
-      ? formatPrice(mainStock.price)
-      : "-";
+// 1) 타이핑 효과는 그대로 유지
+useEffect(() => {
+  if (!analysisResult) {
+    setDisplayText("");
+    return;
+  }
 
-  const mainNumericChange =
-    mainStock.change !== null && Number.isFinite(mainStock.change)
-      ? mainStock.change
-      : 0;
+  const fullText: string =
+    typeof analysisResult === "string"
+      ? analysisResult
+      : [
+          analysisResult.summary,
+          "",
+          "핵심 포인트:",
+          ...(analysisResult.highlights ?? []).map((h: string) => `- ${h}`),
+          "",
+          "리스크:",
+          ...(analysisResult.risks ?? []).map((r: string) => `- ${r}`),
+        ]
+          .filter(Boolean)
+          .join("\n");
 
-  const displayChange =
-    mainStock.change !== null && Number.isFinite(mainStock.change)
-      ? formatSignedNumber(mainStock.change)
-      : "0";
+  setDisplayText("");
 
-  const displayRate =
-    mainStock.changeRate !== null && Number.isFinite(mainStock.changeRate)
-      ? formatSignedPercent(mainStock.changeRate)
-      : "0.00%";
+  let index = 0;
+  const speed = 20;
 
-  const mainColorClass = getColorClassByNumber(mainNumericChange);
+  const timer = setInterval(() => {
+    index += 1;
+    setDisplayText(prev => prev + fullText.charAt(index - 1));
+    if (index >= fullText.length) {
+      clearInterval(timer);
+    }
+  }, speed);
+
+  return () => clearInterval(timer);
+}, [analysisResult]);
+
+// 2) mainStock 표시/색상 계산은 친구 코드 기반으로 개선
+const displayPrice =
+  mainStock.price !== null && Number.isFinite(mainStock.price)
+    ? formatPrice(mainStock.price)
+    : "-";
+
+const mainNumericChange =
+  mainStock.change !== null && Number.isFinite(mainStock.change)
+    ? mainStock.change
+    : 0;
+
+const displayChange =
+  mainStock.change !== null && Number.isFinite(mainStock.change)
+    ? formatSignedNumber(mainStock.change)
+    : "0";
+
+const displayRate =
+  mainStock.changeRate !== null && Number.isFinite(mainStock.changeRate)
+    ? formatSignedPercent(mainStock.changeRate)
+    : "0.00%";
+
+const mainColorClass = getColorClassByNumber(mainNumericChange);
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
@@ -964,175 +1080,277 @@ export default function StocksMockPage() {
                 </div>
               </div>
             </div>
-
-            <section className="w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex flex-col items-center justify-center gap-4 mt-2">
-              <button
-                onClick={handleAnalyzeClick}
-                className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium"
-              >
-                분석 결과 보기
-              </button>
-    
-              {loading && (
-                <p className="text-sm sm:text-base text-gray-600">분석 중입니다...</p>
-              )}
-
-              {err && <p className="text-sm sm:text-base text-red-600">{err}</p>}
-
-              {analysisResult && (
-                <div className="w-[90%] max-w-4xl bg-white rounded-2xl shadow-sm border border-zinc-200 p-4 sm:p-6 flex flex-col gap-4">
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                      설명
-                    </h3>
-                    {explainParse.parsed ? (
-                      <div className="mt-2 text-sm sm:text-base text-zinc-700 flex flex-col gap-2">
-                        <div>
-                          <p className="font-medium text-zinc-900">요약</p>
-                          <ul className="list-disc list-inside">
-                            {(explainParse.parsed.summary ?? []).slice(0, 3).map((item, idx) => (
-                              <li key={`summary-${idx}`}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <p className="font-medium text-zinc-900">리스크</p>
-                          <ul className="list-disc list-inside">
-                            {(explainParse.parsed.risks ?? []).slice(0, 2).map((item, idx) => (
-                              <li key={`risk-${idx}`}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <p className="font-medium text-zinc-900">결론</p>
-                          <p>{explainParse.parsed.conclusion ?? "-"}</p>
-                        </div>
-                      </div>
-                    ) : analysisResult.explain?.text?.trim() ? (
-                      <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
-                        {analysisResult.explain.text}
-                      </p>
-                    ) : (
-                      <p className="text-sm sm:text-base text-zinc-500 mt-2">
-                        설명 생성이 비활성화되었거나 실패했습니다.
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                      OHLCV 요약
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
-                      <div>
-                        캔들 수:{" "}
-                        {analysisResult.metrics.ohlcvSummary.count.toLocaleString()}
-                      </div>
-                      <div>
-                        기간: {formatDate(analysisResult.metrics.ohlcvSummary.from)} ~{" "}
-                        {formatDate(analysisResult.metrics.ohlcvSummary.to)}
-                      </div>
-                      <div>
-                        마지막 종가:{" "}
-                        {formatNumber(analysisResult.metrics.ohlcvSummary.lastClose)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                      Indicator Summary
-                    </h3>
-                    <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
-                      {analysisResult.metrics.indicatorSummary?.trim()
-                        ? analysisResult.metrics.indicatorSummary
-                        : "지표 요약 데이터를 생성하지 못했습니다."}
-                    </p>
-                  </div>
-
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                      재무 요약 (5개년)
-                    </h3>
-                    {analysisResult.metrics.financialSummary.years.length > 0 ? (
-                      <div className="overflow-x-auto mt-2">
-                        <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
-                          <thead className="bg-zinc-100 text-zinc-900">
-                            <tr>
-                              <th className="px-3 py-2 text-left border-b">구분</th>
-                              {analysisResult.metrics.financialSummary.years.map((year) => (
-                                <th key={year} className="px-3 py-2 text-right border-b">
-                                  {year}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td className="px-3 py-2 border-b">매출</td>
-                              {analysisResult.metrics.financialSummary.years.map((year) => (
-                                <td
-                                  key={`revenue-${year}`}
-                                  className="px-3 py-2 text-right border-b"
-                                >
-                                  {formatNumber(
-                                    analysisResult.metrics.financialSummary.revenue[String(year)]
-                                  )}
-                                </td>
-                              ))}
-                            </tr>
-                            <tr>
-                              <td className="px-3 py-2 border-b">영업이익</td>
-                              {analysisResult.metrics.financialSummary.years.map((year) => (
-                                <td
-                                  key={`op-${year}`}
-                                  className="px-3 py-2 text-right border-b"
-                                >
-                                  {formatNumber(
-                                    analysisResult.metrics.financialSummary.operatingIncome[String(year)]
-                                  )}
-                                </td>
-                              ))}
-                            </tr>
-                            <tr>
-                              <td className="px-3 py-2 border-b">순이익</td>
-                              {analysisResult.metrics.financialSummary.years.map((year) => (
-                                <td
-                                  key={`net-${year}`}
-                                  className="px-3 py-2 text-right border-b"
-                                >
-                                  {formatNumber(
-                                    analysisResult.metrics.financialSummary.netIncome[String(year)]
-                                  )}
-                                </td>
-                              ))}
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <p className="text-sm sm:text-base text-zinc-500 mt-2">
-                        재무 요약 데이터를 확보하지 못했습니다.
-                      </p>
-                    )}
-                  </div>
-
-                  {(analysisResult.meta?.warnings ?? []).length > 0 && (
-                    <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">경고</h3>
-                      <ul className="text-sm sm:text-base text-amber-700 mt-2 list-disc list-inside">
-                        {analysisResult.meta?.warnings?.map((warning) => (
-                          <li key={warning}>{warning}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+            {/* ========== 하단 분석 결과 영역 ========== */}
+            <section className="w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex flex-col items-center gap-4 mt-2">
+              {/* 상단 헤더 바: 오른쪽에 다운로드/확대 버튼 */}
+              <div className="w-[90%] max-w-4xl flex items-center justify-end">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleDownloadClick}
+                    className="w-7 h-7 sm:w-8 sm:h-8"
+                  >
+                    <img
+                      src={downloadIcon}
+                      alt="다운로드"
+                      className="w-full h-full object-contain"
+                    />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!analysisResult) return;
+                      setAnalysisZoom(1);
+                      setIsAnalysisModalOpen(true);
+                    }}
+                    className="w-6 h-6 sm:w-7 sm:h-7"
+                  >
+                    <img
+                      src={zoomIcon}
+                      alt="확대"
+                      className="w-full h-full object-contain"
+                    />
+                  </button>
                 </div>
+              </div>
+
+              {/* 분석 실행 버튼 */}
+              {showAnalyzeButton && (
+                <button
+                  onClick={handleAnalyzeClick}
+                  className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium"
+                >
+                  분석 결과 보기
+                </button>
+              )}
+              {err && (
+                <p className="text-sm sm:text-base text-red-600">{err}</p>
+              )}
+              {analysisResult && (
+  <div className="w-[90%] max-w-4xl bg-white rounded-2xl shadow-sm border border-zinc-200 p-4 sm:p-6 flex flex-col gap-4">
+    {/* 설명 섹션 */}
+    <div>
+      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+        설명
+      </h3>
+
+      {explainParse.parsed ? (
+        // 1순위: 파싱된 설명을 구조화해서 보여주기 (친구 코드 유지)
+        <div className="mt-2 text-sm sm:text-base text-zinc-700 flex flex-col gap-2">
+          <div>
+            <p className="font-medium text-zinc-900">요약</p>
+            <ul className="list-disc list-inside">
+              {(explainParse.parsed.summary ?? [])
+                .slice(0, 3)
+                .map((item, idx) => (
+                  <li key={`summary-${idx}`}>{item}</li>
+                ))}
+            </ul>
+          </div>
+          <div>
+            <p className="font-medium text-zinc-900">리스크</p>
+            <ul className="list-disc list-inside">
+              {(explainParse.parsed.risks ?? [])
+                .slice(0, 2)
+                .map((item, idx) => (
+                  <li key={`risk-${idx}`}>{item}</li>
+                ))}
+            </ul>
+          </div>
+          <div>
+            <p className="font-medium text-zinc-900">결론</p>
+            <p>{explainParse.parsed.conclusion ?? "-"}</p>
+          </div>
+        </div>
+      ) : analysisResult.explain?.text?.trim() ? (
+        // 2순위: explain.text가 있지만 파싱은 안 된 경우 → 타이핑 결과(displayText)로 보여줌
+        <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
+          {displayText}
+        </p>
+      ) : (
+        // 3순위: 설명 자체가 없는 경우
+        <p className="text-sm sm:text-base text-zinc-500 mt-2">
+          설명 생성이 비활성화되었거나 실패했습니다.
+        </p>
+      )}
+    </div>
+
+    {/* 이하 OHLCV 요약 / Indicator Summary / 재무 요약 / 경고 섹션은 친구 코드 그대로 유지 */}
+    <div>
+      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+        OHLCV 요약
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
+        <div>
+          캔들 수:{" "}
+          {analysisResult.metrics.ohlcvSummary.count.toLocaleString()}
+        </div>
+        <div>
+          기간: {formatDate(analysisResult.metrics.ohlcvSummary.from)} ~{" "}
+          {formatDate(analysisResult.metrics.ohlcvSummary.to)}
+        </div>
+        <div>
+          마지막 종가:{" "}
+          {formatNumber(analysisResult.metrics.ohlcvSummary.lastClose)}
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+        Indicator Summary
+      </h3>
+      <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
+        {analysisResult.metrics.indicatorSummary?.trim()
+          ? analysisResult.metrics.indicatorSummary
+          : "지표 요약 데이터를 생성하지 못했습니다."}
+      </p>
+    </div>
+
+    <div>
+      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+        재무 요약 (5개년)
+      </h3>
+      {analysisResult.metrics.financialSummary.years.length > 0 ? (
+        <div className="overflow-x-auto mt-2">
+          <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
+            <thead className="bg-zinc-100 text-zinc-900">
+              <tr>
+                <th className="px-3 py-2 text-left border-b">구분</th>
+                {analysisResult.metrics.financialSummary.years.map((year) => (
+                  <th key={year} className="px-3 py-2 text-right border-b">
+                    {year}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="px-3 py-2 border-b">매출</td>
+                {analysisResult.metrics.financialSummary.years.map((year) => (
+                  <td
+                    key={`revenue-${year}`}
+                    className="px-3 py-2 text-right border-b"
+                  >
+                    {formatNumber(
+                      analysisResult.metrics.financialSummary.revenue[
+                        String(year)
+                      ],
+                    )}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="px-3 py-2 border-b">영업이익</td>
+                {analysisResult.metrics.financialSummary.years.map((year) => (
+                  <td
+                    key={`op-${year}`}
+                    className="px-3 py-2 text-right border-b"
+                  >
+                    {formatNumber(
+                      analysisResult.metrics.financialSummary
+                        .operatingIncome[String(year)],
+                    )}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="px-3 py-2 border-b">순이익</td>
+                {analysisResult.metrics.financialSummary.years.map((year) => (
+                  <td
+                    key={`net-${year}`}
+                    className="px-3 py-2 text-right border-b"
+                  >
+                    {formatNumber(
+                      analysisResult.metrics.financialSummary.netIncome[
+                        String(year)
+                      ],
+                    )}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm sm:text-base text-zinc-500 mt-2">
+          재무 요약 데이터를 확보하지 못했습니다.
+        </p>
+      )}
+    </div>
+
+    {(analysisResult.meta?.warnings ?? []).length > 0 && (
+      <div>
+        <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+          경고
+        </h3>
+        <ul className="text-sm sm:text-base text-amber-700 mt-2 list-disc list-inside">
+          {analysisResult.meta?.warnings?.map((warning) => (
+            <li key={warning}>{warning}</li>
+          ))}
+        </ul>
+      </div>
+    )}
+  </div>
               )}
             </section>
           </main>
         )}
 
+        {isAnalysisModalOpen && analysisResult && (
+          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center">
+            <div className="bg-[#020617] rounded-xl w-[90%] max-w-5xl max-h-[80vh] flex flex-col">
+              {/* 상단 바 */}
+              <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700">
+                <span className="text-sm text-gray-200">
+                  {mainStock.name} ({mainStock.symbol}) 분석 결과
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setAnalysisZoom((z) => Math.min(2, z + 0.1))}
+                    className="px-2 py-1 text-xs bg-gray-800 text-white rounded"
+                  >
+                    +
+                  </button>
+                  <button
+                    onClick={() =>
+                      setAnalysisZoom((z) => Math.max(0.5, z - 0.1))
+                    }
+                    className="px-2 py-1 text-xs bg-gray-800 text-white rounded"
+                  >
+                    -
+                  </button>
+                  <button
+                    onClick={() => setAnalysisZoom(1)}
+                    className="px-2 py-1 text-xs bg-gray-800 text-white rounded"
+                  >
+                    100%
+                  </button>
+                  <button
+                    onClick={() => setIsAnalysisModalOpen(false)}
+                    className="text-gray-300 hover:text-white text-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* 내용 영역 */}
+              <div className="flex-1 overflow-auto p-4">
+                <div
+                  style={{
+                    transform: `scale(${analysisZoom})`,
+                    transformOrigin: "top left",
+                  }}
+                >
+                  <pre className="text-xs sm:text-sm text-white whitespace-pre-wrap">
+                    {JSON.stringify(analysisResult, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 토스트 메시지 */}
         {toast.visible && (
           <div
             className="
@@ -1189,7 +1407,10 @@ type IndicatorSectionBlockProps = {
   layout: "3-2" | "2-2" | "2";
 };
 
-function IndicatorSectionBlock({ section, layout }: IndicatorSectionBlockProps) {
+function IndicatorSectionBlock({
+  section,
+  layout,
+}: IndicatorSectionBlockProps) {
   const rows = section.rows;
 
   if (layout === "3-2") {
