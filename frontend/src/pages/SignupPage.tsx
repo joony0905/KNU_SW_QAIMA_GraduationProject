@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { requestEmailVerification, confirmEmailVerification, signup } from "../api/auth";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -17,6 +18,10 @@ export default function SignupPage() {
   const navigate = useNavigate();
 
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [signupLoading, setSignupLoading] = useState(false);
 
   const handleInputChange = (field: string, value: string) => {
     if (field === "phone") {
@@ -25,8 +30,51 @@ export default function SignupPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleVerification = () => {
-    console.log("Verification requested for:", formData.email);
+  const handleVerification = async () => {
+    if (!formData.email) {
+      alert("이메일을 먼저 입력해주세요.");
+      return;
+    }
+    const emailError = validateEmail(formData.email);
+    if (emailError) {
+      alert(emailError);
+      return;
+    }
+    setVerificationLoading(true);
+    try {
+      await requestEmailVerification(formData.email);
+      setVerificationSent(true);
+      alert("인증코드가 발송되었습니다. 이메일을 확인해주세요.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        alert("인증코드 발송 실패: " + err.message);
+      } else {
+        alert("인증코드 발송 중 오류가 발생했습니다.");
+      }
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  const handleConfirmVerification = async () => {
+    if (!formData.verificationCode) {
+      alert("인증코드를 입력해주세요.");
+      return;
+    }
+    setVerificationLoading(true);
+    try {
+      await confirmEmailVerification(formData.email, formData.verificationCode);
+      setEmailVerified(true);
+      alert("이메일 인증이 완료되었습니다.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        alert("인증 실패: " + err.message);
+      } else {
+        alert("인증 중 오류가 발생했습니다.");
+      }
+    } finally {
+      setVerificationLoading(false);
+    }
   };
 
   const inputClass =
@@ -96,7 +144,7 @@ export default function SignupPage() {
   return "";
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const newErrors = {
@@ -141,8 +189,42 @@ export default function SignupPage() {
     }
 
     setErrors(newErrors);
-    // TODO: 실제 회원가입 처리
-    navigate("/login");
+
+    if (!emailVerified) {
+      alert("이메일 인증을 완료해주세요.");
+      return;
+    }
+
+    setSignupLoading(true);
+    try {
+      await signup({
+        email: formData.email,
+        password: formData.password,
+        name: formData.name,
+        birthdate: formData.birthdate + formData.birthdateSecond,
+        phone: formData.phone,
+      });
+      alert("회원가입이 완료되었습니다. 로그인해주세요.");
+      navigate("/login");
+    } catch (err: unknown) {
+      const axiosErr = err as any;
+      const serverMessage = axiosErr?.response?.data?.errors?.[0]?.message;
+      const status = axiosErr?.response?.status;
+
+      if (serverMessage) {
+        alert("회원가입 실패: " + serverMessage);
+      } else if (status === 409) {
+        alert("이미 가입된 이메일입니다.");
+      } else if (status === 400) {
+        alert("입력 정보를 다시 확인해주세요.");
+      } else if (err instanceof Error) {
+        alert("회원가입 실패: " + err.message);
+      } else {
+        alert("회원가입 중 오류가 발생했습니다.");
+      }
+    } finally {
+      setSignupLoading(false);
+    }
   };
 
   const labelFor = (field: keyof typeof formData) => {
@@ -219,19 +301,34 @@ export default function SignupPage() {
               type="text"
               placeholder="인증번호입력"
               value={formData.verificationCode}
-              onChange={e =>
-                handleInputChange("verificationCode", e.target.value)
-              }
+              onChange={e => handleInputChange("verificationCode", e.target.value)}
               className={inputClass + " flex-1"}
+              disabled={emailVerified}
             />
-            <button
-              type="button"
-              onClick={handleVerification}
-              className="px-4 py-3 rounded-[10px] bg-[#0E588D] text-white text-sm font-medium whitespace-nowrap hover:bg-[#0c4a73] transition-colors"
-            >
-              인증받기
-            </button>
+            {!emailVerified ? (
+              <button
+                type="button"
+                onClick={verificationSent ? handleConfirmVerification : handleVerification}
+                disabled={verificationLoading}
+                className="px-4 py-3 rounded-[10px] bg-[#0E588D] text-white text-sm font-medium whitespace-nowrap hover:bg-[#0c4a73] transition-colors disabled:opacity-60"
+              >
+                {verificationLoading
+                  ? "처리 중..."
+                  : verificationSent
+                  ? "인증확인"
+                  : "인증받기"}
+              </button>
+            ) : (
+              <div className="px-4 py-3 rounded-[10px] bg-green-100 text-green-700 text-sm font-medium whitespace-nowrap flex items-center">
+                ✓ 인증완료
+              </div>
+            )}
           </div>
+          {verificationSent && !emailVerified && (
+            <p className="text-xs text-blue-600 mt-1">
+              이메일로 발송된 인증코드를 입력 후 '인증확인' 버튼을 눌러주세요.
+            </p>
+          )}
 
           {/* 비밀번호 */}
           <div>
@@ -370,9 +467,10 @@ export default function SignupPage() {
 
           <button
             type="submit"
-            className="w-full mt-2 py-3 rounded-[10px] bg-[#0E588D] text-white text-lg font-medium hover:bg-[#0c4a73] transition-colors"
+            disabled={signupLoading}
+            className="w-full mt-2 py-3 rounded-[10px] bg-[#0E588D] text-white text-lg font-medium hover:bg-[#0c4a73] transition-colors disabled:opacity-60"
           >
-            회원가입
+            {signupLoading ? "가입 중..." : "회원가입"}
           </button>
         </form>
       </div>
