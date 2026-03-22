@@ -1,5 +1,7 @@
 // src/pages/DictionaryMockPage.tsx
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import type { DictionaryTermDto } from "../types/dictionary";
+import { fetchDictionaryTerms, fetchDictionaryTerm } from "../api/dictionary";
 
 const HANGUL_LETTERS = [
   "ㄱ",
@@ -50,67 +52,6 @@ const ALPHABET_ROW2 = [
   "Z",
 ];
 
-// ---- 타입 & 더미 데이터 ----
-
-export interface DictionaryTerm {
-  id: string;
-  term: string; // 한글 용어
-  termEn?: string; // 영문 약어/이름
-  korInitial?: string; // 초성
-  alphaInitial?: string;
-  fullDefinition: string;
-  category?: string;
-}
-
-const DICTIONARY_TERMS: DictionaryTerm[] = [
-  {
-    id: "hdri",
-    term: "가계부실위험지수",
-    termEn: "HDRI",
-    korInitial: "ㄱ",
-    alphaInitial: "H",
-    fullDefinition:
-      "가구의 소득 흐름은 물론 금융 및 실물 자산까지 종합적으로 고려하여 가계부채의 부실위험을 평가하는 지표로, 가계의 채무상환능력을 소득 측면에서 평가하는 원리금상환비율(DSR; Debt Service Ratio)과 자산 측면에서 평가하는 부채/자산비율(DTA; Debt To Asset Ratio)을 결합하여 산출한 지수이다. 가계부실위험지수는 가구의 DSR과 DTA가 각각 40%, 100%일 때 100의 값을 갖도록 설정되어 있으며, 동 지수가 100을 초과하는 가구를 ‘위험가구’로 분류한다. 위험가구는 소득 및 자산 측면에서 모두 취약한 ‘고위험가구’, 자산 측면에서 취약한 ‘고DTA가구’, 소득 측면에서 취약한 ‘고DSR가구’로 구분할 수 있다. 다만 위험 및 고위험 가구는 가구의 채무상환능력 취약성 정도를 평가하기 위한 것이며 이들 가구가 당장 채무상환 불이행, 즉 임계상황에 직면한 것을 의미하지 않는다.",
-    category: "경제지표",
-  },
-  {
-    id: "gajebu",
-    term: "가계수지",
-    korInitial: "ㄱ",
-    alphaInitial: "H",
-    fullDefinition:
-      "가계의 소득과 지출 구조를 보여주는 통계로, 가계의 소비 성향과 저축률을 파악하는 데 활용된다.",
-    category: "경제지표",
-  },
-  {
-    id: "gaje-sun",
-    term: "가계순저축률",
-    korInitial: "ㄱ",
-    alphaInitial: "H",
-    fullDefinition:
-      "가계의 처분가능소득에서 소비지출을 제외한 순저축이 차지하는 비율로, 가계의 저축 성향을 나타낸다.",
-    category: "경제지표",
-  },
-  {
-    id: "gaje-credit",
-    term: "가계신용통계",
-    korInitial: "ㄱ",
-    alphaInitial: "H",
-    fullDefinition:
-      "가계가 보유한 금융기관 및 기타 차입금 등을 포함한 신용 규모를 파악하기 위한 통계이다.",
-    category: "통계",
-  },
-  {
-    id: "disposable",
-    term: "가계처분가능소득",
-    korInitial: "ㄱ",
-    alphaInitial: "D",
-    fullDefinition:
-      "가계가 세금과 사회보장기여금 등을 납부한 후 자유롭게 소비와 저축에 사용할 수 있는 소득을 말한다.",
-    category: "소득",
-  },
-];
-
 // ---- 컴포넌트 ----
 
 export default function DictionaryMockPage() {
@@ -120,44 +61,35 @@ export default function DictionaryMockPage() {
   const [selectedHangul, setSelectedHangul] = useState<string | null>(null);
   const [selectedAlpha, setSelectedAlpha] = useState<string | null>(null);
 
-  // 선택된 용어 (좌측 카드)
-  const [selectedTermId, setSelectedTermId] = useState<string>(
-    DICTIONARY_TERMS[0]?.id ?? "",
-  );
+  // API 상태
+  const [terms, setTerms] = useState<DictionaryTermDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [selectedTerm, setSelectedTerm] = useState<DictionaryTermDto | null>(null);
 
-  const selectedTerm = useMemo(
-    () =>
-      DICTIONARY_TERMS.find((t) => t.id === selectedTermId) ??
-      DICTIONARY_TERMS[0],
-    [selectedTermId],
-  );
+  // 초기 로딩
+  useEffect(() => {
+    setLoading(true);
+    fetchDictionaryTerms({})
+      .then((data) => {
+        setTerms(data);
+        if (data.length > 0) setSelectedTerm(data[0]);
+      })
+      .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
+      .finally(() => setLoading(false));
+  }, []);
 
   // 필터링 로직
   const filteredTerms = useMemo(() => {
-    return DICTIONARY_TERMS.filter((term) => {
+    return terms.filter((term) => {
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
-        const haystack = (
-          term.term +
-          " " +
-          (term.termEn ?? "") +
-          " " +
-          (term.fullDefinition ?? "")
-        ).toLowerCase();
+        const haystack = (term.term + " " + (term.description ?? "")).toLowerCase();
         if (!haystack.includes(q)) return false;
       }
-
-      if (selectedHangul && term.korInitial !== selectedHangul) {
-        return false;
-      }
-
-      if (selectedAlpha && term.alphaInitial !== selectedAlpha) {
-        return false;
-      }
-
       return true;
     });
-  }, [searchQuery, selectedHangul, selectedAlpha]);
+  }, [terms, searchQuery]);
 
   const resultCount = filteredTerms.length;
 
@@ -168,22 +100,19 @@ export default function DictionaryMockPage() {
       setSearchError("검색어를 입력해주세요.");
       return;
     }
-
-    const found = DICTIONARY_TERMS.find((term) => {
-      const koreanMatch =
-        term.term === q || term.term.toLowerCase() === q.toLowerCase();
-      const englishMatch =
-        term.termEn &&
-        (term.termEn === q || term.termEn.toLowerCase() === q.toLowerCase());
-      return koreanMatch || englishMatch;
-    });
-
-    if (found) {
-      setSelectedTermId(found.id);
-      setSearchError(null);
-    } else {
-      setSearchError("해당 단어는 사전에 존재하지 않습니다.");
-    }
+    setLoading(true);
+    setSearchError(null);
+    fetchDictionaryTerms({ q })
+      .then((data) => {
+        setTerms(data);
+        if (data.length > 0) {
+          setSelectedTerm(data[0]);
+        } else {
+          setSearchError("해당 단어는 사전에 존재하지 않습니다.");
+        }
+      })
+      .catch(() => setSearchError("검색 중 오류가 발생했습니다."))
+      .finally(() => setLoading(false));
   };
 
   const searchPlaceholder = searchError ?? "키워드를 입력해주세요";
@@ -202,15 +131,20 @@ export default function DictionaryMockPage() {
         <main className="w-full flex flex-col lg:flex-row items-start justify-between gap-4 sm:gap-6">
           {/* 좌측: 선택된 용어 설명 카드 (고정 높이) */}
           <section className="w-full lg:flex-[0.9] bg-zinc-100 rounded-2xl px-3.5 sm:px-4 md:px-5 py-4 sm:py-5 flex flex-col gap-2 h-[510px]">
-            <h2 className="text-sky-500 text-base sm:text-lg md:text-xl font-medium leading-snug">
-              {selectedTerm.term}
-              {selectedTerm.termEn ? `(${selectedTerm.termEn})` : ""}
-            </h2>
-            <div className="mt-1 flex-1 overflow-y-auto">
-              <p className="text-black text-[11px] sm:text-xs md:text-sm font-medium leading-relaxed">
-                {selectedTerm.fullDefinition}
-              </p>
-            </div>
+            {selectedTerm ? (
+              <>
+                <h2 className="text-sky-500 text-base sm:text-lg md:text-xl font-medium leading-snug">
+                  {selectedTerm.term}
+                </h2>
+                <div className="mt-1 flex-1 overflow-y-auto">
+                  <p className="text-black text-[11px] sm:text-xs md:text-sm font-medium leading-relaxed">
+                    {selectedTerm.description}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-zinc-500 text-sm">용어를 선택해주세요.</p>
+            )}
           </section>
 
           {/* 우측: 검색/필터 + 결과 리스트 */}
@@ -276,10 +210,14 @@ export default function DictionaryMockPage() {
                         <button
                           key={ch}
                           onClick={() => {
+                            const next = selectedHangul === ch ? null : ch;
                             setSelectedAlpha(null);
-                            setSelectedHangul((prev) =>
-                              prev === ch ? null : ch,
-                            );
+                            setSelectedHangul(next);
+                            setLoading(true);
+                            fetchDictionaryTerms({ initial: next ?? undefined })
+                              .then((data) => setTerms(data))
+                              .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
+                              .finally(() => setLoading(false));
                           }}
                           className={`w-6 h-6 rounded-md outline outline-[0.5px] outline-stone-300 flex items-center justify-center transition-colors ${
                             isActive ? "bg-zinc-900/10" : "bg-white"
@@ -308,10 +246,14 @@ export default function DictionaryMockPage() {
                         <button
                           key={ch}
                           onClick={() => {
+                            const next = selectedAlpha === ch ? null : ch;
                             setSelectedHangul(null);
-                            setSelectedAlpha((prev) =>
-                              prev === ch ? null : ch,
-                            );
+                            setSelectedAlpha(next);
+                            setLoading(true);
+                            fetchDictionaryTerms({ initial: next ?? undefined })
+                              .then((data) => setTerms(data))
+                              .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
+                              .finally(() => setLoading(false));
                           }}
                           className={`w-6 h-6 rounded-md outline outline-[0.5px] outline-stone-300 flex items-center justify-center transition-colors ${
                             isActive ? "bg-zinc-900/10" : "bg-white"
@@ -333,10 +275,14 @@ export default function DictionaryMockPage() {
                         <button
                           key={ch}
                           onClick={() => {
+                            const next = selectedAlpha === ch ? null : ch;
                             setSelectedHangul(null);
-                            setSelectedAlpha((prev) =>
-                              prev === ch ? null : ch,
-                            );
+                            setSelectedAlpha(next);
+                            setLoading(true);
+                            fetchDictionaryTerms({ initial: next ?? undefined })
+                              .then((data) => setTerms(data))
+                              .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
+                              .finally(() => setLoading(false));
                           }}
                           className={`w-6 h-6 rounded-md outline outline-[0.5px] outline-stone-300 flex items-center justify-center transition-colors ${
                             isActive ? "bg-zinc-900/10" : "bg-white"
@@ -357,7 +303,7 @@ export default function DictionaryMockPage() {
             <div className="w-full border-b border-black pb-1">
               <p className="text-zinc-500 text-[11px] sm:text-xs md:text-sm font-medium">
                 {selectedHangul
-                  ? `‘${selectedHangul}’ 검색 결과 `
+                  ? `'${selectedHangul}' 검색 결과 `
                   : "검색 결과 "}
                 <span className="text-red-400 font-medium">{resultCount}</span>
                 건의 정보가 검색되었습니다.
@@ -368,25 +314,36 @@ export default function DictionaryMockPage() {
             <div className="w-full bg-zinc-100 rounded-2xl px-3 sm:px-4 py-3 flex items-stretch">
               {/* 좌측: 결과 목록 (고정 높이 + 내부 스크롤) */}
               <div className="flex-1 min-w-0 text-[11px] sm:text-xs md:text-sm leading-relaxed h-40 sm:h-48 md:h-52 overflow-y-auto">
-                {filteredTerms.map((term) => (
-                  <button
-                    key={term.id}
-                    onClick={() => setSelectedTermId(term.id)}
-                    className={`block w-full text-left py-0.5 ${
-                      term.id === selectedTermId
-                        ? "font-bold underline"
-                        : "font-medium"
-                    }`}
-                  >
-                    {term.term}
-                    {term.termEn ? `(${term.termEn})` : ""}
-                  </button>
-                ))}
+                {loading ? (
+                  <p className="text-[11px] text-gray-500 py-2">불러오는 중...</p>
+                ) : fetchError ? (
+                  <p className="text-[11px] text-red-500 py-2">{fetchError}</p>
+                ) : (
+                  <>
+                    {filteredTerms.map((term) => (
+                      <button
+                        key={term.term}
+                        onClick={() => {
+                          fetchDictionaryTerm(term.term)
+                            .then((data) => setSelectedTerm(data))
+                            .catch(() => setFetchError("상세 정보를 불러오지 못했습니다."));
+                        }}
+                        className={`block w-full text-left py-0.5 ${
+                          term.term === selectedTerm?.term
+                            ? "font-bold underline"
+                            : "font-medium"
+                        }`}
+                      >
+                        {term.term}
+                      </button>
+                    ))}
 
-                {filteredTerms.length === 0 && (
-                  <p className="text-[11px] text-gray-500 py-2">
-                    검색 결과가 없습니다.
-                  </p>
+                    {filteredTerms.length === 0 && (
+                      <p className="text-[11px] text-gray-500 py-2">
+                        검색 결과가 없습니다.
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>
