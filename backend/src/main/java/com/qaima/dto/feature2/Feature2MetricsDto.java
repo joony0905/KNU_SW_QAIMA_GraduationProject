@@ -1,17 +1,19 @@
-// backend/src/main/java/com/qaima/dto/feature2/Feature2MetricsDto.java
 package com.qaima.dto.feature2;
 
 import com.qaima.dto.industry.IndustryIndexBlockDto;
 import com.qaima.dto.industry.IndustryMetaDto;
-import com.qaima.dto.peercluster.PeerClusterDto;
 import com.qaima.dto.news.NewsItemDto;
+import com.qaima.dto.peercluster.PeerClusterDto;
 import com.qaima.dto.stock.StockMeta;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.util.List;
 
 @Getter
 @Setter
@@ -21,12 +23,39 @@ public class Feature2MetricsDto {
 
     private StockMeta stock;
     private IndustryMetaDto industry;
-
-    private IndustryIndexBlockDto industryIndex;   // 추가
-    private PeerClusterDto peerCluster;             // 추가
+    private IndustryIndexBlockDto industryIndex;
+    private PeerClusterDto peerCluster;
+    private ShortSellingMetrics shortSelling;
     private List<NewsItemDto> newsList;
 
     public static Feature2MetricsDto empty() {
         return Feature2MetricsDto.builder().build();
+    }
+
+    @Getter
+    @Setter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor(access = AccessLevel.PROTECTED)
+    public static class ShortSellingMetrics {
+        private Long shortSellingId;
+        private Long stockId;
+        private String stockCode;
+        private String companyName;
+        private LocalDate reportDate;
+        private String marketCode;
+        private String securityType;
+        private BigDecimal shortVolumeTotal;
+        private BigDecimal shortVolumeUptickApplied;
+        private BigDecimal shortVolumeUptickExempt;
+        private BigDecimal totalVolume;
+        private BigDecimal shortVolumeRatio;
+        private BigDecimal shortAmountTotal;
+        private BigDecimal shortAmountUptickApplied;
+        private BigDecimal shortAmountUptickExempt;
+        private BigDecimal totalAmount;
+        private BigDecimal shortAmountRatio;
+        private String source;
+        private String sourceScreenId;
     }
 }
