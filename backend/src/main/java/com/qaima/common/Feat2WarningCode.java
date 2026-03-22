@@ -30,6 +30,10 @@ public enum Feat2WarningCode {
     SHORT_SELLING_MISSING,
     SHORT_SELLING_LOAD_FAILED,
 
+    // ----- Base Rate -----
+    BASE_RATE_MISSING,
+    BASE_RATE_LOAD_FAILED,
+
     // ----- External / Fallback -----
     EXTERNAL_API_FALLBACK_USED,
 
