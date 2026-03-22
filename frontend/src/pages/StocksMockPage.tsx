@@ -475,6 +475,7 @@ export default function StocksMockPage() {
 
     setAnalysisResult(null);
     setIndicatorData(null);
+    setShowAnalyzeButton(true);
 
     setMainStock((prev) => ({
       ...prev,
@@ -1108,7 +1109,13 @@ export default function StocksMockPage() {
             </div>
             {/* ========== 하단 분석 결과 영역 ========== */}
             <AnalysisResultPanel
-              result={analysisResult as AnalysisPanelResult | null}
+              result={analysisResult ? {
+                ...analysisResult,
+                explain: {
+                  ...analysisResult.explain,
+                  parsed: explainParse.parsed,
+                },
+              } as AnalysisPanelResult : null}
               loading={loading}
               err={err}
               showAnalyzeButton={showAnalyzeButton}
