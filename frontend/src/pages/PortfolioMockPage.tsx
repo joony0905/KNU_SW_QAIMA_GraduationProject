@@ -1,6 +1,7 @@
 // src/pages/PortfolioMockPage.tsx
 
 import { useEffect, useRef, useState } from "react";
+import AnalysisResultPanel from "../components/AnalysisResultPanel";
 
 type HoldingRow = {
   id: number;
@@ -43,6 +44,29 @@ export default function PortfolioMockPage() {
     selectedMarket === "국내"
       ? totalKRW / EXCHANGE_RATE
       : rows.reduce((sum, r) => sum + r.quantity * r.avgPrice, 0);
+
+  const [analysisResult] = useState<null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
+  const [displayText] = useState("");
+
+  const handleAnalyzeClick = async () => {
+    setLoading(true);
+    setErr("");
+    try {
+      setShowAnalyzeButton(false);
+      // TODO: 포트폴리오 분석 엔드포인트 확정 후 구현
+      // const result = await fetchPortfolioAnalysis(rows);
+      // setAnalysisResult(result);
+      throw new Error("포트폴리오 분석 엔드포인트 미구현");
+    } catch {
+      setErr("분석 기능은 준비 중입니다.");
+      setShowAnalyzeButton(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const toggleOpen = () => setIsOpen((prev) => !prev);
 
@@ -285,15 +309,17 @@ export default function PortfolioMockPage() {
 
           {/* 오른쪽: 분석 결과 보기 영역 */}
           <section className="w-full lg:flex-1 mt-10 lg:mt-0">
-            <div
-              className="w-full bg-neutral-50 rounded-2xl border-2 border-stone-300
-                         flex items-center justify-center
-                         py-[15rem] sm:py-[16rem] md:py-[17rem]"
-            >
-              <button className="px-6 sm:px-8 md:px-10 py-2.5 sm:py-3.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium">
-                분석 결과 보기
-              </button>
-            </div>
+            <AnalysisResultPanel
+              result={analysisResult}
+              loading={loading}
+              err={err}
+              showAnalyzeButton={showAnalyzeButton}
+              onAnalyze={handleAnalyzeClick}
+              onDownload={() => {}}
+              onZoom={() => {}}
+              displayText={displayText}
+              layout="panel"
+            />
           </section>
         </main>
       </div>
