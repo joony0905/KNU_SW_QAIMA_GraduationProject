@@ -21,6 +21,21 @@ export const ENDPOINTS = {
   analysis: {
     analyze: () => "/feature1/analyze",
   },
+  dictionary: {
+    search: (params: { q?: string; initial?: string; page?: number; size?: number }) => {
+      const query = new URLSearchParams();
+      if (params.q) query.set("q", params.q);
+      if (params.initial) query.set("initial", params.initial);
+      if (params.page !== undefined) query.set("page", String(params.page));
+      if (params.size !== undefined) query.set("size", String(params.size));
+      const qs = query.toString();
+      return `/dictionary${qs ? "?" + qs : ""}`;
+    },
+    getOne: (term: string) => `/dictionary/${encodeURIComponent(term)}`,
+    autocomplete: (q: string, size?: number) =>
+      `/dictionary/autocomplete?q=${encodeURIComponent(q)}${size !== undefined ? "&size=" + size : ""}`,
+    initials: () => "/dictionary/initials",
+  },
   charts: {
     candles: (stockCode: string, freq: string, from: string, to: string) =>
       `/charts/candles?stockCode=${stockCode}&freq=${freq}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
