@@ -25,7 +25,16 @@ api.interceptors.response.use(
     const message = getErrorMessage(status, errorCode);
 
     console.error("API Error:", status, errorCode, message);
-    // 필요하면 여기서 toast나 전역 에러 상태에 message 전달
+
+    if (status === 401) {
+      localStorage.removeItem("qaima_token");
+      localStorage.removeItem("qaima_refresh_token");
+      window.location.href = "/login";
+    } else if (status === 403) {
+      window.location.href = "/forbidden";
+    } else if (status === 500) {
+      console.error("서버 내부 오류가 발생했습니다.");
+    }
 
     return Promise.reject(error);
   }

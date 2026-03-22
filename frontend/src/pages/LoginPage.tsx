@@ -31,14 +31,28 @@ export default function LoginPage() {
 
       const data = await login({ email: form.email, password: form.password });
 
-      localStorage.setItem("qaima_token", data.accessToken);
+      localStorage.setItem("qaima_token", data.access_token);
+      localStorage.setItem("qaima_refresh_token", data.refresh_token);
 
-      navigate("/ping");
+      navigate("/feature/1");
     } catch (err: unknown) {
-      if (err instanceof Error) {
+      // axios 에러인 경우 서버 응답 메시지 우선 표시
+      const axiosErr = err as any;
+      const serverMessage = axiosErr?.response?.data?.errors?.[0]?.message;
+      const status = axiosErr?.response?.status;
+
+      if (serverMessage) {
+        setError(serverMessage);
+      } else if (status === 400) {
+        setError("이메일 또는 비밀번호가 일치하지 않습니다.");
+      } else if (status === 401) {
+        setError("로그인 세션이 만료되었습니다. 다시 로그인해주세요.");
+      } else if (status === 423) {
+        setError("계정이 잠겼습니다. 잠시 후 다시 시도해주세요.");
+      } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError("Network Error");
+        setError("로그인 중 오류가 발생했습니다.");
       }
     } finally {
       setLoading(false);

@@ -12,7 +12,15 @@ type ApiResponse<T> = {
 
 export const getStockByCode = async (stockCode: string): Promise<StockDto> => {
   const res = await api.get<ApiResponse<StockDto>>(
-    ENDPOINTS.stocks.getByCode(stockCode)
+    ENDPOINTS.stocks.getByCode(stockCode),
   );
+  return res.data.data;
+};
+
+export const searchStocks = async (query: string): Promise<StockDto[]> => {
+  const res = await api.get<ApiResponse<StockDto[]>>(
+    ENDPOINTS.stocks.search(query),
+  );
+  console.log("search raw response:", res.data); // 이거 추가
   return res.data.data;
 };
