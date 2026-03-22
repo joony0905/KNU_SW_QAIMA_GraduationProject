@@ -6,6 +6,9 @@ import { fetchCandles } from "../api/charts";
 import type { Candle } from "../types/candle";
 import TradingViewWidget from "../components/TradingViewWidget";
 import clsx from "clsx";
+import AnalysisResultPanel from "../components/AnalysisResultPanel";
+import { fetchFeature2Analysis } from "../api/feature2";
+import type { Feature2AnalyzeResponse } from "../types/feature2";
 
 const getColorClass = (rate: string) => {
   if (rate.startsWith("+")) return "text-red-600";
@@ -234,6 +237,12 @@ export default function Feature2MockPage() {
   const [isTopicOpen, setIsTopicOpen] = useState(false);
   const topicRef = useRef<HTMLDivElement | null>(null);
 
+  const [analysisResult, setAnalysisResult] = useState<Feature2AnalyzeResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
+  const [displayText, setDisplayText] = useState("");
+
   const [mainStock, setMainStock] = useState({
     name: "삼성전자",
     symbol: "005930",
@@ -283,6 +292,39 @@ export default function Feature2MockPage() {
     document.addEventListener("click", handleClickOutsideTopic);
     return () => document.removeEventListener("click", handleClickOutsideTopic);
   }, []);
+
+  useEffect(() => {
+    if (!analysisResult?.explain) {
+      setDisplayText("");
+      return;
+    }
+    const fullText = analysisResult.explain;
+    setDisplayText("");
+    let index = 0;
+    const speed = 20;
+    const timer = setInterval(() => {
+      index += 1;
+      setDisplayText((prev) => prev + fullText.charAt(index - 1));
+      if (index >= fullText.length) clearInterval(timer);
+    }, speed);
+    return () => clearInterval(timer);
+  }, [analysisResult]);
+
+  const handleAnalyzeClick = async () => {
+    setLoading(true);
+    setErr("");
+    setAnalysisResult(null);
+    setDisplayText("");
+    try {
+      setShowAnalyzeButton(false);
+      const result = await fetchFeature2Analysis(mainStock.symbol);
+      setAnalysisResult(result);
+    } catch {
+      setErr("분석 결과를 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!mainStock) return;
@@ -649,11 +691,20 @@ export default function Feature2MockPage() {
         </main>
 
         {/* 분석 결과 보기 영역 */}
-        <section className="w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex flex-col items-center justify-center gap-4 mt-6">
-          <button className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium">
-            분석 결과 보기
-          </button>
-        </section>
+        <AnalysisResultPanel
+          result={analysisResult ? {
+            explain: { text: analysisResult.explain },
+            meta: analysisResult.meta,
+          } : null}
+          loading={loading}
+          err={err}
+          showAnalyzeButton={showAnalyzeButton}
+          onAnalyze={handleAnalyzeClick}
+          onDownload={() => {}}
+          onZoom={() => {}}
+          displayText={displayText}
+          layout="full"
+        />
 
         {/* 펼쳐진 특징주 리스트 패널 */}
         {isOpen && panelPos && (
