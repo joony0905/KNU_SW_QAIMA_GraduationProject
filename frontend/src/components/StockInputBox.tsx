@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import searchIcon from "../assets/search.png";
 import type { WatchlistItem } from "../types/watchlist";
+import type { StockDto } from "../types/stock";
+import { searchStocks, getStockByCode } from "../api/stock";
 
 interface StockInputBoxProps {
   placeholder?: string;
@@ -14,17 +16,23 @@ export default function StockInputBox({
   const [inputValue, setInputValue] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [stockResults, setStockResults] = useState<StockDto[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showRecentSearches, setShowRecentSearches] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
+  const [guideMessage, setGuideMessage] = useState("");
   const [isInterestListOpen, setIsInterestListOpen] = useState(false);
   const [interests, setInterests] = useState<WatchlistItem[]>([]);
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
-        // setIsInterestListOpen(false);
+        setShowRecentSearches(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -59,46 +67,150 @@ export default function StockInputBox({
     setInterests(dummy);
   }, []);
 
-  /**
-   * 자동완성 API 비활성화 버전
-   * - 타이핑 중에는 API 호출하지 않음
-   * - 필요하면 관심 목록에서만 "로컬 자동완성" 제공
-   */
+  const saveRecentSearch = useCallback((companyName: string) => {
+    const stored = localStorage.getItem("recentSearches");
+    let recent: string[] = stored ? JSON.parse(stored) : [];
+    recent = recent.filter((item) => item !== companyName);
+    recent.unshift(companyName);
+    recent = recent.slice(0, 5);
+    localStorage.setItem("recentSearches", JSON.stringify(recent));
+  }, []);
+
+  const handleFocus = () => {
+    if (inputValue.trim() === "") {
+      const stored = localStorage.getItem("recentSearches");
+      const recent: string[] = stored ? JSON.parse(stored) : [];
+      if (recent.length > 0) {
+        setRecentSearches(recent);
+        setShowRecentSearches(true);
+        setShowSuggestions(false);
+      }
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value);
+    setShowRecentSearches(false);
+    setGuideMessage("");
 
     const q = value.trim();
     if (!q) {
       setSuggestions([]);
+      setStockResults([]);
       setShowSuggestions(false);
+      setIsSearching(false);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      // 입력 비우면 최근 검색어 표시
+      const stored = localStorage.getItem("recentSearches");
+      const recent: string[] = stored ? JSON.parse(stored) : [];
+      if (recent.length > 0) {
+        setRecentSearches(recent);
+        setShowRecentSearches(true);
+      }
       return;
     }
 
-    // (선택) 로컬 자동완성: 관심 목록에서만 필터
-    const local = interests
-      .map((x) => x.stockName)
-      .filter((name): name is string => !!name)
-      .filter((name) => name.includes(q))
-      .slice(0, 10);
+    setIsSearching(true);
+    setShowSuggestions(true);
 
-    setSuggestions(local);
-    setShowSuggestions(local.length > 0);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        if (/^\d{6}$/.test(q)) {
+          const stock = await getStockByCode(q);
+          const asResult = [stock] as StockDto[];
+          setStockResults(asResult);
+          setSuggestions([`${stock.companyName} (${stock.stockCode})`]);
+        } else {
+          const results = await searchStocks(q);
+          const filtered = results.filter((s) =>
+            /^\d{6}$/.test((s as any).stock_code)
+          );
+          setStockResults(filtered);
+          const labels = filtered.map(
+            (s) => `${(s as any).company_name} (${(s as any).stock_code})`
+          );
+          setSuggestions(labels);
+        }
+      } catch {
+        setStockResults([]);
+        setSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
   };
 
-  const handleSelect = (value: string) => {
-    setInputValue(value);
+  const handleSelect = (value: string, stockCode?: string) => {
     setShowSuggestions(false);
+    setShowRecentSearches(false);
     setIsInterestListOpen(false);
-    onSearch?.(value);
+    setGuideMessage("");
+
+    if (stockCode) {
+      const matched = stockResults.find(
+        (s) => (s as any).stock_code === stockCode || s.stockCode === stockCode
+      );
+      const name = (matched as any)?.company_name ?? matched?.companyName ?? value.replace(/ \(.*\)$/, "");
+      setInputValue(name);
+      saveRecentSearch(name);
+      onSearch?.(stockCode);
+    } else {
+      onSearch?.(value);
+    }
+  };
+
+  const handleRecentSelect = async (value: string) => {
+    setInputValue(value);
+    setShowRecentSearches(false);
+    setIsInterestListOpen(false);
+    setGuideMessage("");
+
+    try {
+      const results = await searchStocks(value);
+      const match = results.find(
+        (s) =>
+          /^\d{6}$/.test((s as any).stock_code) &&
+          (s as any).company_name === value
+      );
+      if (match) {
+        onSearch?.((match as any).stock_code);
+      } else {
+        setGuideMessage("유효하지 않은 종목입니다.");
+      }
+    } catch {
+      setGuideMessage("유효하지 않은 종목입니다.");
+    }
   };
 
   const submitSearch = () => {
     const q = inputValue.trim();
     if (!q) return;
     setShowSuggestions(false);
+    setShowRecentSearches(false);
     setIsInterestListOpen(false);
-    onSearch?.(q);
+
+    // 현재 stockResults에서 매칭되는 항목이 있으면 stockCode 전달 + 최근 검색어 저장
+    const match = stockResults.find(
+      (s) =>
+        (s as any).company_name === q ||
+        s.companyName === q ||
+        `${(s as any).company_name} (${(s as any).stock_code})` === q ||
+        `${s.companyName} (${s.stockCode})` === q
+    );
+    if (match) {
+      const matchName = (match as any).company_name ?? match.companyName;
+      const matchCode = (match as any).stock_code ?? match.stockCode;
+      saveRecentSearch(matchName);
+      setGuideMessage("");
+      onSearch?.(matchCode);
+    } else if (/^\d{6}$/.test(q)) {
+      setGuideMessage("");
+      onSearch?.(q);
+    } else {
+      setGuideMessage("목록에서 종목을 선택해주세요.");
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -106,6 +218,9 @@ export default function StockInputBox({
       submitSearch();
     }
   };
+
+  const showDropdown =
+    showSuggestions || showRecentSearches || isInterestListOpen;
 
   return (
     <div
@@ -126,6 +241,7 @@ export default function StockInputBox({
             onClick={() => {
               setIsInterestListOpen((prev) => !prev);
               setShowSuggestions(false);
+              setShowRecentSearches(false);
             }}
             type="button"
             className="
@@ -155,6 +271,7 @@ export default function StockInputBox({
             type="text"
             value={inputValue}
             onChange={handleChange}
+            onFocus={handleFocus}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             className="
@@ -188,22 +305,52 @@ export default function StockInputBox({
         </div>
       </div>
 
-      {/* 자동완성 / 관심 리스트 */}
-      {(showSuggestions && suggestions.length > 0) || isInterestListOpen ? (
+      {/* 자동완성 / 최근 검색어 / 관심 리스트 */}
+      {showDropdown ? (
         <div className="absolute top-full left-0 mt-1 w-full z-50">
-          {/* 자동완성 (로컬) */}
-          {showSuggestions && suggestions.length > 0 ? (
+          {/* 실시간 자동완성 */}
+          {showSuggestions ? (
             <ul className="max-h-40 overflow-y-auto bg-white border border-stone-300 rounded-md shadow-md">
-              {suggestions.map((s, idx) => (
-                <li
-                  key={idx}
-                  onClick={() => handleSelect(s)}
-                  className="px-3 py-1.5 cursor-pointer hover:bg-zinc-100 text-sm sm:text-base md:text-lg font-['Inter']"
-                >
-                  {s}
+              {isSearching ? (
+                <li className="px-3 py-1.5 text-sm sm:text-base text-gray-500 font-['Inter']">
+                  검색 중...
                 </li>
-              ))}
+              ) : suggestions.length > 0 ? (
+                suggestions.map((s, idx) => (
+                  <li
+                    key={idx}
+                    onClick={() =>
+                      handleSelect(s, (stockResults[idx] as any)?.stock_code ?? stockResults[idx]?.stockCode)
+                    }
+                    className="px-3 py-1.5 cursor-pointer hover:bg-zinc-100 text-sm sm:text-base md:text-lg font-['Inter']"
+                  >
+                    {s}
+                  </li>
+                ))
+              ) : (
+                <li className="px-3 py-1.5 text-sm sm:text-base text-gray-500 font-['Inter']">
+                  검색 결과 없음
+                </li>
+              )}
             </ul>
+          ) : showRecentSearches ? (
+            /* 최근 검색어 */
+            <div className="bg-white border border-stone-300 rounded-md shadow-md">
+              <div className="px-3 py-1.5 text-xs text-gray-500 font-medium border-b border-stone-200">
+                최근 검색어
+              </div>
+              <ul className="max-h-40 overflow-y-auto">
+                {recentSearches.map((item, idx) => (
+                  <li
+                    key={idx}
+                    onClick={() => handleRecentSelect(item)}
+                    className="px-3 py-1.5 cursor-pointer hover:bg-zinc-100 text-sm sm:text-base md:text-lg font-['Inter']"
+                  >
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : (
             // 관심 리스트
             isInterestListOpen && (
@@ -230,6 +377,12 @@ export default function StockInputBox({
           )}
         </div>
       ) : null}
+
+      {guideMessage && (
+        <p className="absolute top-full left-0 mt-1 w-full px-3 py-1.5 text-sm text-red-500 bg-white border border-stone-300 rounded-md shadow-md z-50">
+          {guideMessage}
+        </p>
+      )}
     </div>
   );
 }
