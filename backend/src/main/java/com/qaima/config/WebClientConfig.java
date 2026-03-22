@@ -44,4 +44,13 @@ public class WebClientConfig {
                 .build();
     }
 
+    @Bean(name = "bokWebClient")
+    public WebClient bokWebClient(
+            @Value("${bok.base-url:https://ecos.bok.or.kr/api}") String baseUrl
+    ) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
+
 }

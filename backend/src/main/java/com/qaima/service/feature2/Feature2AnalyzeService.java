@@ -26,26 +26,27 @@ import reactor.core.scheduler.Schedulers;
 @Slf4j
 public class Feature2AnalyzeService {
 
-    private final StockService stockService;
-    private final StockRepository stockRepository;
-    private final IndustryRepository industryRepository;
-    private final IndustryIndexService industryIndexService;
-    private final ShortSellingFeatureService shortSellingFeatureService;
-    private final PeerClusterService peerClusterService;
-
     private static final Freq INDEX_FREQ = Freq.ONE_D;
     private static final int INDEX_LIMIT = 120;
 
     private static final Freq PEER_FREQ = Freq.ONE_D;
     private static final int PEER_WINDOW = 90;
 
+    private final StockService stockService;
+    private final StockRepository stockRepository;
+    private final IndustryRepository industryRepository;
+    private final IndustryIndexService industryIndexService;
+    private final ShortSellingFeatureService shortSellingFeatureService;
+    private final PeerClusterService peerClusterService;
+    private final BaseRateFeatureService baseRateFeatureService;
+
     public Mono<Feature2AnalyzeResponseDto> analyze(Feature2AnalyzeRequestDto req) {
         log.info("[Feat2] stockService impl={}", stockService.getClass().getName());
 
-        Feature2MetaDto meta = Feature2MetaDto.empty();
-        Feature2MetricsDto metrics = Feature2MetricsDto.empty();
+        final Feature2MetaDto meta = Feature2MetaDto.empty();
+        final Feature2MetricsDto metrics = Feature2MetricsDto.empty();
 
-        String stockCode = req == null ? null : req.getStockCode();
+        final String stockCode = req == null ? null : req.getStockCode();
         if (stockCode == null || stockCode.isBlank()) {
             meta.addWarning(Feat2WarningCode.STOCK_NOT_FOUND);
             return Mono.just(buildResponse(metrics, meta));
@@ -61,15 +62,11 @@ public class Feature2AnalyzeService {
 
                     Stock stock = optStock.get();
                     return refetchWithExchange(stock)
-                            .flatMap(fullStock -> {
-                                metrics.setStock(toStockMetaFromEntity(fullStock, "DB"));
-                                return attachShortSellingAndContinue(fullStock, metrics, meta);
-                            })
+                            .flatMap(resolved -> attachMetricsAndAnalyze(resolved, metrics, meta))
                             .onErrorResume(ex -> {
                                 log.warn("[Feat2] fetch-join(exchange) re-fetch failed. code={}, cause={}",
                                         stock.getStockCode(), ex.getMessage());
-                                metrics.setStock(toStockMetaFromEntity(stock, "DB"));
-                                return attachShortSellingAndContinue(stock, metrics, meta);
+                                return attachMetricsAndAnalyze(stock, metrics, meta);
                             });
                 })
                 .onErrorResume(ex -> {
@@ -80,17 +77,25 @@ public class Feature2AnalyzeService {
                 });
     }
 
-    private Mono<Feature2AnalyzeResponseDto> attachShortSellingAndContinue(
+    private Mono<Feature2AnalyzeResponseDto> attachMetricsAndAnalyze(
             Stock stock,
             Feature2MetricsDto metrics,
             Feature2MetaDto meta
     ) {
-        return shortSellingFeatureService.loadLatest(stock, meta)
+        metrics.setStock(toStockMetaFromEntity(stock, "DB"));
+
+        return baseRateFeatureService.loadLatest(meta)
                 .map(Optional::of)
                 .defaultIfEmpty(Optional.empty())
-                .flatMap(optShortSelling -> {
-                    optShortSelling.ifPresent(metrics::setShortSelling);
-                    return resolveIndustryAndAttachDownstream(stock, metrics, meta);
+                .flatMap(baseRateOpt -> {
+                    baseRateOpt.ifPresent(metrics::setBaseRate);
+                    return shortSellingFeatureService.loadLatest(stock, meta)
+                            .map(Optional::of)
+                            .defaultIfEmpty(Optional.empty())
+                            .flatMap(shortSellingOpt -> {
+                                shortSellingOpt.ifPresent(metrics::setShortSelling);
+                                return resolveIndustryAndAttachDownstream(stock, metrics, meta);
+                            });
                 });
     }
 
@@ -105,7 +110,7 @@ public class Feature2AnalyzeService {
                         return Mono.just(buildResponse(metrics, meta));
                     }
 
-                    Long industryId = optIndustryId.get();
+                    final Long industryId = optIndustryId.get();
                     return Mono.fromCallable(() -> industryRepository.findById(industryId))
                             .subscribeOn(Schedulers.boundedElastic())
                             .flatMap(optIndustry -> {
@@ -121,8 +126,8 @@ public class Feature2AnalyzeService {
                                         .loadIndustryIndex(industry.getIndustryId(), meta, INDEX_FREQ, INDEX_LIMIT)
                                         .map(Optional::of)
                                         .defaultIfEmpty(Optional.empty())
-                                        .flatMap(optIndexBlock -> {
-                                            optIndexBlock.ifPresent(metrics::setIndustryIndex);
+                                        .flatMap(indexBlockOpt -> {
+                                            indexBlockOpt.ifPresent(metrics::setIndustryIndex);
 
                                             return peerClusterService.getPeerCluster(
                                                             industry.getIndustryId(),

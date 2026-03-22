@@ -26,6 +26,7 @@ public class Feature2MetricsDto {
     private IndustryIndexBlockDto industryIndex;
     private PeerClusterDto peerCluster;
     private ShortSellingMetrics shortSelling;
+    private BaseRateMetrics baseRate;
     private List<NewsItemDto> newsList;
 
     public static Feature2MetricsDto empty() {
@@ -57,5 +58,16 @@ public class Feature2MetricsDto {
         private BigDecimal shortAmountRatio;
         private String source;
         private String sourceScreenId;
+    }
+
+    @Getter
+    @Setter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor(access = AccessLevel.PROTECTED)
+    public static class BaseRateMetrics {
+        private LocalDate date;
+        private BigDecimal value;
+        private String unit;
     }
 }
