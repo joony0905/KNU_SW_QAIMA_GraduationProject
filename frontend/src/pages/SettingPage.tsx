@@ -1,168 +1,181 @@
-<div className="w-[1820px] inline-flex flex-col justify-start items-center gap-9">
-  <div className="self-stretch px-5 py-6 bg-white border-b border-neutral-900 inline-flex justify-start items-center gap-2.5 overflow-hidden">
-    <div className="justify-start text-black text-4xl font-medium font-['Inter']">
-      내정보
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+export default function SettingPage() {
+  const navigate = useNavigate();
+
+  const [investLevel, setInvestLevel] = useState<
+    "초급자" | "중급자" | "고급자"
+  >("초급자");
+  const [watchlist, setWatchlist] = useState<string[]>([
+    "삼성전자",
+    "TSLA",
+    "SK하이닉스",
+  ]);
+  const [isEditingWatchlist, setIsEditingWatchlist] = useState(false);
+  const [language, setLanguage] = useState<"한국어" | "English">("한국어");
+
+  return (
+    <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
+      <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
+        <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
+          내정보
+        </h1>
+      </header>
+
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
+        {/* 기본정보 */}
+        <div className="flex flex-col items-center gap-4">
+          <h2 className="text-xl font-medium text-black">기본정보</h2>
+          <div className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-base text-black">
+            <span className="text-right border-r border-black pr-5 py-1">
+              이름
+            </span>
+            <span className="py-1">홍길동</span>
+            <span className="text-right border-r border-black pr-5 py-1">
+              아이디(이메일)
+            </span>
+            <span className="py-1">honggildong123@naver.com</span>
+            <span className="text-right border-r border-black pr-5 py-1">
+              전화번호
+            </span>
+            <span className="py-1">010 1234 5678</span>
+            <span className="text-right border-r border-black pr-5 py-1">
+              생년월일
+            </span>
+            <span className="py-1">1999년 99월 99일</span>
+          </div>
+          <div className="w-full flex justify-end">
+            <button
+              onClick={() => navigate("/setting/edit")}
+              className="border border-zinc-400 rounded-md px-4 py-2 text-sm hover:bg-zinc-50"
+            >
+              개인정보 수정
+            </button>
+          </div>
+        </div>
+
+        <hr className="border-black" />
+
+        {/* 투자레벨 */}
+        <div className="flex flex-col items-center gap-4">
+          <h2 className="text-xl font-medium text-black">투자레벨</h2>
+          <select
+            value={investLevel}
+            onChange={(e) =>
+              setInvestLevel(e.target.value as "초급자" | "중급자" | "고급자")
+            }
+            className="border border-black rounded px-3 py-2 text-base bg-white focus:outline-none"
+          >
+            <option value="초급자">초급자</option>
+            <option value="중급자">중급자</option>
+            <option value="고급자">고급자</option>
+          </select>
+          <p className="text-xs text-zinc-500 text-center">
+            투자 설문 결과를 기반으로 자동 설정되었습니다. 직접 변경할 수
+            있습니다.
+          </p>
+        </div>
+
+        <hr className="border-black" />
+
+        {/* 투자성향 */}
+        <div className="flex flex-col items-center gap-4">
+          <h2 className="text-xl font-medium text-black">투자성향</h2>
+          <p className="text-center text-base text-black">
+            Aggressive (수익 우선, 손실 감수)
+          </p>
+          <p className="text-xs text-zinc-500 text-center">
+            투자 설문 결과를 기반으로 자동 설정되었습니다. 설문을 다시 하면
+            변경할 수 있습니다.
+          </p>
+          <button
+            onClick={() => navigate("/survey")}
+            className="border border-zinc-400 rounded-md px-4 py-2 text-sm hover:bg-zinc-50"
+          >
+            설문 다시하기
+          </button>
+        </div>
+
+        <hr className="border-black" />
+
+        {/* 관심종목 */}
+        <div className="flex flex-col items-center gap-4">
+          <h2 className="text-xl font-medium text-black">관심종목</h2>
+          <div className="w-full max-h-40 overflow-y-auto border border-stone-300 rounded-lg p-3">
+            {watchlist.length === 0 ? (
+              <p className="text-sm text-zinc-500 text-center py-2">
+                관심 종목이 없습니다.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {watchlist.map((item) =>
+                  isEditingWatchlist ? (
+                    <div
+                      key={item}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-neutral-200 rounded-full"
+                    >
+                      <span className="text-sm font-medium text-black">
+                        {item}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setWatchlist((prev) => prev.filter((w) => w !== item))
+                        }
+                        className="text-zinc-500 hover:text-red-500 text-xs font-bold ml-1"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <span
+                      key={item}
+                      className="px-2.5 py-1 bg-neutral-200 rounded-full text-sm font-medium text-black"
+                    >
+                      {item}
+                    </span>
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setIsEditingWatchlist((prev) => !prev)}
+            className="border border-zinc-400 rounded-md px-4 py-2 text-sm hover:bg-zinc-50"
+          >
+            {isEditingWatchlist ? "선택삭제 완료" : "종목 선택삭제"}
+          </button>
+        </div>
+
+        <hr className="border-black" />
+
+        {/* 언어 */}
+        <div className="flex flex-col items-center gap-4">
+          <h2 className="text-xl font-medium text-black">언어/Language</h2>
+          <select
+            value={language}
+            onChange={(e) =>
+              setLanguage(e.target.value as "한국어" | "English")
+            }
+            className="border border-black rounded px-3 py-2 text-base bg-white focus:outline-none"
+          >
+            <option value="한국어">한국어</option>
+            <option value="English">English</option>
+          </select>
+        </div>
+
+        <hr className="border-black" />
+
+        {/* 버그제보 */}
+        <div className="flex flex-col items-center gap-4">
+          <h2 className="text-xl font-medium text-black">버그제보</h2>
+          <p className="text-center text-sm text-black">
+            버그 제보 / contact : 9aima@gmail.com
+          </p>
+        </div>
+
+        <hr className="border-black" />
+      </div>
     </div>
-  </div>
-  <div className="w-[1160px] flex flex-col justify-start items-center gap-12">
-    <div className="w-[490px] flex flex-col justify-end items-end gap-7">
-      <div className="self-stretch flex flex-col justify-start items-center gap-5">
-        <div className="w-48 h-12 rounded-[5px] inline-flex justify-center items-center gap-2.5 overflow-hidden">
-          <div className="justify-start text-black text-2xl font-medium font-['Inter'] leading-9">
-            기본정보
-          </div>
-        </div>
-        <div className="w-[491px] inline-flex justify-start items-center">
-          <div className="p-5 inline-flex flex-col justify-center items-end gap-5 overflow-hidden">
-            <div className="pl-[5px] pr-7 py-[5px] border-r border-black inline-flex justify-end items-center gap-2.5 overflow-hidden">
-              <div className="justify-start text-black text-xl font-normal font-['Inter'] leading-8">
-                이름{" "}
-              </div>
-            </div>
-            <div className="pl-[5px] pr-7 py-[5px] border-r border-black inline-flex justify-end items-center gap-2.5 overflow-hidden">
-              <div className="justify-start text-black text-xl font-normal font-['Inter'] leading-8">
-                아이디(이메일)
-              </div>
-            </div>
-            <div className="pl-[5px] pr-7 py-[5px] border-r border-black inline-flex justify-end items-center gap-2.5 overflow-hidden">
-              <div className="justify-start text-black text-xl font-normal font-['Inter'] leading-8">
-                전화번호{" "}
-              </div>
-            </div>
-            <div className="pl-[5px] pr-7 py-[5px] border-r border-black inline-flex justify-end items-center gap-2.5 overflow-hidden">
-              <div className="justify-start text-black text-xl font-normal font-['Inter'] leading-8">
-                생년월일
-              </div>
-            </div>
-          </div>
-          <div className="py-5 inline-flex flex-col justify-center items-start gap-5 overflow-hidden">
-            <div className="self-stretch pl-[5px] pr-7 py-[5px] inline-flex justify-start items-center gap-2.5 overflow-hidden">
-              <div className="justify-start text-black text-xl font-normal font-['Inter'] leading-8">
-                홍길동
-              </div>
-            </div>
-            <div className="self-stretch pl-[5px] pr-7 py-[5px] inline-flex justify-start items-center gap-2.5 overflow-hidden">
-              <div className="justify-start text-black text-xl font-normal font-['Inter'] leading-8">
-                honggildong123@naver.com
-              </div>
-            </div>
-            <div className="self-stretch pl-[5px] pr-7 py-[5px] inline-flex justify-start items-center gap-2.5 overflow-hidden">
-              <div className="justify-start text-black text-xl font-normal font-['Inter'] leading-8">
-                010 1234 5678{" "}
-              </div>
-            </div>
-            <div className="self-stretch pl-[5px] pr-7 py-[5px] inline-flex justify-start items-center gap-2.5 overflow-hidden">
-              <div className="justify-start text-black text-xl font-normal font-['Inter'] leading-8">
-                1999년 99월 99일
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="w-36 h-10 p-[5px] rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-400 inline-flex justify-center items-center gap-2.5 overflow-hidden">
-        <div className="justify-start text-black text-base font-medium font-['Inter'] leading-6">
-          개인정보 수정
-        </div>
-      </div>
-    </div>
-    <div className="self-stretch h-0 outline outline-1 outline-offset-[-0.50px] outline-black"></div>
-    <div className="w-96 flex flex-col justify-start items-center gap-12">
-      <div className="flex flex-col justify-start items-center gap-5">
-        <div className="justify-start text-black text-2xl font-medium font-['Inter'] leading-9">
-          투자레벨
-        </div>
-        <div className="w-48 bg-white outline outline-1 outline-offset-[-1px] outline-black flex flex-col justify-start items-start gap-2.5 overflow-hidden">
-          <div className="flex flex-col justify-start items-center gap-5">
-            <div className="w-4 h-3.5 origin-top-left -rotate-180 bg-neutral-700 rounded-sm" />
-            <div className="w-48 h-10 text-center justify-center text-black text-xl font-medium font-['Inter']">
-              초급자
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="self-stretch text-center justify-center text-black text-xs font-normal font-['Inter']">
-        투자 설문 결과를 기반으로 자동 설정되었습니다. 직접 변경할 수 있습니다.
-      </div>
-    </div>
-    <div className="self-stretch h-0 outline outline-1 outline-offset-[-0.50px] outline-black"></div>
-    <div className="w-[490px] flex flex-col justify-end items-end gap-11">
-      <div className="self-stretch flex flex-col justify-start items-center gap-14">
-        <div className="w-72 flex flex-col justify-start items-center gap-7">
-          <div className="w-48 h-12 rounded-[5px] inline-flex justify-center items-center gap-2.5 overflow-hidden">
-            <div className="justify-start text-black text-2xl font-medium font-['Inter'] leading-9">
-              투자성향
-            </div>
-          </div>
-          <div className="self-stretch text-center justify-center text-black text-xl font-normal font-['Inter']">
-            Aggresive(수익 우선, 손실 감수)
-          </div>
-        </div>
-        <div className="self-stretch text-center justify-center text-black text-xs font-normal font-['Inter']">
-          투자 설문 결과를 기반으로 자동 설정되었습니다. 설문을 다시 하면 변경할
-          수 있습니다.
-        </div>
-      </div>
-      <div className="w-36 h-10 p-[5px] rounded-[5px] outline outline-1 outline-offset-[-1px] outline-zinc-400 inline-flex justify-center items-center gap-2.5 overflow-hidden">
-        <div className="justify-start text-black text-base font-medium font-['Inter'] leading-6">
-          설문 다시하기
-        </div>
-      </div>
-    </div>
-    <div className="self-stretch h-0 outline outline-1 outline-offset-[-0.50px] outline-black"></div>
-    <div className="w-96 flex flex-col justify-start items-center gap-5">
-      <div className="w-60 flex flex-col justify-start items-center gap-5">
-        <div className="w-48 h-12 rounded-[5px] inline-flex justify-center items-center gap-2.5 overflow-hidden">
-          <div className="justify-start text-black text-2xl font-medium font-['Inter'] leading-9">
-            관심종목
-          </div>
-        </div>
-        <div className="self-stretch p-5 rounded-[5px] outline outline-[3px] outline-offset-[-3px] outline-stone-300 flex flex-col justify-start items-start gap-3">
-          <div className="px-2.5 bg-neutral-200 rounded-[30px] inline-flex justify-center items-center gap-7">
-            <div className="justify-start text-black text-base font-medium font-['Inter'] leading-6">
-              삼성전자
-            </div>
-          </div>
-          <div className="px-2.5 bg-neutral-200 rounded-[30px] inline-flex justify-center items-center gap-12">
-            <div className="justify-start text-black text-base font-medium font-['Inter'] leading-6">
-              TSLA
-            </div>
-          </div>
-          <div className="px-2.5 bg-neutral-200 rounded-[30px] inline-flex justify-start items-center gap-12">
-            <div className="justify-start text-black text-base font-medium font-['Inter'] leading-6">
-              SK하이닉스
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="self-stretch text-center justify-center text-black text-xs font-normal font-['Inter']">
-        관심 리스트가 아직 없습니다. 종목 검색 화면에서 ★를 눌러 추가해보세요.
-      </div>
-    </div>
-    <div className="self-stretch h-0 outline outline-1 outline-offset-[-0.50px] outline-black" />
-    <div className="flex flex-col justify-start items-start gap-5">
-      <div className="w-48 h-12 rounded-[5px] inline-flex justify-center items-center gap-2.5 overflow-hidden">
-        <div className="justify-start text-black text-2xl font-medium font-['Inter'] leading-9">
-          언어/Language
-        </div>
-      </div>
-      <div className="w-48 bg-white outline outline-1 outline-offset-[-1px] outline-black flex flex-col justify-start items-start gap-2.5 overflow-hidden">
-        <div className="w-4 h-3.5 origin-top-left -rotate-180 bg-neutral-700 rounded-sm" />
-        <div className="w-48 h-10 text-center justify-center text-black text-xl font-medium font-['Inter']">
-          한국어
-        </div>
-      </div>
-    </div>
-    <div className="self-stretch h-0 outline outline-1 outline-offset-[-0.50px] outline-black" />
-    <div className="self-stretch flex flex-col justify-start items-center gap-5">
-      <div className="w-48 h-12 rounded-[5px] inline-flex justify-center items-center gap-2.5 overflow-hidden">
-        <div className="justify-start text-black text-2xl font-medium font-['Inter'] leading-9">
-          버그제보
-        </div>
-      </div>
-      <div className="self-stretch text-center justify-center text-black text-base font-normal font-['Inter']">
-        버그 제보 / contact : 9aima@gamil.com
-      </div>
-    </div>
-    <div className="self-stretch h-0 outline outline-1 outline-offset-[-0.50px] outline-black"></div>
-  </div>
-</div>;
+  );
+}
