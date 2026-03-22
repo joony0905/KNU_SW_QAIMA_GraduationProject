@@ -1,5 +1,6 @@
 // src/components/Sidebar.tsx
 import { NavLink, useNavigate } from "react-router-dom";
+import { isLoggedIn } from "../utils/auth";
 
 import introIcon from "../assets/intro.png";
 import analysisIcon from "../assets/analysis.png";
@@ -9,7 +10,7 @@ import dictionaryIcon from "../assets/dictionary.png";
 import mypageIcon from "../assets/mypage.png";
 
 const navItems = [
-  { path: "/ping", icon: introIcon, label: "소개" },
+  { path: "/main", icon: introIcon, label: "소개" },
   { path: "/feature/1", icon: analysisIcon, label: "심층분석" },
   { path: "/feature/2", icon: externalIcon, label: "외부요인" },
   { path: "/feature/3", icon: portfolioIcon, label: "포트폴리오" },
@@ -43,9 +44,11 @@ export default function Sidebar() {
       {/* 내정보(로그아웃) 버튼 */}
       <button
         onClick={() => {
-          localStorage.removeItem("qaima_token");
-          localStorage.removeItem("qaima_refresh_token");
-          navigate("/login");
+          if (isLoggedIn()) {
+            navigate("/setting");
+          } else {
+            navigate("/login");
+          }
         }}
         className="flex flex-col items-center gap-[5px] p-[5px] w-[84px] rounded-[15px] hover:bg-[#D7D7D7]"
       >
@@ -57,7 +60,7 @@ export default function Sidebar() {
           />
         </div>
         <div className="text-black text-center text-[14px] font-normal">
-          내정보
+          {isLoggedIn() ? "내정보" : "로그인"}
         </div>
       </button>
     </div>
