@@ -12,7 +12,11 @@ export function buildSectionsFromDto(dto: FinancialDto): IndicatorSection[] {
     {
       sectionTitle: "수익성",
       rows: [
-        // EPS는 지금 DTO에 없으니 나중에 계산하거나 빈 값 처리
+        {
+          title: "EPS",
+          subtitle: "주당순이익",
+          value: "-",
+        },
         {
           title: "ROE",
           subtitle: "자기자본이익률",
