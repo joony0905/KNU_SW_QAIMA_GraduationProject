@@ -26,6 +26,10 @@ public enum Feat2WarningCode {
     NEWS_NOT_FOUND,
     SENTIMENT_NOT_FOUND,
 
+    // ----- Short Selling -----
+    SHORT_SELLING_MISSING,
+    SHORT_SELLING_LOAD_FAILED,
+
     // ----- External / Fallback -----
     EXTERNAL_API_FALLBACK_USED,
 
