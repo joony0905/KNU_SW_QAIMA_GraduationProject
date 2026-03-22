@@ -2,12 +2,13 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layout/MainLayout";
 import LoginPage from "./pages/LoginPage";
-import PingPage from "./pages/PingPage";
+import MainPage from "./pages/MainPage";
 import StocksMockPage from "./pages/StocksMockPage";
 import Feature2MockPage from "./pages/Feature2MockPage";
 import PortfolioMockPage from "./pages/PortfolioMockPage";
 import DictionaryMockPage from "./pages/DictionaryMockPage";
 import SignupPage from "./pages/SignupPage";
+import SettingPage from "./pages/SettingPage";
 
 export default function App() {
   return (
@@ -20,7 +21,7 @@ export default function App() {
         path="/"
         element={
           <MainLayout>
-            <PingPage />
+            <MainPage />
           </MainLayout>
         }
       />
@@ -28,10 +29,10 @@ export default function App() {
       <Route path="/signup" element={<SignupPage />} />
 
       <Route
-        path="/ping"
+        path="/main"
         element={
           <MainLayout>
-            <PingPage />
+            <MainPage />
           </MainLayout>
         }
       />
@@ -64,6 +65,14 @@ export default function App() {
         element={
           <MainLayout>
             <DictionaryMockPage />
+          </MainLayout>
+        }
+      />
+      <Route
+        path="/setting"
+        element={
+          <MainLayout>
+            <SettingPage />
           </MainLayout>
         }
       />
