@@ -120,7 +120,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
             try {
                 rows = priceOhlcvRepository.findRangeBulk(allCodes, freq, from, to);
             } catch (Exception e) {
-                // ✅ 절대 throw 금지: members/metas만이라도 내려준다
+                // 절대 throw 금지: members/metas만이라도 내려준다
                 log.error("[PeerClusterData] price bulk fetch failed", e);
                 warnings.add("PRICE_BULK_FETCH_FAILED");
                 warnings.add(e.getClass().getSimpleName());
@@ -189,6 +189,9 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
                 warnings.add("NO_USABLE_SERIES");
             }
 
+            //log.info("rows size={}", rows.size());
+            //log.info("byCode size={}", byCode.size());
+
             Map<String, Object> pack = new LinkedHashMap<>();
             pack.put("warnings", warnings);
             pack.put("members", members);
@@ -246,13 +249,9 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
     }
 
     private static String safeStockCode(PriceOhlcv p) {
-        try {
-            if (p == null || p.getStock() == null) return null;
-            String code = p.getStock().getStockCode();
-            return code == null ? null : code.trim();
-        } catch (Exception ignore) {
-            return null;
-        }
+        if (p == null || p.getStock() == null) return null;
+        String code = p.getStock().getStockCode();
+        return code == null ? null : code.trim();
     }
 
     private static OffsetDateTime safeTs(PriceOhlcv p) {

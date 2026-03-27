@@ -1,5 +1,6 @@
 package com.qaima.domain;
 
+import com.qaima.domain.converter.PeriodTypeConverter;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
