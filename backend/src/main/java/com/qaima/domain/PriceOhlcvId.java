@@ -1,5 +1,8 @@
 package com.qaima.domain;
 
+import com.qaima.domain.converter.FreqConverter;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Embeddable;
 import lombok.*;
 
@@ -17,5 +20,7 @@ public class PriceOhlcvId implements Serializable {
     private Long stockId;
     private OffsetDateTime ts;
 
-    private Freq freq; // Enum
+    @Convert(converter = FreqConverter.class)
+    @Column(name = "freq")
+    private Freq freq;
 }

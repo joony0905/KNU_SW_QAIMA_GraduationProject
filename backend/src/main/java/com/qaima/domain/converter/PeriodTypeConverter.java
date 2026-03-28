@@ -1,5 +1,6 @@
-package com.qaima.domain;
+package com.qaima.domain.converter;
 
+import com.qaima.domain.PeriodType;
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
 import java.util.Locale;
