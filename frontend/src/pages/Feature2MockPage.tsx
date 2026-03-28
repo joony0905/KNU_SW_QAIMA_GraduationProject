@@ -1,5 +1,5 @@
 // Feature2MockPage.tsx
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import StockInputBox from "../components/StockInputBox";
 import StockCard from "../components/StockCard";
 import { fetchCandles } from "../api/charts";
@@ -8,6 +8,7 @@ import TradingViewWidget from "../components/TradingViewWidget";
 import clsx from "clsx";
 import AnalysisResultPanel from "../components/AnalysisResultPanel";
 import { fetchFeature2Analysis } from "../api/feature2";
+import RelativeLineWidget from "../components/RelativeLineWidget";
 import type { Feature2AnalyzeResponse } from "../types/feature2";
 
 const getColorClass = (rate: string) => {
@@ -88,7 +89,7 @@ const dummyRelatedStocks: RelatedStock[] = [
     direction: "up",
   },
   {
-    id: "samsung",
+    id: "samsung-2",
     name: "삼성전자",
     price: "104,100",
     volume: "45,942,879",
@@ -136,6 +137,7 @@ export default function Feature2MockPage() {
     const toDate = new Date();
     const fromDate = new Date();
     fromDate.setDate(toDate.getDate() - 30);
+
     try {
       const response = await fetchCandles(
         stockCode,
@@ -143,9 +145,11 @@ export default function Feature2MockPage() {
         fromDate.toISOString(),
         toDate.toISOString(),
       );
+
       if (response.data.length === 0) {
         setChartError("차트 데이터가 없습니다.");
       }
+
       setCandles(response.data);
     } catch (e: any) {
       console.error("차트 데이터 조회 실패:", e);
@@ -157,36 +161,7 @@ export default function Feature2MockPage() {
   };
 
   const [industryChartLoading, setIndustryChartLoading] = useState(false);
-  const [industryChartError, setIndustryChartError] = useState<string | null>(
-    null,
-  );
-  const [industryCandles, setIndustryCandles] = useState<Candle[]>([]);
-
-  const loadIndustryCandles = async (industryCode: string) => {
-    setIndustryChartLoading(true);
-    setIndustryChartError(null);
-    const toDate = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - 30);
-    try {
-      const response = await fetchCandles(
-        industryCode,
-        "ONE_D",
-        fromDate.toISOString(),
-        toDate.toISOString(),
-      );
-      if (response.data.length === 0) {
-        setIndustryChartError("차트 데이터가 없습니다.");
-      }
-      setIndustryCandles(response.data);
-    } catch (e: any) {
-      console.error("차트 데이터 조회 실패:", e);
-      setIndustryChartError("차트를 불러오지 못했습니다.");
-      setIndustryCandles([]);
-    } finally {
-      setIndustryChartLoading(false);
-    }
-  };
+  const [industryChartError, setIndustryChartError] = useState<string | null>(null);
 
   const [featuredStocks] = useState<FeaturedStock[]>([
     {
@@ -220,10 +195,7 @@ export default function Feature2MockPage() {
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   const [isOpen, setIsOpen] = useState(false);
-  const [panelPos, setPanelPos] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
 
   const [topic, setTopic] = useState<
     | "상승종목"
@@ -234,6 +206,7 @@ export default function Feature2MockPage() {
     | "거래대금 상위종목"
     | "거래량 급등종목"
   >("상승종목");
+
   const [isTopicOpen, setIsTopicOpen] = useState(false);
   const topicRef = useRef<HTMLDivElement | null>(null);
 
@@ -248,22 +221,44 @@ export default function Feature2MockPage() {
     symbol: "005930",
   });
 
+  const industrySeries = useMemo(() => {
+  const raw = analysisResult?.metrics?.industry_index?.series;
+
+  console.log("🔥 [RAW industry_index.series]", raw);
+
+  if (!raw || !Array.isArray(raw)) return [];
+
+  const mapped = raw
+    .filter(
+      (p: any) =>
+        p &&
+        typeof p.t === "string" &&
+        Number.isFinite(Number(p.value)),
+    )
+    .map((p: any) => ({
+      t: p.t,
+      value: Number(p.value),
+    }));
+
+  console.log("🔥 [MAPPED industrySeries]", mapped);
+
+  return mapped;
+}, [analysisResult]);
+
   const handleSearch = async (value: string) => {
     const q = value.trim();
     if (!q) return;
 
-    // 일단 코드 그대로 사용 (005930 같은 케이스)
     setMainStock((prev) => ({ ...prev, symbol: q }));
-
-    await Promise.allSettled([loadCandles(q), loadIndustryCandles(q)]);
+    await loadCandles(q);
   };
 
-  const [newsItems, setNewsItems] = useState<NewsItemDto[]>(dummyNews);
+  const [newsItems, setNewsItems] = useState<NewsItem[]>(dummyNews);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState<string | null>(null);
 
-  const [relatedStocks, setRelatedStocks] =
-    useState<RelatedStockDto[]>(dummyRelatedStocks);
+  const [hoveredDayKey, setHoveredDayKey] = useState<string | null>(null);
+  const [relatedStocks, setRelatedStocks] = useState<RelatedStock[]>(dummyRelatedStocks);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedError, setRelatedError] = useState<string | null>(null);
 
@@ -298,27 +293,69 @@ export default function Feature2MockPage() {
       setDisplayText("");
       return;
     }
+
     const fullText = analysisResult.explain;
     setDisplayText("");
     let index = 0;
     const speed = 20;
+
     const timer = setInterval(() => {
       index += 1;
       setDisplayText((prev) => prev + fullText.charAt(index - 1));
       if (index >= fullText.length) clearInterval(timer);
     }, speed);
+
     return () => clearInterval(timer);
   }, [analysisResult]);
+
+  useEffect(() => {
+    if (loading) {
+      setIndustryChartLoading(true);
+      setIndustryChartError(null);
+      return;
+    }
+
+    setIndustryChartLoading(false);
+
+    if (!analysisResult) {
+      setIndustryChartError(null);
+      return;
+    }
+
+    const industryIndex = analysisResult?.metrics?.industry_index;
+    const warnings: string[] = analysisResult?.meta?.warnings ?? [];
+
+    if (!industryIndex) {
+      if (warnings.includes("INDUSTRY_INDEX_OHLCV_EMPTY")) {
+        setIndustryChartError("산업 지수 데이터가 없습니다.");
+      } else {
+        setIndustryChartError("산업 지수 차트를 불러오지 못했습니다.");
+      }
+      return;
+    }
+
+    if (!industryIndex.series || industryIndex.series.length === 0) {
+      setIndustryChartError("산업 지수 데이터가 없습니다.");
+      return;
+    }
+
+    setIndustryChartError(null);
+  }, [analysisResult, loading]);
 
   const handleAnalyzeClick = async () => {
     setLoading(true);
     setErr("");
     setAnalysisResult(null);
     setDisplayText("");
+
     try {
       setShowAnalyzeButton(false);
       const result = await fetchFeature2Analysis(mainStock.symbol);
       setAnalysisResult(result);
+      console.log("🔥 analysisResult raw =", result);
+      console.log("🔥 result keys =", Object.keys(result ?? {}));
+      console.log("🔥 result.data =", result?.data);
+      console.log("🔥 result.metrics =", result?.metrics);
     } catch {
       setErr("분석 결과를 불러오지 못했습니다.");
     } finally {
@@ -328,25 +365,18 @@ export default function Feature2MockPage() {
 
   useEffect(() => {
     if (!mainStock) return;
-
     loadCandles(mainStock.symbol);
-
-    // 나중에 진짜 industryCode 오면 이 부분만 교체
-    const dummyIndustryCode = mainStock.symbol; // 임시
-    loadIndustryCandles(dummyIndustryCode);
   }, [mainStock]);
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
-        {/* 헤더 */}
         <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
             외부요인
           </h1>
         </header>
 
-        {/* 상단 검색 / 특징주 */}
         <section className="w-full flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="w-full lg:max-w-md bg-white rounded-[10px] outline outline-1 outline-stone-300 px-2 py-1 sm:px-2 sm:py-1 flex flex-col gap-2">
             <StockInputBox
@@ -434,13 +464,9 @@ export default function Feature2MockPage() {
           </div>
         </section>
 
-        {/* 메인 2열 레이아웃 */}
         <main className="w-full mt-6 flex flex-col xl:flex-row justify-center items-start gap-6">
-          {/* ============ 좌측: 종목 차트 + 산업 지수 ============ */}
           <div className="flex-1 flex flex-col gap-5">
-            {/* [좌측 상단] 종목 차트 카드 */}
             <section className="w-full bg-zinc-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
-              {/* 종목 헤더 라인 */}
               <div className="flex items-baseline gap-1">
                 <h2 className="text-lg sm:text-2xl font-medium text-black">
                   {mainStock.name}
@@ -450,7 +476,6 @@ export default function Feature2MockPage() {
                 </span>
               </div>
 
-              {/* 차트 영역 */}
               <div className="w-full h-64 sm:h-80 bg-white rounded-xl overflow-hidden">
                 {chartLoading && (
                   <div className="h-full flex items-center justify-center">
@@ -469,7 +494,12 @@ export default function Feature2MockPage() {
                 )}
 
                 {!chartLoading && !chartError && (
-                  <TradingViewWidget candles={candles} />
+                  <TradingViewWidget
+                  candles={candles}
+                  showSubPanes={false}
+                  hoveredDayKey={hoveredDayKey}
+                  onHoverDayKeyChange={setHoveredDayKey}
+                  />
                 )}
               </div>
             </section>
@@ -481,33 +511,40 @@ export default function Feature2MockPage() {
               </h2>
 
               <div className="w-full h-64 sm:h-80 bg-white rounded-xl overflow-hidden">
-                {industryChartLoading && (
-                  <div className="h-full flex items-center justify-center">
-                    <p className="text-md text-gray-500">
-                      차트를 불러오는 중입니다…
-                    </p>
-                  </div>
-                )}
+              {industryChartLoading && (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-md text-gray-500">차트를 불러오는 중입니다…</p>
+                </div>
+              )}
 
-                {industryChartError && !industryChartLoading && (
-                  <div className="h-full flex items-center justify-center">
-                    <p className="text-md text-red-500">
-                      {industryChartError ?? "차트를 불러오지 못했습니다."}
-                    </p>
-                  </div>
-                )}
+              {industryChartError && !industryChartLoading && (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-md text-red-500">
+                    {industryChartError ?? "차트를 불러오지 못했습니다."}
+                  </p>
+                </div>
+              )}
 
-                {!industryChartLoading && !industryChartError && (
-                  <TradingViewWidget candles={industryCandles} />
-                )}
+              {!industryChartLoading && !industryChartError && industrySeries.length > 0 && (
+              <RelativeLineWidget
+              data={industrySeries}
+              height={320}
+              hoveredDayKey={hoveredDayKey}
+              onHoverDayKeyChange={setHoveredDayKey}
+              />
+            )}
+
+            {!industryChartLoading && !industryChartError && industrySeries.length === 0 && (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-md text-gray-500">산업 지수 데이터가 없습니다.</p>
               </div>
+            )}
+            </div>
             </section>
           </div>
-          {/* ============ 우측: 감성 지수 + 뉴스 + 관련 종목 ============ */}
+
           <div className="w-full xl:w-[380px] 2xl:w-[420px] flex flex-col items-stretch gap-5">
-            {/* [우측 최상단] 부정/긍정 지수 영역 */}
             <section className="w-full flex justify-center items-center gap-6 sm:gap-10">
-              {/* 부정 지수 */}
               <div className="flex flex-col items-center gap-1 w-40">
                 <p className="text-center text-sm sm:text-base font-medium text-black">
                   부정 지수 -0.28
@@ -517,10 +554,8 @@ export default function Feature2MockPage() {
                 </p>
               </div>
 
-              {/* 가운데 구분선 */}
               <div className="hidden sm:block w-px h-12 bg-zinc-600" />
 
-              {/* 긍정 지수 */}
               <div className="flex flex-col items-center gap-1 w-44">
                 <p className="text-center text-sm sm:text-base font-medium text-black">
                   긍정 지수 1.24
@@ -531,9 +566,7 @@ export default function Feature2MockPage() {
               </div>
             </section>
 
-            {/* [우측 중단] 관련 뉴스 카드 */}
             <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
-              {/* 왼쪽: 뉴스 리스트 */}
               <div className="flex flex-col gap-3">
                 <h3 className="text-black text-base sm:text-lg font-medium">
                   삼성전자 관련 뉴스
@@ -587,7 +620,6 @@ export default function Feature2MockPage() {
               </div>
             </section>
 
-            {/* [우측 하단] 관련 산업 유사 종목 리스트 */}
             <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
               <div className="flex flex-col gap-3">
                 <h3 className="text-black text-base sm:text-lg font-medium">
@@ -690,12 +722,15 @@ export default function Feature2MockPage() {
           </div>
         </main>
 
-        {/* 분석 결과 보기 영역 */}
         <AnalysisResultPanel
-          result={analysisResult ? {
-            explain: { text: analysisResult.explain },
-            meta: analysisResult.meta,
-          } : null}
+          result={
+            analysisResult
+              ? {
+                  explain: { text: analysisResult.explain },
+                  meta: analysisResult.meta,
+                }
+              : null
+          }
           loading={loading}
           err={err}
           showAnalyzeButton={showAnalyzeButton}
@@ -706,7 +741,6 @@ export default function Feature2MockPage() {
           layout="full"
         />
 
-        {/* 펼쳐진 특징주 리스트 패널 */}
         {isOpen && panelPos && (
           <div
             ref={dropdownRef}

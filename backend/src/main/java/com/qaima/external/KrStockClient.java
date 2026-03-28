@@ -28,6 +28,7 @@ import reactor.core.publisher.Mono;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -440,7 +441,7 @@ public class KrStockClient {
         try {
             if (yyyymmdd == null || yyyymmdd.isBlank()) return null;
             LocalDate date = LocalDate.parse(yyyymmdd, DateTimeFormatter.ofPattern("yyyyMMdd"));
-            return date.atStartOfDay().atOffset(ZoneOffset.UTC);
+            return date.atStartOfDay(ZoneId.of("Asia/Seoul")).toOffsetDateTime();
         } catch (Exception e) {
             return null;
         }

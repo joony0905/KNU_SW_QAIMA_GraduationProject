@@ -9,6 +9,8 @@ public enum Feat2WarningCode {
     // ----- Industry Index (FR-17) -----
     INDUSTRY_INDEX_MISSING,
     INDUSTRY_INDEX_OHLCV_EMPTY,
+    INDUSTRY_INDEX_SAVE_FAILED,
+    INDUSTRY_INDEX_FETCH_FAILED,
 
     // ----- Peer / Cluster (FR-18) -----
     PEER_CLUSTER_CACHE_MISS,
@@ -21,6 +23,8 @@ public enum Feat2WarningCode {
     PEER_CLUSTER_JSON_PARSE_FAILED,
     PEER_CLUSTER_INTERNAL_ERROR,
     PEER_CLUSTER_LOAD_FAILED,
+    PEER_CLUSTER_INDUSTRY_ID_MISSING,
+    PEER_CLUSTER_ANCHOR_MISSING,
 
     // ----- News / Sentiment -----
     NEWS_NOT_FOUND,
@@ -38,5 +42,8 @@ public enum Feat2WarningCode {
     EXTERNAL_API_FALLBACK_USED,
 
     // ----- LLM -----
-    LLM_EXPLAIN_FAILED
+    LLM_EXPLAIN_FAILED,
+
+    // ----- Feat2 (최상위) -----
+    FEAT2_INTERNAL_ERROR
 }

@@ -10,35 +10,49 @@ import com.qaima.dto.feature2.Feature2AnalyzeResponseDto;
 import com.qaima.dto.feature2.Feature2MetaDto;
 import com.qaima.dto.feature2.Feature2MetricsDto;
 import com.qaima.dto.industry.IndustryMetaDto;
+import com.qaima.dto.peercluster.PeerClusterDto;
 import com.qaima.dto.stock.StockMeta;
 import com.qaima.repository.IndustryRepository;
 import com.qaima.repository.StockRepository;
 import com.qaima.service.stock.StockService;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class Feature2AnalyzeService {
 
-    // MVP 고정 파라미터
-    private static final Freq INDEX_FREQ = Freq.ONE_D;
-    private static final int INDEX_LIMIT = 120;
+    // ===== 기본값 (MVP) =====
+    private static final Freq DEFAULT_FREQ = Freq.ONE_D;
+    private static final int DEFAULT_WINDOW = 90;
+    private static final int DEFAULT_PEER_COUNT = 8;
+    private static final int DEFAULT_MAX_LAG = 5;
 
-    private static final Freq PEER_FREQ = Freq.ONE_D;
-    private static final int PEER_WINDOW = 90;
+    // ===== 안전 범위 =====
+    private static final int MIN_WINDOW = 20;
+    private static final int MAX_WINDOW = 365;
+
+    private static final int MIN_PEER_COUNT = 3;
+    private static final int MAX_PEER_COUNT = 20;
+
+    private static final int MIN_MAX_LAG = 1;
+    private static final int MAX_MAX_LAG = 20;
 
     private final StockService stockService;              // Mono<Stock> getOrCreateStockByCode(...)
     private final StockRepository stockRepository;        // JPA (blocking)
     private final IndustryRepository industryRepository;  // JPA (blocking)
     private final IndustryIndexService industryIndexService;
     private final ShortSellingFeatureService shortSellingFeatureService;
-    private final PeerClusterService peerClusterService;  // Redis only (현재)
+    private final PeerClusterService peerClusterService;
     private final BaseRateFeatureService baseRateFeatureService;
 
     public Mono<Feature2AnalyzeResponseDto> analyze(Feature2AnalyzeRequestDto req) {
@@ -47,13 +61,19 @@ public class Feature2AnalyzeService {
         final Feature2MetaDto meta = Feature2MetaDto.empty();
         final Feature2MetricsDto metrics = Feature2MetricsDto.empty();
 
-        final String stockCode = req == null ? null : req.getStockCode();
+        final String stockCode = normalizeStockCode(req == null ? null : req.getStockCode());
+        final Freq freq = normalizeFreq(req == null ? null : req.getFreq());
+        final int window = normalizeWindow(req == null ? null : req.getWindow());
+        final int peerCount = normalizePeerCount(req == null ? null : req.getPeerCount());
+        final int maxLag = normalizeMaxLag(req == null ? null : req.getMaxLag());
+
         if (stockCode == null || stockCode.isBlank()) {
             meta.addWarning(Feat2WarningCode.STOCK_NOT_FOUND);
             return Mono.just(buildResponse(metrics, meta));
         }
 
-        log.info("[Feat2] about to call getOrCreate stockCode={}", stockCode);
+        log.info("[Feat2] about to call getOrCreate stockCode={}, freq={}, window={}, peerCount={}, maxLag={}",
+                stockCode, freq, window, peerCount, maxLag);
 
         // 1) Stock resolve/upsert (DB miss -> 외부 메타 조회 -> 저장)
         return resolveOrCreateStock(stockCode, meta)
@@ -66,20 +86,36 @@ public class Feature2AnalyzeService {
 
                     // 1-1) exchange fetch join 재조회 (안전)
                     return refetchWithExchange(stock)
-                            .flatMap(resolved -> attachMetricsAndAnalyze(resolved, metrics, meta))
+                            .flatMap(resolved -> attachMetricsAndAnalyze(
+                                    resolved,
+                                    metrics,
+                                    meta,
+                                    freq,
+                                    window,
+                                    peerCount,
+                                    maxLag
+                            ))
                             .onErrorResume(ex -> {
                                 // exchange 재조회 실패는 부분 성공 유지
                                 log.warn("[Feat2] fetch-join(exchange) re-fetch failed. code={}, cause={}",
                                         stock.getStockCode(), ex.getMessage());
 
-                                // 최소한 stock 메타는 채우고, baseRate/shortSelling/industry/index/peer는 가능한 만큼 시도
-                                return attachMetricsAndAnalyze(stock, metrics, meta);
+                                // 최소한 stock 메타는 채우고, downstream은 가능한 만큼 시도
+                                return attachMetricsAndAnalyze(
+                                        stock,
+                                        metrics,
+                                        meta,
+                                        freq,
+                                        window,
+                                        peerCount,
+                                        maxLag
+                                );
                             });
                 })
                 .onErrorResume(ex -> {
                     // 최상위 보호막 (절대 throw 안 함)
                     log.warn("[Feat2AnalyzeService] analyze top-level failure. code={}, cause={}",
-                            stockCode, ex.getMessage());
+                            stockCode, ex.getMessage(), ex);
                     meta.addWarning(String.valueOf(ErrorCode.INTERNAL_ERROR));
                     return Mono.just(buildResponse(metrics, meta));
                 });
@@ -88,7 +124,11 @@ public class Feature2AnalyzeService {
     private Mono<Feature2AnalyzeResponseDto> attachMetricsAndAnalyze(
             Stock stock,
             Feature2MetricsDto metrics,
-            Feature2MetaDto meta
+            Feature2MetaDto meta,
+            Freq freq,
+            int window,
+            int peerCount,
+            int maxLag
     ) {
         metrics.setStock(toStockMetaFromEntity(stock, "DB"));
 
@@ -105,7 +145,15 @@ public class Feature2AnalyzeService {
                             .defaultIfEmpty(Optional.empty())
                             .flatMap(shortSellingOpt -> {
                                 shortSellingOpt.ifPresent(metrics::setShortSelling);
-                                return resolveIndustryAndAttachDownstream(stock, metrics, meta);
+                                return resolveIndustryAndAttachDownstream(
+                                        stock,
+                                        metrics,
+                                        meta,
+                                        freq,
+                                        window,
+                                        peerCount,
+                                        maxLag
+                                );
                             });
                 });
     }
@@ -113,11 +161,15 @@ public class Feature2AnalyzeService {
     private Mono<Feature2AnalyzeResponseDto> resolveIndustryAndAttachDownstream(
             Stock stock,
             Feature2MetricsDto metrics,
-            Feature2MetaDto meta
+            Feature2MetaDto meta,
+            Freq freq,
+            int window,
+            int peerCount,
+            int maxLag
     ) {
         /**
          * Industry resolve + (IndustryIndex -> PeerCluster)까지 붙이는 공용 흐름
-         * - 여기서부터는 "가능한 만큼 채우고" 마지막에 response를 한 번만 만든다.
+         * - 여기서부터는 가능한 만큼 채우고 마지막에 response를 한 번만 만든다.
          */
 
         // 2) Industry resolve (id만 안전하게 추출 후 재조회)
@@ -145,42 +197,55 @@ public class Feature2AnalyzeService {
                                 // Feature2: Industry Index 연결
                                 // =========================
                                 return industryIndexService
-                                        .loadIndustryIndex(industry.getIndustryId(), meta, INDEX_FREQ, INDEX_LIMIT)
+                                        .loadIndustryIndex(industry.getIndustryId(), meta, freq, window)
                                         .map(Optional::of)
                                         .defaultIfEmpty(Optional.empty())
                                         .flatMap(indexBlockOpt -> {
                                             indexBlockOpt.ifPresent(metrics::setIndustryIndex);
 
                                             // =========================
-                                            // Feature2: Peer Cluster 연결 (Redis only)
+                                            // Feature2: Peer Cluster 연결
                                             // =========================
                                             return peerClusterService.getPeerCluster(
                                                             industry.getIndustryId(),
                                                             stock.getStockCode(),
-                                                            PEER_FREQ,
-                                                            PEER_WINDOW,
-                                                            8,
-                                                            5
+                                                            freq,
+                                                            window,
+                                                            peerCount,
+                                                            maxLag
                                                     )
                                                     .map(result -> {
-                                                        metrics.setPeerCluster(result.getPeerCluster()); // nullable OK
-                                                        if (result.getWarnings() != null && !result.getWarnings().isEmpty()) {
-                                                            meta.getWarnings().addAll(result.getWarnings());
+                                                        PeerClusterDto pc = result.getPeerCluster();
+
+                                                        if (pc != null) {
+                                                            metrics.setPeerCluster(pc);
                                                         }
+
+                                                        if (result.getWarnings() != null) {
+                                                            result.getWarnings().forEach(meta::addWarning);
+                                                        }
+
                                                         return buildResponse(metrics, meta);
                                                     })
                                                     .onErrorResume(ex -> {
-                                                        log.warn("[Feat2] peerCluster load failed. industryId={}, cause={}",
-                                                                industry.getIndustryId(), ex.getMessage());
+                                                        log.warn("[Feat2] peerCluster load failed. industryId={}, stockCode={}, cause={}",
+                                                                industry.getIndustryId(), stock.getStockCode(), ex.getMessage(), ex);
                                                         meta.addWarning(Feat2WarningCode.PEER_CLUSTER_MISSING);
                                                         metrics.setPeerCluster(null);
                                                         return Mono.just(buildResponse(metrics, meta));
                                                     });
+                                        })
+                                        .onErrorResume(ex -> {
+                                            log.warn("[Feat2] industryIndex load failed. industryId={}, cause={}",
+                                                    industry.getIndustryId(), ex.getMessage(), ex);
+                                            // loadIndustryIndex 내부에서 meta warning을 넣더라도
+                                            // 여기서는 부분 성공 유지용 보호막만 둔다.
+                                            return Mono.just(buildResponse(metrics, meta));
                                         });
                             })
                             .onErrorResume(ex -> {
                                 log.warn("[Feat2] industry fetch failed. code={}, cause={}",
-                                        stock.getStockCode(), ex.getMessage());
+                                        stock.getStockCode(), ex.getMessage(), ex);
                                 meta.addWarning(Feat2WarningCode.INDUSTRY_MISSING);
                                 return Mono.just(buildResponse(metrics, meta));
                             });
@@ -197,7 +262,7 @@ public class Feature2AnalyzeService {
                 .map(Optional::of)
                 .onErrorResume(ex -> {
                     log.warn("[Feat2] stock resolve/create failed -> warnings only. rawCode={}, cause={}",
-                            rawStockCode, ex.getMessage());
+                            rawStockCode, ex.getMessage(), ex);
                     meta.addWarning(Feat2WarningCode.STOCK_NOT_FOUND);
                     // MVP에서는 "외부 메타 조회 경로에서 문제 발생" 정도의 알림 용도
                     meta.addWarning(Feat2WarningCode.EXTERNAL_API_FALLBACK_USED);
@@ -214,7 +279,11 @@ public class Feature2AnalyzeService {
         return Mono.fromCallable(() -> stockRepository.findByStockCodeWithExchange(stock.getStockCode()))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(opt -> opt.orElse(stock))
-                .onErrorResume(ex -> Mono.just(stock));
+                .onErrorResume(ex -> {
+                    log.warn("[Feat2] refetchWithExchange failed. stockCode={}, cause={}",
+                            stock.getStockCode(), ex.getMessage(), ex);
+                    return Mono.just(stock);
+                });
     }
 
     /**
@@ -234,11 +303,55 @@ public class Feature2AnalyzeService {
     }
 
     private Feature2AnalyzeResponseDto buildResponse(Feature2MetricsDto metrics, Feature2MetaDto meta) {
-        return Feature2AnalyzeResponseDto.builder()
-                .metrics(metrics)  // 항상 존재
-                .explain(null)     // FR-21 includeExplain 붙일 때만
-                .meta(meta)        // warnings 누적
+        List<String> dedupedWarnings = meta.getWarnings() == null
+                ? List.of()
+                : new ArrayList<>(new LinkedHashSet<>(meta.getWarnings()));
+
+        Feature2MetaDto normalizedMeta = Feature2MetaDto.builder()
+                .warnings(dedupedWarnings)
                 .build();
+
+        return Feature2AnalyzeResponseDto.builder()
+                .metrics(metrics)
+                .explain(null)
+                .meta(normalizedMeta)
+                .build();
+    }
+
+    /* =========================
+       Normalize
+       ========================= */
+    private String normalizeStockCode(String stockCode) {
+        if (stockCode == null) {
+            return null;
+        }
+        String trimmed = stockCode.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Freq normalizeFreq(Freq freq) {
+        return freq != null ? freq : DEFAULT_FREQ;
+    }
+
+    private int normalizeWindow(Integer window) {
+        if (window == null) {
+            return DEFAULT_WINDOW;
+        }
+        return Math.max(MIN_WINDOW, Math.min(MAX_WINDOW, window));
+    }
+
+    private int normalizePeerCount(Integer peerCount) {
+        if (peerCount == null) {
+            return DEFAULT_PEER_COUNT;
+        }
+        return Math.max(MIN_PEER_COUNT, Math.min(MAX_PEER_COUNT, peerCount));
+    }
+
+    private int normalizeMaxLag(Integer maxLag) {
+        if (maxLag == null) {
+            return DEFAULT_MAX_LAG;
+        }
+        return Math.max(MIN_MAX_LAG, Math.min(MAX_MAX_LAG, maxLag));
     }
 
     /* =========================
