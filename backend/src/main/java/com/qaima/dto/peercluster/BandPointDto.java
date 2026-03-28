@@ -1,14 +1,19 @@
 package com.qaima.dto.peercluster;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
-@Data
+@Getter
 @Builder
+@lombok.extern.jackson.Jacksonized
 public class BandPointDto {
-    private LocalDateTime ts;
-    private Double lower;
-    private Double upper;
+
+    @JsonProperty("t")
+    private final OffsetDateTime ts;
+
+    private final Double p20;
+    private final Double p80;
 }

@@ -101,15 +101,13 @@ class PeerClusterRequest(BaseModel):
 # Response
 # =========================
 class PeerClusterResponse(BaseModel):
-    """
-    Response aligned to Spring-side PeerClusterDto mapping.
-    - throw 금지, 실패/부분성공은 warnings로 표현
-    """
     model_config = ConfigDict(extra="forbid")
 
     method: str = Field(default="INDUSTRY_CORR_V1")
 
     industry_id: int
+    anchor_stock_code: str
+
     freq: Freq
     window: int
     peer_count: int

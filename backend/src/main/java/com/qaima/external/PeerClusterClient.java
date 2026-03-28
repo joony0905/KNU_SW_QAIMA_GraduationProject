@@ -1,8 +1,8 @@
 package com.qaima.external;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.dto.peercluster.PeerClusterRequestDto;
 import com.qaima.dto.peercluster.PeerClusterResponseDto;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -14,23 +14,35 @@ import reactor.core.publisher.Mono;
 @Component
 public class PeerClusterClient {
 
-    @Qualifier("analysisWebClient")
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
 
-    public PeerClusterClient(@Qualifier("analysisWebClient") WebClient webClient) {
+    public PeerClusterClient(
+            @Qualifier("analysisWebClient") WebClient webClient,
+            ObjectMapper objectMapper
+    ) {
         this.webClient = webClient;
+        this.objectMapper = objectMapper;
     }
 
     public Mono<PeerClusterResponseDto> requestPeerCluster(PeerClusterRequestDto req) {
         return webClient.post()
-                .uri("/api/v1/feature2/peer-cluster")
+                .uri("/feature2/peer-cluster")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(req)
                 .retrieve()
-                .bodyToMono(PeerClusterResponseDto.class)
-                .onErrorResume(e -> {
-                    log.warn("[FastAPI] peer-cluster call failed", e);
-                    return Mono.just(new PeerClusterResponseDto());
+                .bodyToMono(String.class)
+                .doOnNext(body -> log.info("[FastAPI RAW] {}", body))
+                .map(body -> {
+                    try {
+                        PeerClusterResponseDto parsed =
+                                objectMapper.readValue(body, PeerClusterResponseDto.class);
+                        log.info("[PeerClusterClient] parsed={}", parsed);
+                        return parsed;
+                    } catch (Exception e) {
+                        log.error("[PeerClusterClient] JSON parse failed. body={}", body, e);
+                        throw new RuntimeException("JSON parse failed", e);
+                    }
                 });
     }
 }

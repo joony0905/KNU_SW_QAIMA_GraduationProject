@@ -1,11 +1,15 @@
 // backend/src/main/java/com/qaima/dto/peercluster/PeerItemDto.java
 package com.qaima.dto.peercluster;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.Builder;
 import lombok.Data;
 
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @Data
 @Builder
+@lombok.extern.jackson.Jacksonized
 public class PeerItemDto {
 
     private String stockCode;

@@ -279,6 +279,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             print(f"[DEBUG][pack] spring pack fetch failed: {ex.__class__.__name__}: {ex}")
             return PeerClusterResponse(
                 industry_id=req.industry_id,
+                anchor_stock_code=req.anchor_stock_code,
                 freq=freq,
                 window=req.window,
                 peer_count=0,
@@ -310,6 +311,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         print("[DEBUG][validation] NO_INDUSTRY_MEMBERS")
         return PeerClusterResponse(
             industry_id=req.industry_id,
+            anchor_stock_code=req.anchor_stock_code,
             freq=freq,
             window=req.window,
             peer_count=0,
@@ -329,6 +331,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         print("[DEBUG][validation] ANCHOR_PRICE_SERIES_MISSING")
         return PeerClusterResponse(
             industry_id=req.industry_id,
+            anchor_stock_code=req.anchor_stock_code,
             freq=freq,
             window=req.window,
             peer_count=0,
@@ -410,6 +413,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         print("[DEBUG][liquidity] NO_CANDIDATES_AFTER_LIQUIDITY_FILTER")
         return PeerClusterResponse(
             industry_id=req.industry_id,
+            anchor_stock_code=req.anchor_stock_code,
             freq=freq,
             window=req.window,
             peer_count=0,
@@ -519,6 +523,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         print("[DEBUG][score] NO_PEERS_AFTER_ALIGNMENT")
         return PeerClusterResponse(
             industry_id=req.industry_id,
+            anchor_stock_code=req.anchor_stock_code,
             freq=freq,
             window=req.window,
             peer_count=0,
@@ -624,6 +629,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     return PeerClusterResponse(
         method="INDUSTRY_CORR_V1",
         industry_id=req.industry_id,
+        anchor_stock_code=req.anchor_stock_code,
         freq=freq,
         window=req.window,
         peer_count=len(selected),

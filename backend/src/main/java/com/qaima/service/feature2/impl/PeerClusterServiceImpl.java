@@ -1,12 +1,11 @@
-// backend/src/main/java/com/qaima/service/feature2/impl/PeerClusterServiceImpl.java
 package com.qaima.service.feature2.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.common.Feat2WarningCode;
 import com.qaima.domain.Freq;
+import com.qaima.dto.peercluster.PeerClusterDto;
 import com.qaima.dto.peercluster.PeerClusterRequestDto;
 import com.qaima.dto.peercluster.PeerClusterResponseDto;
-import com.qaima.dto.peercluster.PeerClusterDto;
 import com.qaima.external.PeerClusterClient;
 import com.qaima.service.feature2.PeerClusterResult;
 import com.qaima.service.feature2.PeerClusterService;
@@ -17,19 +16,19 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class PeerClusterServiceImpl implements PeerClusterService {
 
-    private static final String METHOD = "INDUSTRY_CORR_V1";
-    private static final String VERSION = "v1";
-    private static final Duration TTL = Duration.ofHours(12);
+    private static final Duration CACHE_TTL = Duration.ofHours(12);
 
-    private final ReactiveStringRedisTemplate redis;
+    private final PeerClusterClient peerClusterClient;
+    private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
-    private final PeerClusterClient fastApiClient;
 
     @Override
     public Mono<PeerClusterResult> getPeerCluster(
@@ -40,51 +39,76 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             int peerCount,
             int maxLag
     ) {
-        if (industryId == null || anchorStockCode == null) {
+        if (industryId == null) {
             return Mono.just(PeerClusterResult.empty(
-                    Feat2WarningCode.PEER_CLUSTER_MISSING.name()
+                    Feat2WarningCode.PEER_CLUSTER_INDUSTRY_ID_MISSING.name()
             ));
         }
 
-        final String key = cacheKey(industryId, freq, window, peerCount, maxLag);
+        if (anchorStockCode == null || anchorStockCode.isBlank()) {
+            return Mono.just(PeerClusterResult.empty(
+                    Feat2WarningCode.PEER_CLUSTER_ANCHOR_MISSING.name()
+            ));
+        }
 
-        // 1) Redis hit
-        return redis.opsForValue()
-                .get(key)
-                .flatMap(json -> {
-                    try {
-                        PeerClusterDto dto = objectMapper.readValue(json, PeerClusterDto.class);
-                        return Mono.just(PeerClusterResult.builder()
-                                .peerCluster(dto)
-                                .build());
-                    } catch (Exception e) {
-                        return Mono.empty();
-                    }
-                })
+        String cacheKey = buildCacheKey(industryId, anchorStockCode, freq, window, peerCount, maxLag);
 
-                // 2) Redis miss → FastAPI 계산
-                .switchIfEmpty(
-                        callFastApi(industryId, anchorStockCode, freq, window, peerCount, maxLag)
-                                .flatMap(result -> {
-                                    if (result.getPeerCluster() != null) {
-                                        writeRedisBestEffort(key, result.getPeerCluster());
-                                    }
-                                    return Mono.just(result);
-                                })
-                )
-
-                // 3) 최상위 보호
+        return getFromCache(cacheKey)
                 .onErrorResume(e -> {
-                    log.warn("[PeerCluster] unexpected failure", e);
+                    log.warn("[PeerCluster] cache read failed. fallback to FastAPI. key={}", cacheKey, e);
+                    return Mono.empty();
+                })
+                .flatMap(cached -> {
+                    log.info("[PeerCluster] cache hit key={}", cacheKey);
                     return Mono.just(
-                            PeerClusterResult.empty(
-                                    Feat2WarningCode.PEER_CLUSTER_INTERNAL_ERROR.name()
-                            )
+                            PeerClusterResult.builder()
+                                    .peerCluster(cached)
+                                    .warnings(new ArrayList<>())
+                                    .build()
                     );
-                });
+                })
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.info("[PeerCluster] cache miss key={}", cacheKey);
+
+                    PeerClusterRequestDto req = PeerClusterRequestDto.builder()
+                            .industryId(industryId)
+                            .anchorStockCode(anchorStockCode)
+                            .freq(freq)
+                            .window(window)
+                            .peerCount(peerCount)
+                            .maxLag(maxLag)
+                            .build();
+
+                    return peerClusterClient.requestPeerCluster(req)
+                            .doOnNext(res -> log.info("[PeerCluster] FastAPI parsed response={}", res))
+                            .map(this::toResult)
+                            .flatMap(result -> {
+                                PeerClusterDto dto = result.getPeerCluster();
+                                if (dto == null) {
+                                    return Mono.just(result.addWarning(
+                                            Feat2WarningCode.PEER_CLUSTER_MISSING.name()
+                                    ));
+                                }
+
+                                return putToCache(cacheKey, dto)
+                                        .onErrorResume(e -> {
+                                            log.warn("[PeerCluster] cache write failed. continue without cache. key={}", cacheKey, e);
+                                            return Mono.just(false);
+                                        })
+                                        .thenReturn(result);
+                            })
+                            .onErrorResume(e -> {
+                                log.error("[PeerCluster] fail req={}", req, e);
+                                return Mono.just(
+                                        PeerClusterResult.empty(
+                                                Feat2WarningCode.PEER_CLUSTER_INTERNAL_ERROR.name()
+                                        )
+                                );
+                            });
+                }));
     }
 
-    private Mono<PeerClusterResult> callFastApi(
+    private String buildCacheKey(
             Long industryId,
             String anchorStockCode,
             Freq freq,
@@ -92,49 +116,65 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             int peerCount,
             int maxLag
     ) {
-        PeerClusterRequestDto req = PeerClusterRequestDto.builder()
-                .industryId(industryId)
-                .anchorStockCode(anchorStockCode)
-                .freq(freq)
-                .window(window)
-                .peerCount(peerCount)
-                .maxLag(maxLag)
-                .build();
-
-        return fastApiClient.requestPeerCluster(req)
-                .map(resp -> {
-                    PeerClusterResult r = PeerClusterResult.builder()
-                            .peerCluster(resp.getPeerCluster())
-                            .build();
-
-                    if (resp.getWarnings() != null) {
-                        r.getWarnings().addAll(resp.getWarnings());
-                    }
-                    return r;
-                })
-                .onErrorResume(e ->
-                        Mono.just(PeerClusterResult.empty(
-                                Feat2WarningCode.PEER_CLUSTER_MISSING.name()
-                        ))
-                );
+        return String.format(
+                "feature2:peercluster:v1:%d:%s:%s:%d:%d:%d",
+                industryId,
+                anchorStockCode,
+                freq.name(),
+                window,
+                peerCount,
+                maxLag
+        );
     }
 
-    private void writeRedisBestEffort(String key, PeerClusterDto dto) {
+    private Mono<PeerClusterDto> getFromCache(String key) {
+        return redisTemplate.opsForValue()
+                .get(key)
+                .flatMap(json -> {
+                    try {
+                        PeerClusterDto dto = objectMapper.readValue(json, PeerClusterDto.class);
+                        return Mono.just(dto);
+                    } catch (Exception e) {
+                        log.warn("[PeerCluster] cache deserialize failed key={}", key, e);
+                        return Mono.empty();
+                    }
+                });
+    }
+
+    private Mono<Boolean> putToCache(String key, PeerClusterDto dto) {
         try {
             String json = objectMapper.writeValueAsString(dto);
-            redis.opsForValue().set(key, json, TTL).subscribe();
+            return redisTemplate.opsForValue()
+                    .set(key, json, CACHE_TTL)
+                    .doOnNext(saved ->
+                            log.info("[PeerCluster] cache saved key={}, saved={}", key, saved)
+                    );
         } catch (Exception e) {
-            log.warn("[PeerCluster] redis write failed", e);
+            return Mono.error(e);
         }
     }
 
-    private String cacheKey(Long industryId, Freq freq, int window, int peerCount, int maxLag) {
-        return "peer_cluster:" + VERSION +
-                ":" + METHOD +
-                ":industry=" + industryId +
-                ":freq=" + freq.name() +
-                ":window=" + window +
-                ":peers=" + peerCount +
-                ":lag=" + maxLag;
+    private PeerClusterResult toResult(PeerClusterResponseDto resp) {
+        List<String> warnings = resp.getWarnings() != null
+                ? new ArrayList<>(resp.getWarnings())
+                : new ArrayList<>();
+
+        PeerClusterDto dto = PeerClusterDto.builder()
+                .method(resp.getMethod())
+                .industryId(resp.getIndustryId())
+                .freq(resp.getFreq())
+                .window(resp.getWindow())
+                .peerCount(resp.getPeerCount())
+                .anchorStockCode(resp.getAnchorStockCode())
+                .centroid(resp.getCentroid())
+                .band(resp.getBand())
+                .peers(resp.getPeers())
+                .asOf(resp.getAsOf())
+                .build();
+
+        return PeerClusterResult.builder()
+                .peerCluster(dto)
+                .warnings(warnings)
+                .build();
     }
 }
