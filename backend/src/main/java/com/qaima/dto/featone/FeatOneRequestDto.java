@@ -1,5 +1,7 @@
 package com.qaima.dto.featone;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.qaima.domain.Freq;
 import com.qaima.dto.financial.FinancialSummaryDto;
 import com.qaima.dto.ohlcv.OhlcvItemDto;
@@ -17,6 +19,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class FeatOneRequestDto {
     private String stockCode;
     private Freq freq;

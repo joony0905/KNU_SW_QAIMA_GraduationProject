@@ -2,6 +2,7 @@ package com.qaima.external;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
 import lombok.extern.slf4j.Slf4j;
@@ -47,8 +48,11 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
                                 try {
                                     JsonNode root = objectMapper.readTree(body);
+                                    JsonNode dataNode = root.path("data");
+                                    ObjectMapper snakeMapper = objectMapper.copy()
+                                            .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
                                     FeatOneAnalysisResponseDto dto =
-                                            objectMapper.treeToValue(root, FeatOneAnalysisResponseDto.class);
+                                            snakeMapper.treeToValue(dataNode, FeatOneAnalysisResponseDto.class);
                                     List<String> warnings = new ArrayList<>();
                                     JsonNode warningsNode = root.path("meta").path("warnings");
                                     if (warningsNode.isArray()) {

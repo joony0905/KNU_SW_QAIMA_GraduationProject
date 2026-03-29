@@ -19,25 +19,28 @@ public class StockController {
     private final StockService stockService;
     private final StockMappingService stockMappingService;
 
-    @GetMapping("/{stockId}")
-    public Mono<ApiResponse<StockResponseDto>> getStock(@PathVariable Long stockId) {
+    @GetMapping("/id/{stockId}")
+    public Mono<ApiResponse<StockResponseDto>> getStockById(@PathVariable Long stockId) {
         return stockService.getStockWithRealtime(stockId)
                 .map(this::toResponse)
                 .map(ApiResponse::success);
     }
 
-    /**
-     * code 기반 조회
-     * - DB 없으면 생성
-     * - 내부적으로 ticker-meta + inquire-price 수행
-     */
-    @GetMapping("/code/{stockCode}")
-    public Mono<ApiResponse<StockResponseDto>> getOrCreateStockByCode(
+    @GetMapping("/{stockCode}")
+    public Mono<ApiResponse<StockResponseDto>> getStockByCode(
             @PathVariable String stockCode
     ) {
         return stockService.getStockWithRealtimeByCode(stockCode)
                 .map(this::toResponse)
                 .map(ApiResponse::success);
+    }
+
+    // legacy path compatibility
+    @GetMapping("/code/{stockCode}")
+    public Mono<ApiResponse<StockResponseDto>> getStockByCodeLegacy(
+            @PathVariable String stockCode
+    ) {
+        return getStockByCode(stockCode);
     }
 
     @GetMapping("/normalize")

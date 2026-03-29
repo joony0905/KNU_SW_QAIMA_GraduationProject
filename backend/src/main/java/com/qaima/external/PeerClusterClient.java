@@ -1,6 +1,7 @@
 package com.qaima.external;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.qaima.dto.peercluster.PeerClusterRequestDto;
 import com.qaima.dto.peercluster.PeerClusterResponseDto;
 import lombok.extern.slf4j.Slf4j;
@@ -35,8 +36,10 @@ public class PeerClusterClient {
                 .doOnNext(body -> log.info("[FastAPI RAW] {}", body))
                 .map(body -> {
                     try {
+                        ObjectMapper snakeMapper = objectMapper.copy()
+                                .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
                         PeerClusterResponseDto parsed =
-                                objectMapper.readValue(body, PeerClusterResponseDto.class);
+                                snakeMapper.readValue(body, PeerClusterResponseDto.class);
                         log.info("[PeerClusterClient] parsed={}", parsed);
                         return parsed;
                     } catch (Exception e) {
