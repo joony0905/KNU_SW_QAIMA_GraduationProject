@@ -37,6 +37,7 @@ public class Feature2AnalyzeService {
     private final ShortSellingFeatureService shortSellingFeatureService;
     private final PeerClusterService peerClusterService;
     private final BaseRateFeatureService baseRateFeatureService;
+    private final NewsSentimentService newsSentimentService;
 
     public Mono<Feature2AnalyzeResponseDto> analyze(Feature2AnalyzeRequestDto req) {
         final Feature2MetaDto meta = Feature2MetaDto.empty();
@@ -79,6 +80,7 @@ public class Feature2AnalyzeService {
 
                                 return attachIndustryIndex(industryContext, command, meta, metrics)
                                         .then(attachPeerCluster(stockContext, industryContext, command, meta, metrics))
+                                        .then(attachNews(stockContext, meta, metrics))
                                         .then(Mono.fromSupplier(() -> responseFactory.success(metrics, meta)));
                             });
                 })
@@ -151,6 +153,31 @@ public class Feature2AnalyzeService {
                 })
                 .doOnNext(result -> {
                     metricsAssembler.attachPeerCluster(metrics, result.getPeerCluster());
+                    Optional.ofNullable(result.getWarnings())
+                            .orElseGet(List::of)
+                            .forEach(meta::addWarning);
+                })
+                .then();
+    }
+
+    private Mono<Void> attachNews(
+            Feature2StockContext stockContext,
+            Feature2MetaDto meta,
+            Feature2MetricsDto metrics
+    ) {
+        return newsSentimentService.loadNews(stockContext.stock())
+                .onErrorResume(ex -> {
+                    log.warn("[Feat2] news load failed. stockCode={}, cause={}",
+                            stockContext.stock().getStockCode(),
+                            ex.getMessage(),
+                            ex);
+                    return Mono.just(NewsLoadResult.builder()
+                            .newsList(List.of())
+                            .warnings(List.of("NEWS_LIST_FETCH_FAILED"))
+                            .build());
+                })
+                .doOnNext(result -> {
+                    metricsAssembler.attachNewsList(metrics, result.getNewsList());
                     Optional.ofNullable(result.getWarnings())
                             .orElseGet(List::of)
                             .forEach(meta::addWarning);

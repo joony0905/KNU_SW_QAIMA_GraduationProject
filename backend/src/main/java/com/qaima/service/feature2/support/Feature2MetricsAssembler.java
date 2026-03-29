@@ -2,9 +2,11 @@ package com.qaima.service.feature2.support;
 
 import com.qaima.dto.feature2.Feature2MetricsDto;
 import com.qaima.dto.industry.IndustryIndexBlockDto;
+import com.qaima.dto.news.NewsItemDto;
 import com.qaima.dto.peercluster.PeerClusterDto;
 import com.qaima.service.feature2.model.Feature2IndustryContext;
 import com.qaima.service.feature2.model.Feature2StockContext;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -54,5 +56,12 @@ public class Feature2MetricsAssembler {
             return;
         }
         metrics.setPeerCluster(peerCluster);
+    }
+
+    public void attachNewsList(Feature2MetricsDto metrics, List<NewsItemDto> newsList) {
+        if (metrics == null) {
+            return;
+        }
+        metrics.setNewsList(newsList);
     }
 }
