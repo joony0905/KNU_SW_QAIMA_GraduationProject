@@ -10,7 +10,7 @@ import lombok.Data;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 @Data
 @Builder
 @lombok.extern.jackson.Jacksonized

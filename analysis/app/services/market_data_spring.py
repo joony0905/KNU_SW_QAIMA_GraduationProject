@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Dict, List, Optional, Literal
 
 import httpx
@@ -19,7 +19,7 @@ Freq = Literal["ONE_D", "ONE_W"]
 
 @dataclass(frozen=True)
 class SpringClientConfig:
-    base_url: str  # e.g. "http://localhost:8080"
+    base_url: str
     timeout_sec: float = 8.0
 
 
@@ -31,31 +31,37 @@ class SpringMarketDataProvider(MarketDataProvider):
 
     def __init__(self, cfg: SpringClientConfig):
         self.cfg = cfg
-        self._last_payload: Optional[dict] = None  # debug
+        self._last_payload: Optional[dict] = None
 
-    def _post_peercluster_data(self, industry_id: int, anchor_stock_code: str, freq: Freq, window: int) -> dict:
+    def _post_peercluster_data(
+        self,
+        industry_id: int,
+        anchor_stock_code: str,
+        freq: Freq,
+        window: int,
+    ) -> dict:
         url = f"{self.cfg.base_url}/api/v1/feature2/peercluster/data"
+
+        # Spring DTO = snake_case contract
         payload = {
-        "industryId": industry_id,
-        "anchorStockCode": anchor_stock_code,
-        "freq": freq,
-        "window": window,
-        "peerCount": 0,
-        "maxLag": 0,
+            "industry_id": industry_id,
+            "anchor_stock_code": anchor_stock_code,
+            "freq": freq,
+            "window": window,
+            "peer_count": 0,
+            "max_lag": 0,
         }
         self._last_payload = payload
+        print(f"[DEBUG][spring-pack] payload={payload}")
 
         with httpx.Client(timeout=self.cfg.timeout_sec) as client:
             r = client.post(url, json=payload)
             r.raise_for_status()
-            return r.json()
+            data = r.json()
+            print(f"[DEBUG][spring-pack] response warnings={data.get('warnings', [])}")
+            return data
 
-    # ---- MarketDataProvider impl ----
     def get_industry_members(self, industry_id: int) -> List[str]:
-        # NOTE: members는 다른 메소드에서도 필요하므로 마지막 호출 캐시를 쓰지 말고
-        # compute() 호출 경로에서 한 번만 post하고 결과를 내부에 들고가는 구조가 더 좋지만
-        # MVP에선 단순화를 위해 아래처럼 동작하게 두고,
-        # clustering.py에서 "한 번만" 호출하도록 일단 생성
         raise RuntimeError("Use bulk methods in one call via get_*_bulk (see compute path).")
 
     def get_stock_meta_bulk(self, stock_codes: List[str]) -> Dict[str, StockMeta]:
@@ -67,17 +73,22 @@ class SpringMarketDataProvider(MarketDataProvider):
     def get_liquidity_series_bulk(self, stock_codes: List[str], freq: Freq, window: int) -> Dict[str, LiquiditySeries]:
         raise RuntimeError("Not used directly. Use get_peercluster_pack(...) pattern.")
 
-    # ---- helper for clustering ----
-    def get_peercluster_pack(self, industry_id: int, anchor_stock_code: str, freq: Freq, window: int) -> tuple[
-        List[str], Dict[str, StockMeta], Dict[str, PriceSeries], Dict[str, LiquiditySeries], List[str]
+    def get_peercluster_pack(
+        self,
+        industry_id: int,
+        anchor_stock_code: str,
+        freq: Freq,
+        window: int,
+    ) -> tuple[
+        List[str],
+        Dict[str, StockMeta],
+        Dict[str, PriceSeries],
+        Dict[str, LiquiditySeries],
+        List[str],
     ]:
-        """
-        Returns: (members, metas, prices, liquidity, warnings_from_spring)
-        """
         data = self._post_peercluster_data(industry_id, anchor_stock_code, freq, window)
 
         warnings = data.get("warnings", []) or []
-
         members = data.get("members", []) or []
 
         metas: Dict[str, StockMeta] = {}

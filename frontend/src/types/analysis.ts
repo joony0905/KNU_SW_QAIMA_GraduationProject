@@ -1,7 +1,7 @@
 import type { Feat1AnalysisResult } from "./feature1/analysis";
 
 export interface ParsedExplainText {
-  stock_code?: string;
+  stockCode?: string;
   summary?: string[];
   risks?: string[];
   conclusion?: string;
@@ -29,9 +29,6 @@ export interface AnalysisResponse {
   };
   explain?: {
     text?: string;
-  } | null;
-  meta?: {
-    warnings?: string[];
   } | null;
 }
 

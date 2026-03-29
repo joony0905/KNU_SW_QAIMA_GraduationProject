@@ -1,5 +1,7 @@
 package com.qaima.dto.featone;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.qaima.domain.Freq;
 import com.qaima.dto.financial.FinancialSummaryDto;
 import com.qaima.dto.ohlcv.OhlcvItemDto;
@@ -10,13 +12,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
-import java.util.Map;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class FeatOneRequestDto {
     private String stockCode;
     private Freq freq;
@@ -26,7 +28,4 @@ public class FeatOneRequestDto {
     private List<FinancialSummaryDto> financials;
 
     private Boolean includeExplain;
-
-    // 나중에 확장용 (예: user risk profile, lang 등)
-    private Map<String, Object> options;
 }

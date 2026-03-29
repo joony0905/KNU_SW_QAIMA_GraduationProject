@@ -6,7 +6,7 @@ spring:
     active: mysql #h2 <-> mysql 변경해서 사용
 
   jackson:
-    property-naming-strategy: SNAKE_CASE
+    property-naming-strategy: LOWER_CAMEL_CASE
 
   config:
     import: optional:application-secret.yml
@@ -25,7 +25,7 @@ spring:
   data:
     redis:
       host: localhost
-      port: 6379
+      port: 6380
       timeout: 2s
 
 logging:

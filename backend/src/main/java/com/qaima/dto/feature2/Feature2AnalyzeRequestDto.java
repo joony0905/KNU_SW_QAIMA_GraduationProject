@@ -1,7 +1,7 @@
 package com.qaima.dto.feature2;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.qaima.domain.Freq;
+import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
 @Getter
@@ -10,18 +10,10 @@ import lombok.*;
 @AllArgsConstructor
 public class Feature2AnalyzeRequestDto {
 
-    @JsonProperty("stockCode")
+    @NotBlank
     private String stockCode;
-
-    @JsonProperty("freq")
     private Freq freq;
-
-    @JsonProperty("window")
     private Integer window;
-
-    @JsonProperty("peerCount")
     private Integer peerCount;
-
-    @JsonProperty("maxLag")
     private Integer maxLag;
 }

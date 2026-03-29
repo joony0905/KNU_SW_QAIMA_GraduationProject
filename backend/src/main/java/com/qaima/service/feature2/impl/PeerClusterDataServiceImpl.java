@@ -45,11 +45,14 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         final List<String> warnings = new ArrayList<>();
 
         try {
+            log.info("[PeerClusterData] buildPack start req={}", req);
+
             // -----------------------
             // 1) Input guard
             // -----------------------
             if (req == null) {
                 warnings.add("REQ_NULL");
+                log.warn("[PeerClusterData] req is null");
                 return emptyPack(warnings);
             }
 
@@ -65,6 +68,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
             if (window < 30) warnings.add("BAD_WINDOW");
 
             if (!warnings.isEmpty()) {
+                log.warn("[PeerClusterData] bad request warnings={}", warnings);
                 return emptyPack(warnings);
             }
 
@@ -83,6 +87,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
 
             if (stocks == null || stocks.isEmpty()) {
                 warnings.add("INDUSTRY_MEMBERS_EMPTY");
+                log.warn("[PeerClusterData] no stocks for industryId={}", industryId);
                 return emptyPack(warnings);
             }
 
@@ -91,7 +96,6 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
                 stocks = stocks.subList(0, MAX_UNIVERSE);
             }
 
-            // members codes (null safe)
             List<String> allCodes = stocks.stream()
                     .map(Stock::getStockCode)
                     .filter(Objects::nonNull)
@@ -102,13 +106,16 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
 
             if (allCodes.isEmpty()) {
                 warnings.add("MEMBERS_EMPTY_AFTER_FILTER");
+                log.warn("[PeerClusterData] allCodes empty after filter");
                 return emptyPack(warnings);
             }
 
             if (!allCodes.contains(anchor)) {
                 warnings.add("ANCHOR_NOT_IN_MEMBERS");
-                // 그래도 진행 (anchor가 DB에만 있고 industry 매핑이 다를 수도)
             }
+
+            log.info("[PeerClusterData] stocks size={}", stocks.size());
+            log.info("[PeerClusterData] allCodes size={}", allCodes.size());
 
             // -----------------------
             // 3) Bulk range fetch
@@ -120,7 +127,6 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
             try {
                 rows = priceOhlcvRepository.findRangeBulk(allCodes, freq, from, to);
             } catch (Exception e) {
-                // 절대 throw 금지: members/metas만이라도 내려준다
                 log.error("[PeerClusterData] price bulk fetch failed", e);
                 warnings.add("PRICE_BULK_FETCH_FAILED");
                 warnings.add(e.getClass().getSimpleName());
@@ -129,16 +135,28 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
 
             if (rows == null || rows.isEmpty()) {
                 warnings.add("PRICE_ROWS_EMPTY");
+                log.warn("[PeerClusterData] rows empty. industryId={}, freq={}, from={}, to={}",
+                        industryId, freq, from, to);
                 return packMembersMetaOnly(stocks, warnings);
             }
 
-            // group by stock_code (null 안전하게)
+            log.info("[PeerClusterData] rows size={}", rows.size());
+
+            // group by stock_code
             Map<String, List<PriceOhlcv>> byCode = new HashMap<>();
             for (PriceOhlcv p : rows) {
-                String code = safeStockCode(p);
-                if (code == null) continue;
-                byCode.computeIfAbsent(code, k -> new ArrayList<>()).add(p);
+                try {
+                    String code = safeStockCode(p);
+                    if (code == null) continue;
+                    byCode.computeIfAbsent(code, k -> new ArrayList<>()).add(p);
+                } catch (Exception e) {
+                    log.error("[PeerClusterData] stock access failed while grouping", e);
+                    warnings.add("GROUP_BY_CODE_FAILED");
+                    warnings.add(e.getClass().getSimpleName());
+                }
             }
+
+            log.info("[PeerClusterData] byCode size={}", byCode.size());
 
             // -----------------------
             // 4) Build response lists
@@ -155,19 +173,27 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
                 // metas는 항상 넣기
                 metas.add(metaItem(code, safeCompanyName(s)));
 
-                List<PriceOhlcv> series = byCode.get(code);
-                if (series == null || series.isEmpty()) continue;
+                List<PriceOhlcv> rawSeries = byCode.get(code);
+                if (rawSeries == null || rawSeries.isEmpty()) {
+                    continue;
+                }
 
-                // series는 이미 ts asc order이지만 혹시 모를 혼선 방어로 정렬
-                series.sort(Comparator.comparing(o -> safeTs(o)));
+                log.debug("[PeerClusterData] code={}, rawSeriesSize={}", code, rawSeries.size());
+
+                // 정렬 전에 null ts 제거
+                List<PriceOhlcv> series = rawSeries.stream()
+                        .filter(Objects::nonNull)
+                        .filter(p -> safeTs(p) != null)
+                        .sorted(Comparator.comparing(PeerClusterDataServiceImpl::safeTs))
+                        .collect(Collectors.toList());
+
+                if (series.isEmpty()) {
+                    warnings.add("SERIES_TS_EMPTY:" + code);
+                    continue;
+                }
 
                 // tail(window) 적용
                 List<PriceOhlcv> cut = tail(series, window);
-
-                // 유효 포인트만 남기기 (ts/close라도 있어야 함)
-                cut = cut.stream()
-                        .filter(p -> safeTs(p) != null)
-                        .collect(Collectors.toList());
 
                 if (cut.size() < MIN_POINTS) {
                     warnings.add("SERIES_TOO_SHORT:" + code);
@@ -189,19 +215,19 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
                 warnings.add("NO_USABLE_SERIES");
             }
 
-            //log.info("rows size={}", rows.size());
-            //log.info("byCode size={}", byCode.size());
-
             Map<String, Object> pack = new LinkedHashMap<>();
             pack.put("warnings", warnings);
             pack.put("members", members);
             pack.put("metas", metas);
             pack.put("prices", prices);
             pack.put("liquidity", liquidity);
+
+            log.info("[PeerClusterData] buildPack success members={}, metas={}, prices={}, liquidity={}, warnings={}",
+                    members.size(), metas.size(), prices.size(), liquidity.size(), warnings.size());
+
             return pack;
 
         } catch (Exception e) {
-            // Global 500으로 넘기지 않고 확인
             log.error("[PeerClusterData] unexpected failure", e);
             warnings.add("PEERCLUSTER_DATA_INTERNAL_ERROR");
             warnings.add(e.getClass().getSimpleName());
@@ -209,9 +235,6 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         }
     }
 
-    // -----------------------
-    // helpers
-    // -----------------------
     private static OffsetDateTime calcFrom(OffsetDateTime to, Freq freq, int window) {
         int span = Math.max(window * RANGE_MULTIPLIER, window + 30);
         return switch (freq) {
@@ -243,22 +266,26 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         try {
             String name = s.getCompanyName();
             return name == null ? null : name.trim();
-        } catch (Exception ignore) {
+        } catch (Exception e) {
             return null;
         }
     }
 
     private static String safeStockCode(PriceOhlcv p) {
-        if (p == null || p.getStock() == null) return null;
-        String code = p.getStock().getStockCode();
-        return code == null ? null : code.trim();
+        try {
+            if (p == null || p.getStock() == null) return null;
+            String code = p.getStock().getStockCode();
+            return code == null ? null : code.trim();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static OffsetDateTime safeTs(PriceOhlcv p) {
         try {
             if (p == null || p.getId() == null) return null;
             return p.getId().getTs();
-        } catch (Exception ignore) {
+        } catch (Exception e) {
             return null;
         }
     }
@@ -266,7 +293,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
     private static BigDecimal safeClose(PriceOhlcv p) {
         try {
             return p == null ? null : p.getClose();
-        } catch (Exception ignore) {
+        } catch (Exception e) {
             return null;
         }
     }
@@ -274,7 +301,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
     private static BigDecimal safeVolume(PriceOhlcv p) {
         try {
             return p == null ? null : p.getVolume();
-        } catch (Exception ignore) {
+        } catch (Exception e) {
             return null;
         }
     }
@@ -293,7 +320,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         for (PriceOhlcv p : cut) {
             OffsetDateTime ts = safeTs(p);
             if (ts == null) continue;
-            dates.add(ts.toInstant().toString()); // Z
+            dates.add(ts.toInstant().toString());
             close.add(toDouble(safeClose(p)));
         }
 
@@ -318,7 +345,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
             double c = toDouble(safeClose(p));
 
             volume.add(v);
-            turnover.add(c * v); // turnover 컬럼 없으니 근사치(유동성 필터용)
+            turnover.add(c * v);
         }
 
         Map<String, Object> out = new LinkedHashMap<>();
@@ -333,7 +360,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         if (v == null) return 0.0;
         try {
             return v.doubleValue();
-        } catch (Exception ignore) {
+        } catch (Exception e) {
             return 0.0;
         }
     }

@@ -80,7 +80,6 @@ public class KrStockClient {
                 })
                 .doFinally(sig -> tokenMono = null)
                 .cache();
-
         return tokenMono;
     }
 

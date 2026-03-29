@@ -10,7 +10,6 @@ import com.qaima.domain.PriceOhlcv;
 import com.qaima.domain.PriceOhlcvId;
 import com.qaima.domain.Stock;
 import com.qaima.dto.featone.FeatOneAnalysisExplainDto;
-import com.qaima.dto.featone.FeatOneAnalysisMetaDto;
 import com.qaima.dto.featone.FeatOneAnalysisMetricsDto;
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
@@ -128,6 +127,13 @@ public class FeatOneService {
 
                     FeatOneRequestDto requestDto =
                             buildFeatOneRequestDto(stock, freq, candles, financials, includeExplain);
+
+                    log.info("[FeatOneService][analysis-request] stockCode={}, freq={}, ohlcvSize={}, financialsSize={}, includeExplain={}",
+                            requestDto.getStockCode(),
+                            requestDto.getFreq(),
+                            requestDto.getOhlcv() != null ? requestDto.getOhlcv().size() : 0,
+                            requestDto.getFinancials() != null ? requestDto.getFinancials().size() : 0,
+                            requestDto.getIncludeExplain());
 
                     return analysisApiClient.requestStockAnalysis(requestDto)
                             .map(response -> {
@@ -393,16 +399,12 @@ public class FeatOneService {
 
         FeatOneAnalysisMetricsDto metrics = buildMetrics(stock.getStockCode(), candles, financials, warnings);
 
-        FeatOneAnalysisMetaDto meta = FeatOneAnalysisMetaDto.builder()
-                .warnings(warnings)
-                .build();
-
         FeatOneAnalysisExplainDto explain = null; // includeExplain true여도 fallback에서는 null 유지
 
         return FeatOneAnalysisResponseDto.builder()
                 .metrics(metrics)
                 .explain(explain)
-                .meta(meta)
+                .warnings(warnings)
                 .build();
     }
 

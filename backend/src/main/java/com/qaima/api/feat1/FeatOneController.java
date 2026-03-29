@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/feature1")
@@ -39,13 +42,15 @@ public class FeatOneController {
     }
 
     private ApiResponse<FeatOneAnalysisResponseDto> toApiResponse(FeatOneResult result) {
-        if (result.isChartUnavailable()) {
-            return ApiResponse.successWithWarning(
-                    result.getData(),
-                    "CHART_DATA_UNAVAILABLE"
-            );
+        List<String> warnings = new ArrayList<>();
+        if (result.getData() != null && result.getData().getWarnings() != null) {
+            warnings.addAll(result.getData().getWarnings());
         }
-        return ApiResponse.success(result.getData());
+        if (result.isChartUnavailable()) {
+            warnings.add("CHART_DATA_UNAVAILABLE");
+        }
+        List<String> dedupedWarnings = new ArrayList<>(new LinkedHashSet<>(warnings));
+        return ApiResponse.successWithWarnings(result.getData(), dedupedWarnings);
     }
 
     private String safeMessage(String message) {

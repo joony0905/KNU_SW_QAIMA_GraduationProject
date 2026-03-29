@@ -3,9 +3,9 @@ import { ENDPOINTS } from "./endpoints";
 import type { DictionaryTermDto } from "../types/dictionary";
 
 interface ApiResponse<T> {
-  success: boolean;
+  meta: { status: string; warning?: string | null; warnings?: string[] } | null;
   data: T;
-  error: string | null;
+  errors: Array<{ code: string; message: string }>;
 }
 
 export const fetchDictionaryTerms = async (

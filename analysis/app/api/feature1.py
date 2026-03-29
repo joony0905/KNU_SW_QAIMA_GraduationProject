@@ -8,7 +8,6 @@ from app.models.feature1 import (
     Feature1Response,
     Feature1Metrics,
     Feature1Explain,
-    Feature1Meta,
     OhlcvSummary,
     FinancialSummary,
 )
@@ -92,10 +91,13 @@ def build_indicator_summary(indicators: IndicatorBundle, last_close: float | Non
 @router.post("/feature1", response_model=Feature1Response)
 async def analyze_stock(req: Feature1Request) -> Feature1Response:
     """
-    QAIMA Feature1
+    QAIMA Feature1 (payload-only response contract)
     - OHLCV 기반 지표 계산 (EMA / BB / Stoch)
     - include_explain=true 인 경우에만 LLM 호출
     - 지표 계산 실패 시 fallback + warning
+
+    FastAPI response intentionally returns payload-only JSON (no envelope).
+    Spring gateway owns public envelope(meta/data/errors).
     """
 
     warnings: list[str] = []
@@ -181,8 +183,7 @@ async def analyze_stock(req: Feature1Request) -> Feature1Response:
         explain = llm_res.explain
 
         # warnings merge (router warnings + llm warnings)
-        if llm_res.meta and llm_res.meta.warnings:
-            warnings.extend(llm_res.meta.warnings)
+        warnings.extend(llm_res.warnings)
     else:
         # includeExplain=false면 서비스에서도 SKIPPED 넣지만,
         # 라우터 레벨에서도 정책적으로 남기고 싶으면 유지
@@ -191,10 +192,10 @@ async def analyze_stock(req: Feature1Request) -> Feature1Response:
     # ======================
     # Final Response
     # ======================
-    meta = Feature1Meta(warnings=warnings) if warnings else None
+    deduped_warnings = list(dict.fromkeys(warnings))
 
     return Feature1Response(
         metrics=metrics,
         explain=explain,
-        meta=meta,
+        warnings=deduped_warnings,
     )

@@ -8,7 +8,6 @@ from app.services.llm.factory import get_llm_client
 
 from app.models.feature1 import (
     Feature1Explain,
-    Feature1Meta,
     Feature1Metrics,
     Feature1Request,
     Feature1Response,
@@ -41,5 +40,4 @@ async def analyze_feature1(req: Feature1Request, metrics: Feature1Metrics) -> Fe
         warnings.append("LLM_EXPLAIN_SKIPPED")
 
     deduped_warnings = list(dict.fromkeys(warnings))
-    meta = Feature1Meta(warnings=deduped_warnings) if deduped_warnings else None
-    return Feature1Response(metrics=metrics, explain=explain, meta=meta)
+    return Feature1Response(metrics=metrics, explain=explain, warnings=deduped_warnings)

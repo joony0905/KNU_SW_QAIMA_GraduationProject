@@ -1,5 +1,7 @@
 package com.qaima.dto.news;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -7,6 +9,7 @@ import java.time.OffsetDateTime;
 
 @Getter
 @Builder
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class NewsItemDto {
     private final Long newsId;
     private final String title;

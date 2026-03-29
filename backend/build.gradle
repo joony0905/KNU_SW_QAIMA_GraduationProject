@@ -39,3 +39,8 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok:1.18.30'
     testImplementation 'org.springframework.boot:spring-boot-starter-test' //test
 }
+
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

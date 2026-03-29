@@ -4,13 +4,14 @@ import com.qaima.common.ApiResponse;
 import com.qaima.common.Feat2WarningCode;
 import com.qaima.dto.feature2.Feature2AnalyzeRequestDto;
 import com.qaima.dto.feature2.Feature2AnalyzeResponseDto;
-import com.qaima.dto.feature2.Feature2MetaDto;
 import com.qaima.dto.feature2.Feature2MetricsDto;
 import com.qaima.service.feature2.Feature2AnalyzeService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -22,22 +23,22 @@ public class Feature2AnalyzeController {
 
     @PostMapping("/analyze")
     public Mono<ApiResponse<Feature2AnalyzeResponseDto>> analyze(
-            @RequestBody(required = false) Feature2AnalyzeRequestDto req
+            @Valid @RequestBody Feature2AnalyzeRequestDto req
     ) {
-        log.info("[Feature2] analyze request received");
+        log.info("[Feature2AnalyzeController][request] stockCode={}, freq={}, window={}",
+                req != null ? req.getStockCode() : null,
+                req != null ? req.getFreq() : null,
+                req != null ? req.getWindow() : null);
 
         return feature2AnalyzeService.analyze(req)
                 .map(this::wrapWithWarnings)
                 .onErrorResume(ex -> {
                     log.error("[Feature2] unexpected error in controller. cause={}", ex.getMessage(), ex);
 
-                    Feature2MetaDto meta = Feature2MetaDto.empty();
-                    meta.addWarning(Feat2WarningCode.FEAT2_INTERNAL_ERROR);
-
                     Feature2AnalyzeResponseDto fallback = Feature2AnalyzeResponseDto.builder()
                             .metrics(Feature2MetricsDto.empty())
                             .explain(null)
-                            .meta(meta)
+                            .warnings(List.of(Feat2WarningCode.FEAT2_INTERNAL_ERROR.name()))
                             .build();
 
                     return Mono.just(wrapWithWarnings(fallback));
@@ -45,10 +46,7 @@ public class Feature2AnalyzeController {
     }
 
     private ApiResponse<Feature2AnalyzeResponseDto> wrapWithWarnings(Feature2AnalyzeResponseDto res) {
-        ApiResponse<Feature2AnalyzeResponseDto> api = ApiResponse.success(res);
-        if (res != null && res.getMeta() != null && res.getMeta().getWarnings() != null) {
-            api.getMeta().setWarnings(res.getMeta().getWarnings());
-        }
-        return api;
+        List<String> warnings = (res == null || res.getWarnings() == null) ? List.of() : res.getWarnings();
+        return ApiResponse.successWithWarnings(res, warnings);
     }
 }

@@ -1,6 +1,8 @@
 // backend/src/main/java/com/qaima/common/ApiResponse.java
 package com.qaima.common;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Collections;
 import java.util.List;
 
@@ -11,6 +13,7 @@ import java.util.List;
  * - meta: 요청 ID, 상태, 타임스탬프, warnings
  * - errors: 에러 목록 (성공 시 비어 있음)
  */
+@JsonIgnoreProperties({"success"})
 public class ApiResponse<T> {
 
     private Meta meta;
@@ -64,6 +67,12 @@ public class ApiResponse<T> {
         return new ApiResponse<>(Meta.failure(), null, List.of(error));
     }
 
+    /**
+     * Transitional note:
+     * - `success` was exposed as a derived boolean via bean getter.
+     * - Official envelope contract is `meta/data/errors`; hide derived field from JSON.
+     */
+    @JsonIgnore
     public boolean isSuccess() {
         return meta != null && "success".equalsIgnoreCase(meta.getStatus());
     }

@@ -1,13 +1,18 @@
 package com.qaima.dto.industry;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.qaima.dto.peercluster.RelativePointDto;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 
 import java.util.List;
 
 @Getter
 @Builder
+@Jacksonized
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class IndustryIndexBlockDto {
 
     private final Long indexId;

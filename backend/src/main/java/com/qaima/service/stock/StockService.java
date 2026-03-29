@@ -70,7 +70,7 @@ public class StockService {
             return Mono.error(new IllegalArgumentException("종목코드가 비어있습니다."));
         }
 
-        return Mono.fromCallable(() -> stockRepository.findByStockCodeWithExchange(code))
+        return Mono.fromCallable(() -> stockRepository.findByStockCodeWithExchangeAndIndustry(code))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(optional -> optional
                         .map(existing -> {
@@ -90,6 +90,7 @@ public class StockService {
      * - minimal fallback 없음
      */
     public Mono<Stock> getOrCreateStockByCode(String rawStockCode) {
+        log.info("[StockService][getOrCreateStockByCode] incoming rawStockCode={}", rawStockCode);
         return loadOrCreateStockMono(rawStockCode);
     }
 
@@ -183,7 +184,7 @@ public class StockService {
         AtomicReference<Mono<Stock>> ref = new AtomicReference<>();
 
         Mono<Stock> candidate = Mono.defer(() ->
-                        Mono.fromCallable(() -> stockRepository.findByStockCodeWithExchange(key))
+                        Mono.fromCallable(() -> stockRepository.findByStockCodeWithExchangeAndIndustry(key))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMap(optional -> {
                                     if (optional.isPresent()) {
