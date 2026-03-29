@@ -124,13 +124,9 @@ export default function StockInputBox({
           setSuggestions([`${stock.companyName} (${stock.stockCode})`]);
         } else {
           const results = await searchStocks(q);
-          const filtered = results.filter((s) =>
-            /^\d{6}$/.test((s as any).stock_code)
-          );
+          const filtered = results.filter((s) => /^\d{6}$/.test(s.stockCode));
           setStockResults(filtered);
-          const labels = filtered.map(
-            (s) => `${(s as any).company_name} (${(s as any).stock_code})`
-          );
+          const labels = filtered.map((s) => `${s.companyName} (${s.stockCode})`);
           setSuggestions(labels);
         }
       } catch {
@@ -150,9 +146,9 @@ export default function StockInputBox({
 
     if (stockCode) {
       const matched = stockResults.find(
-        (s) => (s as any).stock_code === stockCode || s.stockCode === stockCode
+        (s) => s.stockCode === stockCode
       );
-      const name = (matched as any)?.company_name ?? matched?.companyName ?? value.replace(/ \(.*\)$/, "");
+      const name = matched?.companyName ?? value.replace(/ \(.*\)$/, "");
       setInputValue(name);
       saveRecentSearch(name);
       onSearch?.(stockCode);
@@ -170,12 +166,10 @@ export default function StockInputBox({
     try {
       const results = await searchStocks(value);
       const match = results.find(
-        (s) =>
-          /^\d{6}$/.test((s as any).stock_code) &&
-          (s as any).company_name === value
+        (s) => /^\d{6}$/.test(s.stockCode) && s.companyName === value
       );
       if (match) {
-        onSearch?.((match as any).stock_code);
+        onSearch?.(match.stockCode);
       } else {
         setGuideMessage("유효하지 않은 종목입니다.");
       }
@@ -194,14 +188,12 @@ export default function StockInputBox({
     // 현재 stockResults에서 매칭되는 항목이 있으면 stockCode 전달 + 최근 검색어 저장
     const match = stockResults.find(
       (s) =>
-        (s as any).company_name === q ||
         s.companyName === q ||
-        `${(s as any).company_name} (${(s as any).stock_code})` === q ||
         `${s.companyName} (${s.stockCode})` === q
     );
     if (match) {
-      const matchName = (match as any).company_name ?? match.companyName;
-      const matchCode = (match as any).stock_code ?? match.stockCode;
+      const matchName = match.companyName;
+      const matchCode = match.stockCode;
       saveRecentSearch(matchName);
       setGuideMessage("");
       onSearch?.(matchCode);
@@ -320,7 +312,7 @@ export default function StockInputBox({
                   <li
                     key={idx}
                     onClick={() =>
-                      handleSelect(s, (stockResults[idx] as any)?.stock_code ?? stockResults[idx]?.stockCode)
+                      handleSelect(s, stockResults[idx]?.stockCode)
                     }
                     className="px-3 py-1.5 cursor-pointer hover:bg-zinc-100 text-sm sm:text-base md:text-lg font-['Inter']"
                   >

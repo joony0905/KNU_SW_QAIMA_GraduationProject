@@ -1,5 +1,7 @@
 package com.qaima.dto.indicator;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.qaima.dto.indicator.points.BollingerPointDto;
 import com.qaima.dto.indicator.points.IndicatorPoint1Dto;
 import com.qaima.dto.indicator.points.StochPointDto;
@@ -17,6 +19,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class IndicatorBundleDto {
 
     private IndicatorSpecDto spec;

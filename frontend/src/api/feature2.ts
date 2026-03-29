@@ -2,9 +2,9 @@ import api from "./apiClient";
 import type { Feature2AnalyzeResponse } from "../types/feature2";
 
 interface ApiResponse<T> {
-  success: boolean;
+  meta: { status: string; warnings?: string[]; warning?: string | null } | null;
   data: T;
-  error: string | null;
+  errors: Array<{ code: string; message: string }>;
 }
 
 export const fetchFeature2Analysis = async (

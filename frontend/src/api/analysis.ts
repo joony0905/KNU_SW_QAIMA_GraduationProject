@@ -25,8 +25,9 @@ export type FeatOneAnalyzeRequest = {
 interface ApiResponse<T> {
   meta: {
     status: string;
-    warning: string | null;
-  };
+    warning?: string | null;
+    warnings?: string[];
+  } | null;
   data: T;
   errors: Array<{ code: string; message: string }>;
 }

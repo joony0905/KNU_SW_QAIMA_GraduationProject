@@ -1,5 +1,7 @@
 package com.qaima.dto.stock;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -9,6 +11,7 @@ import java.math.BigDecimal;
 @Getter
 @Builder
 @AllArgsConstructor
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class StockMeta {
     private String stockCode;
     private String companyName;

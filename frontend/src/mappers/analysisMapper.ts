@@ -1,27 +1,31 @@
 import type { AnalysisResponse, AnalysisResponseWire } from "../types/analysis";
 
 export const mapAnalysisWireToCamel = (wire: AnalysisResponseWire): AnalysisResponse => {
+  const metrics: any = (wire as any)?.metrics ?? {};
+  const ohlcvSummary: any = metrics.ohlcv_summary ?? {};
+  const financialSummary: any = metrics.financial_summary ?? {};
+
   return {
     metrics: {
-      stockCode: wire.metrics.stock_code,
-      asOf: wire.metrics.as_of,
-      schemaVersion: wire.metrics.schema_version,
+      stockCode: metrics.stock_code ?? "",
+      asOf: metrics.as_of ?? "",
+      schemaVersion: metrics.schema_version ?? "",
       ohlcvSummary: {
-        count: wire.metrics.ohlcv_summary.count,
-        from: wire.metrics.ohlcv_summary.from,
-        to: wire.metrics.ohlcv_summary.to,
-        lastClose: wire.metrics.ohlcv_summary.last_close,
+        count: Number(ohlcvSummary.count ?? 0),
+        from: ohlcvSummary.from ?? null,
+        to: ohlcvSummary.to ?? null,
+        lastClose: ohlcvSummary.last_close ?? null,
       },
       financialSummary: {
-        years: wire.metrics.financial_summary.years,
-        revenue: wire.metrics.financial_summary.revenue,
-        operatingIncome: wire.metrics.financial_summary.operating_income,
-        netIncome: wire.metrics.financial_summary.net_income,
+        years: Array.isArray(financialSummary.years) ? financialSummary.years : [],
+        revenue: financialSummary.revenue ?? {},
+        operatingIncome: financialSummary.operating_income ?? {},
+        netIncome: financialSummary.net_income ?? {},
       },
-      indicators: wire.metrics.indicators,
-      indicatorSummary: wire.metrics.indicator_summary,
+      indicators: (metrics as any).indicators,
+      indicatorSummary: metrics.indicator_summary ?? null,
     },
-    explain: wire.explain ?? null,
-    meta: wire.meta ?? null,
+    explain: (wire as any)?.explain ?? null,
+    meta: (wire as any)?.meta ?? null,
   };
 };
