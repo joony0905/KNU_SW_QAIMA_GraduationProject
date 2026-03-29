@@ -92,10 +92,13 @@ def build_indicator_summary(indicators: IndicatorBundle, last_close: float | Non
 @router.post("/feature1", response_model=Feature1Response)
 async def analyze_stock(req: Feature1Request) -> Feature1Response:
     """
-    QAIMA Feature1
+    QAIMA Feature1 (payload-only response contract)
     - OHLCV 기반 지표 계산 (EMA / BB / Stoch)
     - include_explain=true 인 경우에만 LLM 호출
     - 지표 계산 실패 시 fallback + warning
+
+    FastAPI response intentionally returns payload-only JSON (no envelope).
+    Spring gateway owns public envelope(meta/data/errors).
     """
 
     warnings: list[str] = []

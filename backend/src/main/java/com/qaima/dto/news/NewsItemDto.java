@@ -9,7 +9,7 @@ import java.time.OffsetDateTime;
 
 @Getter
 @Builder
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class NewsItemDto {
     private final Long newsId;
     private final String title;

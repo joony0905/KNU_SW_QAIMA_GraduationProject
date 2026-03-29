@@ -7,7 +7,7 @@ import lombok.Getter;
 
 @Getter
 @Builder
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class IndustryMetaDto {
     private final Long industryId;
     private final String name;

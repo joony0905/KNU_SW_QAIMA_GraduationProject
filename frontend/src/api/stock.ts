@@ -2,12 +2,7 @@
 import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
 import type { StockDto } from "../types/stock";
-
-type ApiResponse<T> = {
-  meta: any;
-  data: T;
-  errors: any[];
-};
+import type { ApiResponse } from "../types/common/api";
 
 const normalizeStock = (raw: any): StockDto => ({
   stockId: raw?.stock_id ?? raw?.stockId ?? 0,
@@ -36,6 +31,5 @@ export const searchStocks = async (query: string): Promise<StockDto[]> => {
   const res = await api.get<ApiResponse<StockDto[]>>(
     ENDPOINTS.stocks.search(query),
   );
-  const rows = Array.isArray((res.data as any)?.data) ? (res.data as any).data : [];
-  return rows.map(normalizeStock);
+  return res.data.data;
 };

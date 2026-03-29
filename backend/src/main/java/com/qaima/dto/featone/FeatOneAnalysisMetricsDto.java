@@ -3,8 +3,8 @@ package com.qaima.dto.featone;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.qaima.dto.financial.FinancialSummaryMetricsDto;
-import com.qaima.dto.ohlcv.OhlcvSummaryDto;
 import com.qaima.dto.indicator.IndicatorBundleDto;
+import com.qaima.dto.ohlcv.OhlcvSummaryDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,7 +16,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class FeatOneAnalysisMetricsDto {
     private String stockCode;
     private String asOf;

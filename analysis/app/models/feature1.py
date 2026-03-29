@@ -41,16 +41,12 @@ class FinancialSummaryItem(BaseModel):
 
 
 class Feature1Request(BaseModel):
-    # Contract is snake_case.
-    # camelCase aliases are temporary backward compatibility for legacy callers.
-    stock_code: str = Field(alias="stockCode")
+    # Contract is snake_case only.
+    stock_code: str
     freq: str
     ohlcv: List[OhlcvItem]
     financials: List[FinancialSummaryItem] = []
-    include_explain: bool = Field(default=False, alias="includeExplain")
-
-    class Config:
-        populate_by_name = True  # pydantic v2
+    include_explain: bool = False
 
 
 # ======================

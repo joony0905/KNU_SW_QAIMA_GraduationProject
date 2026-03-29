@@ -8,7 +8,7 @@ import lombok.Data;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 @Data
 public class PeerClusterResponseDto {
     private String method;

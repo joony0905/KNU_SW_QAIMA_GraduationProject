@@ -2,6 +2,7 @@
 import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
 import type { AnalysisResponse, AnalysisResponseWire } from "../types/analysis";
+import type { ApiResponse } from "../types/common/api";
 import { mapAnalysisWireToCamel } from "../mappers/analysisMapper";
 
 export type Freq =
@@ -22,33 +23,23 @@ export type FeatOneAnalyzeRequest = {
   includeExplain: boolean;
 };
 
-interface ApiResponse<T> {
-  meta: {
-    status: string;
-    warning?: string | null;
-    warnings?: string[];
-  } | null;
-  data: T;
-  errors: Array<{ code: string; message: string }>;
-}
-
 export const fetchAnalysis = async (
   req: FeatOneAnalyzeRequest
-): Promise<AnalysisResponse> => {
-  // Spring public contract: snake_case request payload.
-  // Frontend internal naming stays camelCase for minimal impact.
-  const payload = {
-    stock_code: req.stockCode,
-    freq: req.freq,
-    from: req.from,
-    to: req.to,
-    market_div_code: req.marketDivCode,
-    include_explain: req.includeExplain,
-  };
-
+): Promise<ApiResponse<AnalysisResponse>> => {
   const res = await api.post<ApiResponse<AnalysisResponseWire>>(
     ENDPOINTS.analysis.analyze(),
-    payload
+    {
+      stockCode: req.stockCode,
+      freq: req.freq,
+      from: req.from,
+      to: req.to,
+      marketDivCode: req.marketDivCode,
+      includeExplain: req.includeExplain,
+    }
   );
-  return mapAnalysisWireToCamel(res.data.data);
+
+  return {
+    ...res.data,
+    data: mapAnalysisWireToCamel(res.data.data),
+  };
 };

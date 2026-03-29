@@ -1,8 +1,14 @@
 package com.qaima.external;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
@@ -30,7 +36,7 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
         return webClient.post()
                 .uri("/api/v1/analysis/feature1")
-                .bodyValue(request)
+                .bodyValue(toSnakeCaseNode(request))
                 .exchangeToMono(resp -> {
                     HttpStatusCode status = resp.statusCode();
 
@@ -43,8 +49,39 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                 }
 
                                 try {
+                                    JsonNode root = objectMapper.readTree(body);
+                                    JsonNode payloadNode = root.has("data") ? root.get("data") : root;
+                                    if (payloadNode == null || payloadNode.isMissingNode() || payloadNode.isNull()) {
+                                        throw new IllegalStateException("FastAPI feature1 payload(data) is missing");
+                                    }
+
+                                    JsonNode canonicalPayload = toCanonicalCamelNode(payloadNode.deepCopy());
                                     FeatOneAnalysisResponseDto dto =
-                                            objectMapper.readValue(body, FeatOneAnalysisResponseDto.class);
+                                            objectMapper.treeToValue(canonicalPayload, FeatOneAnalysisResponseDto.class);
+
+                                    List<String> warnings = new ArrayList<>();
+                                    JsonNode warningsNode = root.path("meta").path("warnings");
+                                    if (!warningsNode.isArray()) {
+                                        warningsNode = canonicalPayload.path("meta").path("warnings");
+                                    }
+                                    if (warningsNode.isArray()) {
+                                        warningsNode.forEach(node -> {
+                                            if (node.isTextual()) warnings.add(node.asText());
+                                        });
+                                    }
+                                    dto.setWarnings(warnings);
+
+                                    log.info(
+                                            "[FastAPI->Spring][Feature1] metrics fields stockCode={}, asOf={}, ohlcvSummary?={}, financialSummary?={}, indicatorSummary?={}, schemaVersion={}, indicators?={}",
+                                            dto.getMetrics() != null ? dto.getMetrics().getStockCode() : null,
+                                            dto.getMetrics() != null ? dto.getMetrics().getAsOf() : null,
+                                            dto.getMetrics() != null && dto.getMetrics().getOhlcvSummary() != null,
+                                            dto.getMetrics() != null && dto.getMetrics().getFinancialSummary() != null,
+                                            dto.getMetrics() != null && dto.getMetrics().getIndicatorSummary() != null,
+                                            dto.getMetrics() != null ? dto.getMetrics().getSchemaVersion() : null,
+                                            dto.getMetrics() != null && dto.getMetrics().getIndicators() != null
+                                    );
+
                                     return Mono.just(dto);
                                 } catch (Exception e) {
                                     log.error("[FastAPI] decode failed. body={}", body, e);
@@ -53,4 +90,99 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                             });
                 });
     }
+
+
+    private JsonNode toSnakeCaseNode(Object value) {
+        JsonNode node = objectMapper.valueToTree(value);
+        return toSnakeCaseNodeRecursive(node);
+    }
+
+    private JsonNode toSnakeCaseNodeRecursive(JsonNode node) {
+        if (node == null || node.isNull()) return node;
+
+        if (node.isArray()) {
+            ArrayNode arr = (ArrayNode) node;
+            for (int i = 0; i < arr.size(); i++) {
+                arr.set(i, toSnakeCaseNodeRecursive(arr.get(i)));
+            }
+            return arr;
+        }
+
+        if (!node.isObject()) {
+            return node;
+        }
+
+        ObjectNode src = (ObjectNode) node;
+        ObjectNode dst = objectMapper.createObjectNode();
+
+        Iterator<String> fieldNames = src.fieldNames();
+        while (fieldNames.hasNext()) {
+            String key = fieldNames.next();
+            String snakeKey = camelToSnake(key);
+            dst.set(snakeKey, toSnakeCaseNodeRecursive(src.get(key)));
+        }
+
+        return dst;
+    }
+
+    private JsonNode toCanonicalCamelNode(JsonNode node) {
+        if (node == null || node.isNull()) return node;
+
+        if (node.isArray()) {
+            ArrayNode arr = (ArrayNode) node;
+            for (int i = 0; i < arr.size(); i++) {
+                arr.set(i, toCanonicalCamelNode(arr.get(i)));
+            }
+            return arr;
+        }
+
+        if (!node.isObject()) {
+            return node;
+        }
+
+        ObjectNode src = (ObjectNode) node;
+        ObjectNode dst = objectMapper.createObjectNode();
+
+        Iterator<String> fieldNames = src.fieldNames();
+        while (fieldNames.hasNext()) {
+            String key = fieldNames.next();
+            String camelKey = snakeToCamel(key);
+            dst.set(camelKey, toCanonicalCamelNode(src.get(key)));
+        }
+
+        return dst;
+    }
+
+    private String snakeToCamel(String key) {
+        if (key == null || key.indexOf('_') < 0) return key;
+
+        StringBuilder sb = new StringBuilder();
+        boolean upperNext = false;
+        for (char c : key.toCharArray()) {
+            if (c == '_') {
+                upperNext = true;
+                continue;
+            }
+            sb.append(upperNext ? Character.toUpperCase(c) : c);
+            upperNext = false;
+        }
+        return sb.toString();
+    }
+
+    private String camelToSnake(String key) {
+        if (key == null || key.isEmpty()) return key;
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            if (Character.isUpperCase(c)) {
+                if (i > 0) sb.append('_');
+                sb.append(Character.toLowerCase(c));
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
 }

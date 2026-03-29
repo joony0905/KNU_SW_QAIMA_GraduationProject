@@ -21,7 +21,7 @@ import lombok.Setter;
 @Setter
 @Builder
 @AllArgsConstructor
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class Feature2MetricsDto {
 
     private StockMeta stock;
@@ -41,7 +41,7 @@ public class Feature2MetricsDto {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor(access = AccessLevel.PROTECTED)
-    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
     public static class ShortSellingMetrics {
         private Long shortSellingId;
         private Long stockId;
@@ -69,7 +69,7 @@ public class Feature2MetricsDto {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor(access = AccessLevel.PROTECTED)
-    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
     public static class BaseRateMetrics {
         private LocalDate date;
         private BigDecimal value;

@@ -1,7 +1,5 @@
 package com.qaima.dto.featone;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.qaima.domain.Freq;
 import lombok.*;
 
@@ -12,10 +10,6 @@ import lombok.*;
 @Builder
 public class FeatOneAnalyzeRequestDto {
 
-    // External JSON contract is snake_case.
-    // Temporary compatibility: accept legacy camelCase payloads from existing clients.
-    @JsonProperty("stock_code")
-    @JsonAlias("stockCode")
     private String stockCode;
 
     @JsonProperty("freq")

@@ -11,7 +11,7 @@ import java.math.BigDecimal;
 @Getter
 @Builder
 @AllArgsConstructor
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class StockMeta {
     private String stockCode;
     private String companyName;

@@ -65,19 +65,17 @@ def _default_response(
 @router.post("/peer-cluster", response_model=PeerClusterResponse)
 def peer_cluster(req_raw: Dict[str, Any]) -> PeerClusterResponse:
     """
-    PeerCluster v1 (rule-based)
+    PeerCluster v1 (rule-based, payload-only response contract)
     - throw 금지
     - 항상 200 (FastAPI validation 422를 피하기 위해 raw dict로 받고 내부에서 검증)
+
+    FastAPI response is payload-only (no meta/data/errors envelope).
     """
-    # Contract is snake_case. camelCase keys are accepted temporarily
-    # for backward compatibility with pre-refactor callers.
-    raw_industry_id = _safe_int(req_raw.get("industry_id") or req_raw.get("industryId")) or 0
-    raw_anchor_stock_code = _safe_str(
-        req_raw.get("anchor_stock_code") or req_raw.get("anchorStockCode")
-    ) or ""
+    raw_industry_id = _safe_int(req_raw.get("industry_id")) or 0
+    raw_anchor_stock_code = _safe_str(req_raw.get("anchor_stock_code")) or ""
     raw_freq = _safe_str(req_raw.get("freq")) or "ONE_D"
     raw_window = _safe_int(req_raw.get("window")) or 0
-    raw_peer_count = _safe_int(req_raw.get("peer_count") or req_raw.get("peerCount")) or 0
+    raw_peer_count = _safe_int(req_raw.get("peer_count")) or 0
 
     try:
         req = PeerClusterRequest.model_validate(req_raw)

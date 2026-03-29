@@ -12,7 +12,7 @@ import java.util.List;
 @Getter
 @Builder
 @Jacksonized
-@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class IndustryIndexBlockDto {
 
     private final Long indexId;

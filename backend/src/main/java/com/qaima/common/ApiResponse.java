@@ -2,6 +2,7 @@
 package com.qaima.common;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Collections;
 import java.util.List;
 
@@ -12,6 +13,7 @@ import java.util.List;
  * - meta: 요청 ID, 상태, 타임스탬프, warnings
  * - errors: 에러 목록 (성공 시 비어 있음)
  */
+@JsonIgnoreProperties({"success"})
 public class ApiResponse<T> {
 
     private Meta meta;
