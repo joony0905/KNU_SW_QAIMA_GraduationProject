@@ -2,6 +2,7 @@ package com.qaima.external;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.qaima.dto.peercluster.PeerClusterRequestDto;
@@ -20,6 +21,7 @@ public class PeerClusterClient {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final ObjectMapper snakeCaseObjectMapper;
 
     public PeerClusterClient(
             @Qualifier("analysisWebClient") WebClient webClient,
@@ -27,6 +29,8 @@ public class PeerClusterClient {
     ) {
         this.webClient = webClient;
         this.objectMapper = objectMapper;
+        this.snakeCaseObjectMapper = objectMapper.copy()
+                .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     }
 
     public Mono<PeerClusterResponseDto> requestPeerCluster(PeerClusterRequestDto req) {
@@ -40,11 +44,8 @@ public class PeerClusterClient {
                 .map(body -> {
                     try {
                         JsonNode root = objectMapper.readTree(body);
-                        JsonNode payloadNode = requirePayloadOnlyRoot(root, "feature2/peer-cluster");
-                        JsonNode canonicalPayload = toCanonicalCamelNode(payloadNode.deepCopy());
-
                         PeerClusterResponseDto parsed =
-                                objectMapper.treeToValue(canonicalPayload, PeerClusterResponseDto.class);
+                                snakeCaseResponseValue(extractPayload(root, "feature2/peer-cluster"));
                         log.info("[PeerClusterClient] parsed={}", parsed);
                         return parsed;
                     } catch (Exception e) {
@@ -54,12 +55,20 @@ public class PeerClusterClient {
                 });
     }
 
-    private JsonNode requirePayloadOnlyRoot(JsonNode root, String endpointName) {
+    private PeerClusterResponseDto snakeCaseResponseValue(JsonNode payloadNode) throws com.fasterxml.jackson.core.JsonProcessingException {
+        return snakeCaseObjectMapper.treeToValue(payloadNode, PeerClusterResponseDto.class);
+    }
+
+    private JsonNode extractPayload(JsonNode root, String endpointName) {
         if (root == null || root.isNull() || root.isMissingNode() || !root.isObject()) {
             throw new IllegalStateException("FastAPI " + endpointName + " payload root is missing or not object");
         }
         if (root.has("data")) {
-            throw new IllegalStateException("FastAPI " + endpointName + " returned envelope(data), but payload-only is required");
+            JsonNode dataNode = root.get("data");
+            if (dataNode == null || dataNode.isNull() || dataNode.isMissingNode() || !dataNode.isObject()) {
+                throw new IllegalStateException("FastAPI " + endpointName + " envelope data is missing or not object");
+            }
+            return dataNode;
         }
         return root;
     }
@@ -92,47 +101,6 @@ public class PeerClusterClient {
             dst.set(camelToSnake(key), toSnakeCaseNodeRecursive(src.get(key)));
         }
         return dst;
-    }
-
-    private JsonNode toCanonicalCamelNode(JsonNode node) {
-        if (node == null || node.isNull()) return node;
-
-        if (node.isArray()) {
-            ArrayNode arr = (ArrayNode) node;
-            for (int i = 0; i < arr.size(); i++) {
-                arr.set(i, toCanonicalCamelNode(arr.get(i)));
-            }
-            return arr;
-        }
-
-        if (!node.isObject()) {
-            return node;
-        }
-
-        ObjectNode src = (ObjectNode) node;
-        ObjectNode dst = objectMapper.createObjectNode();
-        Iterator<String> fieldNames = src.fieldNames();
-        while (fieldNames.hasNext()) {
-            String key = fieldNames.next();
-            dst.set(snakeToCamel(key), toCanonicalCamelNode(src.get(key)));
-        }
-        return dst;
-    }
-
-    private String snakeToCamel(String key) {
-        if (key == null || key.indexOf('_') < 0) return key;
-
-        StringBuilder sb = new StringBuilder();
-        boolean upperNext = false;
-        for (char c : key.toCharArray()) {
-            if (c == '_') {
-                upperNext = true;
-                continue;
-            }
-            sb.append(upperNext ? Character.toUpperCase(c) : c);
-            upperNext = false;
-        }
-        return sb.toString();
     }
 
     private String camelToSnake(String key) {

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import os
-import json
-import re
-from typing import Any, Dict, Optional, Tuple
+import asyncio
+from typing import Optional, Tuple
 import httpx
 
 from app.services.llm.base import LLMClient
@@ -14,6 +13,7 @@ from app.models.feature1 import Feature1Request, Feature1Metrics
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_TIMEOUT = 10.0
+RATE_LIMIT_RETRY_DELAYS = (0.6, 1.2)
 
 
 class GeminiClient(LLMClient):
@@ -43,11 +43,22 @@ class GeminiClient(LLMClient):
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.post(url, json=payload)
+                resp = None
+                for attempt in range(len(RATE_LIMIT_RETRY_DELAYS) + 1):
+                    resp = await client.post(url, json=payload)
+
+                    if resp.status_code != 429:
+                        break
+
+                    if attempt < len(RATE_LIMIT_RETRY_DELAYS):
+                        await asyncio.sleep(RATE_LIMIT_RETRY_DELAYS[attempt])
 
                 # 왜 실패했는지 warnings에 찍기
-                if resp.status_code == 429:
+                if resp is not None and resp.status_code == 429:
                     return None, "LLM_EXPLAIN_RATE_LIMITED"
+
+                if resp is None:
+                    return None, "LLM_EXPLAIN_EMPTY"
 
                 if resp.status_code >= 400:
                     body = (resp.text or "").strip().replace("\n", " ")
@@ -66,12 +77,6 @@ class GeminiClient(LLMClient):
 
                 if not text:
                     return None, "LLM_EXPLAIN_EMPTY"
-
-                # JSON 파싱 시도 (경고는 warning으로)
-                parsed, parse_warning = _try_parse_json(text)
-                if parse_warning:
-                    # JSON 강제 정책이면 여기서 None 처리해도 되지만, MVP는 text라도 살려두자
-                    return text, parse_warning
 
                 return text, None
 
@@ -115,28 +120,3 @@ class GeminiClient(LLMClient):
             "INDICATORS:\n"
             f"{indicator_summary}\n"
         )
-    
-
-def _extract_json_object(text: str) -> Optional[str]:
-    if not text:
-        return None
-
-    # 코드펜스 제거
-    t = re.sub(r"```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-    t = t.replace("```", "").strip()
-
-    # 첫 { ~ 마지막 } 만 추출
-    start = t.find("{")
-    end = t.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return None
-    return t[start:end + 1]
-
-def _try_parse_json(text: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    raw = _extract_json_object(text)
-    if not raw:
-        return None, "LLM_EXPLAIN_NO_JSON_OBJECT"
-    try:
-        return json.loads(raw), None
-    except Exception as e:
-        return None, f"LLM_EXPLAIN_INVALID_JSON:{type(e).__name__}"

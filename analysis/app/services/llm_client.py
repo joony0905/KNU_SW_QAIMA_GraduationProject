@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from typing import List, Optional
-from app.services.llm.gemini_client import _try_parse_json
 
 from app.services.llm.factory import get_llm_client
 
@@ -26,12 +25,8 @@ async def analyze_feature1(req: Feature1Request, metrics: Feature1Metrics) -> Fe
         text, warning = await llm.generate_explain(req, metrics)
 
         if text and text.strip():
-            parsed, parse_warning = _try_parse_json(text)
-            if parse_warning:
-                warnings.append(parse_warning)
-
-            explain = Feature1Explain(text=text.strip(), json=parsed)
-        else:
+            explain = Feature1Explain(text=text.strip())
+        elif not warning:
             warnings.append("LLM_EXPLAIN_EMPTY")
 
         if warning:

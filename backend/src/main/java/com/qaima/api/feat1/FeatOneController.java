@@ -6,6 +6,7 @@ import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.service.featone.FeatOneResult;
 import com.qaima.service.featone.FeatOneService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +19,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/feature1")
 @RequiredArgsConstructor
+@Slf4j
 public class FeatOneController {
 
     private final FeatOneService featOneService;
@@ -42,6 +44,7 @@ public class FeatOneController {
     }
 
     private ApiResponse<FeatOneAnalysisResponseDto> toApiResponse(FeatOneResult result) {
+        log.info("[FeatOneController] final ApiResponse.data before wrap={}", result != null ? result.getData() : null);
         List<String> warnings = new ArrayList<>();
         if (result.getData() != null && result.getData().getWarnings() != null) {
             warnings.addAll(result.getData().getWarnings());

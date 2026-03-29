@@ -112,6 +112,17 @@ const parseExplainText = (text?: string | null): ExplainParseResult => {
   if (!text || !text.trim()) return { parsed: null, parseFailed: false };
 
   const trimmed = text.trim();
+  const extractSection = (source: string, startKey: string, endKeys: string[]) => {
+    const start = source.indexOf(startKey);
+    if (start === -1) return "";
+
+    const from = start + startKey.length;
+    const candidateEnds = endKeys
+      .map((key) => source.indexOf(key, from))
+      .filter((idx) => idx !== -1);
+    const to = candidateEnds.length > 0 ? Math.min(...candidateEnds) : source.length;
+    return source.slice(from, to);
+  };
 
   try {
     const parsed = JSON.parse(trimmed);
@@ -136,8 +147,11 @@ const parseExplainText = (text?: string | null): ExplainParseResult => {
     }
   }
 
-  const summaryMatch = trimmed.match(/"summary"\s*:\s*\[(.*?)\]/s);
-  const risksMatch = trimmed.match(/"risks"\s*:\s*\[(.*?)\]/s);
+  const summaryChunk = extractSection(trimmed, `"summary":[`, [`,"risks":[`, `"risks":[`, `,"conclusion":"`, `"conclusion":"`]);
+  const risksChunk = extractSection(trimmed, `"risks":[`, [`,"conclusion":"`, `"conclusion":"`]);
+
+  const summaryMatch = summaryChunk.match(/(.*)/s);
+  const risksMatch = risksChunk.match(/(.*)/s);
   const conclusionMatch = trimmed.match(
     /"conclusion"\s*:\s*"((?:\\.|[^"\\])*)"/s,
   );
@@ -771,20 +785,7 @@ export default function StocksMockPage() {
       return;
     }
 
-    const fullText: string =
-      typeof analysisData === "string"
-        ? analysisData
-        : [
-            analysisData.summary,
-            "",
-            "핵심 포인트:",
-            ...(analysisData.highlights ?? []).map((h: string) => `- ${h}`),
-            "",
-            "리스크:",
-            ...(analysisData.risks ?? []).map((r: string) => `- ${r}`),
-          ]
-            .filter(Boolean)
-            .join("\n");
+    const fullText = analysisData.explain?.text ?? "";
 
     setDisplayText("");
 
