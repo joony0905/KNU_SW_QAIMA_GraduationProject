@@ -33,7 +33,7 @@ public class PeerClusterClient {
         return webClient.post()
                 .uri("/feature2/peer-cluster")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(req)
+                .bodyValue(toSnakeCaseNode(req))
                 .retrieve()
                 .bodyToMono(String.class)
                 .doOnNext(body -> log.info("[FastAPI RAW] {}", body))
@@ -52,6 +52,37 @@ public class PeerClusterClient {
                         throw new RuntimeException("JSON parse failed", e);
                     }
                 });
+    }
+
+
+    private JsonNode toSnakeCaseNode(Object value) {
+        JsonNode node = objectMapper.valueToTree(value);
+        return toSnakeCaseNodeRecursive(node);
+    }
+
+    private JsonNode toSnakeCaseNodeRecursive(JsonNode node) {
+        if (node == null || node.isNull()) return node;
+
+        if (node.isArray()) {
+            ArrayNode arr = (ArrayNode) node;
+            for (int i = 0; i < arr.size(); i++) {
+                arr.set(i, toSnakeCaseNodeRecursive(arr.get(i)));
+            }
+            return arr;
+        }
+
+        if (!node.isObject()) {
+            return node;
+        }
+
+        ObjectNode src = (ObjectNode) node;
+        ObjectNode dst = objectMapper.createObjectNode();
+        Iterator<String> fieldNames = src.fieldNames();
+        while (fieldNames.hasNext()) {
+            String key = fieldNames.next();
+            dst.set(camelToSnake(key), toSnakeCaseNodeRecursive(src.get(key)));
+        }
+        return dst;
     }
 
     private JsonNode toCanonicalCamelNode(JsonNode node) {
@@ -91,6 +122,22 @@ public class PeerClusterClient {
             }
             sb.append(upperNext ? Character.toUpperCase(c) : c);
             upperNext = false;
+        }
+        return sb.toString();
+    }
+
+    private String camelToSnake(String key) {
+        if (key == null || key.isEmpty()) return key;
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            if (Character.isUpperCase(c)) {
+                if (i > 0) sb.append('_');
+                sb.append(Character.toLowerCase(c));
+            } else {
+                sb.append(c);
+            }
         }
         return sb.toString();
     }

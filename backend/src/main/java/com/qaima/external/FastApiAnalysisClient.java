@@ -36,7 +36,7 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
         return webClient.post()
                 .uri("/api/v1/analysis/feature1")
-                .bodyValue(request)
+                .bodyValue(toSnakeCaseNode(request))
                 .exchangeToMono(resp -> {
                     HttpStatusCode status = resp.statusCode();
 
@@ -91,6 +91,40 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                 });
     }
 
+
+    private JsonNode toSnakeCaseNode(Object value) {
+        JsonNode node = objectMapper.valueToTree(value);
+        return toSnakeCaseNodeRecursive(node);
+    }
+
+    private JsonNode toSnakeCaseNodeRecursive(JsonNode node) {
+        if (node == null || node.isNull()) return node;
+
+        if (node.isArray()) {
+            ArrayNode arr = (ArrayNode) node;
+            for (int i = 0; i < arr.size(); i++) {
+                arr.set(i, toSnakeCaseNodeRecursive(arr.get(i)));
+            }
+            return arr;
+        }
+
+        if (!node.isObject()) {
+            return node;
+        }
+
+        ObjectNode src = (ObjectNode) node;
+        ObjectNode dst = objectMapper.createObjectNode();
+
+        Iterator<String> fieldNames = src.fieldNames();
+        while (fieldNames.hasNext()) {
+            String key = fieldNames.next();
+            String snakeKey = camelToSnake(key);
+            dst.set(snakeKey, toSnakeCaseNodeRecursive(src.get(key)));
+        }
+
+        return dst;
+    }
+
     private JsonNode toCanonicalCamelNode(JsonNode node) {
         if (node == null || node.isNull()) return node;
 
@@ -134,4 +168,21 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
         }
         return sb.toString();
     }
+
+    private String camelToSnake(String key) {
+        if (key == null || key.isEmpty()) return key;
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            if (Character.isUpperCase(c)) {
+                if (i > 0) sb.append('_');
+                sb.append(Character.toLowerCase(c));
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
 }
