@@ -7,8 +7,7 @@ export const fetchFeature2Analysis = async (
 ): Promise<ApiResponse<Feature2AnalyzeResponse>> => {
   const res = await api.post<ApiResponse<Feature2AnalyzeResponse>>(
     "/feature2/analyze",
-    // Spring external contract: snake_case JSON.
-    { stock_code: stockCode },
+    { stockCode },
   );
   return res.data;
 };

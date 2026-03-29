@@ -1,6 +1,7 @@
 package com.qaima.dto.feature2;
 
 import com.qaima.domain.Freq;
+import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
 @Getter
@@ -9,6 +10,7 @@ import lombok.*;
 @AllArgsConstructor
 public class Feature2AnalyzeRequestDto {
 
+    @NotBlank
     private String stockCode;
     private Freq freq;
     private Integer window;
