@@ -6,7 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.qaima.domain.Freq;
+import com.qaima.dto.featone.FeatOneRequestDto;
 import java.lang.reflect.Method;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -86,6 +89,25 @@ class FastApiAnalysisClientCanonicalizationTest {
         assertEquals(java.util.List.of("A", "B"), warnings);
     }
 
+    @Test
+    void toSnakeCaseNode_matchesFeature1FastApiRequestShape_withoutExtraOptionsField() throws Exception {
+        FeatOneRequestDto req = FeatOneRequestDto.builder()
+                .stockCode("005930")
+                .freq(Freq.ONE_D)
+                .ohlcv(List.of())
+                .financials(List.of())
+                .includeExplain(false)
+                .build();
+
+        JsonNode snake = invokeToSnakeCase(req);
+        assertTrue(snake.has("stock_code"));
+        assertTrue(snake.has("freq"));
+        assertTrue(snake.has("ohlcv"));
+        assertTrue(snake.has("financials"));
+        assertTrue(snake.has("include_explain"));
+        assertTrue(!snake.has("options"));
+    }
+
     private JsonNode invokeCanonicalize(JsonNode input) throws Exception {
         Method method = FastApiAnalysisClient.class.getDeclaredMethod("toCanonicalCamelNode", JsonNode.class);
         method.setAccessible(true);
@@ -108,6 +130,12 @@ class FastApiAnalysisClientCanonicalizationTest {
         Method method = FastApiAnalysisClient.class.getDeclaredMethod("requirePayloadOnlyRoot", JsonNode.class, String.class);
         method.setAccessible(true);
         return (JsonNode) method.invoke(client, root, "feature1");
+    }
+
+    private JsonNode invokeToSnakeCase(FeatOneRequestDto requestDto) throws Exception {
+        Method method = FastApiAnalysisClient.class.getDeclaredMethod("toSnakeCaseNode", Object.class);
+        method.setAccessible(true);
+        return (JsonNode) method.invoke(client, requestDto);
     }
 
     private JsonNode invokeRequirePayloadOnlyRootUnchecked(JsonNode root) {

@@ -35,10 +35,14 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
     @Override
     public Mono<FeatOneAnalysisResponseDto> requestStockAnalysis(FeatOneRequestDto request) {
+        JsonNode snakePayloadNode = toSnakeCaseNode(request);
+        String requestBody = snakePayloadNode.toString();
+        log.info("[FastApiAnalysisClient][request] url=/api/v1/analysis/feature1");
+        log.info("[FastApiAnalysisClient][request] body={}", requestBody);
 
         return webClient.post()
                 .uri("/api/v1/analysis/feature1")
-                .bodyValue(toSnakeCaseNode(request))
+                .bodyValue(snakePayloadNode)
                 .exchangeToMono(resp -> {
                     HttpStatusCode status = resp.statusCode();
 
@@ -46,7 +50,8 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                             .defaultIfEmpty("")
                             .flatMap(body -> {
                                 if (status.isError()) {
-                                    log.error("[FastAPI] status={} body={}", status.value(), body);
+                                    log.error("[FastApiAnalysisClient][error] status={}", status.value());
+                                    log.error("[FastApiAnalysisClient][error] body={}", body);
                                     return Mono.error(new RuntimeException("FASTAPI_HTTP_" + status.value()));
                                 }
 

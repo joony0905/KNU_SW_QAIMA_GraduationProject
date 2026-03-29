@@ -90,6 +90,7 @@ public class StockService {
      * - minimal fallback 없음
      */
     public Mono<Stock> getOrCreateStockByCode(String rawStockCode) {
+        log.info("[StockService][getOrCreateStockByCode] incoming rawStockCode={}", rawStockCode);
         return loadOrCreateStockMono(rawStockCode);
     }
 
