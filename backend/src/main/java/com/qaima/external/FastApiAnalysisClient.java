@@ -48,13 +48,21 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
                                 try {
                                     JsonNode root = objectMapper.readTree(body);
-                                    JsonNode dataNode = root.path("data");
+                                    JsonNode dataNode = root.has("data") ? root.get("data") : root;
+                                    if (dataNode == null || dataNode.isMissingNode() || dataNode.isNull()) {
+                                        throw new IllegalStateException("FastAPI feature1 payload(data) is missing");
+                                    }
+
                                     ObjectMapper snakeMapper = objectMapper.copy()
                                             .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
                                     FeatOneAnalysisResponseDto dto =
                                             snakeMapper.treeToValue(dataNode, FeatOneAnalysisResponseDto.class);
+
                                     List<String> warnings = new ArrayList<>();
                                     JsonNode warningsNode = root.path("meta").path("warnings");
+                                    if (!warningsNode.isArray()) {
+                                        warningsNode = dataNode.path("meta").path("warnings");
+                                    }
                                     if (warningsNode.isArray()) {
                                         warningsNode.forEach(node -> {
                                             if (node.isTextual()) warnings.add(node.asText());
