@@ -1,18 +1,19 @@
 package com.qaima.external;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.qaima.dto.featone.FeatOneAnalysisMetricsDto;
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-import java.util.ArrayList;
-import java.util.List;
 
 @Slf4j
 @Component
@@ -55,8 +56,13 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
                                     ObjectMapper snakeMapper = objectMapper.copy()
                                             .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-                                    FeatOneAnalysisResponseDto dto =
+
+                                    FeatOneAnalysisResponseDto camelParsed =
+                                            objectMapper.treeToValue(dataNode, FeatOneAnalysisResponseDto.class);
+                                    FeatOneAnalysisResponseDto snakeParsed =
                                             snakeMapper.treeToValue(dataNode, FeatOneAnalysisResponseDto.class);
+
+                                    FeatOneAnalysisResponseDto dto = chooseBetter(camelParsed, snakeParsed);
 
                                     List<String> warnings = new ArrayList<>();
                                     JsonNode warningsNode = root.path("meta").path("warnings");
@@ -69,6 +75,18 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                         });
                                     }
                                     dto.setWarnings(warnings);
+
+                                    log.info(
+                                            "[FastAPI->Spring][Feature1] metrics fields stockCode={}, asOf={}, ohlcvSummary?={}, financialSummary?={}, indicatorSummary?={}, schemaVersion={}, indicators?={}",
+                                            dto.getMetrics() != null ? dto.getMetrics().getStockCode() : null,
+                                            dto.getMetrics() != null ? dto.getMetrics().getAsOf() : null,
+                                            dto.getMetrics() != null && dto.getMetrics().getOhlcvSummary() != null,
+                                            dto.getMetrics() != null && dto.getMetrics().getFinancialSummary() != null,
+                                            dto.getMetrics() != null && dto.getMetrics().getIndicatorSummary() != null,
+                                            dto.getMetrics() != null ? dto.getMetrics().getSchemaVersion() : null,
+                                            dto.getMetrics() != null && dto.getMetrics().getIndicators() != null
+                                    );
+
                                     return Mono.just(dto);
                                 } catch (Exception e) {
                                     log.error("[FastAPI] decode failed. body={}", body, e);
@@ -76,5 +94,30 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                 }
                             });
                 });
+    }
+
+    private FeatOneAnalysisResponseDto chooseBetter(
+            FeatOneAnalysisResponseDto camelParsed,
+            FeatOneAnalysisResponseDto snakeParsed
+    ) {
+        int camelScore = score(camelParsed);
+        int snakeScore = score(snakeParsed);
+        return camelScore >= snakeScore ? camelParsed : snakeParsed;
+    }
+
+    private int score(FeatOneAnalysisResponseDto dto) {
+        if (dto == null) return 0;
+        FeatOneAnalysisMetricsDto m = dto.getMetrics();
+        if (m == null) return 0;
+
+        int s = 0;
+        if (m.getStockCode() != null) s++;
+        if (m.getAsOf() != null) s++;
+        if (m.getOhlcvSummary() != null) s++;
+        if (m.getFinancialSummary() != null) s++;
+        if (m.getIndicatorSummary() != null) s++;
+        if (m.getSchemaVersion() != null) s++;
+        if (m.getIndicators() != null) s++;
+        return s;
     }
 }
