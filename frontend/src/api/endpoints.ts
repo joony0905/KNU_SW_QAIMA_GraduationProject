@@ -5,7 +5,7 @@ export const ENDPOINTS = {
   },
   stocks: {
     search: (query: string) => `/stocks/search?q=${encodeURIComponent(query)}`,
-    getByCode: (stockCode: string) => `/stocks/${stockCode}`,
+    getByCode: (stockCode: string) => `/stocks/code/${stockCode}`,
     financials: (ticker: string, years = 5) =>
       `/stocks/${ticker}/financials?years=${years}`,
     financialsByYear: (ticker: string, year: number) =>
