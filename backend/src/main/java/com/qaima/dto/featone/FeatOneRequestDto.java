@@ -12,7 +12,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
-import java.util.Map;
 
 @Getter
 @Setter
@@ -29,7 +28,4 @@ public class FeatOneRequestDto {
     private List<FinancialSummaryDto> financials;
 
     private Boolean includeExplain;
-
-    // 나중에 확장용 (예: user risk profile, lang 등)
-    private Map<String, Object> options;
 }

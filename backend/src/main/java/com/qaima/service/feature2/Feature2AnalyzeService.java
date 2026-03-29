@@ -43,19 +43,21 @@ public class Feature2AnalyzeService {
         final Feature2MetricsDto metrics = metricsAssembler.empty();
         final Feature2Command command = requestNormalizer.normalize(req);
 
+        log.info("[Feature2][service-start] incoming req={}, normalized stockCode={}, freq={}, window={}, peerCount={}, maxLag={}",
+                req, command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag());
         log.info("[Feat2] analyze start. stockCode={}, freq={}, window={}, peerCount={}, maxLag={}",
                 command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag());
 
         if (command.stockCode() == null || command.stockCode().isBlank()) {
             meta.addWarning(Feat2WarningCode.STOCK_NOT_FOUND);
-            log.info("[Feat2] early return: empty stockCode");
+            log.warn("[Feature2][stock-resolve] STOCK_NOT_FOUND added: empty normalized stockCode. incomingReq={}", req);
             return Mono.fromSupplier(() -> responseFactory.success(metrics, meta));
         }
 
         return stockResolver.resolve(command.stockCode(), meta)
                 .flatMap(stockContextOpt -> {
                     if (stockContextOpt.isEmpty()) {
-                        log.info("[Feat2] early return: stock not resolved. stockCode={}", command.stockCode());
+                        log.warn("[Feature2][stock-resolve] STOCK_NOT_FOUND path reached. stockCode={}", command.stockCode());
                         return Mono.fromSupplier(() -> responseFactory.success(metrics, meta));
                     }
 

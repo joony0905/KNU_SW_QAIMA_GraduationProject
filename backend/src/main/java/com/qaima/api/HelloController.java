@@ -61,7 +61,6 @@ public class HelloController {
                 .ohlcv(java.util.List.of())
                 .financials(java.util.List.of())
                 .includeExplain(false)
-                .options(Map.of())
                 .build();
 
         return analysisApiClient.requestStockAnalysis(req)

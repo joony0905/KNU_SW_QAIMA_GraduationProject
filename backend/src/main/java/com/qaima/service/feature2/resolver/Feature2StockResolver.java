@@ -30,6 +30,7 @@ public class Feature2StockResolver {
     private final StockService stockService;
 
     public Mono<Optional<Feature2StockContext>> resolve(String stockCode, Feature2MetaDto meta) {
+        log.info("[Feature2][stock-resolve] incoming stockCode={}", stockCode);
         return findByCode(stockCode)
                 .switchIfEmpty(resolveByFallback(stockCode, meta))
                 .flatMap(stock ->
@@ -51,6 +52,16 @@ public class Feature2StockResolver {
                                 ))
                                 .map(Optional::of)
                 )
+                .doOnNext(result -> {
+                    if (result.isPresent()) {
+                        Stock stock = result.get().stock();
+                        log.info("[Feature2][stock-resolve] result stockId={}, stockCode={}",
+                                stock != null ? stock.getStockId() : null,
+                                stock != null ? stock.getStockCode() : null);
+                    } else {
+                        log.warn("[Feature2][stock-resolve] result empty for stockCode={}", stockCode);
+                    }
+                })
                 .onErrorResume(ex -> {
                     log.warn("[Feat2StockResolver] stock resolve failed. stockCode={}, cause={}",
                             stockCode, ex.getMessage(), ex);
@@ -60,18 +71,24 @@ public class Feature2StockResolver {
     }
 
     private Mono<Stock> findByCode(String stockCode) {
+        log.info("[Feature2][stock-resolve] db lookup stockCode={}", stockCode);
         return Mono.fromCallable(() -> stockRepository.findByStockCodeWithExchangeAndIndustry(stockCode))
                 .subscribeOn(Schedulers.boundedElastic())
+                .doOnNext(opt -> log.info("[Feature2][stock-resolve] dbFound={}", opt.isPresent()))
                 .flatMap(opt -> opt.map(Mono::just).orElseGet(Mono::empty));
     }
 
     private Mono<Stock> resolveByFallback(String stockCode, Feature2MetaDto meta) {
+        log.info("[Feature2][stock-resolve] fallback path entered. stockCode={}", stockCode);
         return stockService.getOrCreateStockByCode(stockCode)
+                .doOnNext(created -> log.info("[Feature2][stock-resolve] fallback getOrCreate success. stockId={}, stockCode={}",
+                        created.getStockId(), created.getStockCode()))
                 .doOnNext(ignore -> meta.addWarning(Feat2WarningCode.EXTERNAL_API_FALLBACK_USED))
                 .flatMap(created -> Mono.fromCallable(() ->
                                 stockRepository.findByIdWithExchangeAndIndustry(created.getStockId())
                         )
                         .subscribeOn(Schedulers.boundedElastic())
+                        .doOnNext(opt -> log.info("[Feature2][stock-resolve] fallback reloadById found={}", opt.isPresent()))
                         .flatMap(opt -> opt.map(Mono::just).orElseGet(() -> Mono.just(created)))
                 )
                 .onErrorResume(ex -> {

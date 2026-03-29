@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 from app.models.indicator import IndicatorBundle
 
@@ -36,12 +36,13 @@ class FinancialSummaryItem(BaseModel):
     operating_income: Optional[float] = None
     net_income: Optional[float] = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class Feature1Request(BaseModel):
     # Contract is snake_case only.
+    model_config = ConfigDict(extra="forbid")
+
     stock_code: str
     freq: str
     ohlcv: List[OhlcvItem]
@@ -59,8 +60,7 @@ class OhlcvSummary(BaseModel):
     to: Optional[datetime] = None
     last_close: Optional[float] = None
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class FinancialSummary(BaseModel):
@@ -85,7 +85,7 @@ class Feature1Metrics(BaseModel):
 
 
 # ======================
-# Explain / Meta
+# Explain / Warnings
 # ======================
 
 class Feature1Explain(BaseModel):
@@ -95,10 +95,6 @@ class Feature1Explain(BaseModel):
     json: Optional[Dict[str, Any]] = Field(default=None, description="Parsed JSON result when available")
 
 
-class Feature1Meta(BaseModel):
-    warnings: List[str] = []
-
-
 # ======================
 # Final Response
 # ======================
@@ -106,4 +102,4 @@ class Feature1Meta(BaseModel):
 class Feature1Response(BaseModel):
     metrics: Feature1Metrics
     explain: Optional[Feature1Explain] = None
-    meta: Optional[Feature1Meta] = None
+    warnings: List[str] = []

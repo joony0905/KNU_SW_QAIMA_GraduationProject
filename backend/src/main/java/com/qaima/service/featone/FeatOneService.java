@@ -128,6 +128,13 @@ public class FeatOneService {
                     FeatOneRequestDto requestDto =
                             buildFeatOneRequestDto(stock, freq, candles, financials, includeExplain);
 
+                    log.info("[FeatOneService][analysis-request] stockCode={}, freq={}, ohlcvSize={}, financialsSize={}, includeExplain={}",
+                            requestDto.getStockCode(),
+                            requestDto.getFreq(),
+                            requestDto.getOhlcv() != null ? requestDto.getOhlcv().size() : 0,
+                            requestDto.getFinancials() != null ? requestDto.getFinancials().size() : 0,
+                            requestDto.getIncludeExplain());
+
                     return analysisApiClient.requestStockAnalysis(requestDto)
                             .map(response -> {
                                 boolean chartUnavailable = (candles == null || candles.isEmpty());

@@ -20,6 +20,8 @@ import reactor.core.publisher.Mono;
 @Component
 public class FastApiAnalysisClient implements AnalysisApiClient {
 
+    private static final String INDICATORS_KEY = "indicators";
+
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
@@ -33,10 +35,14 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
     @Override
     public Mono<FeatOneAnalysisResponseDto> requestStockAnalysis(FeatOneRequestDto request) {
+        JsonNode snakePayloadNode = toSnakeCaseNode(request);
+        String requestBody = snakePayloadNode.toString();
+        log.info("[FastApiAnalysisClient][request] url=/api/v1/analysis/feature1");
+        log.info("[FastApiAnalysisClient][request] body={}", requestBody);
 
         return webClient.post()
                 .uri("/api/v1/analysis/feature1")
-                .bodyValue(toSnakeCaseNode(request))
+                .bodyValue(snakePayloadNode)
                 .exchangeToMono(resp -> {
                     HttpStatusCode status = resp.statusCode();
 
@@ -44,32 +50,20 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                             .defaultIfEmpty("")
                             .flatMap(body -> {
                                 if (status.isError()) {
-                                    log.error("[FastAPI] status={} body={}", status.value(), body);
+                                    log.error("[FastApiAnalysisClient][error] status={}", status.value());
+                                    log.error("[FastApiAnalysisClient][error] body={}", body);
                                     return Mono.error(new RuntimeException("FASTAPI_HTTP_" + status.value()));
                                 }
 
                                 try {
                                     JsonNode root = objectMapper.readTree(body);
-                                    JsonNode payloadNode = root.has("data") ? root.get("data") : root;
-                                    if (payloadNode == null || payloadNode.isMissingNode() || payloadNode.isNull()) {
-                                        throw new IllegalStateException("FastAPI feature1 payload(data) is missing");
-                                    }
+                                    JsonNode payloadNode = requirePayloadOnlyRoot(root, "feature1");
 
                                     JsonNode canonicalPayload = toCanonicalCamelNode(payloadNode.deepCopy());
                                     FeatOneAnalysisResponseDto dto =
                                             objectMapper.treeToValue(canonicalPayload, FeatOneAnalysisResponseDto.class);
 
-                                    List<String> warnings = new ArrayList<>();
-                                    JsonNode warningsNode = root.path("meta").path("warnings");
-                                    if (!warningsNode.isArray()) {
-                                        warningsNode = canonicalPayload.path("meta").path("warnings");
-                                    }
-                                    if (warningsNode.isArray()) {
-                                        warningsNode.forEach(node -> {
-                                            if (node.isTextual()) warnings.add(node.asText());
-                                        });
-                                    }
-                                    dto.setWarnings(warnings);
+                                    dto.setWarnings(readWarnings(canonicalPayload));
 
                                     log.info(
                                             "[FastAPI->Spring][Feature1] metrics fields stockCode={}, asOf={}, ohlcvSummary?={}, financialSummary?={}, indicatorSummary?={}, schemaVersion={}, indicators?={}",
@@ -91,6 +85,26 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                 });
     }
 
+    private JsonNode requirePayloadOnlyRoot(JsonNode root, String endpointName) {
+        if (root == null || root.isNull() || root.isMissingNode() || !root.isObject()) {
+            throw new IllegalStateException("FastAPI " + endpointName + " payload root is missing or not object");
+        }
+        if (root.has("data")) {
+            throw new IllegalStateException("FastAPI " + endpointName + " returned envelope(data), but payload-only is required");
+        }
+        return root;
+    }
+
+    private List<String> readWarnings(JsonNode canonicalPayload) {
+        List<String> warnings = new ArrayList<>();
+        JsonNode warningsNode = canonicalPayload.path("warnings");
+        if (warningsNode.isArray()) {
+            warningsNode.forEach(node -> {
+                if (node.isTextual()) warnings.add(node.asText());
+            });
+        }
+        return warnings;
+    }
 
     private JsonNode toSnakeCaseNode(Object value) {
         JsonNode node = objectMapper.valueToTree(value);
@@ -126,12 +140,16 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
     }
 
     private JsonNode toCanonicalCamelNode(JsonNode node) {
+        return toCanonicalCamelNode(node, false);
+    }
+
+    private JsonNode toCanonicalCamelNode(JsonNode node, boolean preserveKeysInObject) {
         if (node == null || node.isNull()) return node;
 
         if (node.isArray()) {
             ArrayNode arr = (ArrayNode) node;
             for (int i = 0; i < arr.size(); i++) {
-                arr.set(i, toCanonicalCamelNode(arr.get(i)));
+                arr.set(i, toCanonicalCamelNode(arr.get(i), preserveKeysInObject));
             }
             return arr;
         }
@@ -146,8 +164,10 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
         Iterator<String> fieldNames = src.fieldNames();
         while (fieldNames.hasNext()) {
             String key = fieldNames.next();
-            String camelKey = snakeToCamel(key);
-            dst.set(camelKey, toCanonicalCamelNode(src.get(key)));
+            String canonicalKey = preserveKeysInObject ? key : snakeToCamel(key);
+
+            boolean preserveChildKeys = preserveKeysInObject || INDICATORS_KEY.equals(canonicalKey);
+            dst.set(canonicalKey, toCanonicalCamelNode(src.get(key), preserveChildKeys));
         }
 
         return dst;

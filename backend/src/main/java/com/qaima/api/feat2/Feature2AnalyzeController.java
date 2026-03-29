@@ -6,6 +6,7 @@ import com.qaima.dto.feature2.Feature2AnalyzeRequestDto;
 import com.qaima.dto.feature2.Feature2AnalyzeResponseDto;
 import com.qaima.dto.feature2.Feature2MetricsDto;
 import com.qaima.service.feature2.Feature2AnalyzeService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -22,9 +23,12 @@ public class Feature2AnalyzeController {
 
     @PostMapping("/analyze")
     public Mono<ApiResponse<Feature2AnalyzeResponseDto>> analyze(
-            @RequestBody(required = false) Feature2AnalyzeRequestDto req
+            @Valid @RequestBody Feature2AnalyzeRequestDto req
     ) {
-        log.info("[Feature2] analyze request received");
+        log.info("[Feature2AnalyzeController][request] stockCode={}, freq={}, window={}",
+                req != null ? req.getStockCode() : null,
+                req != null ? req.getFreq() : null,
+                req != null ? req.getWindow() : null);
 
         return feature2AnalyzeService.analyze(req)
                 .map(this::wrapWithWarnings)
