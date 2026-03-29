@@ -1,9 +1,12 @@
 package com.qaima.external;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.qaima.dto.peercluster.PeerClusterRequestDto;
 import com.qaima.dto.peercluster.PeerClusterResponseDto;
+import java.util.Iterator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -36,10 +39,12 @@ public class PeerClusterClient {
                 .doOnNext(body -> log.info("[FastAPI RAW] {}", body))
                 .map(body -> {
                     try {
-                        ObjectMapper snakeMapper = objectMapper.copy()
-                                .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
+                        JsonNode root = objectMapper.readTree(body);
+                        JsonNode payloadNode = root.has("data") ? root.get("data") : root;
+                        JsonNode canonicalPayload = toCanonicalCamelNode(payloadNode.deepCopy());
+
                         PeerClusterResponseDto parsed =
-                                snakeMapper.readValue(body, PeerClusterResponseDto.class);
+                                objectMapper.treeToValue(canonicalPayload, PeerClusterResponseDto.class);
                         log.info("[PeerClusterClient] parsed={}", parsed);
                         return parsed;
                     } catch (Exception e) {
@@ -47,5 +52,46 @@ public class PeerClusterClient {
                         throw new RuntimeException("JSON parse failed", e);
                     }
                 });
+    }
+
+    private JsonNode toCanonicalCamelNode(JsonNode node) {
+        if (node == null || node.isNull()) return node;
+
+        if (node.isArray()) {
+            ArrayNode arr = (ArrayNode) node;
+            for (int i = 0; i < arr.size(); i++) {
+                arr.set(i, toCanonicalCamelNode(arr.get(i)));
+            }
+            return arr;
+        }
+
+        if (!node.isObject()) {
+            return node;
+        }
+
+        ObjectNode src = (ObjectNode) node;
+        ObjectNode dst = objectMapper.createObjectNode();
+        Iterator<String> fieldNames = src.fieldNames();
+        while (fieldNames.hasNext()) {
+            String key = fieldNames.next();
+            dst.set(snakeToCamel(key), toCanonicalCamelNode(src.get(key)));
+        }
+        return dst;
+    }
+
+    private String snakeToCamel(String key) {
+        if (key == null || key.indexOf('_') < 0) return key;
+
+        StringBuilder sb = new StringBuilder();
+        boolean upperNext = false;
+        for (char c : key.toCharArray()) {
+            if (c == '_') {
+                upperNext = true;
+                continue;
+            }
+            sb.append(upperNext ? Character.toUpperCase(c) : c);
+            upperNext = false;
+        }
+        return sb.toString();
     }
 }
