@@ -41,6 +41,8 @@ class FinancialSummaryItem(BaseModel):
 
 
 class Feature1Request(BaseModel):
+    # Contract is snake_case.
+    # camelCase aliases are temporary backward compatibility for legacy callers.
     stock_code: str = Field(alias="stockCode")
     freq: str
     ohlcv: List[OhlcvItem]

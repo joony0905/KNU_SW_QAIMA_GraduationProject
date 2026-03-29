@@ -2,9 +2,9 @@ import api from "./apiClient";
 import type { Feature2AnalyzeResponse } from "../types/feature2";
 
 interface ApiResponse<T> {
-  success: boolean;
+  meta: { status: string; warnings?: string[]; warning?: string | null } | null;
   data: T;
-  error: string | null;
+  errors: Array<{ code: string; message: string }>;
 }
 
 export const fetchFeature2Analysis = async (
@@ -12,7 +12,8 @@ export const fetchFeature2Analysis = async (
 ): Promise<Feature2AnalyzeResponse> => {
   const res = await api.post<ApiResponse<Feature2AnalyzeResponse>>(
     "/feature2/analyze",
-    { stockCode },
+    // Spring external contract: snake_case JSON.
+    { stock_code: stockCode },
   );
   return res.data.data;
 };

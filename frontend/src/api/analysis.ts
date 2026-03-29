@@ -25,8 +25,9 @@ export type FeatOneAnalyzeRequest = {
 interface ApiResponse<T> {
   meta: {
     status: string;
-    warning: string | null;
-  };
+    warning?: string | null;
+    warnings?: string[];
+  } | null;
   data: T;
   errors: Array<{ code: string; message: string }>;
 }
@@ -34,9 +35,20 @@ interface ApiResponse<T> {
 export const fetchAnalysis = async (
   req: FeatOneAnalyzeRequest
 ): Promise<AnalysisResponse> => {
+  // Spring public contract: snake_case request payload.
+  // Frontend internal naming stays camelCase for minimal impact.
+  const payload = {
+    stock_code: req.stockCode,
+    freq: req.freq,
+    from: req.from,
+    to: req.to,
+    market_div_code: req.marketDivCode,
+    include_explain: req.includeExplain,
+  };
+
   const res = await api.post<ApiResponse<AnalysisResponseWire>>(
     ENDPOINTS.analysis.analyze(),
-    req
+    payload
   );
   return mapAnalysisWireToCamel(res.data.data);
 };
