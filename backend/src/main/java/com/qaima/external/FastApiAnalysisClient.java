@@ -2,13 +2,30 @@ package com.qaima.external;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
+import com.qaima.dto.featone.FeatOneAnalysisExplainDto;
+import com.qaima.dto.featone.FeatOneAnalysisMetricsDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
+import com.qaima.dto.financial.FinancialSummaryMetricsDto;
+import com.qaima.dto.indicator.IndicatorBundleDto;
+import com.qaima.dto.indicator.IndicatorSpecDto;
+import com.qaima.dto.ohlcv.OhlcvSummaryDto;
+import com.qaima.external.dto.feature1.Feature1InboundExplainDto;
+import com.qaima.external.dto.feature1.Feature1InboundFinancialSummaryDto;
+import com.qaima.external.dto.feature1.Feature1InboundIndicatorBundleDto;
+import com.qaima.external.dto.feature1.Feature1InboundIndicatorSpecDto;
+import com.qaima.external.dto.feature1.Feature1InboundMetricsDto;
+import com.qaima.external.dto.feature1.Feature1InboundOhlcvSummaryDto;
+import com.qaima.external.dto.feature1.Feature1InboundResponseDto;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatusCode;
@@ -20,10 +37,9 @@ import reactor.core.publisher.Mono;
 @Component
 public class FastApiAnalysisClient implements AnalysisApiClient {
 
-    private static final String INDICATORS_KEY = "indicators";
-
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final ObjectMapper snakeCaseObjectMapper;
 
     public FastApiAnalysisClient(
             @Qualifier("analysisWebClient") WebClient webClient,
@@ -31,6 +47,8 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
     ) {
         this.webClient = webClient;
         this.objectMapper = objectMapper;
+        this.snakeCaseObjectMapper = objectMapper.copy()
+                .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     }
 
     @Override
@@ -56,14 +74,16 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                 }
 
                                 try {
+                                    log.info("[FastApiAnalysisClient][feature1] FastAPI raw response={}", body);
                                     JsonNode root = objectMapper.readTree(body);
-                                    JsonNode payloadNode = requirePayloadOnlyRoot(root, "feature1");
+                                    JsonNode payloadNode = extractPayload(root, "feature1");
+                                    log.info("[FastApiAnalysisClient][feature1] payload extract result={}", payloadNode);
+                                    Feature1InboundResponseDto inbound = snakeCaseResponseValue(payloadNode);
+                                    FeatOneAnalysisResponseDto dto = toResponseDto(inbound);
+                                    log.info("[FastApiAnalysisClient][feature1] DTO binding result={}", dto);
+                                    validateBoundResponse(dto, payloadNode);
 
-                                    JsonNode canonicalPayload = toCanonicalCamelNode(payloadNode.deepCopy());
-                                    FeatOneAnalysisResponseDto dto =
-                                            objectMapper.treeToValue(canonicalPayload, FeatOneAnalysisResponseDto.class);
-
-                                    dto.setWarnings(readWarnings(canonicalPayload));
+                                    dto.setWarnings(readWarnings(root, payloadNode));
 
                                     log.info(
                                             "[FastAPI->Spring][Feature1] metrics fields stockCode={}, asOf={}, ohlcvSummary?={}, financialSummary?={}, indicatorSummary?={}, schemaVersion={}, indicators?={}",
@@ -85,25 +105,163 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                 });
     }
 
-    private JsonNode requirePayloadOnlyRoot(JsonNode root, String endpointName) {
+    private Feature1InboundResponseDto snakeCaseResponseValue(JsonNode payloadNode) throws com.fasterxml.jackson.core.JsonProcessingException {
+        return snakeCaseObjectMapper.treeToValue(payloadNode, Feature1InboundResponseDto.class);
+    }
+
+    private FeatOneAnalysisResponseDto toResponseDto(Feature1InboundResponseDto inbound) {
+        if (inbound == null) {
+            throw new IllegalStateException("FastAPI feature1 inbound response is null");
+        }
+
+        return FeatOneAnalysisResponseDto.builder()
+                .metrics(toMetricsDto(inbound.getMetrics()))
+                .explain(toExplainDto(inbound.getExplain()))
+                .warnings(inbound.getWarnings())
+                .build();
+    }
+
+    private FeatOneAnalysisMetricsDto toMetricsDto(Feature1InboundMetricsDto inbound) {
+        if (inbound == null) {
+            throw new IllegalStateException("FastAPI feature1 inbound metrics is null");
+        }
+
+        return FeatOneAnalysisMetricsDto.builder()
+                .stockCode(inbound.getStockCode())
+                .asOf(inbound.getAsOf())
+                .ohlcvSummary(toOhlcvSummaryDto(inbound.getOhlcvSummary()))
+                .financialSummary(toFinancialSummaryDto(inbound.getFinancialSummary()))
+                .indicators(toIndicatorBundleDto(inbound.getIndicators()))
+                .indicatorSummary(inbound.getIndicatorSummary())
+                .schemaVersion(inbound.getSchemaVersion())
+                .build();
+    }
+
+    private OhlcvSummaryDto toOhlcvSummaryDto(Feature1InboundOhlcvSummaryDto inbound) {
+        if (inbound == null) {
+            return null;
+        }
+        return OhlcvSummaryDto.builder()
+                .count(inbound.getCount())
+                .from(inbound.getFrom())
+                .to(inbound.getTo())
+                .lastClose(inbound.getLastClose())
+                .build();
+    }
+
+    private FinancialSummaryMetricsDto toFinancialSummaryDto(Feature1InboundFinancialSummaryDto inbound) {
+        if (inbound == null) {
+            return null;
+        }
+        return FinancialSummaryMetricsDto.builder()
+                .years(inbound.getYears())
+                .revenue(inbound.getRevenue())
+                .operatingIncome(inbound.getOperatingIncome())
+                .netIncome(inbound.getNetIncome())
+                .build();
+    }
+
+    private IndicatorBundleDto toIndicatorBundleDto(Feature1InboundIndicatorBundleDto inbound) {
+        if (inbound == null) {
+            return null;
+        }
+        return IndicatorBundleDto.builder()
+                .spec(toIndicatorSpecDto(inbound.getSpec()))
+                .ema(inbound.getEma())
+                .bb20_2(inbound.getBb20_2())
+                .stoch14_3_3(inbound.getStoch14_3_3())
+                .warnings(inbound.getWarnings() != null ? inbound.getWarnings() : Collections.emptyList())
+                .build();
+    }
+
+    private IndicatorSpecDto toIndicatorSpecDto(Feature1InboundIndicatorSpecDto inbound) {
+        if (inbound == null) {
+            return null;
+        }
+        return IndicatorSpecDto.builder()
+                .emaPeriod(inbound.getEmaPeriod())
+                .bollingerPeriod(inbound.getBollingerPeriod())
+                .bollingerStdDev(inbound.getBollingerStdDev())
+                .stochasticKPeriod(inbound.getStochasticKPeriod())
+                .stochasticDPeriod(inbound.getStochasticDPeriod())
+                .stochasticSmooth(inbound.getStochasticSmooth())
+                .build();
+    }
+
+    private FeatOneAnalysisExplainDto toExplainDto(Feature1InboundExplainDto inbound) {
+        if (inbound == null) {
+            return null;
+        }
+        return FeatOneAnalysisExplainDto.builder()
+                .text(inbound.getText())
+                .build();
+    }
+
+    private void validateBoundResponse(FeatOneAnalysisResponseDto dto, JsonNode payloadNode) {
+        if (dto == null) {
+            throw new IllegalStateException("FastAPI feature1 DTO binding returned null response");
+        }
+        if (dto.getMetrics() == null) {
+            throw new IllegalStateException("FastAPI feature1 DTO binding returned null metrics");
+        }
+
+        boolean allMetricsCoreFieldsNull =
+                dto.getMetrics().getStockCode() == null
+                        && dto.getMetrics().getAsOf() == null
+                        && dto.getMetrics().getOhlcvSummary() == null
+                        && dto.getMetrics().getFinancialSummary() == null
+                        && dto.getMetrics().getIndicators() == null
+                        && dto.getMetrics().getIndicatorSummary() == null
+                        && dto.getMetrics().getSchemaVersion() == null;
+
+        if (allMetricsCoreFieldsNull) {
+            throw new IllegalStateException(
+                    "FastAPI feature1 DTO binding produced empty metrics. payload.metrics keys="
+                            + StreamSupport.stream(
+                                    java.util.Spliterators.spliteratorUnknownSize(
+                                            payloadNode.path("metrics").fieldNames(),
+                                            0
+                                    ),
+                                    false
+                            ).collect(Collectors.toList())
+            );
+        }
+    }
+
+    private JsonNode extractPayload(JsonNode root, String endpointName) {
         if (root == null || root.isNull() || root.isMissingNode() || !root.isObject()) {
             throw new IllegalStateException("FastAPI " + endpointName + " payload root is missing or not object");
         }
         if (root.has("data")) {
-            throw new IllegalStateException("FastAPI " + endpointName + " returned envelope(data), but payload-only is required");
+            JsonNode dataNode = root.get("data");
+            if (dataNode == null || dataNode.isNull() || dataNode.isMissingNode() || !dataNode.isObject()) {
+                throw new IllegalStateException("FastAPI " + endpointName + " envelope data is missing or not object");
+            }
+            return dataNode;
         }
         return root;
     }
 
-    private List<String> readWarnings(JsonNode canonicalPayload) {
+    private List<String> readWarnings(JsonNode root, JsonNode payloadNode) {
         List<String> warnings = new ArrayList<>();
-        JsonNode warningsNode = canonicalPayload.path("warnings");
-        if (warningsNode.isArray()) {
-            warningsNode.forEach(node -> {
-                if (node.isTextual()) warnings.add(node.asText());
-            });
-        }
+        appendWarnings(warnings, root.path("meta").path("warnings"));
+        appendWarnings(warnings, payloadNode.path("meta").path("warnings"));
+        appendWarnings(warnings, payloadNode.path("warnings"));
         return warnings;
+    }
+
+    private void appendWarnings(List<String> warnings, JsonNode warningsNode) {
+        if (!warningsNode.isArray()) {
+            return;
+        }
+        warningsNode.forEach(node -> {
+            if (node.isTextual()) {
+                String warning = node.asText();
+                if (!warnings.contains(warning)) {
+                    warnings.add(warning);
+                }
+            }
+        });
     }
 
     private JsonNode toSnakeCaseNode(Object value) {
@@ -137,56 +295,6 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
         }
 
         return dst;
-    }
-
-    private JsonNode toCanonicalCamelNode(JsonNode node) {
-        return toCanonicalCamelNode(node, false);
-    }
-
-    private JsonNode toCanonicalCamelNode(JsonNode node, boolean preserveKeysInObject) {
-        if (node == null || node.isNull()) return node;
-
-        if (node.isArray()) {
-            ArrayNode arr = (ArrayNode) node;
-            for (int i = 0; i < arr.size(); i++) {
-                arr.set(i, toCanonicalCamelNode(arr.get(i), preserveKeysInObject));
-            }
-            return arr;
-        }
-
-        if (!node.isObject()) {
-            return node;
-        }
-
-        ObjectNode src = (ObjectNode) node;
-        ObjectNode dst = objectMapper.createObjectNode();
-
-        Iterator<String> fieldNames = src.fieldNames();
-        while (fieldNames.hasNext()) {
-            String key = fieldNames.next();
-            String canonicalKey = preserveKeysInObject ? key : snakeToCamel(key);
-
-            boolean preserveChildKeys = preserveKeysInObject || INDICATORS_KEY.equals(canonicalKey);
-            dst.set(canonicalKey, toCanonicalCamelNode(src.get(key), preserveChildKeys));
-        }
-
-        return dst;
-    }
-
-    private String snakeToCamel(String key) {
-        if (key == null || key.indexOf('_') < 0) return key;
-
-        StringBuilder sb = new StringBuilder();
-        boolean upperNext = false;
-        for (char c : key.toCharArray()) {
-            if (c == '_') {
-                upperNext = true;
-                continue;
-            }
-            sb.append(upperNext ? Character.toUpperCase(c) : c);
-            upperNext = false;
-        }
-        return sb.toString();
     }
 
     private String camelToSnake(String key) {
