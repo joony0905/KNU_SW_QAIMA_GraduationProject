@@ -20,6 +20,8 @@ import reactor.core.publisher.Mono;
 @Component
 public class FastApiAnalysisClient implements AnalysisApiClient {
 
+    private static final String INDICATORS_KEY = "indicators";
+
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
 
@@ -126,12 +128,16 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
     }
 
     private JsonNode toCanonicalCamelNode(JsonNode node) {
+        return toCanonicalCamelNode(node, false);
+    }
+
+    private JsonNode toCanonicalCamelNode(JsonNode node, boolean preserveKeysInObject) {
         if (node == null || node.isNull()) return node;
 
         if (node.isArray()) {
             ArrayNode arr = (ArrayNode) node;
             for (int i = 0; i < arr.size(); i++) {
-                arr.set(i, toCanonicalCamelNode(arr.get(i)));
+                arr.set(i, toCanonicalCamelNode(arr.get(i), preserveKeysInObject));
             }
             return arr;
         }
@@ -146,8 +152,10 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
         Iterator<String> fieldNames = src.fieldNames();
         while (fieldNames.hasNext()) {
             String key = fieldNames.next();
-            String camelKey = snakeToCamel(key);
-            dst.set(camelKey, toCanonicalCamelNode(src.get(key)));
+            String canonicalKey = preserveKeysInObject ? key : snakeToCamel(key);
+
+            boolean preserveChildKeys = preserveKeysInObject || INDICATORS_KEY.equals(canonicalKey);
+            dst.set(canonicalKey, toCanonicalCamelNode(src.get(key), preserveChildKeys));
         }
 
         return dst;
