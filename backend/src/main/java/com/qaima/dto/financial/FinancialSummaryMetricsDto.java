@@ -1,6 +1,5 @@
 package com.qaima.dto.financial;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import java.math.BigDecimal;
@@ -21,10 +20,6 @@ import lombok.Setter;
 public class FinancialSummaryMetricsDto {
     private List<Integer> years;
     private Map<Integer, BigDecimal> revenue;
-
-    @JsonAlias("operating_income")
     private Map<Integer, BigDecimal> operatingIncome;
-
-    @JsonAlias("net_income")
     private Map<Integer, BigDecimal> netIncome;
 }

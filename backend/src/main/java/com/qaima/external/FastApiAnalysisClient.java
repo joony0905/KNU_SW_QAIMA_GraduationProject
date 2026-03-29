@@ -2,11 +2,12 @@ package com.qaima.external;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
-import com.qaima.dto.featone.FeatOneAnalysisMetricsDto;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -49,25 +50,19 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
                                 try {
                                     JsonNode root = objectMapper.readTree(body);
-                                    JsonNode dataNode = root.has("data") ? root.get("data") : root;
-                                    if (dataNode == null || dataNode.isMissingNode() || dataNode.isNull()) {
+                                    JsonNode payloadNode = root.has("data") ? root.get("data") : root;
+                                    if (payloadNode == null || payloadNode.isMissingNode() || payloadNode.isNull()) {
                                         throw new IllegalStateException("FastAPI feature1 payload(data) is missing");
                                     }
 
-                                    ObjectMapper snakeMapper = objectMapper.copy()
-                                            .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
-
-                                    FeatOneAnalysisResponseDto camelParsed =
-                                            objectMapper.treeToValue(dataNode, FeatOneAnalysisResponseDto.class);
-                                    FeatOneAnalysisResponseDto snakeParsed =
-                                            snakeMapper.treeToValue(dataNode, FeatOneAnalysisResponseDto.class);
-
-                                    FeatOneAnalysisResponseDto dto = chooseBetter(camelParsed, snakeParsed);
+                                    JsonNode canonicalPayload = toCanonicalCamelNode(payloadNode.deepCopy());
+                                    FeatOneAnalysisResponseDto dto =
+                                            objectMapper.treeToValue(canonicalPayload, FeatOneAnalysisResponseDto.class);
 
                                     List<String> warnings = new ArrayList<>();
                                     JsonNode warningsNode = root.path("meta").path("warnings");
                                     if (!warningsNode.isArray()) {
-                                        warningsNode = dataNode.path("meta").path("warnings");
+                                        warningsNode = canonicalPayload.path("meta").path("warnings");
                                     }
                                     if (warningsNode.isArray()) {
                                         warningsNode.forEach(node -> {
@@ -96,28 +91,47 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                 });
     }
 
-    private FeatOneAnalysisResponseDto chooseBetter(
-            FeatOneAnalysisResponseDto camelParsed,
-            FeatOneAnalysisResponseDto snakeParsed
-    ) {
-        int camelScore = score(camelParsed);
-        int snakeScore = score(snakeParsed);
-        return camelScore >= snakeScore ? camelParsed : snakeParsed;
+    private JsonNode toCanonicalCamelNode(JsonNode node) {
+        if (node == null || node.isNull()) return node;
+
+        if (node.isArray()) {
+            ArrayNode arr = (ArrayNode) node;
+            for (int i = 0; i < arr.size(); i++) {
+                arr.set(i, toCanonicalCamelNode(arr.get(i)));
+            }
+            return arr;
+        }
+
+        if (!node.isObject()) {
+            return node;
+        }
+
+        ObjectNode src = (ObjectNode) node;
+        ObjectNode dst = objectMapper.createObjectNode();
+
+        Iterator<String> fieldNames = src.fieldNames();
+        while (fieldNames.hasNext()) {
+            String key = fieldNames.next();
+            String camelKey = snakeToCamel(key);
+            dst.set(camelKey, toCanonicalCamelNode(src.get(key)));
+        }
+
+        return dst;
     }
 
-    private int score(FeatOneAnalysisResponseDto dto) {
-        if (dto == null) return 0;
-        FeatOneAnalysisMetricsDto m = dto.getMetrics();
-        if (m == null) return 0;
+    private String snakeToCamel(String key) {
+        if (key == null || key.indexOf('_') < 0) return key;
 
-        int s = 0;
-        if (m.getStockCode() != null) s++;
-        if (m.getAsOf() != null) s++;
-        if (m.getOhlcvSummary() != null) s++;
-        if (m.getFinancialSummary() != null) s++;
-        if (m.getIndicatorSummary() != null) s++;
-        if (m.getSchemaVersion() != null) s++;
-        if (m.getIndicators() != null) s++;
-        return s;
+        StringBuilder sb = new StringBuilder();
+        boolean upperNext = false;
+        for (char c : key.toCharArray()) {
+            if (c == '_') {
+                upperNext = true;
+                continue;
+            }
+            sb.append(upperNext ? Character.toUpperCase(c) : c);
+            upperNext = false;
+        }
+        return sb.toString();
     }
 }

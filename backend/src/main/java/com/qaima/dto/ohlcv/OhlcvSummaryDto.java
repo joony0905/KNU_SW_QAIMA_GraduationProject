@@ -1,6 +1,5 @@
 package com.qaima.dto.ohlcv;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import java.math.BigDecimal;
@@ -21,7 +20,5 @@ public class OhlcvSummaryDto {
     private Integer count;
     private OffsetDateTime from;
     private OffsetDateTime to;
-
-    @JsonAlias("last_close")
     private BigDecimal lastClose;
 }
