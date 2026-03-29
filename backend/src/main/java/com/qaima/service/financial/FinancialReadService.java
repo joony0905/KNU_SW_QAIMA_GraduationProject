@@ -37,7 +37,7 @@ public class FinancialReadService {
         int toYear = (asOfDate != null ? asOfDate : LocalDate.now()).getYear();
         int fromYear = toYear - (years - 1);
 
-        return Blocking.call(() -> stockRepository.findByStockCodeWithExchange(stockCode)
+        return Blocking.call(() -> stockRepository.findByStockCodeWithExchangeAndIndustry(stockCode)
                         .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode)))
                 .flatMap(stock -> Blocking.call(() -> queryFinancials(stock, periodType, periodNo, fromYear, toYear)))
                 .map(list -> list.stream().map(financialMapper::toDto).toList());

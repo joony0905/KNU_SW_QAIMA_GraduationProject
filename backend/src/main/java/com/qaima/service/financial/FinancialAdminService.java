@@ -29,7 +29,7 @@ public class FinancialAdminService {
 
     public Mono<FinancialDto> create(String stockCode, FinancialDto dto) {
         return Blocking.call(() -> tx().execute(status -> {
-            Stock stock = stockRepository.findByStockCodeWithExchange(stockCode)
+            Stock stock = stockRepository.findByStockCodeWithExchangeAndIndustry(stockCode)
                     .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode));
 
             if (dto.getYear() == null) throw new IllegalArgumentException("year 값은 필수입니다.");

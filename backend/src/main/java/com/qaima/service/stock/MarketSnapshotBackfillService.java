@@ -45,7 +45,7 @@ public class MarketSnapshotBackfillService {
         String trimmedStockCode = stockCode.trim();
 
         return Blocking.call(() -> stockRepository.findByExchangeCodeAndStockCodeIgnoreCase(resolvedExchange, trimmedStockCode)
-                        .orElseGet(() -> stockRepository.findByStockCodeWithExchange(trimmedStockCode)
+                        .orElseGet(() -> stockRepository.findByStockCodeWithExchangeAndIndustry(trimmedStockCode)
                                 .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + trimmedStockCode))))
                 .flatMap(stock -> backfillStock(stock, targetDate, force));
     }
