@@ -40,7 +40,7 @@ public class PeerClusterClient {
                 .map(body -> {
                     try {
                         JsonNode root = objectMapper.readTree(body);
-                        JsonNode payloadNode = root.has("data") ? root.get("data") : root;
+                        JsonNode payloadNode = requirePayloadOnlyRoot(root, "feature2/peer-cluster");
                         JsonNode canonicalPayload = toCanonicalCamelNode(payloadNode.deepCopy());
 
                         PeerClusterResponseDto parsed =
@@ -54,6 +54,15 @@ public class PeerClusterClient {
                 });
     }
 
+    private JsonNode requirePayloadOnlyRoot(JsonNode root, String endpointName) {
+        if (root == null || root.isNull() || root.isMissingNode() || !root.isObject()) {
+            throw new IllegalStateException("FastAPI " + endpointName + " payload root is missing or not object");
+        }
+        if (root.has("data")) {
+            throw new IllegalStateException("FastAPI " + endpointName + " returned envelope(data), but payload-only is required");
+        }
+        return root;
+    }
 
     private JsonNode toSnakeCaseNode(Object value) {
         JsonNode node = objectMapper.valueToTree(value);

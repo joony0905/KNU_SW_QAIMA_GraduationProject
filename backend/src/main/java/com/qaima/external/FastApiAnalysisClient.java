@@ -52,26 +52,13 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
                                 try {
                                     JsonNode root = objectMapper.readTree(body);
-                                    JsonNode payloadNode = root.has("data") ? root.get("data") : root;
-                                    if (payloadNode == null || payloadNode.isMissingNode() || payloadNode.isNull()) {
-                                        throw new IllegalStateException("FastAPI feature1 payload(data) is missing");
-                                    }
+                                    JsonNode payloadNode = requirePayloadOnlyRoot(root, "feature1");
 
                                     JsonNode canonicalPayload = toCanonicalCamelNode(payloadNode.deepCopy());
                                     FeatOneAnalysisResponseDto dto =
                                             objectMapper.treeToValue(canonicalPayload, FeatOneAnalysisResponseDto.class);
 
-                                    List<String> warnings = new ArrayList<>();
-                                    JsonNode warningsNode = root.path("meta").path("warnings");
-                                    if (!warningsNode.isArray()) {
-                                        warningsNode = canonicalPayload.path("meta").path("warnings");
-                                    }
-                                    if (warningsNode.isArray()) {
-                                        warningsNode.forEach(node -> {
-                                            if (node.isTextual()) warnings.add(node.asText());
-                                        });
-                                    }
-                                    dto.setWarnings(warnings);
+                                    dto.setWarnings(readWarnings(canonicalPayload));
 
                                     log.info(
                                             "[FastAPI->Spring][Feature1] metrics fields stockCode={}, asOf={}, ohlcvSummary?={}, financialSummary?={}, indicatorSummary?={}, schemaVersion={}, indicators?={}",
@@ -93,6 +80,26 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                 });
     }
 
+    private JsonNode requirePayloadOnlyRoot(JsonNode root, String endpointName) {
+        if (root == null || root.isNull() || root.isMissingNode() || !root.isObject()) {
+            throw new IllegalStateException("FastAPI " + endpointName + " payload root is missing or not object");
+        }
+        if (root.has("data")) {
+            throw new IllegalStateException("FastAPI " + endpointName + " returned envelope(data), but payload-only is required");
+        }
+        return root;
+    }
+
+    private List<String> readWarnings(JsonNode canonicalPayload) {
+        List<String> warnings = new ArrayList<>();
+        JsonNode warningsNode = canonicalPayload.path("warnings");
+        if (warningsNode.isArray()) {
+            warningsNode.forEach(node -> {
+                if (node.isTextual()) warnings.add(node.asText());
+            });
+        }
+        return warnings;
+    }
 
     private JsonNode toSnakeCaseNode(Object value) {
         JsonNode node = objectMapper.valueToTree(value);

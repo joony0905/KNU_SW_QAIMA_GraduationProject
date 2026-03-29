@@ -1,6 +1,7 @@
 package com.qaima.external;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -57,6 +58,34 @@ class FastApiAnalysisClientCanonicalizationTest {
         assertEquals("stoch1433", invokeSnakeToCamel("stoch14_3_3"));
     }
 
+    @Test
+    void requirePayloadOnlyRoot_rejectsLegacyEnvelope() throws Exception {
+        JsonNode envelope = objectMapper.readTree("""
+                {
+                  "data": {
+                    "metrics": {}
+                  }
+                }
+                """);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class, () -> invokeRequirePayloadOnlyRootUnchecked(envelope));
+        assertTrue(ex.getMessage().contains("payload-only"));
+    }
+
+    @Test
+    void readWarnings_readsOnlyPayloadWarnings() throws Exception {
+        JsonNode payload = objectMapper.readTree("""
+                {
+                  "warnings": ["A", "B"],
+                  "meta": { "warnings": ["LEGACY"] }
+                }
+                """);
+
+        @SuppressWarnings("unchecked")
+        java.util.List<String> warnings = (java.util.List<String>) invokeReadWarnings(payload);
+        assertEquals(java.util.List.of("A", "B"), warnings);
+    }
+
     private JsonNode invokeCanonicalize(JsonNode input) throws Exception {
         Method method = FastApiAnalysisClient.class.getDeclaredMethod("toCanonicalCamelNode", JsonNode.class);
         method.setAccessible(true);
@@ -67,5 +96,30 @@ class FastApiAnalysisClientCanonicalizationTest {
         Method method = FastApiAnalysisClient.class.getDeclaredMethod("snakeToCamel", String.class);
         method.setAccessible(true);
         return (String) method.invoke(client, key);
+    }
+
+    private Object invokeReadWarnings(JsonNode payload) throws Exception {
+        Method method = FastApiAnalysisClient.class.getDeclaredMethod("readWarnings", JsonNode.class);
+        method.setAccessible(true);
+        return method.invoke(client, payload);
+    }
+
+    private JsonNode invokeRequirePayloadOnlyRoot(JsonNode root) throws Exception {
+        Method method = FastApiAnalysisClient.class.getDeclaredMethod("requirePayloadOnlyRoot", JsonNode.class, String.class);
+        method.setAccessible(true);
+        return (JsonNode) method.invoke(client, root, "feature1");
+    }
+
+    private JsonNode invokeRequirePayloadOnlyRootUnchecked(JsonNode root) {
+        try {
+            return invokeRequirePayloadOnlyRoot(root);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            if (e.getCause() instanceof IllegalStateException stateEx) {
+                throw stateEx;
+            }
+            throw new RuntimeException(e.getCause());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
