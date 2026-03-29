@@ -30,9 +30,6 @@ export interface AnalysisResponse {
   explain?: {
     text?: string;
   } | null;
-  meta?: {
-    warnings?: string[];
-  } | null;
 }
 
 export type AnalysisResponseWire = Feat1AnalysisResult;

@@ -1,16 +1,13 @@
 // src/types/stock.ts
+
+// stock API contract now follows global snake_case + ApiResponse envelope
 export interface StockDto {
-  stockId: number;
-  stockCode: string;
-  isin: string | null;
-  companyName: string;
-  exchangeId: number;
-  exchangeCode: string;
-  assetType: string;
-  currency: string;
-  industryId: number | null;
-  price: number | null;
-  changeRate: number | null;
-  listedAt: string | null; // "2024-01-01"
-  delistedAt: string | null;
+  stock_id?: number | null;
+  stock_code: string;
+  company_name: string;
+  exchange_code?: string | null;
+  symbol?: string | null;
+  currency?: string | null;
+  price?: number | null;
+  change_rate?: number | null;
 }

@@ -1,5 +1,6 @@
 package com.qaima.dto.feature2;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.qaima.domain.Freq;
 import lombok.*;
@@ -10,7 +11,10 @@ import lombok.*;
 @AllArgsConstructor
 public class Feature2AnalyzeRequestDto {
 
-    @JsonProperty("stockCode")
+    // External JSON contract is snake_case.
+    // Temporary compatibility: accept legacy camelCase payloads from existing clients.
+    @JsonProperty("stock_code")
+    @JsonAlias("stockCode")
     private String stockCode;
 
     @JsonProperty("freq")
@@ -19,9 +23,11 @@ public class Feature2AnalyzeRequestDto {
     @JsonProperty("window")
     private Integer window;
 
-    @JsonProperty("peerCount")
+    @JsonProperty("peer_count")
+    @JsonAlias("peerCount")
     private Integer peerCount;
 
-    @JsonProperty("maxLag")
+    @JsonProperty("max_lag")
+    @JsonAlias("maxLag")
     private Integer maxLag;
 }

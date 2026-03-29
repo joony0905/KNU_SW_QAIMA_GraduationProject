@@ -1,5 +1,7 @@
 package com.qaima.dto.feature2;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.qaima.dto.industry.IndustryIndexBlockDto;
 import com.qaima.dto.industry.IndustryMetaDto;
 import com.qaima.dto.news.NewsItemDto;
@@ -19,6 +21,7 @@ import lombok.Setter;
 @Setter
 @Builder
 @AllArgsConstructor
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class Feature2MetricsDto {
 
     private StockMeta stock;
@@ -38,6 +41,7 @@ public class Feature2MetricsDto {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor(access = AccessLevel.PROTECTED)
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public static class ShortSellingMetrics {
         private Long shortSellingId;
         private Long stockId;
@@ -65,6 +69,7 @@ public class Feature2MetricsDto {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor(access = AccessLevel.PROTECTED)
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     public static class BaseRateMetrics {
         private LocalDate date;
         private BigDecimal value;

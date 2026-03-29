@@ -8,7 +8,7 @@ export interface WatchlistItem {
 }
 
 export interface ApiResponse<T> {
-  success: boolean;
+  meta: { status: string; warning?: string | null; warnings?: string[] } | null;
   data: T;
-  error: string | null;
+  errors: Array<{ code: string; message: string }>;
 }

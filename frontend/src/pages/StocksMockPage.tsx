@@ -24,6 +24,7 @@ import jsPDF from "jspdf";
 import downloadIcon from "../assets/download_button.png";
 import zoomIcon from "../assets/zoom_button.png";
 import type { AnalysisResponse, ParsedExplainText } from "../types/analysis";
+import type { ApiResponse } from "../types/common/api";
 
 /* =========================
    Zoom-out Loading Policy
@@ -179,23 +180,25 @@ export default function StocksMockPage() {
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(
+  const [analysisResult, setAnalysisResult] = useState<ApiResponse<AnalysisResponse> | null>(
     null,
   );
 
+  const analysisData = analysisResult?.data ?? null;
+
   const explainParse = useMemo(
-    () => parseExplainText(analysisResult?.explain?.text),
-    [analysisResult?.explain?.text],
+    () => parseExplainText(analysisData?.explain?.text),
+    [analysisData?.explain?.text],
   );
 
   useEffect(() => {
-    if (analysisResult?.explain?.text && explainParse.parseFailed) {
+    if (analysisData?.explain?.text && explainParse.parseFailed) {
       console.warn(
         "[analysis] explain JSON parse failed",
-        analysisResult.explain.text,
+        analysisData.explain.text,
       );
     }
-  }, [analysisResult?.explain?.text, explainParse.parseFailed]);
+  }, [analysisData?.explain?.text, explainParse.parseFailed]);
 
   // 차트용 indicators state (analysisResult와 분리)
   const [indicatorData, setIndicatorData] = useState<IndicatorData | null>(
@@ -488,15 +491,15 @@ export default function StocksMockPage() {
 
     try {
       const stockInfo = await getStockByCode(q);
-      resolvedCode = stockInfo.stockCode;
+      resolvedCode = stockInfo.stock_code;
 
       setMainStock((prev) => ({
         ...prev,
-        name: stockInfo.companyName,
-        symbol: stockInfo.stockCode,
+        name: stockInfo.company_name,
+        symbol: stockInfo.stock_code,
         price: stockInfo.price ?? null, // number 그대로
-        change: stockInfo.change ?? null, // number 그대로 (필드명 확인 필요)
-        changeRate: stockInfo.changeRate ?? null, // number 그대로
+        change: null,
+        changeRate: stockInfo.change_rate ?? null, // number 그대로
       }));
     } catch (e) {
       console.error("종목 정보 조회 실패(임시 무시):", e);
@@ -571,7 +574,7 @@ export default function StocksMockPage() {
 
       setAnalysisResult(result);
 
-      const ind = result?.metrics?.indicators;
+      const ind = result?.data?.metrics?.indicators;
 
       setIndicatorData({
         ema: ind?.ema ?? null,
@@ -592,10 +595,10 @@ export default function StocksMockPage() {
     const doc = new jsPDF();
 
     const title = `${mainStock.name} (${mainStock.symbol}) 심층 분석`;
-    const summary = analysisResult.summary ?? "";
-    const rating = analysisResult.rating ?? "";
-    const highlights = (analysisResult.highlights ?? []).join("\n- ");
-    const risks = (analysisResult.risks ?? []).join("\n- ");
+    const summary = analysisData?.summary ?? "";
+    const rating = analysisData?.rating ?? "";
+    const highlights = (analysisData?.highlights ?? []).join("\n- ");
+    const risks = (analysisData?.risks ?? []).join("\n- ");
 
     let y = 20;
 
@@ -763,22 +766,22 @@ export default function StocksMockPage() {
 
   // 1) 타이핑 효과는 그대로 유지
   useEffect(() => {
-    if (!analysisResult) {
+    if (!analysisData) {
       setDisplayText("");
       return;
     }
 
     const fullText: string =
-      typeof analysisResult === "string"
-        ? analysisResult
+      typeof analysisData === "string"
+        ? analysisData
         : [
-            analysisResult.summary,
+            analysisData.summary,
             "",
             "핵심 포인트:",
-            ...(analysisResult.highlights ?? []).map((h: string) => `- ${h}`),
+            ...(analysisData.highlights ?? []).map((h: string) => `- ${h}`),
             "",
             "리스크:",
-            ...(analysisResult.risks ?? []).map((r: string) => `- ${r}`),
+            ...(analysisData.risks ?? []).map((r: string) => `- ${r}`),
           ]
             .filter(Boolean)
             .join("\n");
@@ -797,7 +800,7 @@ export default function StocksMockPage() {
     }, speed);
 
     return () => clearInterval(timer);
-  }, [analysisResult]);
+  }, [analysisData]);
 
   // 2) mainStock 표시/색상 계산은 친구 코드 기반으로 개선
   const displayPrice =
@@ -1109,12 +1112,13 @@ export default function StocksMockPage() {
             </div>
             {/* ========== 하단 분석 결과 영역 ========== */}
             <AnalysisResultPanel
-              result={analysisResult ? {
-                ...analysisResult,
+              result={analysisData ? {
+                ...analysisData,
                 explain: {
-                  ...analysisResult.explain,
+                  ...analysisData.explain,
                   parsed: explainParse.parsed,
                 },
+                meta: analysisResult?.meta,
               } as AnalysisPanelResult : null}
               loading={loading}
               err={err}
@@ -1182,9 +1186,9 @@ export default function StocksMockPage() {
                           <p>{explainParse.parsed.conclusion ?? "-"}</p>
                         </div>
                       </div>
-                    ) : analysisResult.explain?.text?.trim() ? (
+                    ) : analysisData?.explain?.text?.trim() ? (
                       <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
-                        {analysisResult.explain.text}
+                        {analysisData?.explain?.text}
                       </p>
                     ) : (
                       <p className="text-sm sm:text-base text-zinc-500 mt-2">
@@ -1194,40 +1198,40 @@ export default function StocksMockPage() {
                   </div>
 
                   {/* OHLCV 요약 */}
-                  {analysisResult.metrics?.ohlcvSummary && (
+                  {analysisData?.metrics?.ohlcvSummary && (
                     <div>
                       <h3 className="text-base sm:text-lg font-semibold text-zinc-900">OHLCV 요약</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
-                        <div>캔들 수: {analysisResult.metrics.ohlcvSummary.count.toLocaleString()}</div>
-                        <div>기간: {formatDate(analysisResult.metrics.ohlcvSummary.from)} ~ {formatDate(analysisResult.metrics.ohlcvSummary.to)}</div>
-                        <div>마지막 종가: {formatNumber(analysisResult.metrics.ohlcvSummary.lastClose)}</div>
+                        <div>캔들 수: {analysisData.metrics.ohlcvSummary.count.toLocaleString()}</div>
+                        <div>기간: {formatDate(analysisData.metrics.ohlcvSummary.from)} ~ {formatDate(analysisData.metrics.ohlcvSummary.to)}</div>
+                        <div>마지막 종가: {formatNumber(analysisData.metrics.ohlcvSummary.lastClose)}</div>
                       </div>
                     </div>
                   )}
 
                   {/* Indicator Summary */}
-                  {analysisResult.metrics?.indicatorSummary !== undefined && (
+                  {analysisData?.metrics?.indicatorSummary !== undefined && (
                     <div>
                       <h3 className="text-base sm:text-lg font-semibold text-zinc-900">Indicator Summary</h3>
                       <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
-                        {analysisResult.metrics.indicatorSummary?.trim()
-                          ? analysisResult.metrics.indicatorSummary
+                        {analysisData.metrics.indicatorSummary?.trim()
+                          ? analysisData.metrics.indicatorSummary
                           : "지표 요약 데이터를 생성하지 못했습니다."}
                       </p>
                     </div>
                   )}
 
                   {/* 재무 요약 (5개년) */}
-                  {analysisResult.metrics?.financialSummary && (
+                  {analysisData?.metrics?.financialSummary && (
                     <div>
                       <h3 className="text-base sm:text-lg font-semibold text-zinc-900">재무 요약 (5개년)</h3>
-                      {analysisResult.metrics.financialSummary.years.length > 0 ? (
+                      {analysisData.metrics.financialSummary.years.length > 0 ? (
                         <div className="overflow-x-auto mt-2">
                           <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
                             <thead className="bg-zinc-100 text-zinc-900">
                               <tr>
                                 <th className="px-3 py-2 text-left border-b">구분</th>
-                                {analysisResult.metrics.financialSummary.years.map((year) => (
+                                {analysisData.metrics.financialSummary.years.map((year) => (
                                   <th key={year} className="px-3 py-2 text-right border-b">{year}</th>
                                 ))}
                               </tr>
@@ -1235,25 +1239,25 @@ export default function StocksMockPage() {
                             <tbody>
                               <tr>
                                 <td className="px-3 py-2 border-b">매출</td>
-                                {analysisResult.metrics.financialSummary.years.map((year) => (
+                                {analysisData.metrics.financialSummary.years.map((year) => (
                                   <td key={`modal-rev-${year}`} className="px-3 py-2 text-right border-b">
-                                    {formatNumber(analysisResult.metrics!.financialSummary!.revenue[String(year)])}
+                                    {formatNumber(analysisData.metrics!.financialSummary!.revenue[String(year)])}
                                   </td>
                                 ))}
                               </tr>
                               <tr>
                                 <td className="px-3 py-2 border-b">영업이익</td>
-                                {analysisResult.metrics.financialSummary.years.map((year) => (
+                                {analysisData.metrics.financialSummary.years.map((year) => (
                                   <td key={`modal-op-${year}`} className="px-3 py-2 text-right border-b">
-                                    {formatNumber(analysisResult.metrics!.financialSummary!.operatingIncome[String(year)])}
+                                    {formatNumber(analysisData.metrics!.financialSummary!.operatingIncome[String(year)])}
                                   </td>
                                 ))}
                               </tr>
                               <tr>
                                 <td className="px-3 py-2 border-b">순이익</td>
-                                {analysisResult.metrics.financialSummary.years.map((year) => (
+                                {analysisData.metrics.financialSummary.years.map((year) => (
                                   <td key={`modal-net-${year}`} className="px-3 py-2 text-right border-b">
-                                    {formatNumber(analysisResult.metrics!.financialSummary!.netIncome[String(year)])}
+                                    {formatNumber(analysisData.metrics!.financialSummary!.netIncome[String(year)])}
                                   </td>
                                 ))}
                               </tr>

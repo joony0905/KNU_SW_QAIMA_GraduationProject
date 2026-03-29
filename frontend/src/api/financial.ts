@@ -5,9 +5,9 @@ import type { FinancialDto } from "../types/financial";
 
 // ApiResponse 래퍼 타입 (로그인/워치리스트와 동일)
 interface ApiResponse<T> {
-  success: boolean;
+  meta: { status: string; warning?: string | null; warnings?: string[] } | null;
   data: T;
-  error: string | null;
+  errors: Array<{ code: string; message: string }>;
 }
 
 /**

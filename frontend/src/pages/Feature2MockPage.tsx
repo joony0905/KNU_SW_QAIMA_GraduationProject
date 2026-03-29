@@ -10,6 +10,7 @@ import AnalysisResultPanel from "../components/AnalysisResultPanel";
 import { fetchFeature2Analysis } from "../api/feature2";
 import RelativeLineWidget from "../components/RelativeLineWidget";
 import type { Feature2AnalyzeResponse } from "../types/feature2";
+import type { ApiResponse } from "../types/common/api";
 
 const getColorClass = (rate: string) => {
   if (rate.startsWith("+")) return "text-red-600";
@@ -210,7 +211,8 @@ export default function Feature2MockPage() {
   const [isTopicOpen, setIsTopicOpen] = useState(false);
   const topicRef = useRef<HTMLDivElement | null>(null);
 
-  const [analysisResult, setAnalysisResult] = useState<Feature2AnalyzeResponse | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<ApiResponse<Feature2AnalyzeResponse> | null>(null);
+  const analysisData = analysisResult?.data ?? null;
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
@@ -222,7 +224,7 @@ export default function Feature2MockPage() {
   });
 
   const industrySeries = useMemo(() => {
-  const raw = analysisResult?.metrics?.industry_index?.series;
+  const raw = analysisData?.metrics?.industry_index?.series;
 
   console.log("🔥 [RAW industry_index.series]", raw);
 
@@ -243,7 +245,7 @@ export default function Feature2MockPage() {
   console.log("🔥 [MAPPED industrySeries]", mapped);
 
   return mapped;
-}, [analysisResult]);
+}, [analysisData]);
 
   const handleSearch = async (value: string) => {
     const q = value.trim();
@@ -289,12 +291,12 @@ export default function Feature2MockPage() {
   }, []);
 
   useEffect(() => {
-    if (!analysisResult?.explain) {
+    if (!analysisData?.explain) {
       setDisplayText("");
       return;
     }
 
-    const fullText = analysisResult.explain;
+    const fullText = analysisData.explain;
     setDisplayText("");
     let index = 0;
     const speed = 20;
@@ -306,7 +308,7 @@ export default function Feature2MockPage() {
     }, speed);
 
     return () => clearInterval(timer);
-  }, [analysisResult]);
+  }, [analysisData]);
 
   useEffect(() => {
     if (loading) {
@@ -317,12 +319,12 @@ export default function Feature2MockPage() {
 
     setIndustryChartLoading(false);
 
-    if (!analysisResult) {
+    if (!analysisData) {
       setIndustryChartError(null);
       return;
     }
 
-    const industryIndex = analysisResult?.metrics?.industry_index;
+    const industryIndex = analysisData?.metrics?.industry_index;
     const warnings: string[] = analysisResult?.meta?.warnings ?? [];
 
     if (!industryIndex) {
@@ -355,7 +357,7 @@ export default function Feature2MockPage() {
       console.log("🔥 analysisResult raw =", result);
       console.log("🔥 result keys =", Object.keys(result ?? {}));
       console.log("🔥 result.data =", result?.data);
-      console.log("🔥 result.metrics =", result?.metrics);
+      console.log("🔥 result.metrics =", result?.data?.metrics);
     } catch {
       setErr("분석 결과를 불러오지 못했습니다.");
     } finally {
@@ -726,8 +728,8 @@ export default function Feature2MockPage() {
           result={
             analysisResult
               ? {
-                  explain: { text: analysisResult.explain },
-                  meta: analysisResult.meta,
+                  explain: { text: analysisData?.explain },
+                  meta: analysisResult?.meta,
                 }
               : null
           }

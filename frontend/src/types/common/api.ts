@@ -1,9 +1,14 @@
 export interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: {
+  meta: {
+    request_id?: string;
+    status: string;
+    timestamp?: string;
+    warning?: string | null;
+    warnings?: string[];
+  } | null;
+  data: T;
+  errors: Array<{
     code: string;
     message: string;
-  };
-  warnings?: string[];
+  }>;
 }
