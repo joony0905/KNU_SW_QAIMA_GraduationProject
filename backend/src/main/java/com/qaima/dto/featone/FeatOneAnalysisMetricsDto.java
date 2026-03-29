@@ -1,5 +1,7 @@
 package com.qaima.dto.featone;
 
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import com.qaima.dto.financial.FinancialSummaryMetricsDto;
 import com.qaima.dto.ohlcv.OhlcvSummaryDto;
 import com.qaima.dto.indicator.IndicatorBundleDto;
@@ -8,13 +10,13 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class FeatOneAnalysisMetricsDto {
     private String stockCode;
     private String asOf;
@@ -22,7 +24,6 @@ public class FeatOneAnalysisMetricsDto {
     private FinancialSummaryMetricsDto financialSummary;
     // metrics 안에 indicators를 포함하는 관통 계약의 ground truth
     private IndicatorBundleDto indicators;
-    @JsonProperty("indicator_summary")
     private String indicatorSummary;
     private String schemaVersion;
 }

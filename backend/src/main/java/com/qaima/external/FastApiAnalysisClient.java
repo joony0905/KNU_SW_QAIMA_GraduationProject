@@ -1,6 +1,7 @@
 package com.qaima.external;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
 import lombok.extern.slf4j.Slf4j;
@@ -9,6 +10,8 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import java.util.ArrayList;
+import java.util.List;
 
 @Slf4j
 @Component
@@ -43,8 +46,17 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                 }
 
                                 try {
+                                    JsonNode root = objectMapper.readTree(body);
                                     FeatOneAnalysisResponseDto dto =
-                                            objectMapper.readValue(body, FeatOneAnalysisResponseDto.class);
+                                            objectMapper.treeToValue(root, FeatOneAnalysisResponseDto.class);
+                                    List<String> warnings = new ArrayList<>();
+                                    JsonNode warningsNode = root.path("meta").path("warnings");
+                                    if (warningsNode.isArray()) {
+                                        warningsNode.forEach(node -> {
+                                            if (node.isTextual()) warnings.add(node.asText());
+                                        });
+                                    }
+                                    dto.setWarnings(warnings);
                                     return Mono.just(dto);
                                 } catch (Exception e) {
                                     log.error("[FastAPI] decode failed. body={}", body, e);

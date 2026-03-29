@@ -1,16 +1,12 @@
 // src/types/stock.ts
+
 export interface StockDto {
-  stockId: number;
+  stockId?: number | null;
   stockCode: string;
-  isin: string | null;
   companyName: string;
-  exchangeId: number;
-  exchangeCode: string;
-  assetType: string;
-  currency: string;
-  industryId: number | null;
-  price: number | null;
-  changeRate: number | null;
-  listedAt: string | null; // "2024-01-01"
-  delistedAt: string | null;
+  exchangeCode?: string | null;
+  symbol?: string | null;
+  currency?: string | null;
+  price?: number | null;
+  changeRate?: number | null;
 }

@@ -24,7 +24,7 @@ public class Feature2ResponseFactory {
         return Feature2AnalyzeResponseDto.builder()
                 .metrics(metrics)
                 .explain(null)
-                .meta(normalizedMeta)
+                .warnings(normalizedMeta.getWarnings())
                 .build();
     }
 }
