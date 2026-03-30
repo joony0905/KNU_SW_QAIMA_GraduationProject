@@ -69,10 +69,27 @@ public class OpenDartCorpCodeSyncService {
             boolean fallbackMatched = false;
             ShareClass targetShareClass = ShareClass.OTHER;
             if (entry == null) {
+                boolean changed = false;
+                if (stock.getDartCorpCode() != null) {
+                    stock.setDartCorpCode(null);
+                    changed = true;
+                }
+                if (stock.getDartCorpName() != null) {
+                    stock.setDartCorpName(null);
+                    changed = true;
+                }
+                if (stock.getDartModifiedDate() != null) {
+                    stock.setDartModifiedDate(null);
+                    changed = true;
+                }
                 entry = resolveFallbackEntry(stock, stockCode, fallbackEntryByKey, ambiguousFallbackKeys);
                 if (entry == null) {
                     if (stock.getShareClass() != targetShareClass) {
                         stock.setShareClass(targetShareClass);
+                        changed = true;
+                    }
+                    if (changed) {
+                        stock.setDartSyncedAt(now);
                         stocksToSave.add(stock);
                     }
                     missingStocks++;

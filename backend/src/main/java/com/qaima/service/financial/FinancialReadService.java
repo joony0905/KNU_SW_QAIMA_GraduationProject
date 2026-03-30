@@ -142,34 +142,20 @@ public class FinancialReadService {
         }
 
         LocalDate reportDate = financial.getReportDate();
+        LocalDate effectiveDate = reportDate != null ? reportDate : fallbackDate;
         IssuedShares issuedShares;
         if (stock.getShareClass() == ShareClass.PREFERRED) {
-            issuedShares = resolveIssuedShares(stock, SHARE_TYPE_PREFERRED, reportDate, fallbackDate);
+            issuedShares = findIssuedShares(stock, SHARE_TYPE_PREFERRED, effectiveDate);
         } else {
-            issuedShares = resolveIssuedShares(stock, SHARE_TYPE_COMMON, reportDate, fallbackDate);
+            issuedShares = findIssuedShares(stock, SHARE_TYPE_COMMON, effectiveDate);
             if (issuedShares == null) {
-                issuedShares = resolveIssuedShares(stock, SHARE_TYPE_TOTAL, reportDate, fallbackDate);
+                issuedShares = findIssuedShares(stock, SHARE_TYPE_TOTAL, effectiveDate);
             }
         }
 
         return issuedShares != null && issuedShares.getIssuedSharesTotal() != null
                 ? BigDecimal.valueOf(issuedShares.getIssuedSharesTotal())
                 : null;
-    }
-
-    private IssuedShares resolveIssuedShares(
-            Stock stock,
-            String shareType,
-            LocalDate primaryDate,
-            LocalDate fallbackDate
-    ) {
-        IssuedShares issuedShares = findIssuedShares(stock, shareType, primaryDate);
-        if (issuedShares == null
-                && fallbackDate != null
-                && (primaryDate == null || !fallbackDate.equals(primaryDate))) {
-            issuedShares = findIssuedShares(stock, shareType, fallbackDate);
-        }
-        return issuedShares;
     }
 
     private IssuedShares findIssuedShares(Stock stock, String shareType, LocalDate asOfDate) {
