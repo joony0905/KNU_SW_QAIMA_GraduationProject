@@ -2,12 +2,16 @@ package com.qaima.api.stock;
 
 import com.qaima.common.ApiResponse;
 import com.qaima.dto.stock.StockCodeMappingDto;
+import com.qaima.dto.stock.MarketSnapshotDto;
 import com.qaima.dto.stock.StockDto;
 import com.qaima.dto.stock.StockResponseDto;
+import com.qaima.service.stock.MarketSnapshotService;
 import com.qaima.service.stock.StockMappingService;
 import com.qaima.service.stock.StockService;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
@@ -18,6 +22,7 @@ public class StockController {
 
     private final StockService stockService;
     private final StockMappingService stockMappingService;
+    private final MarketSnapshotService marketSnapshotService;
 
     @GetMapping("/{stockId}")
     public Mono<ApiResponse<StockResponseDto>> getStock(@PathVariable Long stockId) {
@@ -38,6 +43,18 @@ public class StockController {
         return stockService.getStockWithRealtimeByCode(stockCode)
                 .map(this::toResponse)
                 .map(ApiResponse::success);
+    }
+
+    @GetMapping("/code/{stockCode}/market-snapshot")
+    public Mono<ApiResponse<MarketSnapshotDto>> getLatestMarketSnapshot(
+            @PathVariable String stockCode,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate
+    ) {
+        return stockService.getOrCreateStockByCode(stockCode)
+                .flatMap(stock -> marketSnapshotService.getLatestDto(stock, asOfDate))
+                .map(ApiResponse::success)
+                .switchIfEmpty(Mono.just(ApiResponse.success(null)));
     }
 
     @GetMapping("/normalize")
