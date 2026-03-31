@@ -2,11 +2,18 @@ package com.qaima.external;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.qaima.dto.peercluster.BandPointDto;
 import com.qaima.dto.peercluster.PeerClusterRequestDto;
+import com.qaima.dto.peercluster.PeerItemDto;
 import com.qaima.dto.peercluster.PeerClusterResponseDto;
+import com.qaima.dto.peercluster.RelativePointDto;
+import com.qaima.external.dto.peercluster.PeerClusterInboundBandPointDto;
+import com.qaima.external.dto.peercluster.PeerClusterInboundPeerItemDto;
+import com.qaima.external.dto.peercluster.PeerClusterInboundRelativePointDto;
+import com.qaima.external.dto.peercluster.PeerClusterInboundResponseDto;
+import java.util.List;
 import java.util.Iterator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -21,7 +28,6 @@ public class PeerClusterClient {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
-    private final ObjectMapper snakeCaseObjectMapper;
 
     public PeerClusterClient(
             @Qualifier("analysisWebClient") WebClient webClient,
@@ -29,8 +35,6 @@ public class PeerClusterClient {
     ) {
         this.webClient = webClient;
         this.objectMapper = objectMapper;
-        this.snakeCaseObjectMapper = objectMapper.copy()
-                .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE);
     }
 
     public Mono<PeerClusterResponseDto> requestPeerCluster(PeerClusterRequestDto req) {
@@ -56,7 +60,72 @@ public class PeerClusterClient {
     }
 
     private PeerClusterResponseDto snakeCaseResponseValue(JsonNode payloadNode) throws com.fasterxml.jackson.core.JsonProcessingException {
-        return snakeCaseObjectMapper.treeToValue(payloadNode, PeerClusterResponseDto.class);
+        PeerClusterInboundResponseDto inbound = objectMapper.treeToValue(payloadNode, PeerClusterInboundResponseDto.class);
+        return toResponseDto(inbound);
+    }
+
+    private PeerClusterResponseDto toResponseDto(PeerClusterInboundResponseDto inbound) {
+        PeerClusterResponseDto response = new PeerClusterResponseDto();
+        response.setMethod(inbound.getMethod());
+        response.setIndustryId(inbound.getIndustryId());
+        response.setFreq(inbound.getFreq());
+        response.setWindow(inbound.getWindow());
+        response.setPeerCount(inbound.getPeerCount());
+        response.setAnchorStockCode(inbound.getAnchorStockCode());
+        response.setCentroid(mapCentroid(inbound.getCentroid()));
+        response.setBand(mapBand(inbound.getBand()));
+        response.setPeers(mapPeers(inbound.getPeers()));
+        response.setAsOf(inbound.getAsOf());
+        response.setWarnings(inbound.getWarnings());
+        return response;
+    }
+
+    private List<RelativePointDto> mapCentroid(List<PeerClusterInboundRelativePointDto> points) {
+        if (points == null) {
+            return List.of();
+        }
+        return points.stream()
+                .map(point -> RelativePointDto.builder()
+                        .ts(point.getT())
+                        .pct(point.getValue())
+                        .build())
+                .toList();
+    }
+
+    private List<BandPointDto> mapBand(List<PeerClusterInboundBandPointDto> points) {
+        if (points == null) {
+            return List.of();
+        }
+        return points.stream()
+                .map(point -> BandPointDto.builder()
+                        .ts(point.getT())
+                        .p20(point.getP20())
+                        .p80(point.getP80())
+                        .build())
+                .toList();
+    }
+
+    private List<PeerItemDto> mapPeers(List<PeerClusterInboundPeerItemDto> peers) {
+        if (peers == null) {
+            return List.of();
+        }
+        return peers.stream()
+                .map(this::toPeerItemDto)
+                .toList();
+    }
+
+    private PeerItemDto toPeerItemDto(PeerClusterInboundPeerItemDto peer) {
+        return PeerItemDto.builder()
+                .stockCode(peer.getStockCode())
+                .companyName(peer.getCompanyName())
+                .avgTurnover(peer.getAvgTurnover())
+                .avgVolume(peer.getAvgVolume())
+                .corr(peer.getCorr())
+                .bestLag(peer.getBestLag())
+                .leadLagCorr(peer.getLeadLagCorr())
+                .relation(peer.getRelation())
+                .score(peer.getScore())
+                .build();
     }
 
     private JsonNode extractPayload(JsonNode root, String endpointName) {
