@@ -1,6 +1,12 @@
 analysis:
   base-url: "http://localhost:8000"
 
+opendart:
+  base-url: "https://opendart.fss.or.kr/api"
+  sync:
+    enabled: true
+    daily-cron: "0 10 3 * * *"
+
 spring:
   profiles:
     active: mysql #h2 <-> mysql 변경해서 사용

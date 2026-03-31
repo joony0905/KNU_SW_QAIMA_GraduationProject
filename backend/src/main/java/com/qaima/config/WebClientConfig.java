@@ -3,6 +3,7 @@ package com.qaima.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.codec.ClientCodecConfigurer;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
@@ -44,6 +45,7 @@ public class WebClientConfig {
                 .build();
     }
 
+    // 한국은행
     @Bean(name = "bokWebClient")
     public WebClient bokWebClient(
             @Value("${bok.base-url:https://ecos.bok.or.kr/api}") String baseUrl
@@ -51,6 +53,22 @@ public class WebClientConfig {
         return WebClient.builder()
                 .baseUrl(baseUrl)
                 .build();
+    }
+
+
+    // opendart(금융감독원)
+    @Bean(name = "opendartWebClient")
+    public WebClient openDartWebClient(
+            @Value("${opendart.base-url:https://opendart.fss.or.kr/api}") String baseUrl
+    ) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .codecs(this::configureOpenDartCodecs)
+                .build();
+    }
+
+    private void configureOpenDartCodecs(ClientCodecConfigurer codecs) {
+        codecs.defaultCodecs().maxInMemorySize(16 * 1024 * 1024);
     }
 
 }

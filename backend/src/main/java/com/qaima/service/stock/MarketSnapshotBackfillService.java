@@ -24,6 +24,7 @@ public class MarketSnapshotBackfillService {
     private static final String DEFAULT_EXCHANGE = "KOSPI";
     private static final long DEFAULT_DELAY_MS = 100L;
     private static final int DEFAULT_LIMIT = 50;
+    private static final String SOURCE_OPENDART_PRIMARY = "OPENDART_PRIMARY";
 
     private final StockRepository stockRepository;
     private final MarketSnapshotRepository marketSnapshotRepository;
@@ -45,7 +46,7 @@ public class MarketSnapshotBackfillService {
         String trimmedStockCode = stockCode.trim();
 
         return Blocking.call(() -> stockRepository.findByExchangeCodeAndStockCodeIgnoreCase(resolvedExchange, trimmedStockCode)
-                        .orElseGet(() -> stockRepository.findByStockCodeWithExchangeAndIndustry(trimmedStockCode)
+                        .orElseGet(() -> stockRepository.findByStockCodeWithExchange(trimmedStockCode)
                                 .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + trimmedStockCode))))
                 .flatMap(stock -> backfillStock(stock, targetDate, force));
     }
@@ -131,9 +132,26 @@ public class MarketSnapshotBackfillService {
             return true;
         }
 
-        return snapshot.getMarketCap() == null
+        if (snapshot.getMarketCap() == null
                 || snapshot.getPer() == null
-                || snapshot.getPbr() == null;
+                || snapshot.getPbr() == null
+                || snapshot.getSharesOutstanding() == null
+                || snapshot.getSource() == null
+                || snapshot.getSource().isBlank()) {
+            return true;
+        }
+
+        if (!requiresOwnershipMetrics(snapshot)) {
+            return false;
+        }
+
+        return snapshot.getFloatMarketCap() == null
+                || snapshot.getFloatRatio() == null
+                || snapshot.getTreasuryRatio() == null;
+    }
+
+    private boolean requiresOwnershipMetrics(MarketSnapshot snapshot) {
+        return SOURCE_OPENDART_PRIMARY.equalsIgnoreCase(snapshot.getSource());
     }
 
     private boolean isKisEligible(Stock stock) {

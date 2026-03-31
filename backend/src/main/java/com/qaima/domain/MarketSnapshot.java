@@ -46,21 +46,39 @@ public class MarketSnapshot {
     @JoinColumn(name = "stock_id", nullable = false)
     private Stock stock;
 
+    // 스냅샷 기준일
     @Column(name = "as_of_date", nullable = false)
     private LocalDate asOfDate;
 
+    // 시가총액 = 현재가 * 발행주식수
     @Column(name = "market_cap", precision = 20, scale = 0)
     private BigDecimal marketCap;
 
+    // 유통시가총액 = 현재가 * 유통주식수
+    @Column(name = "float_market_cap", precision = 20, scale = 0)
+    private BigDecimal floatMarketCap;
+
+    // 주가수익비율
     @Column(precision = 10, scale = 4)
     private BigDecimal per;
 
+    // 주가순자산비율
     @Column(precision = 10, scale = 4)
     private BigDecimal pbr;
 
+    // 유통주식수 / 발행주식수
+    @Column(name = "float_ratio", precision = 10, scale = 4)
+    private BigDecimal floatRatio;
+
+    // 자기주식수 / 발행주식수
+    @Column(name = "treasury_ratio", precision = 10, scale = 4)
+    private BigDecimal treasuryRatio;
+
+    // 계산에 사용한 기준 발행주식수
     @Column(name = "shares_outstanding", precision = 20, scale = 0)
     private BigDecimal sharesOutstanding;
 
+    // 값 산출 기준 출처(OPENDART_PRIMARY, KIS_FALLBACK 등)
     @Column(length = 50)
     private String source;
 
