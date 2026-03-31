@@ -7,9 +7,9 @@ import type { Candle } from "../types/candle";
 import TradingViewWidget from "../components/TradingViewWidget";
 import clsx from "clsx";
 import AnalysisResultPanel from "../components/AnalysisResultPanel";
-import { fetchFeature2Analysis } from "../api/feature2";
+import { fetchFeature2Analysis, fetchFeature2NewsList } from "../api/feature2";
 import RelativeLineWidget from "../components/RelativeLineWidget";
-import type { Feature2AnalyzeResponse } from "../types/feature2";
+import type { Feature2AnalyzeResponse, NewsListItem } from "../types/feature2";
 import type { ApiResponse } from "../types/common/api";
 
 const getColorClass = (rate: string) => {
@@ -27,12 +27,13 @@ interface FeaturedStock {
   changeRate: string;
 }
 
-type NewsItem = {
+type NewsCardItem = {
   id: string;
   title: string;
   summary: string;
   source: string;
   timeAgo: string;
+  url: string;
   thumbnailUrl?: string;
 };
 
@@ -46,13 +47,14 @@ type RelatedStock = {
   direction: "up" | "down" | "flat";
 };
 
-const dummyNews: NewsItem[] = [
+const dummyNews: NewsCardItem[] = [
   {
     id: "1",
     title: "Title",
     summary: "blablablabla~~~~~~~~~~~~~~~ blablablabla...",
     source: "출간사 이름",
     timeAgo: "3시간 전",
+    url: "#",
   },
   {
     id: "2",
@@ -60,6 +62,7 @@ const dummyNews: NewsItem[] = [
     summary: "blablablabla~~~~~~~~~~~~~~~ blablablabla...",
     source: "출간사 이름",
     timeAgo: "5시간 전",
+    url: "#",
   },
   {
     id: "3",
@@ -67,6 +70,7 @@ const dummyNews: NewsItem[] = [
     summary: "blablablabla~~~~~~~~~~~~~~~ blablablabla...",
     source: "출간사 이름",
     timeAgo: "어제",
+    url: "#",
   },
 ];
 
@@ -255,14 +259,14 @@ export default function Feature2MockPage() {
     await loadCandles(q);
   };
 
-  const [newsItems, setNewsItems] = useState<NewsItem[]>(dummyNews);
+  const [newsItems, setNewsItems] = useState<NewsCardItem[]>(dummyNews);
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsError, setNewsError] = useState<string | null>(null);
 
   const [hoveredDayKey, setHoveredDayKey] = useState<string | null>(null);
-  const [relatedStocks, setRelatedStocks] = useState<RelatedStock[]>(dummyRelatedStocks);
-  const [relatedLoading, setRelatedLoading] = useState(false);
-  const [relatedError, setRelatedError] = useState<string | null>(null);
+  const [relatedStocks] = useState<RelatedStock[]>(dummyRelatedStocks);
+  const [relatedLoading] = useState(false);
+  const [relatedError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -369,6 +373,28 @@ export default function Feature2MockPage() {
     if (!mainStock) return;
     loadCandles(mainStock.symbol);
   }, [mainStock]);
+
+  useEffect(() => {
+    const loadNewsList = async () => {
+      if (!mainStock.symbol) return;
+
+      setNewsLoading(true);
+      setNewsError(null);
+      try {
+        const response = await fetchFeature2NewsList(mainStock.symbol);
+        const items = (response.data ?? []).map(mapNewsItemToCard);
+        setNewsItems(items);
+      } catch (e) {
+        console.error("뉴스 리스트 조회 실패:", e);
+        setNewsItems([]);
+        setNewsError("뉴스를 불러오지 못했습니다.");
+      } finally {
+        setNewsLoading(false);
+      }
+    };
+
+    loadNewsList();
+  }, [mainStock.symbol]);
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
@@ -589,11 +615,14 @@ export default function Feature2MockPage() {
                 {!newsLoading && !newsError && (
                   <div className="flex flex-col max-h-72 overflow-y-auto">
                     {newsItems.map((item, idx) => (
-                      <article
+                      <a
                         key={item.id}
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
                         className={`flex items-center gap-4 px-2.5 py-2 bg-white border-t ${
                           idx === newsItems.length - 1 ? "border-b" : ""
-                        } border-zinc-300`}
+                        } border-zinc-300 hover:bg-zinc-50 transition-colors`}
                       >
                         <div className="w-20 h-16 bg-zinc-300 rounded-2xl flex-shrink-0" />
                         <div className="flex-1 flex flex-col gap-2">
@@ -609,7 +638,7 @@ export default function Feature2MockPage() {
                             {item.timeAgo} • {item.source}
                           </p>
                         </div>
-                      </article>
+                      </a>
                     ))}
 
                     {newsItems.length === 0 && (
@@ -775,4 +804,36 @@ export default function Feature2MockPage() {
       </div>
     </div>
   );
+}
+
+function mapNewsItemToCard(item: NewsListItem): NewsCardItem {
+  return {
+    id: String(item.newsId),
+    title: item.title,
+    summary: item.summary ?? "",
+    source: item.publisher,
+    timeAgo: formatPublishedAt(item.publishedAt),
+    url: item.url,
+  };
+}
+
+function formatPublishedAt(publishedAt: string): string {
+  const target = new Date(publishedAt);
+  if (Number.isNaN(target.getTime())) {
+    return publishedAt;
+  }
+
+  const diffMs = Date.now() - target.getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 1) return "방금 전";
+  if (diffMinutes < 60) return `${diffMinutes}분 전`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}시간 전`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}일 전`;
+
+  return target.toLocaleDateString("ko-KR");
 }

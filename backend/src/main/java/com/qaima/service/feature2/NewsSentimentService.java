@@ -16,6 +16,7 @@ import com.qaima.external.NewsArticleExtractorClient;
 import com.qaima.repository.NewsRepository;
 import com.qaima.repository.NewsSecurityMapRepository;
 import com.qaima.repository.SentimentResultRepository;
+import com.qaima.repository.StockRepository;
 import com.qaima.service.feature2.model.NewsSentimentInput;
 import com.qaima.service.feature2.model.NewsSentimentResult;
 import java.math.BigDecimal;
@@ -84,6 +85,7 @@ public class NewsSentimentService {
     private final NewsRepository newsRepository;
     private final NewsSecurityMapRepository newsSecurityMapRepository;
     private final SentimentResultRepository sentimentResultRepository;
+    private final StockRepository stockRepository;
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final NaverNewsClient naverNewsClient;
@@ -96,6 +98,11 @@ public class NewsSentimentService {
 
     public Mono<NewsLoadResult> loadNews(Stock stock) {
         return Mono.fromCallable(() -> loadNewsBlocking(stock))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<NewsLoadResult> loadNewsByStockCode(String stockCode) {
+        return Mono.fromCallable(() -> loadNewsByStockCodeBlocking(stockCode))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -119,6 +126,25 @@ public class NewsSentimentService {
                 .newsList(newsList)
                 .warnings(dedupeWarnings(warnings))
                 .build();
+    }
+
+    private NewsLoadResult loadNewsByStockCodeBlocking(String stockCode) {
+        List<String> warnings = new ArrayList<>();
+        if (stockCode == null || stockCode.isBlank()) {
+            return NewsLoadResult.builder().newsList(List.of()).warnings(warnings).build();
+        }
+
+        Stock stock = stockRepository.findByStockCodeWithExchangeAndIndustry(stockCode)
+                .orElse(null);
+        if (stock == null) {
+            warnings.add("NEWS_LIST_FETCH_FAILED");
+            return NewsLoadResult.builder()
+                    .newsList(List.of())
+                    .warnings(dedupeWarnings(warnings))
+                    .build();
+        }
+
+        return loadNewsBlocking(stock);
     }
 
     private NewsDetailDto loadNewsDetailBlocking(Long newsId) {

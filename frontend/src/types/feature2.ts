@@ -1,3 +1,13 @@
+export interface NewsListItem {
+  newsId: number;
+  title: string;
+  url: string;
+  publisher: string;
+  publishedAt: string;
+  summary?: string | null;
+  sentimentScore?: number | null;
+}
+
 export interface Feature2AnalyzeResponse {
   metrics:
     | {
@@ -7,7 +17,7 @@ export interface Feature2AnalyzeResponse {
         peerCluster?: Record<string, unknown> | null;
         shortSelling?: Record<string, unknown> | null;
         baseRate?: Record<string, unknown> | null;
-        newsList?: Array<Record<string, unknown>>;
+        newsList?: NewsListItem[];
       }
     | null;
   explain: string | null;
