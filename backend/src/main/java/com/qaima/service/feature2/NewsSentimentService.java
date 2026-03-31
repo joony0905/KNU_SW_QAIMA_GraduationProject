@@ -1,7 +1,7 @@
 package com.qaima.service.feature2;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.qaima.common.exception.ResourceNotFoundException;
 import com.qaima.domain.News;
 import com.qaima.domain.NewsSecurityMap;
 import com.qaima.domain.NewsSecurityMapId;
@@ -10,7 +10,6 @@ import com.qaima.domain.SentimentResultId;
 import com.qaima.domain.Stock;
 import com.qaima.dto.news.NewsDetailDto;
 import com.qaima.dto.news.NewsItemDto;
-import com.qaima.common.exception.ResourceNotFoundException;
 import com.qaima.external.Feature2NewsSentimentClient;
 import com.qaima.external.NaverNewsClient;
 import com.qaima.external.NewsArticleExtractorClient;
@@ -27,9 +26,10 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
-import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -54,18 +54,19 @@ import reactor.core.scheduler.Schedulers;
 @Slf4j
 public class NewsSentimentService {
 
-    private static final String NEWS_LIST_KEY = "feat2:news:list:stock:%s:v1";
-    private static final String NEWS_FOCUS_KEY = "feat2:news:focus:urlhash:%s:v1";
-    private static final String NEWS_SENTIMENT_KEY = "feat2:news:sentiment:news:%s:model:%s:v1";
-    private static final String NEWS_DETAIL_KEY = "feat2:news:detail:news:%s:v1";
+    private static final String NEWS_LIST_KEY_PREFIX = "feat2:news:list:stock:";
+    private static final String NEWS_DETAIL_KEY_PREFIX = "feat2:news:detail:news:";
+    private static final String NEWS_FOCUS_KEY_PREFIX = "feat2:news:focus:news:";
+    private static final String NEWS_SENTIMENT_KEY_PREFIX = "feat2:news:sentiment:news:";
     private static final Duration NEWS_LIST_TTL = Duration.ofMinutes(10);
-    private static final Duration NEWS_FOCUS_TTL = Duration.ofHours(24);
+    private static final Duration NEWS_DETAIL_TTL = Duration.ofDays(3);
+    private static final Duration NEWS_FOCUS_TTL = Duration.ofDays(2);
     private static final Duration NEWS_SENTIMENT_TTL = Duration.ofDays(7);
-    private static final Duration NEWS_DETAIL_TTL = Duration.ofHours(1);
     private static final int NEWS_FETCH_LIMIT = 10;
     private static final int NEWS_FETCH_START = 1;
     private static final int NEWS_FETCH_STEP = 10;
     private static final int NEWS_FETCH_MAX_START = 51;
+    private static final String NEWS_SENTIMENT_PROMPT_VERSION = "feature2-news-sentiment-v1";
     private static final List<String> EXTERNAL_FACTOR_KEYWORDS = List.of(
             "주식", "증시", "증권", "투자", "수급", "밸류에이션", "목표주가",
             "실적", "실적발표", "매출", "매출액", "영업이익", "순이익",
@@ -112,28 +113,7 @@ public class NewsSentimentService {
             return NewsLoadResult.builder().newsList(List.of()).warnings(dedupeWarnings(warnings)).build();
         }
 
-        String listKey = NEWS_LIST_KEY.formatted(stock.getStockCode());
-        List<NewsItemDto> cached = readCacheList(listKey, warnings);
-        if (cached != null) {
-            return NewsLoadResult.builder().newsList(cached).warnings(dedupeWarnings(warnings)).build();
-        }
-
-        try {
-            List<NaverNewsClient.NaverNewsArticle> articles = collectRelevantArticles(stock.getCompanyName(), warnings);
-            upsertNewsMeta(stock, articles, warnings);
-        } catch (Exception ex) {
-            log.warn("[NewsSentimentService] news list fetch failed. stockCode={}", stock.getStockCode(), ex);
-            warnings.add("NEWS_LIST_FETCH_FAILED");
-        }
-
-        List<News> latestNews = newsSecurityMapRepository.findLatestNewsByStockId(
-                stock.getStockId(),
-                PageRequest.of(0, NEWS_FETCH_LIMIT)
-        );
-
-        List<NewsItemDto> newsList = buildNewsList(latestNews, warnings);
-        writeCacheList(listKey, newsList, warnings);
-
+        List<NewsItemDto> newsList = getOrLoadNewsList(stock.getStockCode(), stock.getCompanyName(), stock, warnings);
         return NewsLoadResult.builder()
                 .newsList(newsList)
                 .warnings(dedupeWarnings(warnings))
@@ -148,53 +128,61 @@ public class NewsSentimentService {
         News news = newsRepository.findById(newsId)
                 .orElseThrow(() -> new ResourceNotFoundException("NEWS_DETAIL_NOT_FOUND"));
         List<String> warnings = new ArrayList<>();
-
-        CachedNewsDetail cachedDetail = readDetailCache(newsId, warnings);
         BigDecimal sentimentScore = resolveExistingSentimentScore(news, warnings);
-
-        if (cachedDetail != null) {
-            if (cachedDetail.isLowConfidence()) {
-                warnings.add("NEWS_BODY_LOW_CONFIDENCE:" + newsId);
-            }
-            return NewsDetailDto.builder()
-                    .newsId(news.getNewsId())
-                    .title(news.getTitle())
-                    .url(news.getUrl())
-                    .publisher(news.getSource())
-                    .publishedAt(news.getPublishedAt())
-                    .body(cachedDetail.getBody())
-                    .readerSummary(cachedDetail.getReaderSummary())
-                    .sentimentScore(sentimentScore)
-                    .warnings(dedupeWarnings(warnings))
-                    .build();
-        }
-
-        try {
-            CachedNewsDetail extractedDetail = fetchAndCacheDetail(news, warnings);
-            if (extractedDetail == null || extractedDetail.getBody() == null || extractedDetail.getBody().isBlank()) {
-                warnings.add("NEWS_DETAIL_FETCH_FAILED:" + newsId);
-                return buildFallbackDetail(news, sentimentScore, warnings);
-            }
-
-            if (extractedDetail.isLowConfidence()) {
-                warnings.add("NEWS_BODY_LOW_CONFIDENCE:" + newsId);
-            }
-            return NewsDetailDto.builder()
-                    .newsId(news.getNewsId())
-                    .title(news.getTitle())
-                    .url(news.getUrl())
-                    .publisher(news.getSource())
-                    .publishedAt(news.getPublishedAt())
-                    .body(extractedDetail.getBody())
-                    .readerSummary(extractedDetail.getReaderSummary())
-                    .sentimentScore(sentimentScore)
-                    .warnings(dedupeWarnings(warnings))
-                    .build();
-        } catch (Exception ex) {
-            log.warn("[NewsSentimentService] detail fetch failed. newsId={}", newsId, ex);
+        CachedNewsDetail detail = getOrLoadNewsDetail(news, warnings);
+        if (detail == null || detail.getBody() == null || detail.getBody().isBlank()) {
             warnings.add("NEWS_DETAIL_FETCH_FAILED:" + newsId);
             return buildFallbackDetail(news, sentimentScore, warnings);
         }
+        if (detail.isLowConfidence()) {
+            warnings.add("NEWS_BODY_LOW_CONFIDENCE:" + newsId);
+        }
+        return NewsDetailDto.builder()
+                .newsId(news.getNewsId())
+                .title(news.getTitle())
+                .url(news.getUrl())
+                .publisher(news.getSource())
+                .publishedAt(news.getPublishedAt())
+                .body(detail.getBody())
+                .readerSummary(detail.getReaderSummary())
+                .sentimentScore(sentimentScore)
+                .warnings(dedupeWarnings(warnings))
+                .build();
+    }
+
+    private List<NewsItemDto> getOrLoadNewsList(String stockCode, String query, Stock stock, List<String> warnings) {
+        String listKey = buildNewsListCacheKeyByStock(stockCode);
+        CachedNewsListPayload cachedNewsList = readNewsListCache(listKey, warnings);
+        if (cachedNewsList != null && cachedNewsList.getItems() != null) {
+            return buildNewsList(toNewsReferences(cachedNewsList.getItems()), warnings);
+        }
+
+        refreshNewsListSource(stock, warnings);
+        List<News> latestNews = loadLatestNewsEntities(stock);
+        List<NewsItemDto> newsList = buildNewsList(latestNews, warnings);
+        cacheNewsList(listKey, stockCode, newsList, warnings);
+        return newsList;
+    }
+
+    private void refreshNewsListSource(Stock stock, List<String> warnings) {
+        try {
+            List<NaverNewsClient.NaverNewsArticle> articles = fetchNewsList(stock.getCompanyName(), warnings);
+            upsertNewsMeta(stock, articles, warnings);
+        } catch (Exception ex) {
+            log.warn("[NewsSentimentService] news list fetch failed. stockCode={}", stock.getStockCode(), ex);
+            warnings.add("NEWS_LIST_FETCH_FAILED");
+        }
+    }
+
+    private List<NaverNewsClient.NaverNewsArticle> fetchNewsList(String companyName, List<String> warnings) {
+        return collectRelevantArticles(companyName, warnings);
+    }
+
+    private List<News> loadLatestNewsEntities(Stock stock) {
+        return newsSecurityMapRepository.findLatestNewsByStockId(
+                stock.getStockId(),
+                PageRequest.of(0, NEWS_FETCH_LIMIT)
+        );
     }
 
     @Transactional
@@ -292,9 +280,9 @@ public class NewsSentimentService {
         if (value == null || value.isBlank()) {
             return false;
         }
-        String normalized = value.toLowerCase();
+        String normalized = value.toLowerCase(Locale.ROOT);
         for (String keyword : keywords) {
-            if (normalized.contains(keyword.toLowerCase())) {
+            if (normalized.contains(keyword.toLowerCase(Locale.ROOT))) {
                 return true;
             }
         }
@@ -332,94 +320,120 @@ public class NewsSentimentService {
                 continue;
             }
 
-            BigDecimal cached = readSentimentCache(news.getNewsId(), warnings);
-            if (cached != null) {
-                scores.put(news.getUrl(), cached);
+            SentimentResolution resolution = getOrAnalyzeSentiment(news, warnings);
+            if (resolution.score() != null) {
+                scores.put(news.getUrl(), resolution.score());
                 continue;
             }
-
-            Optional<SentimentResult> existing = sentimentResultRepository.findById(
-                    new SentimentResultId(news.getNewsId(), sentimentModel)
-            );
-            if (existing.isPresent()) {
-                BigDecimal score = existing.get().getScore();
-                scores.put(news.getUrl(), score);
-                writeSentimentCache(news.getNewsId(), score, warnings);
-                continue;
-            }
-
-            String focusText = resolveFocusText(news, warnings);
-            if (focusText == null || focusText.isBlank()) {
-                warnings.add("NEWS_BODY_FETCH_FAILED:" + hashUrl(news.getUrl()));
-                continue;
-            }
-
-            toAnalyze.add(new NewsSentimentInput(
-                    news.getUrl(),
-                    news.getTitle(),
-                    news.getSource(),
-                    news.getPublishedAt(),
-                    focusText
-            ));
-            pendingNews.put(news.getUrl(), news);
-        }
-
-        if (!toAnalyze.isEmpty()) {
-            try {
-                Feature2NewsSentimentClient.SentimentBatchResponse response =
-                        sentimentClient.analyze(toAnalyze, sentimentModel);
-                warnings.addAll(response.warnings());
-                for (String invalidScoreUrl : response.invalidScoreUrls()) {
-                    News invalidScoreNews = pendingNews.get(invalidScoreUrl);
-                    if (invalidScoreNews != null && invalidScoreNews.getNewsId() != null) {
-                        warnings.add("NEWS_SENTIMENT_INVALID_SCORE:" + invalidScoreNews.getNewsId());
-                    }
-                }
-
-                List<String> resolvedUrls = new ArrayList<>();
-                for (NewsSentimentResult result : response.results()) {
-                    News matchedNews = pendingNews.get(result.url());
-                    if (matchedNews == null || matchedNews.getNewsId() == null) {
-                        warnings.add("NEWS_SENTIMENT_INVALID_RESPONSE");
-                        continue;
-                    }
-                    if (result.sentimentScore() == null) {
-                        warnings.add("NEWS_SENTIMENT_INVALID_SCORE:" + matchedNews.getNewsId());
-                        continue;
-                    }
-                    resolvedUrls.add(result.url());
-                    scores.put(result.url(), result.sentimentScore());
-                    writeSentimentCache(matchedNews.getNewsId(), result.sentimentScore(), warnings);
-                    upsertSentimentResult(matchedNews, result.sentimentScore(), warnings);
-                }
-
-                for (Map.Entry<String, News> entry : pendingNews.entrySet()) {
-                    News news = entry.getValue();
-                    if (news == null || news.getNewsId() == null) {
-                        continue;
-                    }
-                    if (!resolvedUrls.contains(entry.getKey()) && !response.invalidScoreUrls().contains(entry.getKey())) {
-                        warnings.add("NEWS_SENTIMENT_FAILED:" + news.getNewsId());
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[NewsSentimentService] sentiment analyze failed", ex);
-                for (NewsSentimentInput input : toAnalyze) {
-                    News failedNews = pendingNews.get(input.url());
-                    if (failedNews != null && failedNews.getNewsId() != null) {
-                        warnings.add("NEWS_SENTIMENT_FAILED:" + failedNews.getNewsId());
-                    }
-                }
+            if (resolution.pendingInput() != null) {
+                toAnalyze.add(resolution.pendingInput());
+                pendingNews.put(news.getUrl(), news);
             }
         }
 
+        analyzePendingSentiments(toAnalyze, pendingNews, scores, warnings);
         return scores;
     }
 
+    private SentimentResolution getOrAnalyzeSentiment(News news, List<String> warnings) {
+        CachedSentimentValue cachedSentiment = readSentimentCache(news.getNewsId(), warnings);
+        if (cachedSentiment != null) {
+            CachedFocusTextValue focusPayload = getOrLoadFocusText(news, warnings);
+            if (focusPayload != null && isReusableSentiment(cachedSentiment, focusPayload)) {
+                return SentimentResolution.cached(cachedSentiment.getSentimentScore());
+            }
+        }
+
+        CachedFocusTextValue focusPayload = getOrLoadFocusText(news, warnings);
+        if (focusPayload == null || focusPayload.getFocusText() == null || focusPayload.getFocusText().isBlank()) {
+            warnings.add("NEWS_BODY_FETCH_FAILED:" + hashUrl(news.getUrl()));
+            return SentimentResolution.unavailable();
+        }
+
+        if (cachedSentiment == null) {
+            Optional<SentimentResult> existingSentiment = sentimentResultRepository.findById(
+                    new SentimentResultId(news.getNewsId(), sentimentModel)
+            );
+            if (existingSentiment.isPresent()) {
+                BigDecimal score = existingSentiment.get().getScore();
+                cacheSentiment(news.getNewsId(), score, focusPayload.getFocusTextVersion(), warnings);
+                return SentimentResolution.cached(score);
+            }
+        }
+
+        return SentimentResolution.pending(new NewsSentimentInput(
+                news.getUrl(),
+                news.getTitle(),
+                news.getSource(),
+                news.getPublishedAt(),
+                focusPayload.getFocusText()
+        ));
+    }
+
+    private void analyzePendingSentiments(
+            List<NewsSentimentInput> toAnalyze,
+            Map<String, News> pendingNews,
+            Map<String, BigDecimal> scores,
+            List<String> warnings
+    ) {
+        if (toAnalyze.isEmpty()) {
+            return;
+        }
+
+        try {
+            Feature2NewsSentimentClient.SentimentBatchResponse response =
+                    analyzeSentiment(toAnalyze, warnings);
+            warnings.addAll(response.warnings());
+            for (String invalidScoreUrl : response.invalidScoreUrls()) {
+                News invalidScoreNews = pendingNews.get(invalidScoreUrl);
+                if (invalidScoreNews != null && invalidScoreNews.getNewsId() != null) {
+                    warnings.add("NEWS_SENTIMENT_INVALID_SCORE:" + invalidScoreNews.getNewsId());
+                }
+            }
+
+            List<String> resolvedUrls = new ArrayList<>();
+            for (NewsSentimentResult result : response.results()) {
+                News matchedNews = pendingNews.get(result.url());
+                if (matchedNews == null || matchedNews.getNewsId() == null) {
+                    warnings.add("NEWS_SENTIMENT_INVALID_RESPONSE");
+                    continue;
+                }
+                if (result.sentimentScore() == null) {
+                    warnings.add("NEWS_SENTIMENT_INVALID_SCORE:" + matchedNews.getNewsId());
+                    continue;
+                }
+                resolvedUrls.add(result.url());
+                scores.put(result.url(), result.sentimentScore());
+                CachedFocusTextValue focusPayload = getOrLoadFocusText(matchedNews, warnings);
+                String focusTextVersion = focusPayload == null ? null : focusPayload.getFocusTextVersion();
+                cacheSentiment(matchedNews.getNewsId(), result.sentimentScore(), focusTextVersion, warnings);
+                upsertSentimentResult(matchedNews, result.sentimentScore(), warnings);
+            }
+
+            for (Map.Entry<String, News> entry : pendingNews.entrySet()) {
+                News news = entry.getValue();
+                if (news == null || news.getNewsId() == null) {
+                    continue;
+                }
+                if (!resolvedUrls.contains(entry.getKey()) && !response.invalidScoreUrls().contains(entry.getKey())) {
+                    warnings.add("NEWS_SENTIMENT_FAILED:" + news.getNewsId());
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[NewsSentimentService] sentiment analyze failed", ex);
+            for (NewsSentimentInput input : toAnalyze) {
+                News failedNews = pendingNews.get(input.url());
+                if (failedNews != null && failedNews.getNewsId() != null) {
+                    warnings.add("NEWS_SENTIMENT_FAILED:" + failedNews.getNewsId());
+                }
+            }
+        }
+    }
+
     private BigDecimal resolveExistingSentimentScore(News news, List<String> warnings) {
-        BigDecimal cached = readSentimentCache(news.getNewsId(), warnings);
+        CachedSentimentValue cached = readSentimentCache(news.getNewsId(), warnings);
         if (cached != null) {
-            return cached;
+            return cached.getSentimentScore();
         }
         return sentimentResultRepository.findById(new SentimentResultId(news.getNewsId(), sentimentModel))
                 .map(SentimentResult::getScore)
@@ -446,38 +460,28 @@ public class NewsSentimentService {
         }
     }
 
-    private String resolveFocusText(News news, List<String> warnings) {
-        String hash = hashUrl(news.getUrl());
-        String cachedFocus = readStringCache(NEWS_FOCUS_KEY.formatted(hash), warnings);
-        if (cachedFocus != null && !cachedFocus.isBlank()) {
+    private CachedFocusTextValue getOrLoadFocusText(News news, List<String> warnings) {
+        CachedFocusTextValue cachedFocus = readFocusCache(news.getNewsId(), warnings);
+        if (cachedFocus != null && cachedFocus.getFocusText() != null && !cachedFocus.getFocusText().isBlank()) {
             return cachedFocus;
         }
 
-        CachedNewsDetail detail = readDetailCache(news.getNewsId(), warnings);
+        CachedNewsDetail detail = getOrLoadNewsDetail(news, warnings);
         if (detail == null || detail.getBody() == null || detail.getBody().isBlank()) {
-            try {
-                detail = fetchAndCacheDetail(news, warnings);
-            } catch (Exception ex) {
-                log.warn("[NewsSentimentService] body fetch failed. url={}", news.getUrl(), ex);
-                warnings.add("NEWS_BODY_FETCH_FAILED:" + hash);
-                return null;
-            }
-        }
-
-        if (detail == null || detail.getBody() == null || detail.getBody().isBlank()) {
-            warnings.add("NEWS_BODY_FETCH_FAILED:" + hash);
             return null;
         }
         if (detail.isLowConfidence()) {
             warnings.add("NEWS_BODY_LOW_CONFIDENCE:" + news.getNewsId());
         }
+        return buildAndCacheFocusText(news, detail.getBody(), warnings);
+    }
 
-        String body = detail.getBody();
+    private CachedFocusTextValue buildAndCacheFocusText(News news, String body, List<String> warnings) {
         String focusText = buildFocusText(news, body);
-        if (focusText != null && !focusText.isBlank()) {
-            writeStringCache(NEWS_FOCUS_KEY.formatted(hash), focusText, NEWS_FOCUS_TTL, warnings);
+        if (focusText == null || focusText.isBlank()) {
+            return null;
         }
-        return focusText;
+        return cacheFocusText(news.getNewsId(), focusText, warnings);
     }
 
     private String buildFocusText(News news, String body) {
@@ -499,7 +503,10 @@ public class NewsSentimentService {
         if (body == null) {
             return null;
         }
-        String normalized = body.replaceAll("\\s+", " ").trim();
+        String normalized = body
+                .replaceAll("[ \\t\\x0B\\f\\r]+", " ")
+                .replaceAll("\\n\\s*\\n+", "\n\n")
+                .trim();
         return normalized.isBlank() ? null : normalized;
     }
 
@@ -538,77 +545,97 @@ public class NewsSentimentService {
         return summary.split("(?<=[.!?]|다\\.)\\s+").length;
     }
 
-    private CachedNewsDetail fetchAndCacheDetail(News news, List<String> warnings) {
+    private CachedNewsDetail getOrLoadNewsDetail(News news, List<String> warnings) {
+        CachedNewsDetail cachedDetail = readDetailCache(news.getNewsId(), warnings);
+        if (cachedDetail != null) {
+            return cachedDetail;
+        }
+        try {
+            CachedNewsDetail extractedDetail = extractNewsDetail(news);
+            if (extractedDetail != null) {
+                cacheNewsDetail(extractedDetail, warnings);
+            }
+            return extractedDetail;
+        } catch (Exception ex) {
+            log.warn("[NewsSentimentService] detail fetch failed. newsId={}", news.getNewsId(), ex);
+            return null;
+        }
+    }
+
+    private CachedNewsDetail extractNewsDetail(News news) {
         NewsArticleExtractorClient.ArticleExtractionResult extraction = articleExtractorClient.fetchArticleBody(news.getUrl());
         String body = normalizeBody(extraction.body());
         if (body == null || body.isBlank()) {
             return null;
         }
 
-        CachedNewsDetail detail = CachedNewsDetail.builder()
+        List<String> paragraphs = extraction.paragraphs() == null || extraction.paragraphs().isEmpty()
+                ? splitBodyParagraphs(body)
+                : extraction.paragraphs().stream()
+                        .map(this::normalizeBody)
+                        .filter(paragraph -> paragraph != null && !paragraph.isBlank())
+                        .toList();
+
+        return CachedNewsDetail.builder()
                 .newsId(news.getNewsId())
                 .title(news.getTitle())
                 .url(news.getUrl())
                 .publisher(news.getSource())
                 .publishedAt(news.getPublishedAt())
                 .body(body)
+                .paragraphs(paragraphs)
                 .readerSummary(buildReaderSummary(body))
                 .fetchedAt(OffsetDateTime.now())
                 .lowConfidence(extraction.lowConfidence())
+                .extractionMeta(extraction.extractionMeta())
                 .build();
-        writeDetailCache(detail, warnings);
-        return detail;
     }
 
-    private List<NewsItemDto> readCacheList(String key, List<String> warnings) {
+    private CachedNewsListPayload readNewsListCache(String key, List<String> warnings) {
         try {
             String value = redisTemplate.opsForValue().get(key).block();
             if (value == null || value.isBlank()) {
                 return null;
             }
-            List<CachedNewsItem> cached = objectMapper.readValue(value, new TypeReference<List<CachedNewsItem>>() {});
-            return cached.stream()
-                    .map(item -> NewsItemDto.builder()
-                            .newsId(item.getNewsId())
-                            .title(item.getTitle())
-                            .url(item.getUrl())
-                            .publisher(item.getPublisher())
-                            .publishedAt(item.getPublishedAt())
-                            .summary(item.getSummary())
-                            .sentimentScore(item.getSentimentScore())
-                            .build())
-                    .toList();
+            return objectMapper.readValue(value, CachedNewsListPayload.class);
         } catch (Exception ex) {
             warnings.add("NEWS_CACHE_READ_FAILED");
             return null;
         }
     }
 
-    private void writeCacheList(String key, List<NewsItemDto> newsList, List<String> warnings) {
+    private void writeNewsListCache(String key, CachedNewsListPayload payload, List<String> warnings) {
         try {
-            List<CachedNewsItem> cached = newsList.stream()
-                    .map(item -> CachedNewsItem.builder()
-                            .newsId(item.getNewsId())
-                            .title(item.getTitle())
-                            .url(item.getUrl())
-                            .publisher(item.getPublisher())
-                            .publishedAt(item.getPublishedAt())
-                            .summary(item.getSummary())
-                            .sentimentScore(item.getSentimentScore())
-                            .build())
-                    .toList();
             redisTemplate.opsForValue()
-                    .set(key, objectMapper.writeValueAsString(cached), NEWS_LIST_TTL)
+                    .set(key, objectMapper.writeValueAsString(payload), NEWS_LIST_TTL)
                     .block();
         } catch (Exception ex) {
             warnings.add("NEWS_CACHE_WRITE_FAILED");
         }
     }
 
+    private void cacheNewsList(String key, String stockCode, List<NewsItemDto> newsList, List<String> warnings) {
+        CachedNewsListPayload payload = CachedNewsListPayload.builder()
+                .stockCode(normalizeCacheSegment(stockCode))
+                .cachedAt(OffsetDateTime.now())
+                .items(newsList.stream()
+                        .map(item -> CachedNewsListItem.builder()
+                                .newsId(item.getNewsId())
+                                .title(item.getTitle())
+                                .url(item.getUrl())
+                                .publisher(item.getPublisher())
+                                .publishedAt(item.getPublishedAt())
+                                .summary(item.getSummary())
+                                .build())
+                        .toList())
+                .build();
+        writeNewsListCache(key, payload, warnings);
+    }
+
     private CachedNewsDetail readDetailCache(Long newsId, List<String> warnings) {
         try {
             String value = redisTemplate.opsForValue()
-                    .get(NEWS_DETAIL_KEY.formatted(newsId))
+                    .get(buildNewsDetailCacheKey(newsId))
                     .block();
             if (value == null || value.isBlank()) {
                 return null;
@@ -623,75 +650,174 @@ public class NewsSentimentService {
     private void writeDetailCache(CachedNewsDetail detail, List<String> warnings) {
         try {
             redisTemplate.opsForValue()
-                    .set(NEWS_DETAIL_KEY.formatted(detail.getNewsId()), objectMapper.writeValueAsString(detail), NEWS_DETAIL_TTL)
+                    .set(buildNewsDetailCacheKey(detail.getNewsId()), objectMapper.writeValueAsString(detail), NEWS_DETAIL_TTL)
                     .block();
         } catch (Exception ex) {
             warnings.add("NEWS_CACHE_WRITE_FAILED");
         }
     }
 
-    private BigDecimal readSentimentCache(Long newsId, List<String> warnings) {
+    private void cacheNewsDetail(CachedNewsDetail detail, List<String> warnings) {
+        writeDetailCache(detail, warnings);
+    }
+
+    private CachedFocusTextValue readFocusCache(Long newsId, List<String> warnings) {
+        try {
+            String value = redisTemplate.opsForValue().get(buildNewsFocusCacheKey(newsId)).block();
+            if (value == null || value.isBlank()) {
+                return null;
+            }
+            return objectMapper.readValue(value, CachedFocusTextValue.class);
+        } catch (Exception ex) {
+            warnings.add("NEWS_CACHE_READ_FAILED");
+            return null;
+        }
+    }
+
+    private CachedFocusTextValue cacheFocusText(Long newsId, String focusText, List<String> warnings) {
+        CachedFocusTextValue payload = CachedFocusTextValue.builder()
+                .newsId(newsId)
+                .focusText(focusText)
+                .generatedAt(OffsetDateTime.now())
+                .focusTextVersion(buildFocusTextVersion(focusText))
+                .build();
+        try {
+            redisTemplate.opsForValue()
+                    .set(buildNewsFocusCacheKey(newsId), objectMapper.writeValueAsString(payload), NEWS_FOCUS_TTL)
+                    .block();
+        } catch (Exception ex) {
+            warnings.add("NEWS_CACHE_WRITE_FAILED");
+        }
+        return payload;
+    }
+
+    private CachedSentimentValue readSentimentCache(Long newsId, List<String> warnings) {
         if (newsId == null) {
             return null;
         }
         try {
             String value = redisTemplate.opsForValue()
-                    .get(NEWS_SENTIMENT_KEY.formatted(newsId, sentimentModel))
+                    .get(buildNewsSentimentCacheKey(newsId))
                     .block();
             if (value == null || value.isBlank()) {
                 return null;
             }
-            CachedSentimentValue cached = objectMapper.readValue(value, CachedSentimentValue.class);
-            return cached.getSentimentScore();
+            return objectMapper.readValue(value, CachedSentimentValue.class);
         } catch (Exception ex) {
             warnings.add("NEWS_CACHE_READ_FAILED");
             return null;
         }
     }
 
-    private void writeSentimentCache(Long newsId, BigDecimal score, List<String> warnings) {
+    private void writeSentimentCache(Long newsId, BigDecimal score, String focusTextVersion, List<String> warnings) {
         if (newsId == null || score == null) {
             return;
         }
         try {
-            CachedSentimentValue cached = new CachedSentimentValue(score, OffsetDateTime.now());
+            CachedSentimentValue payload = CachedSentimentValue.builder()
+                    .newsId(newsId)
+                    .sentimentScore(score)
+                    .analyzedAt(OffsetDateTime.now())
+                    .modelVersion(sentimentModel)
+                    .promptVersion(NEWS_SENTIMENT_PROMPT_VERSION)
+                    .focusTextVersion(focusTextVersion)
+                    .build();
             redisTemplate.opsForValue()
-                    .set(
-                            NEWS_SENTIMENT_KEY.formatted(newsId, sentimentModel),
-                            objectMapper.writeValueAsString(cached),
-                            NEWS_SENTIMENT_TTL
-                    )
+                    .set(buildNewsSentimentCacheKey(newsId), objectMapper.writeValueAsString(payload), NEWS_SENTIMENT_TTL)
                     .block();
         } catch (Exception ex) {
             warnings.add("NEWS_CACHE_WRITE_FAILED");
         }
     }
 
-    private String readStringCache(String key, List<String> warnings) {
-        try {
-            return redisTemplate.opsForValue().get(key).block();
-        } catch (Exception ex) {
-            warnings.add("NEWS_CACHE_READ_FAILED");
-            return null;
-        }
+    private void cacheSentiment(Long newsId, BigDecimal score, String focusTextVersion, List<String> warnings) {
+        writeSentimentCache(newsId, score, focusTextVersion, warnings);
     }
 
-    private void writeStringCache(String key, String value, Duration ttl, List<String> warnings) {
-        try {
-            redisTemplate.opsForValue().set(key, value, ttl).block();
-        } catch (Exception ex) {
-            warnings.add("NEWS_CACHE_WRITE_FAILED");
+    private Feature2NewsSentimentClient.SentimentBatchResponse analyzeSentiment(
+            List<NewsSentimentInput> toAnalyze,
+            List<String> warnings
+    ) {
+        return sentimentClient.analyze(toAnalyze, sentimentModel);
+    }
+
+    String buildNewsListCacheKeyByStock(String stockCode) {
+        return NEWS_LIST_KEY_PREFIX + normalizeCacheSegment(stockCode);
+    }
+
+    String buildNewsDetailCacheKey(Long newsId) {
+        return NEWS_DETAIL_KEY_PREFIX + newsId;
+    }
+
+    String buildNewsFocusCacheKey(Long newsId) {
+        return NEWS_FOCUS_KEY_PREFIX + newsId;
+    }
+
+    String buildNewsSentimentCacheKey(Long newsId) {
+        return NEWS_SENTIMENT_KEY_PREFIX + newsId;
+    }
+
+    String normalizeCacheSegment(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "unknown";
         }
+        return raw.trim()
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("\\s+", "-")
+                .replaceAll("[^\\p{L}\\p{N}-]+", "-")
+                .replaceAll("-{2,}", "-")
+                .replaceAll("^-|-$", "");
+    }
+
+    boolean isReusableSentiment(CachedSentimentValue cached, CachedFocusTextValue focusPayload) {
+        if (cached == null || focusPayload == null) {
+            return false;
+        }
+        return sentimentModel.equals(cached.getModelVersion())
+                && NEWS_SENTIMENT_PROMPT_VERSION.equals(cached.getPromptVersion())
+                && focusPayload.getFocusTextVersion() != null
+                && focusPayload.getFocusTextVersion().equals(cached.getFocusTextVersion());
     }
 
     private String hashUrl(String url) {
+        return hashValue(url);
+    }
+
+    private String buildFocusTextVersion(String focusText) {
+        return hashValue(focusText);
+    }
+
+    private String hashValue(String value) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest((url == null ? "" : url).getBytes(StandardCharsets.UTF_8));
+            byte[] bytes = digest.digest((value == null ? "" : value).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(bytes);
         } catch (Exception ex) {
-            return Integer.toHexString((url == null ? "" : url).hashCode());
+            return Integer.toHexString((value == null ? "" : value).hashCode());
         }
+    }
+
+    private List<News> toNewsReferences(List<CachedNewsListItem> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream().map(item -> {
+            News news = new News();
+            news.setNewsId(item.getNewsId());
+            news.setTitle(item.getTitle());
+            news.setUrl(item.getUrl());
+            news.setSource(item.getPublisher());
+            news.setPublishedAt(item.getPublishedAt());
+            news.setSummary(item.getSummary());
+            return news;
+        }).toList();
+    }
+
+    private List<String> splitBodyParagraphs(String body) {
+        return java.util.Arrays.stream(body.split("\\n\\n+"))
+                .map(this::normalizeBody)
+                .filter(paragraph -> paragraph != null && !paragraph.isBlank())
+                .toList();
     }
 
     private List<String> dedupeWarnings(List<String> warnings) {
@@ -733,23 +859,10 @@ public class NewsSentimentService {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    private static class CachedNewsItem {
-        private Long newsId;
-        private String title;
-        private String url;
-        private String publisher;
-        private OffsetDateTime publishedAt;
-        private String summary;
-        private BigDecimal sentimentScore;
-    }
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    private static class CachedSentimentValue {
-        private BigDecimal sentimentScore;
-        private OffsetDateTime createdAt;
+    private static class CachedNewsListPayload {
+        private String stockCode;
+        private OffsetDateTime cachedAt;
+        private List<CachedNewsListItem> items;
     }
 
     @Getter
@@ -757,15 +870,74 @@ public class NewsSentimentService {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    private static class CachedNewsDetail {
+    private static class CachedNewsListItem {
+        private Long newsId;
+        private String title;
+        private String url;
+        private String publisher;
+        private OffsetDateTime publishedAt;
+        private String summary;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    static class CachedNewsDetail {
         private Long newsId;
         private String title;
         private String url;
         private String publisher;
         private OffsetDateTime publishedAt;
         private String body;
+        private List<String> paragraphs;
         private String readerSummary;
         private OffsetDateTime fetchedAt;
         private boolean lowConfidence;
+        private String extractionMeta;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    static class CachedFocusTextValue {
+        private Long newsId;
+        private String focusText;
+        private OffsetDateTime generatedAt;
+        private String focusTextVersion;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    static class CachedSentimentValue {
+        private Long newsId;
+        private BigDecimal sentimentScore;
+        private OffsetDateTime analyzedAt;
+        private String modelVersion;
+        private String promptVersion;
+        private String focusTextVersion;
+    }
+
+    private record SentimentResolution(
+            BigDecimal score,
+            NewsSentimentInput pendingInput
+    ) {
+        private static SentimentResolution cached(BigDecimal score) {
+            return new SentimentResolution(score, null);
+        }
+
+        private static SentimentResolution pending(NewsSentimentInput input) {
+            return new SentimentResolution(null, input);
+        }
+
+        private static SentimentResolution unavailable() {
+            return new SentimentResolution(null, null);
+        }
     }
 }
