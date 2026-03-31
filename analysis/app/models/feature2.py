@@ -118,3 +118,34 @@ class PeerClusterResponse(BaseModel):
 
     as_of: datetime
     warnings: List[str] = Field(default_factory=list)
+
+
+class NewsSentimentItemRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
+    title: str
+    publisher: str
+    published_at: datetime
+    focus_text: str
+
+
+class NewsSentimentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: List[NewsSentimentItemRequest] = Field(default_factory=list)
+    model: str
+
+
+class NewsSentimentResultItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
+    sentiment_score: float
+
+
+class NewsSentimentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    results: List[NewsSentimentResultItem] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
