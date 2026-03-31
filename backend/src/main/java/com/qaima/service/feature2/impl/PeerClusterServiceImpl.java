@@ -117,7 +117,7 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             int maxLag
     ) {
         return String.format(
-                "feature2:peercluster:v1:%d:%s:%s:%d:%d:%d",
+                "feature2:peercluster:v2:%d:%s:%s:%d:%d:%d",
                 industryId,
                 anchorStockCode,
                 freq.name(),
@@ -133,6 +133,10 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                 .flatMap(json -> {
                     try {
                         PeerClusterDto dto = objectMapper.readValue(json, PeerClusterDto.class);
+                        if (!isUsableCache(dto)) {
+                            log.warn("[PeerCluster] cache payload invalid. fallback to FastAPI. key={}", key);
+                            return Mono.empty();
+                        }
                         return Mono.just(dto);
                     } catch (Exception e) {
                         log.warn("[PeerCluster] cache deserialize failed key={}", key, e);
@@ -176,5 +180,18 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                 .peerCluster(dto)
                 .warnings(warnings)
                 .build();
+    }
+
+    private boolean isUsableCache(PeerClusterDto dto) {
+        if (dto == null) {
+            return false;
+        }
+        return dto.getIndustryId() != null
+                && dto.getPeerCount() != null
+                && dto.getAnchorStockCode() != null
+                && !dto.getAnchorStockCode().isBlank()
+                && dto.getMethod() != null
+                && dto.getFreq() != null
+                && dto.getWindow() != null;
     }
 }
