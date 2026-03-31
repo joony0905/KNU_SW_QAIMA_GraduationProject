@@ -32,6 +32,7 @@ public class Feature2NewsSentimentClient {
     }
 
     public SentimentBatchResponse analyze(List<NewsSentimentInput> items, String model) {
+        // TODO: 현재는 Spring이 정한 모델명을 전달하고, 추후 클라이언트 선택 모델을 그대로 넘기도록 확장한다.
         Feature2NewsSentimentExternalRequestDto requestDto = Feature2NewsSentimentExternalRequestDto.builder()
                 .items(items.stream()
                         .map(item -> Feature2NewsSentimentExternalItemDto.builder()

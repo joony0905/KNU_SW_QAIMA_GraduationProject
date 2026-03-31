@@ -90,7 +90,8 @@ public class NewsSentimentService {
     private final NewsArticleExtractorClient articleExtractorClient;
     private final Feature2NewsSentimentClient sentimentClient;
 
-    @Value("${feature2.news.sentiment.model:gpt-4o-mini}")
+    // TODO: 현재는 서버 기본 모델을 사용하고, 추후 클라이언트가 선택한 LLM 모델을 받아 전달하도록 확장한다.
+    @Value("${feature2.news.sentiment.model:gemini-2.5-flash}")
     private String sentimentModel;
 
     public Mono<NewsLoadResult> loadNews(Stock stock) {
