@@ -21,21 +21,21 @@ export default function Sidebar() {
   const navigate = useNavigate();
 
   return (
-    <div className="w-[90px] h-screen border-r-2 border-[#C6C6C6] bg-[#FDFDFD] flex flex-col items-center justify-center gap-[30px] py-8 fixed left-0 top-0 z-50">
+    <div className="w-[60px] h-screen border-r-2 border-[#C6C6C6] bg-[#FDFDFD] flex flex-col items-center justify-start gap-[20px] py-6 fixed left-0 top-0 z-50">
       {navItems.map((item) => (
         <NavLink
           key={item.path}
           to={item.path}
-          className="flex flex-col items-center gap-[5px] p-[5px] w-[84px] rounded-[15px] hover:bg-[#D7D7D7]"
+          className="flex flex-col items-center gap-[4px] p-[4px] w-[56px] rounded-[12px] hover:bg-[#D7D7D7]"
         >
-          <div className="w-[50px] h-[50px] flex items-center justify-center">
+          <div className="w-[28px] h-[28px] flex items-center justify-center">
             <img
               src={item.icon}
               alt={item.label}
               className="w-full h-full object-contain"
             />
           </div>
-          <div className="text-black text-center text-[14px] font-normal">
+          <div className="text-black text-center text-[11px] whitespace-nowrap font-normal">
             {item.label}
           </div>
         </NavLink>
@@ -50,16 +50,16 @@ export default function Sidebar() {
             navigate("/login");
           }
         }}
-        className="flex flex-col items-center gap-[5px] p-[5px] w-[84px] rounded-[15px] hover:bg-[#D7D7D7]"
+        className="flex flex-col items-center gap-[4px] p-[4px] w-[56px] rounded-[12px] hover:bg-[#D7D7D7]"
       >
-        <div className="w-[50px] h-[50px] flex items-center justify-center">
+        <div className="w-[28px] h-[28px] flex items-center justify-center">
           <img
             src={mypageIcon}
             alt="내정보"
             className="w-full h-full object-contain"
           />
         </div>
-        <div className="text-black text-center text-[14px] font-normal">
+        <div className="text-black text-center text-[11px] whitespace-nowrap font-normal">
           {isLoggedIn() ? "내정보" : "로그인"}
         </div>
       </button>

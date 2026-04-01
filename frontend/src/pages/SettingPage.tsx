@@ -16,7 +16,7 @@ export default function SettingPage() {
   const [language, setLanguage] = useState<"한국어" | "English">("한국어");
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] ml-[90px]">
+    <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
       <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
         <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
           내정보

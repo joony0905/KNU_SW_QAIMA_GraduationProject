@@ -6,10 +6,16 @@ export const ENDPOINTS = {
   stocks: {
     search: (query: string) => `/stocks/search?q=${encodeURIComponent(query)}`,
     getByCode: (stockCode: string) => `/stocks/code/${stockCode}`,
-    financials: (ticker: string, years = 5) =>
-      `/stocks/${ticker}/financials?years=${years}`,
-    financialsByYear: (ticker: string, year: number) =>
-      `/stocks/${ticker}/financials/${year}`,
+    financials: (ticker: string, years = 5, periodType?: string, periodNo?: number) =>
+      `/stocks/${ticker}/financials?years=${years}${periodType ? `&periodType=${periodType}` : ""}${periodNo !== undefined ? `&periodNo=${periodNo}` : ""}`,
+    financialsByYear: (ticker: string, year: number, periodType?: string, periodNo?: number) => {
+      const base = `/stocks/${ticker}/financials/${year}`;
+      const params = new URLSearchParams();
+      if (periodType) params.set("periodType", periodType);
+      if (periodNo !== undefined) params.set("periodNo", String(periodNo));
+      const qs = params.toString();
+      return qs ? `${base}?${qs}` : base;
+    },
     analysisTicker: (symbol: string) => `/stocks/marketstack/ticker/${symbol}`,
   },
   watchlist: {
@@ -35,6 +41,11 @@ export const ENDPOINTS = {
     autocomplete: (q: string, size?: number) =>
       `/dictionary/autocomplete?q=${encodeURIComponent(q)}${size !== undefined ? "&size=" + size : ""}`,
     initials: () => "/dictionary/initials",
+  },
+  news: {
+    listByStock: (stockCode: string, limit = 10) =>
+      `/feature2/news?stockCode=${stockCode}&limit=${limit}`,
+    detail: (newsId: number) => `/feature2/news/${newsId}`,
   },
   charts: {
     candles: (stockCode: string, freq: string, from: string, to: string) =>

@@ -8,6 +8,7 @@ const fmtTimes = (value: number | null) =>
   value == null ? "-" : `${value.toFixed(1)}배`;
 
 export function buildSectionsFromDto(dto: FinancialDto): IndicatorSection[] {
+  console.log("[buildSectionsFromDto] called with:", dto);
   return [
     {
       sectionTitle: "수익성",

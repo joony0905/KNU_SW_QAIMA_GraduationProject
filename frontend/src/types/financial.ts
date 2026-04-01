@@ -26,4 +26,11 @@ export interface FinancialDto {
   per: number | null;
   pbr: number | null;
   debtRatio: number | null;
+  roa: number | null;
+  eps: number | null;
+  bps: number | null;
+  psr: number | null;
+  currentRatio: number | null;
+  quickRatio: number | null;
+  interestCoverageRatio: number | null;
 }

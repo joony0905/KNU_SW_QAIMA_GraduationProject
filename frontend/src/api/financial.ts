@@ -15,12 +15,15 @@ interface ApiResponse<T> {
  */
 export const fetchFinancials = async (
   ticker: string,
-  years = 5
+  years = 5,
+  periodType?: string,
+  periodNo?: number
 ): Promise<FinancialDto[]> => {
-  const res = await api.get<ApiResponse<FinancialDto[]>>(
-    ENDPOINTS.stocks.financials(ticker, years)
+  const res = await api.get(
+    ENDPOINTS.stocks.financials(ticker, years, periodType, periodNo)
   );
-  return res.data.data;
+  const body = res.data;
+  return Array.isArray(body) ? body : body.data;
 };
 
 /**
@@ -28,10 +31,13 @@ export const fetchFinancials = async (
  */
 export const fetchFinancialsByYear = async (
   ticker: string,
-  year: number
+  year: number,
+  periodType?: string,
+  periodNo?: number
 ): Promise<FinancialDto[]> => {
-  const res = await api.get<ApiResponse<FinancialDto[]>>(
-    ENDPOINTS.stocks.financialsByYear(ticker, year)
+  const res = await api.get(
+    ENDPOINTS.stocks.financialsByYear(ticker, year, periodType, periodNo)
   );
-  return res.data.data;
+  const body = res.data;
+  return Array.isArray(body) ? body : body.data;
 };
