@@ -53,7 +53,7 @@ public class FinancialMapper {
                     .doubleValue();
         }
 
-        BigDecimal marketCap = financial.getMarketCap() != null ? financial.getMarketCap() : marketCapOverride;
+        BigDecimal marketCap = marketCapOverride;
         boolean annualLike = periodType == PeriodType.A || periodType == PeriodType.TTM;
 
         BigDecimal eps = null;
@@ -65,6 +65,37 @@ public class FinancialMapper {
             if (financial.getEquity() != null) {
                 bps = financial.getEquity().divide(sharesOverride, METRIC_SCALE, RoundingMode.HALF_UP);
             }
+        }
+
+        Double operatingMargin = null;
+        if (financial.getOperatingIncome() != null
+                && financial.getRevenue() != null
+                && financial.getRevenue().signum() != 0) {
+            operatingMargin = financial.getOperatingIncome()
+                    .divide(financial.getRevenue(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+        }
+
+        Double netMargin = null;
+        if (financial.getNetIncome() != null
+                && financial.getRevenue() != null
+                && financial.getRevenue().signum() != 0) {
+            netMargin = financial.getNetIncome()
+                    .divide(financial.getRevenue(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+        }
+
+        Double roe = null;
+        if (annualLike
+                && financial.getNetIncome() != null
+                && financial.getEquity() != null
+                && financial.getEquity().signum() != 0) {
+            roe = financial.getNetIncome()
+                    .divide(financial.getEquity(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
         }
 
         Double roa = null;
@@ -82,8 +113,6 @@ public class FinancialMapper {
             per = currentPriceOverride
                     .divide(eps, METRIC_SCALE, RoundingMode.HALF_UP)
                     .doubleValue();
-        } else if (financial.getPer() != null) {
-            per = bdToDouble(financial.getPer());
         } else if (marketCap != null
                 && annualLike
                 && financial.getNetIncome() != null
@@ -98,8 +127,6 @@ public class FinancialMapper {
             pbr = currentPriceOverride
                     .divide(bps, METRIC_SCALE, RoundingMode.HALF_UP)
                     .doubleValue();
-        } else if (financial.getPbr() != null) {
-            pbr = bdToDouble(financial.getPbr());
         } else if (marketCap != null
                 && financial.getEquity() != null
                 && financial.getEquity().signum() != 0) {
@@ -142,9 +169,9 @@ public class FinancialMapper {
                 .marketCap(marketCap)
                 .eps(eps)
                 .bps(bps)
-                .operatingMargin(bdToDouble(financial.getOperatingMargin()))
-                .netMargin(bdToDouble(financial.getNetMargin()))
-                .roe(bdToDouble(financial.getRoe()))
+                .operatingMargin(operatingMargin)
+                .netMargin(netMargin)
+                .roe(roe)
                 .roa(roa)
                 .per(per)
                 .pbr(pbr)

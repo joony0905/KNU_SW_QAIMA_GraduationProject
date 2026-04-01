@@ -2,21 +2,18 @@ package com.qaima.service.financial;
 
 import com.qaima.common.Blocking;
 import com.qaima.domain.Financial;
-import com.qaima.domain.IssuedShares;
-import com.qaima.domain.MarketSnapshot;
 import com.qaima.domain.PeriodType;
-import com.qaima.domain.ShareClass;
 import com.qaima.domain.Stock;
 import com.qaima.dto.financial.FinancialDto;
 import com.qaima.mapper.FinancialMapper;
 import com.qaima.repository.FinancialRepository;
-import com.qaima.repository.IssuedSharesRepository;
-import com.qaima.repository.MarketSnapshotRepository;
 import com.qaima.repository.StockRepository;
+import com.qaima.service.marketmetric.RealtimePriceService;
+import com.qaima.service.marketmetric.ShareBasisResolver;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -25,15 +22,11 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class FinancialReadService {
 
-    private static final String SHARE_TYPE_COMMON = "보통주";
-    private static final String SHARE_TYPE_PREFERRED = "우선주";
-    private static final String SHARE_TYPE_TOTAL = "합계";
-
     private final StockRepository stockRepository;
     private final FinancialRepository financialRepository;
-    private final MarketSnapshotRepository marketSnapshotRepository;
-    private final IssuedSharesRepository issuedSharesRepository;
     private final FinancialMapper financialMapper;
+    private final RealtimePriceService realtimePriceService;
+    private final ShareBasisResolver shareBasisResolver;
 
     public Mono<List<FinancialDto>> getForLastNYears(
             String stockCode,
@@ -56,18 +49,23 @@ public class FinancialReadService {
 
         return Blocking.call(() -> stockRepository.findByStockCodeWithExchange(stockCode)
                         .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode)))
-                .flatMap(stock -> Blocking.call(() -> {
-                    List<Financial> financials = queryFinancials(stock, periodType, periodNo, fromYear, toYear);
-                    MarketContext marketContext = resolveLatestMarketContext(stock, snapshotAsOfDate);
-                    return financials.stream()
-                            .map(financial -> financialMapper.toDto(
-                                    financial,
-                                    marketContext.marketCap(),
-                                    marketContext.currentPrice(),
-                                    resolveValuationShares(stock, financial, snapshotAsOfDate)
-                            ))
-                            .toList();
-                }));
+                .flatMap(stock -> realtimePriceService.getPrice(stock)
+                        .map(Optional::of)
+                        .onErrorResume(ex -> Mono.empty())
+                        .defaultIfEmpty(Optional.empty())
+                        .flatMap(currentPriceOpt -> Blocking.call(() -> {
+                            BigDecimal currentPrice = currentPriceOpt.orElse(null);
+                            List<Financial> financials = queryFinancials(stock, periodType, periodNo, fromYear, toYear);
+                            return financials.stream()
+                                    .map(financial -> {
+                                        BigDecimal shares = resolveValuationShares(stock, financial, snapshotAsOfDate);
+                                        BigDecimal marketCap = (currentPrice != null && shares != null)
+                                                ? currentPrice.multiply(shares)
+                                                : null;
+                                        return financialMapper.toDto(financial, marketCap, currentPrice, shares);
+                                    })
+                                    .toList();
+                        })));
     }
 
     public Mono<List<FinancialDto>> getForYear(
@@ -113,29 +111,6 @@ public class FinancialReadService {
                 );
     }
 
-    private MarketContext resolveLatestMarketContext(Stock stock, LocalDate asOfDate) {
-        if (stock == null) {
-            return new MarketContext(null, null);
-        }
-
-        MarketSnapshot snapshot = marketSnapshotRepository
-                .findTopByStockAndAsOfDateLessThanEqualOrderByAsOfDateDesc(stock, asOfDate)
-                .orElseGet(() -> marketSnapshotRepository.findTopByStockOrderByAsOfDateDesc(stock).orElse(null));
-        if (snapshot == null) {
-            return new MarketContext(null, null);
-        }
-
-        BigDecimal currentPrice = null;
-        if (snapshot.getMarketCap() != null
-                && snapshot.getSharesOutstanding() != null
-                && snapshot.getSharesOutstanding().signum() != 0) {
-            currentPrice = snapshot.getMarketCap()
-                    .divide(snapshot.getSharesOutstanding(), 8, RoundingMode.HALF_UP);
-        }
-
-        return new MarketContext(snapshot.getMarketCap(), currentPrice);
-    }
-
     private BigDecimal resolveValuationShares(Stock stock, Financial financial, LocalDate fallbackDate) {
         if (stock == null || financial == null) {
             return null;
@@ -143,33 +118,9 @@ public class FinancialReadService {
 
         LocalDate reportDate = financial.getReportDate();
         LocalDate effectiveDate = reportDate != null ? reportDate : fallbackDate;
-        IssuedShares issuedShares;
-        if (stock.getShareClass() == ShareClass.PREFERRED) {
-            issuedShares = findIssuedShares(stock, SHARE_TYPE_PREFERRED, effectiveDate);
-        } else {
-            issuedShares = findIssuedShares(stock, SHARE_TYPE_COMMON, effectiveDate);
-            if (issuedShares == null) {
-                issuedShares = findIssuedShares(stock, SHARE_TYPE_TOTAL, effectiveDate);
-            }
-        }
-
-        return issuedShares != null && issuedShares.getIssuedSharesTotal() != null
-                ? BigDecimal.valueOf(issuedShares.getIssuedSharesTotal())
-                : null;
-    }
-
-    private IssuedShares findIssuedShares(Stock stock, String shareType, LocalDate asOfDate) {
-        if (stock == null || shareType == null || asOfDate == null) {
-            return null;
-        }
-
-        return issuedSharesRepository
-                .findTopByStockAndShareTypeAndIssuedSharesTotalIsNotNullAndBaseDateLessThanEqualOrderByBaseDateDesc(
-                        stock,
-                        shareType,
-                        asOfDate
-                )
-                .orElse(null);
+        return shareBasisResolver.fromIssuedShares(
+                shareBasisResolver.findPrimaryIssuedShares(stock, effectiveDate)
+        ).sharesOutstanding();
     }
 
     private void validatePeriodNo(PeriodType periodType, Integer periodNo) {
@@ -199,8 +150,5 @@ public class FinancialReadService {
                 }
             }
         }
-    }
-
-    private record MarketContext(BigDecimal marketCap, BigDecimal currentPrice) {
     }
 }
