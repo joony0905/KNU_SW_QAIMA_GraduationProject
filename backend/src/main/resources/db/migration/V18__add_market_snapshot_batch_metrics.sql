@@ -1,0 +1,15 @@
+ALTER TABLE market_snapshot
+    ADD COLUMN eps_ttm DECIMAL(20,6) NULL AFTER shares_outstanding,
+    ADD COLUMN bps DECIMAL(20,6) NULL AFTER eps_ttm,
+    ADD COLUMN sps DECIMAL(20,6) NULL AFTER bps,
+    ADD COLUMN roe DECIMAL(10,4) NULL AFTER sps,
+    ADD COLUMN roa DECIMAL(10,4) NULL AFTER roe,
+    ADD COLUMN operating_margin DECIMAL(10,4) NULL AFTER roa,
+    ADD COLUMN net_margin DECIMAL(10,4) NULL AFTER operating_margin,
+    ADD COLUMN debt_ratio DECIMAL(10,4) NULL AFTER net_margin,
+    ADD COLUMN current_assets DECIMAL(20,2) NULL AFTER debt_ratio,
+    ADD COLUMN current_liabilities DECIMAL(20,2) NULL AFTER current_assets,
+    ADD COLUMN inventory DECIMAL(20,2) NULL AFTER current_liabilities,
+    ADD COLUMN interest_expense DECIMAL(20,2) NULL AFTER inventory,
+    ADD COLUMN operating_cash_flow DECIMAL(20,2) NULL AFTER interest_expense,
+    ADD COLUMN capex DECIMAL(20,2) NULL AFTER operating_cash_flow;
