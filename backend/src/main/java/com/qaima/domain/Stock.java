@@ -5,6 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+import java.time.Instant;
 import java.time.LocalDate;
 
 @Getter
@@ -51,7 +54,33 @@ public class Stock {
     @ColumnDefault("'KRW'")
     private String currency;
 
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(name = "share_class", nullable = false, length = 20)
+    @ColumnDefault("'OTHER'")
+    private ShareClass shareClass;
+
+    @Column(name = "dart_corp_code", length = 8)
+    private String dartCorpCode;
+
+    @Column(name = "dart_corp_name", length = 255)
+    private String dartCorpName;
+
+    @Column(name = "dart_modified_date")
+    private LocalDate dartModifiedDate;
+
+    @Column(name = "dart_synced_at")
+    private Instant dartSyncedAt;
+
     private LocalDate listedAt;
     private LocalDate delistedAt;
+
+    @PrePersist
+    @PreUpdate
+    private void applyDefaults() {
+        if (shareClass == null) {
+            shareClass = ShareClass.OTHER;
+        }
+    }
 
 }

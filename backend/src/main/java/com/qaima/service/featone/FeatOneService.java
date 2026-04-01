@@ -161,33 +161,14 @@ public class FeatOneService {
             return Mono.just(Boolean.TRUE);
         }
 
-        String marketDivCode = (marketDivCodeOverride != null && !marketDivCodeOverride.isBlank())
-                ? marketDivCodeOverride
-                : toKisMarketDivCode(stock.getExchange());
-
-        if ("B".equals(marketDivCode)) {
-            return Mono.just(Boolean.TRUE);
-        }
-
         LocalDate baseDate = LocalDate.now();
-
-        return krStockClient.fetchKisStatRaw(stock.getStockCode(), marketDivCode)
-                .flatMap(output -> marketSnapshotService
-                        .upsertFromKis(stock, output, baseDate)
-                        .thenReturn(Boolean.TRUE))
-                .doOnError(ex -> log.warn(
-                        "[FeatOneService] market snapshot refresh failed. stockCode={}, marketDivCode={}",
-                        stock.getStockCode(), marketDivCode, ex
-                ))
-                .onErrorResume(ex -> marketSnapshotService.getLatestDto(stock, baseDate)
-                        .thenReturn(Boolean.TRUE)
-                        .onErrorResume(fallbackEx -> {
-                            log.warn(
-                                    "[FeatOneService] market snapshot fallback read failed. stockCode={}",
-                                    stock.getStockCode(), fallbackEx
-                            );
-                            return Mono.just(Boolean.TRUE);
-                        }));
+        return marketSnapshotService.getLatestDto(stock, baseDate)
+                .thenReturn(Boolean.TRUE)
+                .onErrorResume(ex -> {
+                    log.warn("[FeatOneService] market snapshot read failed. stockCode={}",
+                            stock.getStockCode(), ex);
+                    return Mono.just(Boolean.TRUE);
+                });
     }
 
     /**

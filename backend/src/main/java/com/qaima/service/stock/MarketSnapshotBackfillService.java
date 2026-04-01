@@ -1,12 +1,10 @@
 package com.qaima.service.stock;
 
 import com.qaima.common.Blocking;
-import com.qaima.domain.Exchange;
 import com.qaima.domain.MarketSnapshot;
 import com.qaima.domain.Stock;
 import com.qaima.dto.stock.MarketSnapshotBackfillResult;
 import com.qaima.dto.stock.MarketSnapshotDto;
-import com.qaima.external.KrStockClient;
 import com.qaima.repository.MarketSnapshotRepository;
 import com.qaima.repository.StockRepository;
 import java.time.Duration;
@@ -24,11 +22,10 @@ public class MarketSnapshotBackfillService {
     private static final String DEFAULT_EXCHANGE = "KOSPI";
     private static final long DEFAULT_DELAY_MS = 100L;
     private static final int DEFAULT_LIMIT = 50;
-
+    private static final String SOURCE_OPENDART_PRIMARY = "OPENDART_PRIMARY";
     private final StockRepository stockRepository;
     private final MarketSnapshotRepository marketSnapshotRepository;
     private final MarketSnapshotService marketSnapshotService;
-    private final KrStockClient krStockClient;
 
     public Mono<MarketSnapshotBackfillResult> backfillOne(
             String stockCode,
@@ -45,7 +42,7 @@ public class MarketSnapshotBackfillService {
         String trimmedStockCode = stockCode.trim();
 
         return Blocking.call(() -> stockRepository.findByExchangeCodeAndStockCodeIgnoreCase(resolvedExchange, trimmedStockCode)
-                        .orElseGet(() -> stockRepository.findByStockCodeWithExchangeAndIndustry(trimmedStockCode)
+                        .orElseGet(() -> stockRepository.findByStockCodeWithExchange(trimmedStockCode)
                                 .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + trimmedStockCode))))
                 .flatMap(stock -> backfillStock(stock, targetDate, force));
     }
@@ -80,7 +77,7 @@ public class MarketSnapshotBackfillService {
     }
 
     private Mono<Boolean> shouldBackfill(Stock stock, LocalDate targetDate) {
-        if (!isKisEligible(stock)) {
+        if (!isSnapshotEligible(stock)) {
             return Mono.just(false);
         }
 
@@ -89,7 +86,7 @@ public class MarketSnapshotBackfillService {
     }
 
     private Mono<MarketSnapshotBackfillResult> backfillStock(Stock stock, LocalDate targetDate, boolean force) {
-        if (!isKisEligible(stock)) {
+        if (!isSnapshotEligible(stock)) {
             return Mono.just(resultSkipped(stock, targetDate, "NOT_ELIGIBLE"));
         }
 
@@ -106,13 +103,7 @@ public class MarketSnapshotBackfillService {
                         ));
                     }
 
-                    String marketDivCode = toKisMarketDivCode(stock.getExchange());
-                    if ("B".equals(marketDivCode)) {
-                        return Mono.just(resultSkipped(stock, targetDate, "NOT_ELIGIBLE"));
-                    }
-
-                    return krStockClient.fetchKisStatRaw(stock.getStockCode(), marketDivCode)
-                            .flatMap(output -> marketSnapshotService.upsertFromKis(stock, output, targetDate))
+                    return marketSnapshotService.upsertBatchSnapshot(stock, targetDate)
                             .map(saved -> resultUpdated(stock, targetDate, marketSnapshotService.toDto(saved)))
                             .onErrorResume(ex -> Mono.just(resultFailed(stock, targetDate, ex.getMessage())));
                 });
@@ -121,7 +112,7 @@ public class MarketSnapshotBackfillService {
     private LocalDate resolveAsOfDate(LocalDate asOfDate) {
         LocalDate targetDate = (asOfDate == null) ? LocalDate.now() : asOfDate;
         if (!LocalDate.now().equals(targetDate)) {
-            throw new IllegalArgumentException("asOfDate must be today for KIS backfill");
+            throw new IllegalArgumentException("asOfDate must be today for snapshot backfill");
         }
         return targetDate;
     }
@@ -131,12 +122,28 @@ public class MarketSnapshotBackfillService {
             return true;
         }
 
-        return snapshot.getMarketCap() == null
-                || snapshot.getPer() == null
-                || snapshot.getPbr() == null;
+        if (snapshot.getSharesOutstanding() == null
+                || snapshot.getEpsTtm() == null
+                || snapshot.getBps() == null
+                || snapshot.getSps() == null
+                || snapshot.getSource() == null
+                || snapshot.getSource().isBlank()) {
+            return true;
+        }
+
+        if (!requiresOwnershipMetrics(snapshot)) {
+            return false;
+        }
+
+        return snapshot.getFloatRatio() == null
+                || snapshot.getTreasuryRatio() == null;
     }
 
-    private boolean isKisEligible(Stock stock) {
+    private boolean requiresOwnershipMetrics(MarketSnapshot snapshot) {
+        return SOURCE_OPENDART_PRIMARY.equalsIgnoreCase(snapshot.getSource());
+    }
+
+    private boolean isSnapshotEligible(Stock stock) {
         if (stock == null || stock.getExchange() == null) {
             return false;
         }
@@ -149,19 +156,6 @@ public class MarketSnapshotBackfillService {
         return switch (code.trim().toUpperCase()) {
             case "KRX", "KOSPI", "KOSDAQ", "KONEX" -> true;
             default -> false;
-        };
-    }
-
-    private String toKisMarketDivCode(Exchange exchange) {
-        if (exchange == null || exchange.getCode() == null) {
-            return "B";
-        }
-
-        return switch (exchange.getCode().trim().toUpperCase()) {
-            case "KRX", "XKRX", "KOSPI" -> "J";
-            case "KOSDAQ", "XKOS" -> "Q";
-            case "KONEX" -> "K";
-            default -> "B";
         };
     }
 
@@ -183,7 +177,7 @@ public class MarketSnapshotBackfillService {
                 .exchangeCode(stock.getExchange() != null ? stock.getExchange().getCode() : null)
                 .asOfDate(targetDate)
                 .status("UPDATED")
-                .message("KIS snapshot upserted")
+                .message("Batch snapshot upserted")
                 .snapshot(dto)
                 .build();
     }
@@ -214,7 +208,7 @@ public class MarketSnapshotBackfillService {
                 .exchangeCode(stock.getExchange() != null ? stock.getExchange().getCode() : null)
                 .asOfDate(targetDate)
                 .status("FAILED")
-                .message(message == null ? "KIS backfill failed" : message)
+                .message(message == null ? "Batch snapshot backfill failed" : message)
                 .snapshot(null)
                 .build();
     }

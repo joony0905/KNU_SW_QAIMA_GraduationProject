@@ -3,75 +3,180 @@ package com.qaima.mapper;
 import com.qaima.domain.Financial;
 import com.qaima.domain.PeriodType;
 import com.qaima.dto.financial.FinancialDto;
-import org.springframework.stereotype.Component;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import org.springframework.stereotype.Component;
 
 @Component
 public class FinancialMapper {
 
-    private static Double bdToDouble(BigDecimal v) {
-        return v == null ? null : v.doubleValue();
+    private static final int METRIC_SCALE = 4;
+
+    private static Double bdToDouble(BigDecimal value) {
+        return value == null ? null : value.doubleValue();
     }
 
-    public FinancialDto toDto(Financial f) {
-        if (f == null) return null;
+    public FinancialDto toDto(Financial financial) {
+        return toDto(financial, null, null, null);
+    }
 
-        // periodType/periodNo
-        Integer quarter = null;
-        Integer half = null;
+    public FinancialDto toDto(Financial financial, BigDecimal marketCapOverride) {
+        return toDto(financial, marketCapOverride, null, null);
+    }
 
-        PeriodType pt = f.getPeriodType();
-        if (pt == PeriodType.Q) {
-            quarter = (f.getFiscalQuarter() != null) ? f.getFiscalQuarter() : f.getPeriodNo();
-        } else if (pt == PeriodType.H) {
-            half = f.getPeriodNo(); // 1 or 2
+    public FinancialDto toDto(
+            Financial financial,
+            BigDecimal marketCapOverride,
+            BigDecimal currentPriceOverride,
+            BigDecimal sharesOverride
+    ) {
+        if (financial == null) {
+            return null;
         }
 
-        // 부채비율 = liabilities / equity * 100
+        PeriodType periodType = financial.getPeriodType();
+        Integer quarter = null;
+        Integer half = null;
+        if (periodType == PeriodType.Q) {
+            quarter = financial.getFiscalQuarter() != null ? financial.getFiscalQuarter() : financial.getPeriodNo();
+        } else if (periodType == PeriodType.H) {
+            half = financial.getPeriodNo();
+        }
+
         Double debtRatio = null;
-        if (f.getLiabilities() != null && f.getEquity() != null && f.getEquity().signum() != 0) {
-            BigDecimal ratio = f.getLiabilities()
-                    .divide(f.getEquity(), 4, RoundingMode.HALF_UP)
-                    .multiply(BigDecimal.valueOf(100));
-            debtRatio = ratio.doubleValue();
+        if (financial.getLiabilities() != null
+                && financial.getEquity() != null
+                && financial.getEquity().signum() != 0) {
+            debtRatio = financial.getLiabilities()
+                    .divide(financial.getEquity(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+        }
+
+        BigDecimal marketCap = marketCapOverride;
+        boolean annualLike = periodType == PeriodType.A || periodType == PeriodType.TTM;
+
+        BigDecimal eps = null;
+        BigDecimal bps = null;
+        if (annualLike && sharesOverride != null && sharesOverride.signum() != 0) {
+            if (financial.getNetIncome() != null) {
+                eps = financial.getNetIncome().divide(sharesOverride, METRIC_SCALE, RoundingMode.HALF_UP);
+            }
+            if (financial.getEquity() != null) {
+                bps = financial.getEquity().divide(sharesOverride, METRIC_SCALE, RoundingMode.HALF_UP);
+            }
+        }
+
+        Double operatingMargin = null;
+        if (financial.getOperatingIncome() != null
+                && financial.getRevenue() != null
+                && financial.getRevenue().signum() != 0) {
+            operatingMargin = financial.getOperatingIncome()
+                    .divide(financial.getRevenue(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+        }
+
+        Double netMargin = null;
+        if (financial.getNetIncome() != null
+                && financial.getRevenue() != null
+                && financial.getRevenue().signum() != 0) {
+            netMargin = financial.getNetIncome()
+                    .divide(financial.getRevenue(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+        }
+
+        Double roe = null;
+        if (annualLike
+                && financial.getNetIncome() != null
+                && financial.getEquity() != null
+                && financial.getEquity().signum() != 0) {
+            roe = financial.getNetIncome()
+                    .divide(financial.getEquity(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+        }
+
+        Double roa = null;
+        if (annualLike
+                && financial.getNetIncome() != null
+                && financial.getAssets() != null
+                && financial.getAssets().signum() != 0) {
+            roa = financial.getNetIncome()
+                    .divide(financial.getAssets(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .doubleValue();
+        }
+
+        Double per = null;
+        if (currentPriceOverride != null && eps != null && eps.signum() != 0) {
+            per = currentPriceOverride
+                    .divide(eps, METRIC_SCALE, RoundingMode.HALF_UP)
+                    .doubleValue();
+        } else if (marketCap != null
+                && annualLike
+                && financial.getNetIncome() != null
+                && financial.getNetIncome().signum() != 0) {
+            per = marketCap
+                    .divide(financial.getNetIncome(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .doubleValue();
+        }
+
+        Double pbr = null;
+        if (currentPriceOverride != null && bps != null && bps.signum() != 0) {
+            pbr = currentPriceOverride
+                    .divide(bps, METRIC_SCALE, RoundingMode.HALF_UP)
+                    .doubleValue();
+        } else if (marketCap != null
+                && financial.getEquity() != null
+                && financial.getEquity().signum() != 0) {
+            pbr = marketCap
+                    .divide(financial.getEquity(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .doubleValue();
+        }
+
+        Double psr = null;
+        if (marketCap != null
+                && annualLike
+                && financial.getRevenue() != null
+                && financial.getRevenue().signum() != 0) {
+            psr = marketCap
+                    .divide(financial.getRevenue(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .doubleValue();
         }
 
         return FinancialDto.builder()
-                // 식별/메타
-                .financialId(f.getFinancialId())
-                .stockId(f.getStock().getStockId())
-                .ticker(f.getStock().getStockCode())
-                .companyName(f.getStock().getCompanyName())
-                .year(f.getFiscalYear())
+                .financialId(financial.getFinancialId())
+                .stockId(financial.getStock().getStockId())
+                .ticker(financial.getStock().getStockCode())
+                .companyName(financial.getStock().getCompanyName())
+                .year(financial.getFiscalYear())
                 .quarter(quarter)
                 .half(half)
-                .periodType(pt != null ? pt.name() : null)
-                .periodNo(f.getPeriodNo())
-                .reportDate(f.getReportDate())
-
-                // 규모(원 단위)
-                .revenue(f.getRevenue())
-                .grossProfit(f.getGrossProfit())
-                .operatingIncome(f.getOperatingIncome())
-                .netIncome(f.getNetIncome())
-                .assets(f.getAssets())
-                .liabilities(f.getLiabilities())
-                .equity(f.getEquity())
-                .capitalStock(f.getCapitalStock())
-                .retainedEarnings(f.getRetainedEarnings())
-                .cashAndEquivalents(f.getCashAndEquivalents())
-                .marketCap(f.getMarketCap())
-
-                // 비율/배수(Double)
-                .operatingMargin(bdToDouble(f.getOperatingMargin()))
-                .netMargin(bdToDouble(f.getNetMargin()))
-                .roe(bdToDouble(f.getRoe()))
-                .per(bdToDouble(f.getPer()))
-                .pbr(bdToDouble(f.getPbr()))
+                .periodType(periodType != null ? periodType.name() : null)
+                .periodNo(financial.getPeriodNo())
+                .reportDate(financial.getReportDate())
+                .revenue(financial.getRevenue())
+                .grossProfit(financial.getGrossProfit())
+                .operatingIncome(financial.getOperatingIncome())
+                .netIncome(financial.getNetIncome())
+                .assets(financial.getAssets())
+                .liabilities(financial.getLiabilities())
+                .equity(financial.getEquity())
+                .capitalStock(financial.getCapitalStock())
+                .retainedEarnings(financial.getRetainedEarnings())
+                .cashAndEquivalents(financial.getCashAndEquivalents())
+                .marketCap(marketCap)
+                .eps(eps)
+                .bps(bps)
+                .operatingMargin(operatingMargin)
+                .netMargin(netMargin)
+                .roe(roe)
+                .roa(roa)
+                .per(per)
+                .pbr(pbr)
+                .psr(psr)
                 .debtRatio(debtRatio)
-
                 .build();
     }
 }

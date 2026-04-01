@@ -1,0 +1,24 @@
+package com.qaima.dto.news;
+
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.List;
+import lombok.Builder;
+import lombok.Getter;
+
+@Getter
+@Builder
+@JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
+public class NewsDetailDto {
+    private final Long newsId;
+    private final String title;
+    private final String url;
+    private final String publisher;
+    private final OffsetDateTime publishedAt;
+    private final String body;
+    private final String readerSummary;
+    private final BigDecimal sentimentScore;
+    private final List<String> warnings;
+}
