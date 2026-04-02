@@ -1,3 +1,5 @@
+import type { NewsItemDto } from "./news";
+
 // --- 종목 메타 ---
 export interface StockMeta {
   stockCode: string;
@@ -100,17 +102,6 @@ export interface BaseRateMetrics {
   unit: string;
 }
 
-// --- 뉴스 ---
-export interface NewsItem {
-  newsId: number;
-  title: string;
-  url: string;
-  publishedAt: string;
-  source: string;
-  lang: string;
-  summary: string;
-}
-
 // --- Feature2 전체 메트릭스 ---
 export interface Feature2Metrics {
   stock: StockMeta | null;
@@ -119,7 +110,7 @@ export interface Feature2Metrics {
   peerCluster: PeerCluster | null;
   shortSelling: ShortSellingMetrics | null;
   baseRate: BaseRateMetrics | null;
-  newsList: NewsItem[];
+  newsList: NewsItemDto[];
 }
 
 // --- Feature2 분석 응답 ---
