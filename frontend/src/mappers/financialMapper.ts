@@ -17,6 +17,26 @@ const fmtWon = (value: number | null | undefined) => {
 const fmtNumber = (value: number | null | undefined) =>
   value == null ? "-" : value.toLocaleString("ko-KR");
 
+export function buildSnapshotSections(
+  snapshot: MarketSnapshotDto,
+): IndicatorSection[] {
+  return [
+    {
+      sectionTitle: "시장 개요",
+      rows: [
+        { title: "시가총액", subtitle: "Market Cap", value: fmtWon(snapshot.marketCap) },
+        { title: "유동 시가총액", subtitle: "Float Market Cap", value: fmtWon(snapshot.floatMarketCap) },
+        { title: "PER", subtitle: "주가수익비율", value: fmtTimes(snapshot.per) },
+        { title: "PBR", subtitle: "주가순자산비율", value: fmtTimes(snapshot.pbr) },
+        { title: "유통비율", subtitle: "Float Ratio", value: fmtPercent(snapshot.floatRatio) },
+        { title: "자사주비율", subtitle: "Treasury Ratio", value: fmtPercent(snapshot.treasuryRatio) },
+        { title: "상장주식수", subtitle: "Shares Outstanding", value: fmtNumber(snapshot.sharesOutstanding) },
+        { title: "기준일", subtitle: "As of Date", value: snapshot.asOfDate ?? "-" },
+      ],
+    },
+  ];
+}
+
 export function buildSectionsFromDto(
   dto: FinancialDto,
   snapshot?: MarketSnapshotDto | null,
