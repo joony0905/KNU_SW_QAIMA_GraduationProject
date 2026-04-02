@@ -2,8 +2,8 @@ export interface NewsItemDto {
   newsId: number;
   title: string;
   url: string;
+  publisher: string;
   publishedAt: string;
-  source: string;
-  lang: string;
   summary: string;
+  sentimentScore: number | null;
 }
