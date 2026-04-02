@@ -1,14 +1,8 @@
 // src/api/financial.ts
 import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
-import type { FinancialDto } from "../types/financial";
-
-// ApiResponse 래퍼 타입 (로그인/워치리스트와 동일)
-interface ApiResponse<T> {
-  meta: { status: string; warning?: string | null; warnings?: string[] } | null;
-  data: T;
-  errors: Array<{ code: string; message: string }>;
-}
+import type { FinancialDto, MarketSnapshotDto } from "../types/financial";
+import type { ApiResponse } from "../types/common/api";
 
 /**
  * 최근 N년치 재무제표 조회
@@ -40,4 +34,17 @@ export const fetchFinancialsByYear = async (
   );
   const body = res.data;
   return Array.isArray(body) ? body : body.data;
+};
+
+/**
+ * 시장 스냅샷 조회 (실시간 PER/PBR/시가총액)
+ */
+export const fetchMarketSnapshot = async (
+  stockCode: string,
+  asOfDate?: string
+): Promise<MarketSnapshotDto> => {
+  const res = await api.get<ApiResponse<MarketSnapshotDto>>(
+    ENDPOINTS.stocks.marketSnapshot(stockCode, asOfDate)
+  );
+  return res.data.data;
 };
