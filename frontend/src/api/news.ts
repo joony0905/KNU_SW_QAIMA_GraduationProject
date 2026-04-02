@@ -1,14 +1,14 @@
 import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
 import type { NewsItemDto } from "../types/news";
+import type { ApiResponse } from "../types/common/api";
 
 export const fetchNewsByStock = async (
   stockCode: string,
   limit = 10,
 ): Promise<NewsItemDto[]> => {
-  const res = await api.get(
+  const res = await api.get<ApiResponse<NewsItemDto[]>>(
     ENDPOINTS.news.listByStock(stockCode, limit),
   );
-  const body = res.data;
-  return Array.isArray(body) ? body : body.data;
+  return res.data.data;
 };
