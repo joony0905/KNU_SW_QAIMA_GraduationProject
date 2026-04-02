@@ -5,10 +5,15 @@ import type { NewsItemDto } from "../types/news";
 
 export const fetchFeature2Analysis = async (
   stockCode: string,
+  freq?: string,
+  window?: number,
 ): Promise<ApiResponse<Feature2AnalyzeResponse>> => {
+  const body: Record<string, unknown> = { stockCode };
+  if (freq) body.freq = freq;
+  if (window) body.window = window;
   const res = await api.post<ApiResponse<Feature2AnalyzeResponse>>(
     "/feature2/analyze",
-    { stockCode },
+    body,
   );
   return res.data;
 };
