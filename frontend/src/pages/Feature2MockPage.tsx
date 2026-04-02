@@ -1,5 +1,6 @@
 // Feature2MockPage.tsx
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import StockInputBox from "../components/StockInputBox";
 import StockCard from "../components/StockCard";
 import { fetchCandles } from "../api/charts";
@@ -14,6 +15,7 @@ import type { ApiResponse } from "../types/common/api";
 import { fetchNewsByStock } from "../api/news";
 import type { NewsItemDto } from "../types/news";
 import { getStockByCode } from "../api/stock";
+import { isLoggedIn } from "../utils/auth";
 
 const getColorClass = (rate: string) => {
   if (rate.startsWith("+")) return "text-red-600";
@@ -49,6 +51,7 @@ const formatTimeAgo = (isoStr: string): string => {
 };
 
 export default function Feature2MockPage() {
+  const navigate = useNavigate();
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -290,6 +293,11 @@ export default function Feature2MockPage() {
   }, [analysisResult, loading]);
 
   const handleAnalyzeClick = async () => {
+    if (!isLoggedIn()) {
+      sessionStorage.setItem("qaima_redirect", window.location.pathname + window.location.search);
+      navigate("/login");
+      return;
+    }
     setLoading(true);
     setErr("");
     setAnalysisResult(null);
@@ -553,7 +561,6 @@ export default function Feature2MockPage() {
                           idx === newsItems.length - 1 ? "border-b" : ""
                         } border-zinc-300 hover:bg-zinc-50 transition-colors`}
                       >
-                        <div className="w-20 h-16 bg-zinc-300 rounded-2xl flex-shrink-0" />
                         <div className="flex-1 flex flex-col gap-2">
                           <div className="flex flex-col">
                             <h4 className="text-black text-sm sm:text-base font-semibold line-clamp-1">
@@ -564,7 +571,7 @@ export default function Feature2MockPage() {
                             </p>
                           </div>
                           <p className="text-black text-[11px] sm:text-xs font-medium">
-                            {formatTimeAgo(item.publishedAt)} • {item.source}
+                            {formatTimeAgo(item.publishedAt)} • {item.publisher}
                           </p>
                         </div>
                       </a>
