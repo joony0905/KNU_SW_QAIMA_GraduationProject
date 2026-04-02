@@ -31,10 +31,12 @@ export default function LoginPage() {
 
       const data = await login({ email: form.email, password: form.password });
 
-      localStorage.setItem("qaima_token", data.access_token);
-      localStorage.setItem("qaima_refresh_token", data.refresh_token);
+      localStorage.setItem("qaima_token", data.accessToken);
+      localStorage.setItem("qaima_refresh_token", data.refreshToken);
 
-      navigate("/feature/1");
+      const redirect = sessionStorage.getItem("qaima_redirect") || "/feature/1";
+      sessionStorage.removeItem("qaima_redirect");
+      navigate(redirect);
     } catch (err: unknown) {
       // axios 에러인 경우 서버 응답 메시지 우선 표시
       const axiosErr = err as any;
