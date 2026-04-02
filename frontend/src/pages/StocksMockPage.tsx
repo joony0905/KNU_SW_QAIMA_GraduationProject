@@ -11,7 +11,8 @@ import { Star } from "lucide-react";
 import { type IndicatorSection } from "../mocks/financialIndicators";
 import type { FinancialDto } from "../types/financial";
 import { buildSectionsFromDto } from "../mappers/financialMapper";
-import { fetchFinancials, fetchFinancialsByYear } from "../api/financial";
+import { fetchFinancials, fetchFinancialsByYear, fetchMarketSnapshot } from "../api/financial";
+import type { MarketSnapshotDto } from "../types/financial";
 import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
@@ -236,6 +237,7 @@ export default function StocksMockPage() {
 
   const [hasSelectedStock, setHasSelectedStock] = useState(false);
   const [financial, setFinancial] = useState<FinancialDto | null>(null);
+  const [snapshot, setSnapshot] = useState<MarketSnapshotDto | null>(null);
   const [sections, setSections] = useState<IndicatorSection[]>([]);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
@@ -538,20 +540,19 @@ export default function StocksMockPage() {
     const code = resolvedCode;
 
     try {
-      const [singleData, trend] = await Promise.all([
+      const [singleData, trend, snap] = await Promise.all([
         fetchFinancialsByYear(code, selectedYear, selectedPeriodType, selectedPeriodNo),
         fetchFinancials(code, 5, "A"),
+        fetchMarketSnapshot(code).catch(() => null),
       ]);
-      console.log("[handleSearch] singleData:", singleData, "type:", typeof singleData, "isArray:", Array.isArray(singleData));
-      console.log("[handleSearch] trend:", trend, "type:", typeof trend, "isArray:", Array.isArray(trend));
+      setSnapshot(snap);
       if (Array.isArray(singleData) && singleData.length > 0) {
         setFinancial(singleData[0]);
-        setSections(buildSectionsFromDto(singleData[0]));
+        setSections(buildSectionsFromDto(singleData[0], snap));
       } else if (singleData && !Array.isArray(singleData)) {
-        // 백엔드가 단일 객체를 반환하는 경우
         const dto = singleData as unknown as FinancialDto;
         setFinancial(dto);
-        setSections(buildSectionsFromDto(dto));
+        setSections(buildSectionsFromDto(dto, snap));
       }
       setTrendData(Array.isArray(trend) ? trend : []);
     } catch (e) {
@@ -564,6 +565,7 @@ export default function StocksMockPage() {
 
   const handleAnalyzeClick = async () => {
     if (!isLoggedIn()) {
+      sessionStorage.setItem("qaima_redirect", window.location.pathname + window.location.search);
       navigate("/login");
       return;
     }
@@ -1129,7 +1131,7 @@ export default function StocksMockPage() {
                           setSelectedYear(yr);
                           try {
                             const data = await fetchFinancialsByYear(mainStock.symbol, yr, selectedPeriodType, selectedPeriodNo);
-                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0])); }
+                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
                           } catch (err) { console.error("재무제표 조회 실패:", err); }
                         }}
                         className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
@@ -1148,7 +1150,7 @@ export default function StocksMockPage() {
                           setSelectedPeriodNo(undefined);
                           try {
                             const data = await fetchFinancialsByYear(mainStock.symbol, selectedYear, pt, undefined);
-                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0])); }
+                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
                           } catch (err) { console.error("재무제표 조회 실패:", err); }
                         }}
                         className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
@@ -1167,7 +1169,7 @@ export default function StocksMockPage() {
                             setSelectedPeriodNo(no);
                             try {
                               const data = await fetchFinancialsByYear(mainStock.symbol, selectedYear, selectedPeriodType, no);
-                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0])); }
+                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
                             } catch (err) { console.error("재무제표 조회 실패:", err); }
                           }}
                           className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
@@ -1187,7 +1189,7 @@ export default function StocksMockPage() {
                             setSelectedPeriodNo(no);
                             try {
                               const data = await fetchFinancialsByYear(mainStock.symbol, selectedYear, selectedPeriodType, no);
-                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0])); }
+                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
                             } catch (err) { console.error("재무제표 조회 실패:", err); }
                           }}
                           className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
@@ -1207,11 +1209,13 @@ export default function StocksMockPage() {
                             key={section.sectionTitle}
                             section={section}
                             layout={
-                              section.sectionTitle === "수익성"
-                                ? "3-2"
-                                : section.sectionTitle === "가치(밸류에이션)"
+                              section.sectionTitle === "밸류에이션"
+                                ? "2-2-2"
+                                : section.sectionTitle === "수익성"
                                   ? "2-2"
-                                  : "2"
+                                  : section.sectionTitle === "재무안정성"
+                                    ? "2-2-1"
+                                    : "2"
                             }
                           />
                         ))
@@ -1502,7 +1506,7 @@ function Cell({
 
 type IndicatorSectionBlockProps = {
   section: IndicatorSection;
-  layout: "3-2" | "2-2" | "2";
+  layout: "2-2-2" | "2-2" | "2-2-1" | "2";
 };
 
 function IndicatorSectionBlock({
@@ -1511,9 +1515,8 @@ function IndicatorSectionBlock({
 }: IndicatorSectionBlockProps) {
   const rows = section.rows;
 
-  if (layout === "3-2") {
-    const top = rows.slice(0, 3);
-    const bottom = rows.slice(3);
+  if (layout === "2-2-2") {
+    const chunks = [rows.slice(0, 2), rows.slice(2, 4), rows.slice(4, 6)];
 
     return (
       <div className="flex flex-col gap-2.5">
@@ -1521,28 +1524,67 @@ function IndicatorSectionBlock({
           {section.sectionTitle}
         </div>
         <div className="border border-stone-300 rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-            {top.map((cell, idx) => (
+          {chunks.map((chunk, rowIdx) => (
+            <div key={rowIdx} className="grid grid-cols-2">
+              {chunk.map((cell, idx) => (
+                <Cell
+                  key={`${cell.title}-${idx}`}
+                  title={cell.title}
+                  subtitle={cell.subtitle}
+                  value={cell.value}
+                  className={`${rowIdx < chunks.length - 1 ? "border-b" : ""} ${idx === 0 ? "border-r" : ""}`}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (layout === "2-2-1") {
+    const row1 = rows.slice(0, 2);
+    const row2 = rows.slice(2, 4);
+    const last = rows[4];
+
+    return (
+      <div className="flex flex-col gap-2.5">
+        <div className="text-black text-base sm:text-lg md:text-xl font-normal">
+          {section.sectionTitle}
+        </div>
+        <div className="border border-stone-300 rounded-2xl overflow-hidden">
+          <div className="grid grid-cols-2">
+            {row1.map((cell, idx) => (
               <Cell
                 key={`${cell.title}-${idx}`}
                 title={cell.title}
                 subtitle={cell.subtitle}
                 value={cell.value}
-                className={`border-b ${idx !== top.length - 1 ? "border-r" : ""}`}
+                className={`border-b ${idx === 0 ? "border-r" : ""}`}
               />
             ))}
           </div>
           <div className="grid grid-cols-2">
-            {bottom.map((cell, idx) => (
+            {row2.map((cell, idx) => (
               <Cell
-                key={`${cell.title}-bottom-${idx}`}
+                key={`${cell.title}-${idx}`}
                 title={cell.title}
                 subtitle={cell.subtitle}
                 value={cell.value}
-                className={idx === 0 ? "border-r" : ""}
+                className={`border-b ${idx === 0 ? "border-r" : ""}`}
               />
             ))}
           </div>
+          {last && (
+            <div className="grid grid-cols-1">
+              <Cell
+                title={last.title}
+                subtitle={last.subtitle}
+                value={last.value}
+                className=""
+              />
+            </div>
+          )}
         </div>
       </div>
     );
