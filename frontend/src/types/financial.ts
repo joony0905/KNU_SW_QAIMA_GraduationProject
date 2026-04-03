@@ -6,24 +6,50 @@ export interface FinancialDto {
 
   year: number;
   quarter: number | null;
-  periodType: "A" | "Q" | "TTM";
-  reportDate: string; // LocalDate → 문자열로 온다고 가정
+  half: number | null;
+  periodType: "A" | "Q" | "H" | "TTM";
+  periodNo: number | null;
+  reportDate: string;
 
-  // 규모 지표 (원 단위) - 숫자 or 문자열, 팀 규칙에 맞춰 선택
+  // 절대값 재무 지표
   revenue: number | null;
+  grossProfit: number | null;
   operatingIncome: number | null;
   netIncome: number | null;
   assets: number | null;
   liabilities: number | null;
   equity: number | null;
   capitalStock: number | null;
-  marketCap: number | null;
+  retainedEarnings: number | null;
+  cashAndEquivalents: number | null;
 
-  // 비율 지표 (%)
+  // 시장 / 주당 지표
+  marketCap: number | null;
+  eps: number | null;
+  bps: number | null;
+
+  // 비율 지표
   operatingMargin: number | null;
   netMargin: number | null;
   roe: number | null;
+  roa: number | null;
   per: number | null;
   pbr: number | null;
+  psr: number | null;
   debtRatio: number | null;
+  currentRatio: number | null;
+  quickRatio: number | null;
+  interestCoverageRatio: number | null;
+}
+
+export interface MarketSnapshotDto {
+  asOfDate: string;
+  marketCap: number | null;
+  floatMarketCap: number | null;
+  per: number | null;
+  pbr: number | null;
+  floatRatio: number | null;
+  treasuryRatio: number | null;
+  sharesOutstanding: number | null;
+  source: string | null;
 }

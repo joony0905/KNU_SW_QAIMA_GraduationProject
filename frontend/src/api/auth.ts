@@ -7,11 +7,11 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  user_id: number;
+  userId: number;
   email: string;
   name: string;
-  access_token: string;
-  refresh_token: string;
+  accessToken: string;
+  refreshToken: string;
 }
 
 export const login = async (payload: LoginRequest): Promise<LoginResponse> => {

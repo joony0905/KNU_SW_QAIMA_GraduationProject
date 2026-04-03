@@ -4,7 +4,7 @@ export default function MainPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-gray-100 ml-[90px]">
+    <div className="min-h-screen bg-gray-100 ml-[60px]">
       {/* Hero Section */}
       <section className="relative w-full px-6 sm:px-12 lg:px-24 pt-20 sm:pt-28 lg:pt-36 pb-16 sm:pb-24 bg-[radial-gradient(ellipse_155%_193%_at_50%_-2%,_rgba(242,242,246,0.70)_37%,_rgba(25,51,44,0.04)_100%)]">
         <div className="max-w-5xl mx-auto flex flex-col items-center gap-10 sm:gap-16 text-center">

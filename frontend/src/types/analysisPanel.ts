@@ -22,6 +22,22 @@ export interface AnalysisPanelResult {
       operatingIncome: Record<string, number>;
       netIncome: Record<string, number>;
     };
+    shortSelling?: {
+      stockCode: string;
+      companyName: string;
+      reportDate: string;
+      shortVolumeTotal: number;
+      totalVolume: number;
+      shortVolumeRatio: number;
+      shortAmountTotal: number;
+      totalAmount: number;
+      shortAmountRatio: number;
+    } | null;
+    baseRate?: {
+      date: string;
+      value: number;
+      unit: string;
+    } | null;
   } | null;
 
   meta?: {

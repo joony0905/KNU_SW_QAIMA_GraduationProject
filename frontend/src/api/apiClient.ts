@@ -29,6 +29,10 @@ api.interceptors.response.use(
     if (status === 401) {
       localStorage.removeItem("qaima_token");
       localStorage.removeItem("qaima_refresh_token");
+      const currentPath = window.location.pathname + window.location.search;
+      if (currentPath !== "/login") {
+        sessionStorage.setItem("qaima_redirect", currentPath);
+      }
       window.location.href = "/login";
     } else if (status === 403) {
       window.location.href = "/forbidden";
