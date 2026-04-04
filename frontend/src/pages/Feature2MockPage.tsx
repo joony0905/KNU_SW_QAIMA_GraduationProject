@@ -17,6 +17,7 @@ import type { NewsItemDto } from "../types/news";
 import { getStockByCode } from "../api/stock";
 import { isLoggedIn } from "../utils/auth";
 import DictTerm from "../components/DictTerm";
+import { formatKstOffsetDateTime, shiftKstDays } from "../utils/kst";
 
 const getColorClass = (rate: string) => {
   if (rate.startsWith("+")) return "text-red-600";
@@ -51,7 +52,7 @@ const formatTimeAgo = (isoStr: string): string => {
   if (hours < 24) return `${hours}시간 전`;
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}일 전`;
-  return new Date(isoStr).toLocaleDateString("ko-KR");
+  return new Date(isoStr).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
 };
 
 export default function Feature2MockPage() {
@@ -64,15 +65,14 @@ export default function Feature2MockPage() {
     setChartLoading(true);
     setChartError(null);
     const toDate = new Date();
-    const fromDate = new Date();
-    fromDate.setDate(toDate.getDate() - 30);
+    const fromDate = shiftKstDays(toDate, -30);
 
     try {
       const response = await fetchCandles(
         stockCode,
         "ONE_D",
-        fromDate.toISOString(),
-        toDate.toISOString(),
+        formatKstOffsetDateTime(fromDate),
+        formatKstOffsetDateTime(toDate),
       );
 
       if (response.data.length === 0) {

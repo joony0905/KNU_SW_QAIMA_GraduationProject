@@ -169,7 +169,7 @@ public class FeatOneService {
             return Mono.just(Boolean.TRUE);
         }
 
-        LocalDate baseDate = LocalDate.now();
+        LocalDate baseDate = LocalDate.now(KST);
         return marketSnapshotService.getLatestDto(stock, baseDate)
                 .thenReturn(Boolean.TRUE)
                 .onErrorResume(ex -> {
@@ -643,9 +643,9 @@ public class FeatOneService {
         try {
             LocalDate date = LocalDate.parse(raw);
             if (endOfDayForDateOnly) {
-                return date.atTime(23, 59, 59).atOffset(ZoneOffset.UTC);
+                return date.atTime(23, 59, 59).atZone(KST).toOffsetDateTime();
             }
-            return date.atStartOfDay().atOffset(ZoneOffset.UTC);
+            return date.atStartOfDay(KST).toOffsetDateTime();
         } catch (DateTimeParseException ignored) {
             throw new IllegalArgumentException(
                     "from/to must be ISO-8601 datetime (e.g. 2025-01-10T00:00:00Z) or date (e.g. 2025-01-10)."
