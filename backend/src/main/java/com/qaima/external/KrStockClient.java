@@ -169,7 +169,7 @@ public class KrStockClient {
 
     /* =========================
        2) search-info / search-stock-info (CTPF1002R)
-       - 너 로그의 '상품번호 필수'를 해결하기 위해 PDNO로 호출
+       - '상품번호 필수'를 해결하기 위해 PDNO로 호출
        ========================= */
 
     public Mono<KisSearchInfoResponseDto.Output> fetchSearchInfoRaw(String stockCode, String marketDivCode) {
@@ -509,6 +509,8 @@ public class KrStockClient {
     }
 
     // DB/엔티티 exchange.code -> KIS market div code
+    // KIS MarketDivCode가 KRX로 전체 통일돼서 J,K,Q에서 J로 변경함
+    // 26.04.05 기준 사실상 필요없는 레거시 코드이나, scope가 나스닥까지 확장될경우를 대비해 혹시나해서 남겨둠
     private String toKisMarketDivCode(Exchange exchange) {
         if (exchange == null) return "J";
         String code = exchange.getCode();
@@ -516,8 +518,8 @@ public class KrStockClient {
 
         return switch (code) {
             case "KOSPI" -> "J";
-            case "KOSDAQ" -> "Q";
-            case "KONEX" -> "K";
+            case "KOSDAQ" -> "J";
+            case "KONEX" -> "J";
             case "KRX" -> "J";
             default -> "J";
         };
