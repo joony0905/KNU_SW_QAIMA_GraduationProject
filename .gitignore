@@ -251,3 +251,10 @@ Thumbs.db
 # === General ===
 *.env
 .env
+
+# === QAIMA 프로젝트 - 로컬 파일들 (VSCode Source Control에서 숨김) ===
+settings.local.json
+CLAUDE.md
+*.local.*
+*.local.json
+CLAUDE*.md
