@@ -10,8 +10,9 @@ import StockInputBox from "../components/StockInputBox";
 import { Star } from "lucide-react";
 import { type IndicatorSection } from "../mocks/financialIndicators";
 import type { FinancialDto } from "../types/financial";
-import { buildSectionsFromDto } from "../mappers/financialMapper";
-import { fetchFinancials, fetchFinancialsByYear } from "../api/financial";
+import { buildSectionsFromDto, buildSnapshotSections } from "../mappers/financialMapper";
+import { fetchFinancials, fetchFinancialsByYear, fetchMarketSnapshot } from "../api/financial";
+import type { MarketSnapshotDto } from "../types/financial";
 import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
@@ -21,6 +22,7 @@ import downloadIcon from "../assets/download_button.png";
 import zoomIcon from "../assets/zoom_button.png";
 import type { AnalysisResponse, ParsedExplainText } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
+import DictTerm from "../components/DictTerm";
 
 /* =========================
    Zoom-out Loading Policy
@@ -236,6 +238,7 @@ export default function StocksMockPage() {
 
   const [hasSelectedStock, setHasSelectedStock] = useState(false);
   const [financial, setFinancial] = useState<FinancialDto | null>(null);
+  const [snapshot, setSnapshot] = useState<MarketSnapshotDto | null>(null);
   const [sections, setSections] = useState<IndicatorSection[]>([]);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
@@ -244,7 +247,8 @@ export default function StocksMockPage() {
 
   const [isOpen, setIsOpen] = useState(false);
 
-  const [finTab, setFinTab] = useState<"single" | "trend">("single");
+  const [finTab, setFinTab] = useState<"snapshot" | "detail">("snapshot");
+  const [snapshotSections, setSnapshotSections] = useState<IndicatorSection[]>([]);
   const [selectedYear, setSelectedYear] = useState<number>(2024);
   const [selectedPeriodType, setSelectedPeriodType] = useState<"A" | "Q" | "H">("A");
   const [selectedPeriodNo, setSelectedPeriodNo] = useState<number | undefined>(undefined);
@@ -492,6 +496,13 @@ export default function StocksMockPage() {
     setIndicatorData(null);
     setShowAnalyzeButton(true);
 
+    // 기본 분석 기간: 최근 6개월
+    const defaultTo = new Date();
+    const defaultFrom = new Date();
+    defaultFrom.setDate(defaultTo.getDate() - 180);
+    setAnalysisFrom(defaultFrom.toISOString().slice(0, 10));
+    setAnalysisTo(defaultTo.toISOString().slice(0, 10));
+
     setMainStock((prev) => ({
       ...prev,
       price: null,
@@ -538,20 +549,25 @@ export default function StocksMockPage() {
     const code = resolvedCode;
 
     try {
-      const [singleData, trend] = await Promise.all([
+      const [singleData, trend, snap] = await Promise.all([
         fetchFinancialsByYear(code, selectedYear, selectedPeriodType, selectedPeriodNo),
         fetchFinancials(code, 5, "A"),
+        fetchMarketSnapshot(code).catch(() => null),
       ]);
-      console.log("[handleSearch] singleData:", singleData, "type:", typeof singleData, "isArray:", Array.isArray(singleData));
-      console.log("[handleSearch] trend:", trend, "type:", typeof trend, "isArray:", Array.isArray(trend));
+      setSnapshot(snap);
+      setFinTab("snapshot");
+      if (snap) {
+        setSnapshotSections(buildSnapshotSections(snap));
+      } else {
+        setSnapshotSections([]);
+      }
       if (Array.isArray(singleData) && singleData.length > 0) {
         setFinancial(singleData[0]);
-        setSections(buildSectionsFromDto(singleData[0]));
+        setSections(buildSectionsFromDto(singleData[0], snap));
       } else if (singleData && !Array.isArray(singleData)) {
-        // 백엔드가 단일 객체를 반환하는 경우
         const dto = singleData as unknown as FinancialDto;
         setFinancial(dto);
-        setSections(buildSectionsFromDto(dto));
+        setSections(buildSectionsFromDto(dto, snap));
       }
       setTrendData(Array.isArray(trend) ? trend : []);
     } catch (e) {
@@ -564,6 +580,7 @@ export default function StocksMockPage() {
 
   const handleAnalyzeClick = async () => {
     if (!isLoggedIn()) {
+      sessionStorage.setItem("qaima_redirect", window.location.pathname + window.location.search);
       navigate("/login");
       return;
     }
@@ -589,11 +606,15 @@ export default function StocksMockPage() {
         throw new Error("Chart range is not ready");
       }
 
+      // 사용자 선택 기간이 있으면 우선 사용, 없으면 차트 범위 사용
+      const fromDate = analysisFrom || range.fromIso;
+      const toDate = analysisTo || range.toIso;
+
       const result = await fetchAnalysis({
         stockCode: mainStock.symbol,
         freq: analysisFreq,
-        from: range.fromIso,
-        to: range.toIso,
+        from: fromDate,
+        to: toDate,
         marketDivCode,
         includeExplain,
       });
@@ -1096,32 +1117,46 @@ export default function StocksMockPage() {
               </div>
 
               <div className="w-full h-[520px] px-4 sm:px-6 py-5 bg-zinc-100 rounded-2xl flex flex-col overflow-hidden">
-                <h2 className="w-full text-[20px] font-semibold mb-3 text-center">
-                  재무제표
-                </h2>
-
-                {/* 탭 */}
-                <div className="flex gap-2 mb-3">
-                  {(["single", "trend"] as const).map((tab) => (
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-[20px] font-semibold">
+                    재무제표
+                  </h2>
+                  {finTab === "snapshot" ? (
                     <button
-                      key={tab}
-                      onClick={() => setFinTab(tab)}
-                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        finTab === tab
-                          ? "bg-zinc-800 text-white"
-                          : "bg-white text-zinc-600 hover:bg-zinc-200"
-                      }`}
+                      onClick={() => setFinTab("detail")}
+                      className="px-4 py-1.5 rounded-lg text-sm font-medium bg-zinc-800 text-white hover:bg-zinc-700 transition-colors"
                     >
-                      {tab === "single" ? "단일 조회" : "5개년 추이"}
+                      상세보기
                     </button>
-                  ))}
+                  ) : (
+                    <button
+                      onClick={() => setFinTab("snapshot")}
+                      className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white text-zinc-600 border border-zinc-300 hover:bg-zinc-200 transition-colors"
+                    >
+                      요약으로 돌아가기
+                    </button>
+                  )}
                 </div>
 
-                {finTab === "single" ? (
+                {finTab === "snapshot" ? (
+                  <div className="flex-1 overflow-y-auto flex flex-col gap-5 pr-2">
+                    {snapshotSections.length > 0 ? (
+                      snapshotSections.map((section) => (
+                        <IndicatorSectionBlock
+                          key={section.sectionTitle}
+                          section={section}
+                          layout="2-2-2"
+                        />
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500">
+                        시장 스냅샷 데이터가 없습니다.
+                      </p>
+                    )}
+                  </div>
+                ) : (
                   <div className="flex flex-col flex-1 min-h-0">
-                    {/* 드롭박스 영역 */}
                     <div className="flex flex-wrap gap-2 mb-3">
-                      {/* 연도 */}
                       <select
                         value={selectedYear}
                         onChange={async (e) => {
@@ -1129,17 +1164,16 @@ export default function StocksMockPage() {
                           setSelectedYear(yr);
                           try {
                             const data = await fetchFinancialsByYear(mainStock.symbol, yr, selectedPeriodType, selectedPeriodNo);
-                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0])); }
+                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
                           } catch (err) { console.error("재무제표 조회 실패:", err); }
                         }}
                         className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                       >
-                        {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((yr) => (
+                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((yr) => (
                           <option key={yr} value={yr}>{yr}년</option>
                         ))}
                       </select>
 
-                      {/* 기간 유형 */}
                       <select
                         value={selectedPeriodType}
                         onChange={async (e) => {
@@ -1148,7 +1182,7 @@ export default function StocksMockPage() {
                           setSelectedPeriodNo(undefined);
                           try {
                             const data = await fetchFinancialsByYear(mainStock.symbol, selectedYear, pt, undefined);
-                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0])); }
+                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
                           } catch (err) { console.error("재무제표 조회 실패:", err); }
                         }}
                         className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
@@ -1158,7 +1192,6 @@ export default function StocksMockPage() {
                         <option value="H">반기</option>
                       </select>
 
-                      {/* 분기/반기 번호 (조건부) */}
                       {selectedPeriodType === "Q" && (
                         <select
                           value={selectedPeriodNo ?? ""}
@@ -1167,7 +1200,7 @@ export default function StocksMockPage() {
                             setSelectedPeriodNo(no);
                             try {
                               const data = await fetchFinancialsByYear(mainStock.symbol, selectedYear, selectedPeriodType, no);
-                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0])); }
+                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
                             } catch (err) { console.error("재무제표 조회 실패:", err); }
                           }}
                           className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
@@ -1187,7 +1220,7 @@ export default function StocksMockPage() {
                             setSelectedPeriodNo(no);
                             try {
                               const data = await fetchFinancialsByYear(mainStock.symbol, selectedYear, selectedPeriodType, no);
-                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0])); }
+                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
                             } catch (err) { console.error("재무제표 조회 실패:", err); }
                           }}
                           className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
@@ -1199,7 +1232,6 @@ export default function StocksMockPage() {
                       )}
                     </div>
 
-                    {/* 지표 카드 */}
                     <div className="flex-1 overflow-y-auto flex flex-col gap-5 pr-2">
                       {sections.length > 0 ? (
                         sections.map((section) => (
@@ -1207,11 +1239,13 @@ export default function StocksMockPage() {
                             key={section.sectionTitle}
                             section={section}
                             layout={
-                              section.sectionTitle === "수익성"
-                                ? "3-2"
-                                : section.sectionTitle === "가치(밸류에이션)"
+                              section.sectionTitle === "밸류에이션"
+                                ? "2-2-2"
+                                : section.sectionTitle === "수익성"
                                   ? "2-2"
-                                  : "2"
+                                  : section.sectionTitle === "재무안정성"
+                                    ? "2-2-1"
+                                    : "2"
                             }
                           />
                         ))
@@ -1222,55 +1256,71 @@ export default function StocksMockPage() {
                       )}
                     </div>
                   </div>
-                ) : (
-                  /* 5개년 추이 탭 */
-                  <div className="flex-1 overflow-auto min-h-0">
-                    {trendData.length > 0 ? (
-                      <table className="w-full text-sm border-collapse">
-                        <thead>
-                          <tr className="bg-zinc-200">
-                            <th className="sticky left-0 bg-zinc-200 px-3 py-2 text-left font-semibold text-zinc-700 whitespace-nowrap">지표</th>
-                            {trendData.map((d) => (
-                              <th key={d.year} className="px-3 py-2 text-right font-semibold text-zinc-700 whitespace-nowrap">{d.year}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {([
-                            ["ROE (%)", "roe"],
-                            ["영업이익률 (%)", "operatingMargin"],
-                            ["순이익률 (%)", "netMargin"],
-                            ["PER", "per"],
-                            ["PBR", "pbr"],
-                            ["부채비율 (%)", "debtRatio"],
-                            ["매출액", "revenue"],
-                            ["영업이익", "operatingIncome"],
-                            ["당기순이익", "netIncome"],
-                            ["자산총계", "assets"],
-                            ["부채총계", "liabilities"],
-                            ["자본총계", "equity"],
-                            ["시가총액", "marketCap"],
-                          ] as [string, keyof FinancialDto][]).map(([label, key], idx) => (
-                            <tr key={key} className={idx % 2 === 0 ? "bg-white" : "bg-zinc-50"}>
-                              <td className="sticky left-0 px-3 py-2 font-medium text-zinc-700 whitespace-nowrap" style={{ background: "inherit" }}>{label}</td>
-                              {trendData.map((d) => {
-                                const v = d[key];
-                                const formatted = v == null ? "-" : typeof v === "number" ? v.toLocaleString() : String(v);
-                                return (
-                                  <td key={d.year} className="px-3 py-2 text-right text-zinc-600 whitespace-nowrap">{formatted}</td>
-                                );
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <p className="text-sm text-gray-500 text-center mt-8">5개년 추이 데이터가 없습니다.</p>
-                    )}
-                  </div>
                 )}
               </div>
             </div>
+            {/* ========== 분석 기간 선택 ========== */}
+            <div className="w-full bg-white rounded-2xl border border-stone-300 px-4 sm:px-6 py-4 flex flex-col gap-3">
+              <h3 className="text-sm sm:text-base font-semibold text-zinc-800">분석 기간</h3>
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+                {/* 프리셋 버튼 */}
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ["3개월", 90],
+                    ["6개월", 180],
+                    ["1년", 365],
+                    ["3년", 1095],
+                    ["5년", 1825],
+                  ] as const).map(([label, days]) => {
+                    const to = new Date();
+                    const from = new Date();
+                    from.setDate(to.getDate() - days);
+                    const fromStr = from.toISOString().slice(0, 10);
+                    const toStr = to.toISOString().slice(0, 10);
+                    const isActive = analysisFrom === fromStr && analysisTo === toStr;
+
+                    return (
+                      <button
+                        key={label}
+                        onClick={() => {
+                          setAnalysisFrom(fromStr);
+                          setAnalysisTo(toStr);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                          isActive
+                            ? "border-sky-500 bg-sky-50 text-sky-700 font-medium"
+                            : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* 직접 날짜 입력 */}
+                <div className="flex items-center gap-2 text-sm">
+                  <input
+                    type="date"
+                    value={analysisFrom}
+                    min={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 5); return d.toISOString().slice(0, 10); })()}
+                    max={analysisTo || new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setAnalysisFrom(e.target.value)}
+                    className="px-2 py-1.5 border border-zinc-300 rounded-lg text-zinc-700 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                  />
+                  <span className="text-zinc-400">~</span>
+                  <input
+                    type="date"
+                    value={analysisTo}
+                    min={analysisFrom || (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 5); return d.toISOString().slice(0, 10); })()}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setAnalysisTo(e.target.value)}
+                    className="px-2 py-1.5 border border-zinc-300 rounded-lg text-zinc-700 focus:outline-none focus:ring-1 focus:ring-sky-400"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* ========== 하단 분석 결과 영역 ========== */}
             <AnalysisResultPanel
               result={analysisData ? {
@@ -1361,11 +1411,11 @@ export default function StocksMockPage() {
                   {/* OHLCV 요약 */}
                   {analysisData?.metrics?.ohlcvSummary && (
                     <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">OHLCV 요약</h3>
+                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900"><DictTerm term="OHLCV">OHLCV</DictTerm> 요약</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
                         <div>캔들 수: {analysisData.metrics.ohlcvSummary.count.toLocaleString()}</div>
                         <div>기간: {formatDate(analysisData.metrics.ohlcvSummary.from)} ~ {formatDate(analysisData.metrics.ohlcvSummary.to)}</div>
-                        <div>마지막 종가: {formatNumber(analysisData.metrics.ohlcvSummary.lastClose)}</div>
+                        <div>마지막 <DictTerm term="종가">종가</DictTerm>: {formatNumber(analysisData.metrics.ohlcvSummary.lastClose)}</div>
                       </div>
                     </div>
                   )}
@@ -1385,7 +1435,7 @@ export default function StocksMockPage() {
                   {/* 재무 요약 (5개년) */}
                   {analysisData?.metrics?.financialSummary && (
                     <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">재무 요약 (5개년)</h3>
+                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900"><DictTerm term="재무제표">재무 요약</DictTerm> (5개년)</h3>
                       {analysisData.metrics.financialSummary.years.length > 0 ? (
                         <div className="overflow-x-auto mt-2">
                           <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
@@ -1399,7 +1449,7 @@ export default function StocksMockPage() {
                             </thead>
                             <tbody>
                               <tr>
-                                <td className="px-3 py-2 border-b">매출</td>
+                                <td className="px-3 py-2 border-b"><DictTerm term="매출">매출</DictTerm></td>
                                 {analysisData.metrics.financialSummary.years.map((year) => (
                                   <td key={`modal-rev-${year}`} className="px-3 py-2 text-right border-b">
                                     {formatNumber(analysisData.metrics!.financialSummary!.revenue[String(year)])}
@@ -1407,7 +1457,7 @@ export default function StocksMockPage() {
                                 ))}
                               </tr>
                               <tr>
-                                <td className="px-3 py-2 border-b">영업이익</td>
+                                <td className="px-3 py-2 border-b"><DictTerm term="영업이익">영업이익</DictTerm></td>
                                 {analysisData.metrics.financialSummary.years.map((year) => (
                                   <td key={`modal-op-${year}`} className="px-3 py-2 text-right border-b">
                                     {formatNumber(analysisData.metrics!.financialSummary!.operatingIncome[String(year)])}
@@ -1415,7 +1465,7 @@ export default function StocksMockPage() {
                                 ))}
                               </tr>
                               <tr>
-                                <td className="px-3 py-2 border-b">순이익</td>
+                                <td className="px-3 py-2 border-b"><DictTerm term="순이익">순이익</DictTerm></td>
                                 {analysisData.metrics.financialSummary.years.map((year) => (
                                   <td key={`modal-net-${year}`} className="px-3 py-2 text-right border-b">
                                     {formatNumber(analysisData.metrics!.financialSummary!.netIncome[String(year)])}
@@ -1482,7 +1532,7 @@ function Cell({
     <div className={`px-3 py-2 bg-white flex flex-col ${className}`}>
       <div className="flex justify-between items-center">
         <span className="text-black text-sm sm:text-base font-semibold">
-          {title}
+          <DictTerm term={title}>{title}</DictTerm>
         </span>
         <span className="text-black text-sm sm:text-base font-semibold whitespace-nowrap">
           {value}
@@ -1492,7 +1542,7 @@ function Cell({
       <div className="h-[3px] sm:h-[4px]" />
 
       <span className="text-black text-[11px] sm:text-xs font-normal leading-tight">
-        {subtitle}
+        <DictTerm term={subtitle}>{subtitle}</DictTerm>
       </span>
 
       <div className="h-[3px] sm:h-[4px]" />
@@ -1502,7 +1552,7 @@ function Cell({
 
 type IndicatorSectionBlockProps = {
   section: IndicatorSection;
-  layout: "3-2" | "2-2" | "2";
+  layout: "2-2-2" | "2-2" | "2-2-1" | "2";
 };
 
 function IndicatorSectionBlock({
@@ -1511,38 +1561,76 @@ function IndicatorSectionBlock({
 }: IndicatorSectionBlockProps) {
   const rows = section.rows;
 
-  if (layout === "3-2") {
-    const top = rows.slice(0, 3);
-    const bottom = rows.slice(3);
+  if (layout === "2-2-2") {
+    const chunks = [rows.slice(0, 2), rows.slice(2, 4), rows.slice(4, 6)];
 
     return (
       <div className="flex flex-col gap-2.5">
         <div className="text-black text-base sm:text-lg md:text-xl font-normal">
-          {section.sectionTitle}
+          <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
         </div>
         <div className="border border-stone-300 rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-            {top.map((cell, idx) => (
+          {chunks.map((chunk, rowIdx) => (
+            <div key={rowIdx} className="grid grid-cols-2">
+              {chunk.map((cell, idx) => (
+                <Cell
+                  key={`${cell.title}-${idx}`}
+                  title={cell.title}
+                  subtitle={cell.subtitle}
+                  value={cell.value}
+                  className={`${rowIdx < chunks.length - 1 ? "border-b" : ""} ${idx === 0 ? "border-r" : ""}`}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (layout === "2-2-1") {
+    const row1 = rows.slice(0, 2);
+    const row2 = rows.slice(2, 4);
+    const last = rows[4];
+
+    return (
+      <div className="flex flex-col gap-2.5">
+        <div className="text-black text-base sm:text-lg md:text-xl font-normal">
+          <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
+        </div>
+        <div className="border border-stone-300 rounded-2xl overflow-hidden">
+          <div className="grid grid-cols-2">
+            {row1.map((cell, idx) => (
               <Cell
                 key={`${cell.title}-${idx}`}
                 title={cell.title}
                 subtitle={cell.subtitle}
                 value={cell.value}
-                className={`border-b ${idx !== top.length - 1 ? "border-r" : ""}`}
+                className={`border-b ${idx === 0 ? "border-r" : ""}`}
               />
             ))}
           </div>
           <div className="grid grid-cols-2">
-            {bottom.map((cell, idx) => (
+            {row2.map((cell, idx) => (
               <Cell
-                key={`${cell.title}-bottom-${idx}`}
+                key={`${cell.title}-${idx}`}
                 title={cell.title}
                 subtitle={cell.subtitle}
                 value={cell.value}
-                className={idx === 0 ? "border-r" : ""}
+                className={`border-b ${idx === 0 ? "border-r" : ""}`}
               />
             ))}
           </div>
+          {last && (
+            <div className="grid grid-cols-1">
+              <Cell
+                title={last.title}
+                subtitle={last.subtitle}
+                value={last.value}
+                className=""
+              />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1552,7 +1640,7 @@ function IndicatorSectionBlock({
     return (
       <div className="flex flex-col gap-2.5">
         <div className="text-black text-base sm:text-lg md:text-xl font-normal">
-          {section.sectionTitle}
+          <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 border border-stone-300 rounded-2xl overflow-hidden">
           {rows.map((cell, idx) => (

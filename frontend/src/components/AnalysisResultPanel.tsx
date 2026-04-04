@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { AnalysisPanelResult } from "../types/analysisPanel";
 import downloadIcon from "../assets/download_button.png";
 import zoomIcon from "../assets/zoom_button.png";
+import DictTerm from "./DictTerm";
 
 interface AnalysisResultPanelProps {
   result: AnalysisPanelResult | null;
@@ -157,7 +158,7 @@ export default function AnalysisResultPanel({
           {result.metrics?.ohlcvSummary && (
             <div>
               <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                OHLCV 요약
+                <DictTerm term="OHLCV">OHLCV</DictTerm> 요약
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
                 <div>
@@ -169,7 +170,7 @@ export default function AnalysisResultPanel({
                   {formatDate(result.metrics.ohlcvSummary.to)}
                 </div>
                 <div>
-                  마지막 종가:{" "}
+                  마지막 <DictTerm term="종가">종가</DictTerm>:{" "}
                   {formatNumber(result.metrics.ohlcvSummary.lastClose)}
                 </div>
               </div>
@@ -194,7 +195,7 @@ export default function AnalysisResultPanel({
           {result.metrics?.financialSummary && (
             <div>
               <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                재무 요약 (5개년)
+                <DictTerm term="재무제표">재무 요약</DictTerm> (5개년)
               </h3>
               {result.metrics.financialSummary.years.length > 0 ? (
                 <div className="overflow-x-auto mt-2">
@@ -214,7 +215,7 @@ export default function AnalysisResultPanel({
                     </thead>
                     <tbody>
                       <tr>
-                        <td className="px-3 py-2 border-b">매출</td>
+                        <td className="px-3 py-2 border-b"><DictTerm term="매출">매출</DictTerm></td>
                         {result.metrics.financialSummary.years.map((year) => (
                           <td
                             key={`revenue-${year}`}
@@ -229,7 +230,7 @@ export default function AnalysisResultPanel({
                         ))}
                       </tr>
                       <tr>
-                        <td className="px-3 py-2 border-b">영업이익</td>
+                        <td className="px-3 py-2 border-b"><DictTerm term="영업이익">영업이익</DictTerm></td>
                         {result.metrics.financialSummary.years.map((year) => (
                           <td
                             key={`op-${year}`}
@@ -243,7 +244,7 @@ export default function AnalysisResultPanel({
                         ))}
                       </tr>
                       <tr>
-                        <td className="px-3 py-2 border-b">순이익</td>
+                        <td className="px-3 py-2 border-b"><DictTerm term="순이익">순이익</DictTerm></td>
                         {result.metrics.financialSummary.years.map((year) => (
                           <td
                             key={`net-${year}`}
@@ -265,6 +266,68 @@ export default function AnalysisResultPanel({
                   재무 요약 데이터를 확보하지 못했습니다.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* 기준금리 */}
+          {result.metrics?.baseRate && (
+            <div>
+              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                <DictTerm term="기준금리">기준금리</DictTerm>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
+                <div>기준일: {result.metrics.baseRate.date}</div>
+                <div>금리: {result.metrics.baseRate.value}{result.metrics.baseRate.unit}</div>
+              </div>
+            </div>
+          )}
+
+          {/* 공매도 현황 */}
+          {result.metrics?.shortSelling && (
+            <div>
+              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                <DictTerm term="공매도">공매도</DictTerm> 현황
+              </h3>
+              <div className="overflow-x-auto mt-2">
+                <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
+                  <thead className="bg-zinc-100 text-zinc-900">
+                    <tr>
+                      <th className="px-3 py-2 text-left border-b">항목</th>
+                      <th className="px-3 py-2 text-right border-b">값</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="px-3 py-2 border-b">기준일</td>
+                      <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.reportDate}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b">공매도 거래량</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.shortVolumeTotal)}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b"><DictTerm term="거래량">거래량</DictTerm> (총)</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.totalVolume)}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b">공매도 거래량 비율</td>
+                      <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.shortVolumeRatio.toFixed(2)}%</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b">공매도 거래대금</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.shortAmountTotal)}원</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b"><DictTerm term="거래대금">거래대금</DictTerm> (총)</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.totalAmount)}원</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b">공매도 거래대금 비율</td>
+                      <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.shortAmountRatio.toFixed(2)}%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 

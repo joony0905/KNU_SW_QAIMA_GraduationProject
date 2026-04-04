@@ -17,6 +17,10 @@ export const ENDPOINTS = {
       return qs ? `${base}?${qs}` : base;
     },
     analysisTicker: (symbol: string) => `/stocks/marketstack/ticker/${symbol}`,
+    marketSnapshot: (stockCode: string, asOfDate?: string) => {
+      const base = `/stocks/code/${stockCode}/market-snapshot`;
+      return asOfDate ? `${base}?asOfDate=${asOfDate}` : base;
+    },
   },
   watchlist: {
     getItems: (watchlistId: number) => `/watchlist/${watchlistId}`,

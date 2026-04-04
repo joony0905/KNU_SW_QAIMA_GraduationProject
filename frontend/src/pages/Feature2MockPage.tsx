@@ -1,25 +1,37 @@
 // Feature2MockPage.tsx
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import StockInputBox from "../components/StockInputBox";
 import StockCard from "../components/StockCard";
 import { fetchCandles } from "../api/charts";
 import type { Candle } from "../types/candle";
 import TradingViewWidget from "../components/TradingViewWidget";
-import clsx from "clsx";
+
 import AnalysisResultPanel from "../components/AnalysisResultPanel";
 import { fetchFeature2Analysis } from "../api/feature2";
 import RelativeLineWidget from "../components/RelativeLineWidget";
-import type { Feature2AnalyzeResponse, PeerItem } from "../types/feature2";
+import type { Feature2AnalyzeResponse } from "../types/feature2";
 import type { ApiResponse } from "../types/common/api";
 import { fetchNewsByStock } from "../api/news";
 import type { NewsItemDto } from "../types/news";
 import { getStockByCode } from "../api/stock";
+import { isLoggedIn } from "../utils/auth";
+import DictTerm from "../components/DictTerm";
 
 const getColorClass = (rate: string) => {
   if (rate.startsWith("+")) return "text-red-600";
   if (rate.startsWith("-")) return "text-blue-600";
   return "text-black";
 };
+
+interface RelatedStockDisplay {
+  stockCode: string;
+  companyName: string;
+  price: number;
+  change: number;
+  changeRate: number;
+  volume: number;
+}
 
 interface FeaturedStock {
   name: string;
@@ -30,12 +42,6 @@ interface FeaturedStock {
   changeRate: string;
 }
 
-const relationLabel: Record<string, string> = {
-  LEADER: "선행",
-  FOLLOWER: "후행",
-  COINCIDENT: "동행",
-  UNKNOWN: "-",
-};
 
 const formatTimeAgo = (isoStr: string): string => {
   const diff = Date.now() - new Date(isoStr).getTime();
@@ -49,6 +55,7 @@ const formatTimeAgo = (isoStr: string): string => {
 };
 
 export default function Feature2MockPage() {
+  const navigate = useNavigate();
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -138,10 +145,13 @@ export default function Feature2MockPage() {
   const [err, setErr] = useState("");
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
   const [displayText, setDisplayText] = useState("");
+  const [selectedFreq, setSelectedFreq] = useState<"ONE_D" | "ONE_W">("ONE_D");
+  const [selectedWindow, setSelectedWindow] = useState<60 | 120 | 180 | 252>(120);
 
+  const [hasSelectedStock, setHasSelectedStock] = useState(false);
   const [mainStock, setMainStock] = useState({
-    name: "삼성전자",
-    symbol: "005930",
+    name: "",
+    symbol: "",
   });
 
   const industrySeries = useMemo(() => {
@@ -172,6 +182,11 @@ export default function Feature2MockPage() {
     const q = value.trim();
     if (!q) return;
 
+    setHasSelectedStock(true);
+    setShowAnalyzeButton(true);
+    setAnalysisResult(null);
+    setDisplayText("");
+    setErr("");
     setMainStock((prev) => ({ ...prev, symbol: q }));
 
     // 종목명 조회
@@ -205,7 +220,13 @@ export default function Feature2MockPage() {
   const [newsError, setNewsError] = useState<string | null>(null);
 
   const [hoveredDayKey, setHoveredDayKey] = useState<string | null>(null);
-  const [relatedStocks, setRelatedStocks] = useState<PeerItem[]>([]);
+  const [relatedStocks, setRelatedStocks] = useState<RelatedStockDisplay[]>([
+    { stockCode: "000660", companyName: "SK하이닉스", price: 178000, change: 3000, changeRate: 1.71, volume: 3200000 },
+    { stockCode: "042700", companyName: "한미반도체", price: 95400, change: -1200, changeRate: -1.24, volume: 1500000 },
+    { stockCode: "034730", companyName: "SK Inc.", price: 152000, change: 0, changeRate: 0, volume: 800000 },
+    { stockCode: "035420", companyName: "NAVER", price: 213500, change: 4500, changeRate: 2.15, volume: 2100000 },
+    { stockCode: "006400", companyName: "삼성SDI", price: 380000, change: -5000, changeRate: -1.30, volume: 900000 },
+  ]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedError, setRelatedError] = useState<string | null>(null);
 
@@ -290,6 +311,11 @@ export default function Feature2MockPage() {
   }, [analysisResult, loading]);
 
   const handleAnalyzeClick = async () => {
+    if (!isLoggedIn()) {
+      sessionStorage.setItem("qaima_redirect", window.location.pathname + window.location.search);
+      navigate("/login");
+      return;
+    }
     setLoading(true);
     setErr("");
     setAnalysisResult(null);
@@ -297,7 +323,7 @@ export default function Feature2MockPage() {
 
     try {
       setShowAnalyzeButton(false);
-      const result = await fetchFeature2Analysis(mainStock.symbol);
+      const result = await fetchFeature2Analysis(mainStock.symbol, selectedFreq, selectedWindow);
       setAnalysisResult(result);
 
       // 분석 응답의 뉴스 데이터로 갱신
@@ -306,10 +332,37 @@ export default function Feature2MockPage() {
         setNewsItems(analyzeNews);
       }
 
-      // 유사 종목 데이터 갱신
+      // 유사 종목 시세 조회 후 갱신
       const peers = result?.data?.metrics?.peerCluster?.peers;
       if (peers && peers.length > 0) {
-        setRelatedStocks(peers);
+        const displays = await Promise.all(
+          peers.map(async (peer) => {
+            try {
+              const stock = await getStockByCode(peer.stockCode);
+              const price = stock.price ?? 0;
+              const rate = stock.changeRate ?? 0;
+              const change = Math.round(price * rate / (100 + rate));
+              return {
+                stockCode: peer.stockCode,
+                companyName: peer.companyName,
+                price,
+                change,
+                changeRate: rate,
+                volume: peer.avgVolume,
+              };
+            } catch {
+              return {
+                stockCode: peer.stockCode,
+                companyName: peer.companyName,
+                price: 0,
+                change: 0,
+                changeRate: 0,
+                volume: peer.avgVolume,
+              };
+            }
+          }),
+        );
+        setRelatedStocks(displays);
       }
     } catch {
       setErr("분석 결과를 불러오지 못했습니다.");
@@ -319,7 +372,7 @@ export default function Feature2MockPage() {
   };
 
   useEffect(() => {
-    if (!mainStock) return;
+    if (!mainStock || !mainStock.symbol) return;
     loadCandles(mainStock.symbol);
   }, [mainStock]);
 
@@ -419,6 +472,7 @@ export default function Feature2MockPage() {
           </div>
         </section>
 
+        {hasSelectedStock && (<>
         <main className="w-full mt-6 flex flex-col xl:flex-row justify-center items-start gap-6">
           <div className="flex-1 flex flex-col gap-5">
             <section className="w-full bg-zinc-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
@@ -462,7 +516,7 @@ export default function Feature2MockPage() {
             {/* [좌측 하단] 산업 지수 차트 카드 */}
             <section className="w-full bg-zinc-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-2.5 overflow-hidden">
               <h2 className="text-black text-lg sm:text-2xl font-medium">
-                {mainStock.name}({mainStock.symbol}) 관련 산업 지수
+                {mainStock.name}({mainStock.symbol}) 관련 <DictTerm term="산업 지수">산업 지수</DictTerm>
               </h2>
 
               <div className="w-full h-80 sm:h-[420px] bg-white rounded-xl overflow-hidden">
@@ -501,7 +555,7 @@ export default function Feature2MockPage() {
           <div className="w-full xl:w-[380px] 2xl:w-[420px] flex flex-col items-stretch gap-5">
             <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-black text-base sm:text-lg font-medium">기준금리</h3>
+                <h3 className="text-black text-base sm:text-lg font-medium"><DictTerm term="기준금리">기준금리</DictTerm></h3>
                 {(() => {
                   const br = analysisData?.metrics?.baseRate;
                   if (!br) {
@@ -553,7 +607,6 @@ export default function Feature2MockPage() {
                           idx === newsItems.length - 1 ? "border-b" : ""
                         } border-zinc-300 hover:bg-zinc-50 transition-colors`}
                       >
-                        <div className="w-20 h-16 bg-zinc-300 rounded-2xl flex-shrink-0" />
                         <div className="flex-1 flex flex-col gap-2">
                           <div className="flex flex-col">
                             <h4 className="text-black text-sm sm:text-base font-semibold line-clamp-1">
@@ -564,7 +617,7 @@ export default function Feature2MockPage() {
                             </p>
                           </div>
                           <p className="text-black text-[11px] sm:text-xs font-medium">
-                            {formatTimeAgo(item.publishedAt)} • {item.source}
+                            {formatTimeAgo(item.publishedAt)} • {item.publisher}
                           </p>
                         </div>
                       </a>
@@ -600,52 +653,54 @@ export default function Feature2MockPage() {
 
                 {!relatedLoading && !relatedError && (
                   <div className="flex flex-col min-h-[230px] max-h-[250px] overflow-y-auto">
-                    {relatedStocks.map((row, idx) => (
-                      <div
-                        key={row.stockCode}
-                        className={`flex items-center justify-between gap-3 px-2.5 py-2.5 bg-white border-t ${
-                          idx === relatedStocks.length - 1 ? "border-b" : ""
-                        } border-zinc-300`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs sm:text-sm font-medium text-black truncate">
-                            {row.companyName}
-                          </p>
-                          <p className="text-[10px] sm:text-xs text-gray-500">
-                            {row.stockCode}
-                          </p>
-                        </div>
+                    {relatedStocks.map((row, idx) => {
+                      const colorClass = row.change > 0 ? "text-red-600" : row.change < 0 ? "text-blue-600" : "text-black";
+                      const fmtPrice = row.price.toLocaleString("ko-KR");
+                      const fmtVolume = row.volume.toLocaleString("ko-KR");
+                      const fmtChange = row.change > 0 ? `+${row.change.toLocaleString("ko-KR")}` : row.change.toLocaleString("ko-KR");
+                      const fmtRate = row.change > 0 ? `+${row.changeRate.toFixed(2)}%` : row.change < 0 ? `${row.changeRate.toFixed(2)}%` : "0.00%";
 
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                          <div className="flex flex-col items-center gap-0.5 w-14">
-                            <span className="text-[10px] text-gray-400">상관계수</span>
-                            <span className={clsx(
-                              "text-xs sm:text-sm font-semibold",
-                              row.corr >= 0.7 ? "text-red-600" : row.corr >= 0.4 ? "text-orange-500" : "text-gray-700",
-                            )}>
-                              {row.corr.toFixed(2)}
-                            </span>
+                      return (
+                        <button
+                          key={row.stockCode}
+                          onClick={() => handleSearch(row.stockCode)}
+                          className={`flex items-center gap-2 px-2.5 py-2 bg-white border-t ${
+                            idx === relatedStocks.length - 1 ? "border-b" : ""
+                          } border-zinc-300 hover:bg-zinc-50 transition-colors cursor-pointer w-full text-left`}
+                        >
+                          {/* 종목명 */}
+                          <div className="min-w-0 w-[90px] flex-shrink-0">
+                            <p className="text-xs sm:text-sm font-semibold text-black truncate">{row.companyName}</p>
+                            <p className="text-[10px] text-gray-400">{row.stockCode}</p>
                           </div>
 
-                          <div className="flex flex-col items-center gap-0.5 w-12">
-                            <span className="text-[10px] text-gray-400">관계</span>
-                            <span className={clsx(
-                              "text-[11px] sm:text-xs font-medium",
-                              row.relation === "LEADER" ? "text-blue-600" : row.relation === "FOLLOWER" ? "text-purple-600" : "text-gray-600",
-                            )}>
-                              {relationLabel[row.relation] ?? "-"}
-                            </span>
+                          {/* 현재가 + 거래량 */}
+                          <div className="flex flex-col items-end flex-1 min-w-0">
+                            <span className={`text-xs sm:text-sm font-semibold ${colorClass}`}>{fmtPrice}</span>
+                            <span className="text-[10px] sm:text-xs text-gray-500">{fmtVolume}</span>
                           </div>
 
-                          <div className="flex flex-col items-center gap-0.5 w-12">
-                            <span className="text-[10px] text-gray-400">점수</span>
-                            <span className="text-xs sm:text-sm font-semibold text-black">
-                              {row.score.toFixed(2)}
-                            </span>
+                          {/* 방향 삼각형 */}
+                          <div className="flex-shrink-0 w-3 flex items-center justify-center">
+                            {row.change > 0 && (
+                              <div className={`${colorClass} w-0 h-0 border-l-[5px] border-r-[5px] border-b-[7px] border-transparent border-b-current`} />
+                            )}
+                            {row.change < 0 && (
+                              <div className={`${colorClass} w-0 h-0 border-l-[5px] border-r-[5px] border-t-[7px] border-transparent border-t-current`} />
+                            )}
+                            {row.change === 0 && (
+                              <span className="text-black text-lg font-extrabold leading-none">-</span>
+                            )}
                           </div>
-                        </div>
-                      </div>
-                    ))}
+
+                          {/* 등락금액 + 등락률 */}
+                          <div className="flex flex-col items-end flex-shrink-0 min-w-[60px]">
+                            <span className={`text-xs sm:text-sm font-semibold ${colorClass}`}>{fmtChange}</span>
+                            <span className={`text-[10px] sm:text-xs font-medium ${colorClass}`}>{fmtRate}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
 
                     {relatedStocks.length === 0 && (
                       <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
@@ -661,7 +716,7 @@ export default function Feature2MockPage() {
             <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
               <div className="flex flex-col gap-3">
                 <h3 className="text-black text-base sm:text-lg font-medium">
-                  {mainStock.name} 공매도 현황
+                  {mainStock.name} <DictTerm term="공매도">공매도</DictTerm> 현황
                 </h3>
 
                 {(() => {
@@ -677,13 +732,13 @@ export default function Feature2MockPage() {
                   const fmt = (v: number) => v.toLocaleString("ko-KR");
                   const pct = (v: number) => `${v.toFixed(2)}%`;
 
-                  const rows: { label: string; value: string }[] = [
+                  const rows: { label: React.ReactNode; value: string }[] = [
                     { label: "기준일", value: ss.reportDate },
                     { label: "공매도 거래량", value: fmt(ss.shortVolumeTotal) },
-                    { label: "총 거래량", value: fmt(ss.totalVolume) },
+                    { label: <><DictTerm term="거래량">거래량</DictTerm> (총)</>, value: fmt(ss.totalVolume) },
                     { label: "공매도 거래량 비율", value: pct(ss.shortVolumeRatio) },
                     { label: "공매도 거래대금", value: `${fmt(ss.shortAmountTotal)}원` },
-                    { label: "총 거래대금", value: `${fmt(ss.totalAmount)}원` },
+                    { label: <><DictTerm term="거래대금">거래대금</DictTerm> (총)</>, value: `${fmt(ss.totalAmount)}원` },
                     { label: "공매도 거래대금 비율", value: pct(ss.shortAmountRatio) },
                   ];
 
@@ -708,11 +763,81 @@ export default function Feature2MockPage() {
           </div>
         </main>
 
+        {/* 분석 옵션 라디오버튼 */}
+        <div className="w-full bg-white rounded-2xl border border-stone-300 px-4 sm:px-6 py-4 flex flex-col gap-4">
+          <h3 className="text-sm sm:text-base font-semibold text-zinc-800">분석 옵션</h3>
+
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-8">
+            {/* 주기 선택 */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs sm:text-sm font-medium text-zinc-500">데이터 주기</span>
+              <div className="flex gap-3">
+                {([["ONE_D", "1일"], ["ONE_W", "1주"]] as const).map(([value, label]) => (
+                  <label
+                    key={value}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-sm ${
+                      selectedFreq === value
+                        ? "border-sky-500 bg-sky-50 text-sky-700 font-medium"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="freq"
+                      value={value}
+                      checked={selectedFreq === value}
+                      onChange={() => setSelectedFreq(value)}
+                      className="accent-sky-600 w-3.5 h-3.5"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* 기간 선택 */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs sm:text-sm font-medium text-zinc-500">분석 기간</span>
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  [60, "3개월"],
+                  [120, "6개월"],
+                  [180, "9개월"],
+                  [252, "1년"],
+                ] as const).map(([value, label]) => (
+                  <label
+                    key={value}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-sm ${
+                      selectedWindow === value
+                        ? "border-sky-500 bg-sky-50 text-sky-700 font-medium"
+                        : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="window"
+                      value={value}
+                      checked={selectedWindow === value}
+                      onChange={() => setSelectedWindow(value)}
+                      className="accent-sky-600 w-3.5 h-3.5"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <AnalysisResultPanel
           result={
             analysisResult
               ? {
                   explain: { text: analysisData?.explain },
+                  metrics: {
+                    shortSelling: analysisData?.metrics?.shortSelling ?? null,
+                    baseRate: analysisData?.metrics?.baseRate ?? null,
+                  },
                   meta: analysisResult?.meta,
                 }
               : null
@@ -726,6 +851,7 @@ export default function Feature2MockPage() {
           displayText={displayText}
           layout="full"
         />
+        </>)}
 
         {isOpen && panelPos && (
           <div
