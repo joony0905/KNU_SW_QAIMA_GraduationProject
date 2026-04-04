@@ -1,6 +1,7 @@
 package com.qaima.service.financial;
 
 import com.qaima.common.Blocking;
+import com.qaima.common.exception.ResourceNotFoundException;
 import com.qaima.domain.Financial;
 import com.qaima.domain.PeriodType;
 import com.qaima.domain.Stock;
@@ -30,7 +31,7 @@ public class FinancialAdminService {
     public Mono<FinancialDto> create(String stockCode, FinancialDto dto) {
         return Blocking.call(() -> tx().execute(status -> {
             Stock stock = stockRepository.findByStockCodeWithExchangeAndIndustry(stockCode)
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode));
+                    .orElseThrow(() -> new ResourceNotFoundException("Unknown stockCode: " + stockCode));
 
             if (dto.getYear() == null) throw new IllegalArgumentException("year 값은 필수입니다.");
             if (dto.getPeriodType() == null || dto.getPeriodType().isBlank())
@@ -65,7 +66,7 @@ public class FinancialAdminService {
     public Mono<FinancialDto> update(Long financialId, FinancialDto dto) {
         return Blocking.call(() -> tx().execute(status -> {
             Financial entity = financialRepository.findById(financialId)
-                    .orElseThrow(() -> new IllegalArgumentException("Financial not found: " + financialId));
+                    .orElseThrow(() -> new ResourceNotFoundException("Financial not found: " + financialId));
 
             boolean periodRelatedChanged = false;
 
@@ -102,8 +103,7 @@ public class FinancialAdminService {
     public Mono<Void> delete(Long financialId) {
         return Blocking.run(() -> tx().executeWithoutResult(status -> {
             if (!financialRepository.existsById(financialId)) {
-                log.warn("delete() called for non-existing financialId={}", financialId);
-                return;
+                throw new ResourceNotFoundException("Financial not found: " + financialId);
             }
             financialRepository.deleteById(financialId);
         }));

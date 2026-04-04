@@ -1,5 +1,6 @@
 package com.qaima.api.FinancialController;
 
+import com.qaima.common.ApiResponse;
 import com.qaima.domain.PeriodType;
 import com.qaima.dto.financial.FinancialDto;
 import com.qaima.service.financial.FinancialReadService;
@@ -28,10 +29,10 @@ public class FinancialController {
      * - 반기 전체: periodType=H
      * - 하반기만: periodType=H&periodNo=2
      * - TTM: periodType=TTM (periodNo는 생략하거나 0)
-     */
+    */
 
     @GetMapping("/{ticker}/financials")
-    public Mono<List<FinancialDto>> getFinancialsForLastNYears(
+    public Mono<ApiResponse<List<FinancialDto>>> getFinancialsForLastNYears(
             @PathVariable String ticker,
             @RequestParam(name = "years", defaultValue = "5") int years,
             @RequestParam(name = "asOfDate", required = false)
@@ -40,7 +41,8 @@ public class FinancialController {
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-        return financialQueryService.getForLastNYears(ticker, pt, periodNo, years, asOfDate);
+        return financialQueryService.getForLastNYears(ticker, pt, periodNo, years, asOfDate)
+                .map(ApiResponse::success);
     }
 
     /**
@@ -52,14 +54,15 @@ public class FinancialController {
      */
 
     @GetMapping("/{ticker}/financials/{year}")
-    public Mono<List<FinancialDto>> getFinancialsForYear(
+    public Mono<ApiResponse<List<FinancialDto>>> getFinancialsForYear(
             @PathVariable String ticker,
             @PathVariable int year,
             @RequestParam(name = "periodType", required = false) PeriodType periodType,
             @RequestParam(name = "periodNo", required = false) Integer periodNo
     ) {
         PeriodType pt = (periodType != null ? periodType : PeriodType.A);
-        return financialQueryService.getForYear(ticker, pt, periodNo, year);
+        return financialQueryService.getForYear(ticker, pt, periodNo, year)
+                .map(ApiResponse::success);
     }
 }
 
