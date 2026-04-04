@@ -1,5 +1,6 @@
 package com.qaima.api.FinancialAdminController;
 
+import com.qaima.common.ApiResponse;
 import com.qaima.dto.financial.FinancialDto;
 import com.qaima.service.financial.FinancialAdminService;
 import lombok.RequiredArgsConstructor;
@@ -8,29 +9,32 @@ import reactor.core.publisher.Mono;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/admin")
+@RequestMapping("/api/v1/admin")
 public class FinancialAdminController {
 
     private final FinancialAdminService financialCommandService;
     
     @PostMapping("/stocks/{stockCode}/financials")
-    public Mono<FinancialDto> createFinancial(
+    public Mono<ApiResponse<FinancialDto>> createFinancial(
             @PathVariable String stockCode,
             @RequestBody FinancialDto dto
     ) {
-        return financialCommandService.create(stockCode, dto);
+        return financialCommandService.create(stockCode, dto)
+                .map(ApiResponse::success);
     }
 
     @PutMapping("/financials/{id}")
-    public Mono<FinancialDto> updateFinancial(
+    public Mono<ApiResponse<FinancialDto>> updateFinancial(
             @PathVariable Long id,
             @RequestBody FinancialDto dto
     ) {
-        return financialCommandService.update(id, dto);
+        return financialCommandService.update(id, dto)
+                .map(ApiResponse::success);
     }
 
     @DeleteMapping("/financials/{id}")
-    public Mono<Void> deleteFinancial(@PathVariable Long id) {
-        return financialCommandService.delete(id);
+    public Mono<ApiResponse<Void>> deleteFinancial(@PathVariable Long id) {
+        return financialCommandService.delete(id)
+                .thenReturn(ApiResponse.success(null));
     }
 }

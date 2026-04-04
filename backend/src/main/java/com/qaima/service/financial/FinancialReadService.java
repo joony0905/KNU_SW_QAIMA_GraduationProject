@@ -1,6 +1,7 @@
 package com.qaima.service.financial;
 
 import com.qaima.common.Blocking;
+import com.qaima.common.exception.ResourceNotFoundException;
 import com.qaima.domain.Financial;
 import com.qaima.domain.PeriodType;
 import com.qaima.domain.Stock;
@@ -48,7 +49,7 @@ public class FinancialReadService {
         int fromYear = toYear - (years - 1);
 
         return Blocking.call(() -> stockRepository.findByStockCodeWithExchange(stockCode)
-                        .orElseThrow(() -> new IllegalArgumentException("Unknown stockCode: " + stockCode)))
+                        .orElseThrow(() -> new ResourceNotFoundException("Unknown stockCode: " + stockCode)))
                 .flatMap(stock -> realtimePriceService.getPrice(stock)
                         .map(Optional::of)
                         .onErrorResume(ex -> Mono.empty())
