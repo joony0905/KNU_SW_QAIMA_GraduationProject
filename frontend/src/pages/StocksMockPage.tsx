@@ -23,6 +23,13 @@ import zoomIcon from "../assets/zoom_button.png";
 import type { AnalysisResponse, ParsedExplainText } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
 import DictTerm from "../components/DictTerm";
+import {
+  formatKstDate,
+  formatKstDateTimeDisplay,
+  formatKstOffsetDateTime,
+  shiftKstDays,
+  shiftKstYears,
+} from "../utils/kst";
 
 /* =========================
    Zoom-out Loading Policy
@@ -314,24 +321,25 @@ export default function StocksMockPage() {
     setChartError(null);
 
     const toDate = new Date();
-    const fromDate = new Date();
 
     const days = mode === "ANALYZE" ? MAX_HISTORY_DAYS : INITIAL_HISTORY_DAYS;
-    fromDate.setDate(toDate.getDate() - (days - 1));
+    const fromDate = shiftKstDays(toDate, -(days - 1));
+    const fromIso = formatKstOffsetDateTime(fromDate);
+    const toIso = formatKstOffsetDateTime(toDate);
 
     try {
       const usedFreq = "ONE_D" as const;
 
       // 차트 로딩과 동시에 분석 파라미터도 동일하게 맞춰둠
       setAnalysisFreq(usedFreq);
-      setAnalysisFrom(fromDate.toISOString());
-      setAnalysisTo(toDate.toISOString());
+      setAnalysisFrom(formatKstDate(fromDate));
+      setAnalysisTo(formatKstDate(toDate));
 
       const response = await fetchCandles(
         stockCode,
         usedFreq,
-        fromDate.toISOString(),
-        toDate.toISOString(),
+        fromIso,
+        toIso,
       );
 
       const data = response.data;
@@ -343,15 +351,14 @@ export default function StocksMockPage() {
       setCandles(data);
 
       // 줌아웃 확장 하한은 항상 1년
-      const absoluteMin = new Date(toDate);
-      absoluteMin.setDate(absoluteMin.getDate() - MAX_HISTORY_DAYS);
+      const absoluteMin = shiftKstDays(toDate, -MAX_HISTORY_DAYS);
 
       chartRangeRef.current = {
         stockCode,
         freq: usedFreq,
-        fromIso: fromDate.toISOString(),
-        toIso: toDate.toISOString(),
-        absoluteMinFromIso: absoluteMin.toISOString(),
+        fromIso,
+        toIso,
+        absoluteMinFromIso: formatKstOffsetDateTime(absoluteMin),
         mode,
       };
 
@@ -498,10 +505,9 @@ export default function StocksMockPage() {
 
     // 기본 분석 기간: 최근 6개월
     const defaultTo = new Date();
-    const defaultFrom = new Date();
-    defaultFrom.setDate(defaultTo.getDate() - 180);
-    setAnalysisFrom(defaultFrom.toISOString().slice(0, 10));
-    setAnalysisTo(defaultTo.toISOString().slice(0, 10));
+    const defaultFrom = shiftKstDays(defaultTo, -180);
+    setAnalysisFrom(formatKstDate(defaultFrom));
+    setAnalysisTo(formatKstDate(defaultTo));
 
     setMainStock((prev) => ({
       ...prev,
@@ -715,11 +721,7 @@ export default function StocksMockPage() {
   };
 
   const formatDate = (value?: string | null) => {
-    if (!value) {
-      return "-";
-    }
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
+    return formatKstDateTimeDisplay(value);
   };
 
   const featuredListWrapperRef = useRef<HTMLDivElement | null>(null);
@@ -1273,10 +1275,9 @@ export default function StocksMockPage() {
                     ["5년", 1825],
                   ] as const).map(([label, days]) => {
                     const to = new Date();
-                    const from = new Date();
-                    from.setDate(to.getDate() - days);
-                    const fromStr = from.toISOString().slice(0, 10);
-                    const toStr = to.toISOString().slice(0, 10);
+                    const from = shiftKstDays(to, -days);
+                    const fromStr = formatKstDate(from);
+                    const toStr = formatKstDate(to);
                     const isActive = analysisFrom === fromStr && analysisTo === toStr;
 
                     return (
@@ -1303,8 +1304,8 @@ export default function StocksMockPage() {
                   <input
                     type="date"
                     value={analysisFrom}
-                    min={(() => { const d = new Date(); d.setFullYear(d.getFullYear() - 5); return d.toISOString().slice(0, 10); })()}
-                    max={analysisTo || new Date().toISOString().slice(0, 10)}
+                    min={formatKstDate(shiftKstYears(new Date(), -5))}
+                    max={analysisTo || formatKstDate(new Date())}
                     onChange={(e) => setAnalysisFrom(e.target.value)}
                     className="px-2 py-1.5 border border-zinc-300 rounded-lg text-zinc-700 focus:outline-none focus:ring-1 focus:ring-sky-400"
                   />
@@ -1312,8 +1313,8 @@ export default function StocksMockPage() {
                   <input
                     type="date"
                     value={analysisTo}
-                    min={analysisFrom || (() => { const d = new Date(); d.setFullYear(d.getFullYear() - 5); return d.toISOString().slice(0, 10); })()}
-                    max={new Date().toISOString().slice(0, 10)}
+                    min={analysisFrom || formatKstDate(shiftKstYears(new Date(), -5))}
+                    max={formatKstDate(new Date())}
                     onChange={(e) => setAnalysisTo(e.target.value)}
                     className="px-2 py-1.5 border border-zinc-300 rounded-lg text-zinc-700 focus:outline-none focus:ring-1 focus:ring-sky-400"
                   />

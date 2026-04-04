@@ -10,14 +10,20 @@ import com.qaima.domain.Stock;
 import com.qaima.dto.ohlcv.PriceOhlcvDto;
 import com.qaima.external.StockClient;
 import com.qaima.repository.PriceOhlcvRepository;
+import com.qaima.service.tradingcalendar.TradingCalendarService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import java.util.Comparator;
@@ -27,8 +33,12 @@ import java.util.Comparator;
 @RequiredArgsConstructor
 public class CandleLoadService {
 
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final String KRX_MARKET = "KRX";
+
     private final PriceOhlcvRepository priceOhlcvRepository;
     private final StockClient stockClient;
+    private final TradingCalendarService tradingCalendarService;
 
     public Mono<CandleLoadResult> load(
             Stock stock,
@@ -45,13 +55,20 @@ public class CandleLoadService {
                 )
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(dbCandles -> {
-                    if (!dbCandles.isEmpty()) {
+                    if (!shouldFetchCandlesFromExternal(dbCandles)) {
                         return Mono.just(new CandleLoadResult(dbCandles, CandleSource.DB));
                     }
 
+                    log.info("[CANDLE] latest candle miss -> external fetch. stockCode={}, freq={}, existingSize={}, requestedToDate={}, latestDbDate={}",
+                            stockCode,
+                            freq,
+                            dbCandles.size(),
+                            latestTradingDay(),
+                            latestLocalDate(dbCandles));
+
                     return stockClient.fetchCandles(stock, freq, from, to)
                             .flatMap(result ->
-                                    save(stock, freq, result.getCandles())
+                                    save(stock, freq, dbCandles, result.getCandles())
                                             .map(list -> {
                                                 CandleSource source = list.isEmpty()
                                                         ? CandleSource.EMPTY
@@ -84,9 +101,14 @@ public class CandleLoadService {
                 });
     }
 
-    private Mono<List<PriceOhlcv>> save(Stock stock, Freq freq, List<PriceOhlcvDto> dtoList) {
+    private Mono<List<PriceOhlcv>> save(
+            Stock stock,
+            Freq freq,
+            List<PriceOhlcv> existing,
+            List<PriceOhlcvDto> dtoList
+    ) {
         if (dtoList == null || dtoList.isEmpty()) {
-            return Mono.just(List.of());
+            return Mono.just(existing == null ? List.of() : existing);
         }
 
         return Mono.fromCallable(() -> {
@@ -94,7 +116,17 @@ public class CandleLoadService {
                             .map(dto -> toEntity(stock, freq, dto))
                             .collect(Collectors.toList());
 
-                    return priceOhlcvRepository.saveAll(entities);
+                    List<PriceOhlcv> missingOnly = filterMissingCandles(existing, entities);
+                    if (missingOnly.isEmpty()) {
+                        log.info("[CANDLE] external returned only existing rows. stockCode={}, freq={}, fetchedSize={}",
+                                stock.getStockCode(), freq, entities.size());
+                        return mergeCandles(existing, entities);
+                    }
+
+                    List<PriceOhlcv> saved = priceOhlcvRepository.saveAll(missingOnly);
+                    log.info("[CANDLE] persisted missing rows only. stockCode={}, freq={}, existingSize={}, fetchedSize={}, insertedSize={}",
+                            stock.getStockCode(), freq, existing == null ? 0 : existing.size(), entities.size(), saved.size());
+                    return mergeCandles(existing, saved);
                 })
                 .subscribeOn(Schedulers.boundedElastic());
     }
@@ -139,7 +171,7 @@ public class CandleLoadService {
 
                     return stockClient.fetchCandles(stock, freq, from, to)
                             .flatMap(result ->
-                                    save(stock, freq, result.getCandles())
+                                    save(stock, freq, List.of(), result.getCandles())
                                             .then(
                                                     Mono.fromCallable(() ->
                                                                     priceOhlcvRepository.findBefore(
@@ -167,6 +199,63 @@ public class CandleLoadService {
                                     Mono.just(new CandleLoadResult(List.of(), CandleSource.EMPTY))
                             );
                 });
+    }
+
+    private boolean shouldFetchCandlesFromExternal(List<PriceOhlcv> existing) {
+        if (existing == null || existing.isEmpty()) {
+            return true;
+        }
+
+        LocalDate latestRequestedDate = latestTradingDay();
+        LocalDate latestDbDate = latestLocalDate(existing);
+        return latestDbDate == null || latestDbDate.isBefore(latestRequestedDate);
+    }
+
+    private LocalDate latestTradingDay() {
+        return tradingCalendarService.latestTradingDay(ZonedDateTime.now(KST), KRX_MARKET);
+    }
+
+    private LocalDate latestLocalDate(List<PriceOhlcv> candles) {
+        if (candles == null || candles.isEmpty()) {
+            return null;
+        }
+
+        return candles.stream()
+                .map(candle -> candle != null && candle.getId() != null ? candle.getId().getTs() : null)
+                .filter(java.util.Objects::nonNull)
+                .map(OffsetDateTime::toLocalDate)
+                .max(LocalDate::compareTo)
+                .orElse(null);
+    }
+
+    private List<PriceOhlcv> filterMissingCandles(List<PriceOhlcv> existing, List<PriceOhlcv> fetched) {
+        Set<PriceOhlcvId> existingIds = (existing == null ? List.<PriceOhlcv>of() : existing).stream()
+                .map(PriceOhlcv::getId)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        return (fetched == null ? List.<PriceOhlcv>of() : fetched).stream()
+                .filter(entity -> entity.getId() != null && !existingIds.contains(entity.getId()))
+                .toList();
+    }
+
+    private List<PriceOhlcv> mergeCandles(List<PriceOhlcv> existing, List<PriceOhlcv> fetched) {
+        java.util.LinkedHashMap<PriceOhlcvId, PriceOhlcv> merged = new java.util.LinkedHashMap<>();
+
+        if (existing != null) {
+            existing.stream()
+                    .filter(entity -> entity != null && entity.getId() != null)
+                    .forEach(entity -> merged.put(entity.getId(), entity));
+        }
+
+        if (fetched != null) {
+            fetched.stream()
+                    .filter(entity -> entity != null && entity.getId() != null)
+                    .forEach(entity -> merged.put(entity.getId(), entity));
+        }
+
+        return merged.values().stream()
+                .sorted(Comparator.comparing(entity -> entity.getId().getTs()))
+                .toList();
     }
 
     /**

@@ -3,6 +3,7 @@ import type { AnalysisPanelResult } from "../types/analysisPanel";
 import downloadIcon from "../assets/download_button.png";
 import zoomIcon from "../assets/zoom_button.png";
 import DictTerm from "./DictTerm";
+import { formatKstDateTimeDisplay } from "../utils/kst";
 
 interface AnalysisResultPanelProps {
   result: AnalysisPanelResult | null;
@@ -22,9 +23,7 @@ const formatNumber = (value?: number | null) => {
 };
 
 const formatDate = (value?: string | null) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
+  return formatKstDateTimeDisplay(value);
 };
 
 export default function AnalysisResultPanel({

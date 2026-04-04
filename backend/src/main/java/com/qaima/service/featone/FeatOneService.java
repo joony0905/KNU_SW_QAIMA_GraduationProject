@@ -26,6 +26,7 @@ import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.PriceOhlcvRepository;
 import com.qaima.service.stock.MarketSnapshotService;
 import com.qaima.service.stock.StockService;
+import com.qaima.service.tradingcalendar.TradingCalendarService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,14 +43,18 @@ import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
@@ -59,6 +64,8 @@ import java.util.stream.Collectors;
 public class FeatOneService {
 
     private static final Logger log = LoggerFactory.getLogger(FeatOneService.class);
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final String KRX_MARKET = "KRX";
 
     private static final int DEFAULT_FINANCIAL_LIMIT = 5;
     private static final String SCHEMA_VERSION = "0.1"; //network에서 0.1로 떨어지면 백엔드 오류
@@ -67,6 +74,7 @@ public class FeatOneService {
     private final PriceOhlcvRepository priceOhlcvRepository;
     private final FinancialRepository financialRepository;
     private final MarketSnapshotService marketSnapshotService;
+    private final TradingCalendarService tradingCalendarService;
 
     // Feature1은 직접 KIS/Marketstack을 사용
     private final KrStockClient krStockClient;
@@ -161,7 +169,7 @@ public class FeatOneService {
             return Mono.just(Boolean.TRUE);
         }
 
-        LocalDate baseDate = LocalDate.now();
+        LocalDate baseDate = LocalDate.now(KST);
         return marketSnapshotService.getLatestDto(stock, baseDate)
                 .thenReturn(Boolean.TRUE)
                 .onErrorResume(ex -> {
@@ -193,9 +201,21 @@ public class FeatOneService {
         return Mono.fromCallable(() -> priceOhlcvRepository.findRange(stockCode, freq, from, to))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(existing -> {
-                    if (!existing.isEmpty()) {
+                    if (!shouldFetchCandlesFromExternal(existing)) {
+                        log.info("[FeatOneService][candles] DB hit covers latest request. stockCode={}, freq={}, size={}, latest={}",
+                                stockCode,
+                                freq,
+                                existing.size(),
+                                latestLocalDate(existing));
                         return Mono.just(existing);
                     }
+
+                    log.info("[FeatOneService][candles] latest candle miss -> external fallback. stockCode={}, freq={}, existingSize={}, requestedToDate={}, latestDbDate={}",
+                            stockCode,
+                            freq,
+                            existing.size(),
+                            latestTradingDay(),
+                            latestLocalDate(existing));
 
                     Mono<List<PriceOhlcvDto>> fromKis =
                             krStockClient.fetchCandles(stockCode, marketDivCode, freq, from, to);
@@ -219,18 +239,88 @@ public class FeatOneService {
 
                     return fromGlobal.flatMap(dtoList -> {
                         if (dtoList == null || dtoList.isEmpty()) {
-                            return Mono.just(List.<PriceOhlcv>of());
+                            return Mono.just(existing);
                         }
 
                         return Mono.fromCallable(() -> {
                                     List<PriceOhlcv> entities = dtoList.stream()
                                             .map(dto -> toPriceOhlcvEntity(stock, freq, dto))
                                             .collect(Collectors.toList());
-                                    return priceOhlcvRepository.saveAll(entities);
+
+                                    List<PriceOhlcv> merged = mergeCandles(existing, entities);
+                                    List<PriceOhlcv> missingOnly = filterMissingCandles(existing, entities);
+
+                                    if (missingOnly.isEmpty()) {
+                                        log.info("[FeatOneService][candles] external returned only existing rows. stockCode={}, freq={}, fetchedSize={}",
+                                                stockCode, freq, entities.size());
+                                        return merged;
+                                    }
+
+                                    List<PriceOhlcv> saved = priceOhlcvRepository.saveAll(missingOnly);
+                                    log.info("[FeatOneService][candles] persisted missing rows only. stockCode={}, freq={}, existingSize={}, fetchedSize={}, insertedSize={}",
+                                            stockCode, freq, existing.size(), entities.size(), saved.size());
+                                    return mergeCandles(existing, saved);
                                 })
                                 .subscribeOn(Schedulers.boundedElastic());
                     });
                 });
+    }
+
+    private boolean shouldFetchCandlesFromExternal(List<PriceOhlcv> existing) {
+        if (existing == null || existing.isEmpty()) {
+            return true;
+        }
+ 
+        LocalDate latestRequestedDate = latestTradingDay();
+        LocalDate latestDbDate = latestLocalDate(existing);
+        return latestDbDate == null || latestDbDate.isBefore(latestRequestedDate);
+    }
+
+    private LocalDate latestTradingDay() {
+        return tradingCalendarService.latestTradingDay(ZonedDateTime.now(KST), KRX_MARKET);
+    }
+
+    private LocalDate latestLocalDate(List<PriceOhlcv> candles) {
+        if (candles == null || candles.isEmpty()) {
+            return null;
+        }
+
+        return candles.stream()
+                .map(candle -> candle != null && candle.getId() != null ? candle.getId().getTs() : null)
+                .filter(java.util.Objects::nonNull)
+                .map(OffsetDateTime::toLocalDate)
+                .max(LocalDate::compareTo)
+                .orElse(null);
+    }
+
+    private List<PriceOhlcv> filterMissingCandles(List<PriceOhlcv> existing, List<PriceOhlcv> fetched) {
+        Set<PriceOhlcvId> existingIds = (existing == null ? List.<PriceOhlcv>of() : existing).stream()
+                .map(PriceOhlcv::getId)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        return (fetched == null ? List.<PriceOhlcv>of() : fetched).stream()
+                .filter(entity -> entity.getId() != null && !existingIds.contains(entity.getId()))
+                .toList();
+    }
+
+    private List<PriceOhlcv> mergeCandles(List<PriceOhlcv> existing, List<PriceOhlcv> fetched) {
+        java.util.LinkedHashMap<PriceOhlcvId, PriceOhlcv> merged = new java.util.LinkedHashMap<>();
+
+        if (existing != null) {
+            existing.stream()
+                    .filter(entity -> entity != null && entity.getId() != null)
+                    .forEach(entity -> merged.put(entity.getId(), entity));
+        }
+
+        if (fetched != null) {
+            fetched.stream()
+                    .filter(entity -> entity != null && entity.getId() != null)
+                    .forEach(entity -> merged.put(entity.getId(), entity));
+        }
+
+        return merged.values().stream()
+                .sorted(Comparator.comparing(entity -> entity.getId().getTs()))
+                .toList();
     }
 
     private PriceOhlcv toPriceOhlcvEntity(Stock stock, Freq reqFreq, PriceOhlcvDto dto) {
@@ -553,9 +643,9 @@ public class FeatOneService {
         try {
             LocalDate date = LocalDate.parse(raw);
             if (endOfDayForDateOnly) {
-                return date.atTime(23, 59, 59).atOffset(ZoneOffset.UTC);
+                return date.atTime(23, 59, 59).atZone(KST).toOffsetDateTime();
             }
-            return date.atStartOfDay().atOffset(ZoneOffset.UTC);
+            return date.atStartOfDay(KST).toOffsetDateTime();
         } catch (DateTimeParseException ignored) {
             throw new IllegalArgumentException(
                     "from/to must be ISO-8601 datetime (e.g. 2025-01-10T00:00:00Z) or date (e.g. 2025-01-10)."
