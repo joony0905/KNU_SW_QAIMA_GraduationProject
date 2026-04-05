@@ -31,6 +31,9 @@ export const ENDPOINTS = {
   analysis: {
     analyze: () => "/feature1/analyze",
   },
+  portfolio: {
+    analyze: () => "/feature3/analysis",
+  },
   dictionary: {
     search: (params: { q?: string; initial?: string; page?: number; size?: number }) => {
       const query = new URLSearchParams();

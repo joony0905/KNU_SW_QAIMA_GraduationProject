@@ -10,9 +10,10 @@ import StockInputBox from "../components/StockInputBox";
 import { Star } from "lucide-react";
 import { type IndicatorSection } from "../mocks/financialIndicators";
 import type { FinancialDto } from "../types/financial";
-import { buildSectionsFromDto, buildSnapshotSections } from "../mappers/financialMapper";
+import { buildSectionsFromDto } from "../mappers/financialMapper";
 import { fetchFinancials, fetchFinancialsByYear, fetchMarketSnapshot } from "../api/financial";
 import type { MarketSnapshotDto } from "../types/financial";
+import FinancialDetailModal from "../components/FinancialDetailModal";
 import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
@@ -254,8 +255,7 @@ export default function StocksMockPage() {
 
   const [isOpen, setIsOpen] = useState(false);
 
-  const [finTab, setFinTab] = useState<"snapshot" | "detail">("snapshot");
-  const [snapshotSections, setSnapshotSections] = useState<IndicatorSection[]>([]);
+  const [isFinModalOpen, setIsFinModalOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number>(2024);
   const [selectedPeriodType, setSelectedPeriodType] = useState<"A" | "Q" | "H">("A");
   const [selectedPeriodNo, setSelectedPeriodNo] = useState<number | undefined>(undefined);
@@ -561,12 +561,6 @@ export default function StocksMockPage() {
         fetchMarketSnapshot(code).catch(() => null),
       ]);
       setSnapshot(snap);
-      setFinTab("snapshot");
-      if (snap) {
-        setSnapshotSections(buildSnapshotSections(snap));
-      } else {
-        setSnapshotSections([]);
-      }
       if (Array.isArray(singleData) && singleData.length > 0) {
         setFinancial(singleData[0]);
         setSections(buildSectionsFromDto(singleData[0], snap));
@@ -574,6 +568,9 @@ export default function StocksMockPage() {
         const dto = singleData as unknown as FinancialDto;
         setFinancial(dto);
         setSections(buildSectionsFromDto(dto, snap));
+      } else {
+        // financial 데이터 없어도 snapshot만으로 투자지표 표시
+        setSections(buildSectionsFromDto(null, snap));
       }
       setTrendData(Array.isArray(trend) ? trend : []);
     } catch (e) {
@@ -1118,147 +1115,45 @@ export default function StocksMockPage() {
                 </section>
               </div>
 
-              <div className="w-full h-[520px] px-4 sm:px-6 py-5 bg-zinc-100 rounded-2xl flex flex-col overflow-hidden">
+              <div className="w-full h-[520px] px-4 sm:px-6 py-5 bg-zinc-100 rounded-2xl flex flex-col">
                 <div className="flex items-center justify-between mb-3">
                   <h2 className="text-[20px] font-semibold">
-                    재무제표
+                    투자지표
                   </h2>
-                  {finTab === "snapshot" ? (
-                    <button
-                      onClick={() => setFinTab("detail")}
-                      className="px-4 py-1.5 rounded-lg text-sm font-medium bg-zinc-800 text-white hover:bg-zinc-700 transition-colors"
-                    >
-                      상세보기
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setFinTab("snapshot")}
-                      className="px-4 py-1.5 rounded-lg text-sm font-medium bg-white text-zinc-600 border border-zinc-300 hover:bg-zinc-200 transition-colors"
-                    >
-                      요약으로 돌아가기
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setIsFinModalOpen(true)}
+                    className="px-4 py-1.5 rounded-lg text-sm font-medium bg-zinc-800 text-white hover:bg-zinc-700 transition-colors"
+                  >
+                    재무제표
+                  </button>
                 </div>
 
-                {finTab === "snapshot" ? (
-                  <div className="flex-1 overflow-y-auto flex flex-col gap-5 pr-2">
-                    {snapshotSections.length > 0 ? (
-                      snapshotSections.map((section) => (
+                <div className="flex flex-col flex-1 min-h-0">
+
+                  <div className="flex-1 overflow-y-auto flex flex-col gap-5 pr-2 pt-2">
+                    {sections.length > 0 ? (
+                      sections.map((section) => (
                         <IndicatorSectionBlock
                           key={section.sectionTitle}
                           section={section}
-                          layout="2-2-2"
+                          layout={
+                            section.sectionTitle === "밸류에이션"
+                              ? "2-2-2"
+                              : section.sectionTitle === "수익성"
+                                ? "2-2"
+                                : section.sectionTitle === "재무안정성"
+                                  ? "2-2-1"
+                                  : "2"
+                          }
                         />
                       ))
                     ) : (
                       <p className="text-sm text-gray-500">
-                        시장 스냅샷 데이터가 없습니다.
+                        해당 조건의 재무제표 데이터가 없습니다.
                       </p>
                     )}
                   </div>
-                ) : (
-                  <div className="flex flex-col flex-1 min-h-0">
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <select
-                        value={selectedYear}
-                        onChange={async (e) => {
-                          const yr = Number(e.target.value);
-                          setSelectedYear(yr);
-                          try {
-                            const data = await fetchFinancialsByYear(mainStock.symbol, yr, selectedPeriodType, selectedPeriodNo);
-                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
-                          } catch (err) { console.error("재무제표 조회 실패:", err); }
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                      >
-                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((yr) => (
-                          <option key={yr} value={yr}>{yr}년</option>
-                        ))}
-                      </select>
-
-                      <select
-                        value={selectedPeriodType}
-                        onChange={async (e) => {
-                          const pt = e.target.value as "A" | "Q" | "H";
-                          setSelectedPeriodType(pt);
-                          setSelectedPeriodNo(undefined);
-                          try {
-                            const data = await fetchFinancialsByYear(mainStock.symbol, selectedYear, pt, undefined);
-                            if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
-                          } catch (err) { console.error("재무제표 조회 실패:", err); }
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                      >
-                        <option value="A">연간</option>
-                        <option value="Q">분기</option>
-                        <option value="H">반기</option>
-                      </select>
-
-                      {selectedPeriodType === "Q" && (
-                        <select
-                          value={selectedPeriodNo ?? ""}
-                          onChange={async (e) => {
-                            const no = e.target.value ? Number(e.target.value) : undefined;
-                            setSelectedPeriodNo(no);
-                            try {
-                              const data = await fetchFinancialsByYear(mainStock.symbol, selectedYear, selectedPeriodType, no);
-                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
-                            } catch (err) { console.error("재무제표 조회 실패:", err); }
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                        >
-                          <option value="">전체</option>
-                          <option value="1">1분기</option>
-                          <option value="2">2분기</option>
-                          <option value="3">3분기</option>
-                          <option value="4">4분기</option>
-                        </select>
-                      )}
-                      {selectedPeriodType === "H" && (
-                        <select
-                          value={selectedPeriodNo ?? ""}
-                          onChange={async (e) => {
-                            const no = e.target.value ? Number(e.target.value) : undefined;
-                            setSelectedPeriodNo(no);
-                            try {
-                              const data = await fetchFinancialsByYear(mainStock.symbol, selectedYear, selectedPeriodType, no);
-                              if (data.length > 0) { setFinancial(data[0]); setSections(buildSectionsFromDto(data[0], snapshot)); }
-                            } catch (err) { console.error("재무제표 조회 실패:", err); }
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-white text-sm text-zinc-700 border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-400"
-                        >
-                          <option value="">전체</option>
-                          <option value="1">상반기</option>
-                          <option value="2">하반기</option>
-                        </select>
-                      )}
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto flex flex-col gap-5 pr-2">
-                      {sections.length > 0 ? (
-                        sections.map((section) => (
-                          <IndicatorSectionBlock
-                            key={section.sectionTitle}
-                            section={section}
-                            layout={
-                              section.sectionTitle === "밸류에이션"
-                                ? "2-2-2"
-                                : section.sectionTitle === "수익성"
-                                  ? "2-2"
-                                  : section.sectionTitle === "재무안정성"
-                                    ? "2-2-1"
-                                    : "2"
-                            }
-                          />
-                        ))
-                      ) : (
-                        <p className="text-sm text-gray-500">
-                          해당 조건의 재무제표 데이터가 없습니다.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
             </div>
             {/* ========== 분석 기간 선택 ========== */}
@@ -1498,6 +1393,13 @@ export default function StocksMockPage() {
             </div>
           </div>
         )}
+
+        <FinancialDetailModal
+          isOpen={isFinModalOpen}
+          onClose={() => setIsFinModalOpen(false)}
+          ticker={mainStock.symbol}
+          companyName={mainStock.name}
+        />
 
         {/* 토스트 메시지 */}
         {toast.visible && (
