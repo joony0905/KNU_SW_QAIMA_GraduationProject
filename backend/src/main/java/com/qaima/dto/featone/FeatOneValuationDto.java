@@ -1,5 +1,6 @@
 package com.qaima.dto.featone;
 
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -11,8 +12,9 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FeatOneAnalysisExplainDto {
-    private String text;
-    private FeatOneAnalysisExplainSectionsDto sections;
-    private FeatOneAnalysisExplainOverallDto overall;
+public class FeatOneValuationDto {
+    private Double per;
+    private Double pbr;
+    private Double psr;
+    private BigDecimal marketCap;
 }

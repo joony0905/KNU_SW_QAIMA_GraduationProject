@@ -17,5 +17,6 @@ class LLMClient(ABC):
         self,
         req: Feature1Request,
         metrics: Feature1Metrics,
+        compact: bool = False,
     ) -> Tuple[Optional[str], Optional[str]]:
         pass

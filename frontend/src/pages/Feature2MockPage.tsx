@@ -145,6 +145,7 @@ export default function Feature2MockPage() {
   const [err, setErr] = useState("");
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
   const [displayText, setDisplayText] = useState("");
+  const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
   const [selectedFreq, setSelectedFreq] = useState<"ONE_D" | "ONE_W">("ONE_D");
   const [selectedWindow, setSelectedWindow] = useState<60 | 120 | 180 | 252>(120);
 
@@ -848,6 +849,8 @@ export default function Feature2MockPage() {
           onAnalyze={handleAnalyzeClick}
           onDownload={() => {}}
           onZoom={() => {}}
+          llmVendor={llmVendor}
+          onLlmVendorChange={setLlmVendor}
           displayText={displayText}
           layout="full"
         />

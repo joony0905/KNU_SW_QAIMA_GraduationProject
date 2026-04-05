@@ -21,6 +21,7 @@ export type FeatOneAnalyzeRequest = {
   to: string;
   marketDivCode: string;
   includeExplain: boolean;
+  llmVendor?: string;
 };
 
 export const fetchAnalysis = async (
@@ -35,6 +36,7 @@ export const fetchAnalysis = async (
       to: req.to,
       marketDivCode: req.marketDivCode,
       includeExplain: req.includeExplain,
+      llmVendor: req.llmVendor,
     }
   );
 

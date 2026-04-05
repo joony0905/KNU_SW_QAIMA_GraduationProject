@@ -14,8 +14,9 @@ import lombok.Setter;
 @AllArgsConstructor
 @Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class Feature1InboundExplainDto {
-    private String text;
-    private Feature1InboundExplainSectionsDto sections;
-    private Feature1InboundExplainOverallDto overall;
+public class Feature1InboundExplainSectionsDto {
+    private Feature1InboundExplainSectionDto priceFlow;
+    private Feature1InboundExplainSectionDto marketSnapshot;
+    private Feature1InboundExplainSectionDto indicators;
+    private Feature1InboundExplainSectionDto financialTimeline;
 }

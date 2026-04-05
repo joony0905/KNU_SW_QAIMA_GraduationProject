@@ -99,12 +99,12 @@ public class MarketSnapshotBackfillService {
                                 stock,
                                 targetDate,
                                 "ALREADY_FILLED",
-                                existing != null ? marketSnapshotService.toDto(existing) : null
+                                existing != null ? marketSnapshotService.toDto(existing, stock) : null
                         ));
                     }
 
                     return marketSnapshotService.upsertBatchSnapshot(stock, targetDate)
-                            .map(saved -> resultUpdated(stock, targetDate, marketSnapshotService.toDto(saved)))
+                            .map(saved -> resultUpdated(stock, targetDate, marketSnapshotService.toDto(saved, stock)))
                             .onErrorResume(ex -> Mono.just(resultFailed(stock, targetDate, ex.getMessage())));
                 });
     }

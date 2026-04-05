@@ -127,9 +127,7 @@ public class RealtimePriceService {
             return "B";
         }
         return switch (exchange.getCode().trim().toUpperCase()) {
-            case "KRX", "XKRX", "KOSPI" -> "J";
-            case "KOSDAQ", "XKOS" -> "Q";
-            case "KONEX" -> "K";
+            case "KRX", "XKRX", "KOSPI", "KOSDAQ", "XKOS", "KONEX" -> "J";
             default -> "B";
         };
     }

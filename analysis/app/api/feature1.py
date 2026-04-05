@@ -1,5 +1,5 @@
 # app/api/feature1.py
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from fastapi import APIRouter
 
 
@@ -9,7 +9,13 @@ from app.models.feature1 import (
     Feature1Metrics,
     Feature1Explain,
     OhlcvSummary,
-    FinancialSummary,
+    FinancialSeries,
+    MarketSnapshotMetrics,
+    ValuationMetrics,
+    ProfitabilityMetrics,
+    StabilityMetrics,
+    GrowthMetrics,
+    PerShareMetrics,
 )
 from app.models.indicator import (
     IndicatorBundle,
@@ -41,6 +47,238 @@ def _latest_value(points, attr: str):
         if v is not None:
             return v
     return None
+
+
+def _safe_div(numerator: float | None, denominator: float | None) -> float | None:
+    if numerator is None or denominator is None or denominator == 0:
+        return None
+    return numerator / denominator
+
+
+def _ratio_percent(numerator: float | None, denominator: float | None) -> float | None:
+    base = _safe_div(numerator, denominator)
+    return None if base is None else base * 100
+
+
+def _growth_percent(current: float | None, previous: float | None) -> float | None:
+    if current is None or previous is None or previous == 0:
+        return None
+    return ((current - previous) / previous) * 100
+
+
+def _sort_financials(financials):
+    return sorted(
+        [f for f in financials if f is not None],
+        key=lambda f: (
+            f.fiscal_year or 0,
+            f.period_no or 0,
+            f.report_date or date.min,
+        ),
+        reverse=True,
+    )
+
+
+def _is_previous_quarter(current, previous) -> bool:
+    if current.period_no is None or previous.period_no is None or current.fiscal_year is None or previous.fiscal_year is None:
+        return False
+    expected_year = current.fiscal_year - 1 if current.period_no == 1 else current.fiscal_year
+    expected_quarter = 4 if current.period_no == 1 else current.period_no - 1
+    return previous.fiscal_year == expected_year and previous.period_no == expected_quarter
+
+
+def _latest_contiguous_four_quarters(quarters):
+    if len(quarters) < 4:
+        return None
+    latest = quarters[:4]
+    for idx in range(len(latest) - 1):
+        if not _is_previous_quarter(latest[idx], latest[idx + 1]):
+            return None
+    return latest
+
+
+def _sum_attr(items, attr: str) -> float | None:
+    total = 0.0
+    for item in items:
+        value = getattr(item, attr, None)
+        if value is None:
+            return None
+        total += value
+    return total
+
+
+def _build_financial_series(financials) -> FinancialSeries:
+    if not financials:
+        return FinancialSeries()
+
+    revenue: Dict[int, Optional[float]] = {}
+    operating_income: Dict[int, Optional[float]] = {}
+    net_income: Dict[int, Optional[float]] = {}
+
+    for item in financials:
+        if item.fiscal_year is None:
+            continue
+        revenue[item.fiscal_year] = item.revenue
+        operating_income[item.fiscal_year] = item.operating_income
+        net_income[item.fiscal_year] = item.net_income
+
+    years = sorted(revenue.keys())
+    return FinancialSeries(
+        years=years,
+        revenue=revenue,
+        operating_income=operating_income,
+        net_income=net_income,
+    )
+
+
+def _build_market_snapshot(req: Feature1Request, warnings: list[str]) -> MarketSnapshotMetrics:
+    if req.market_snapshot is not None:
+        snapshot = req.market_snapshot
+
+        null_checks = {
+            "MARKET_SNAPSHOT_AS_OF_MISSING": snapshot.as_of,
+            "MARKET_SNAPSHOT_CURRENCY_MISSING": snapshot.currency,
+            "MARKET_SNAPSHOT_PER_MISSING": snapshot.valuation.per,
+            "MARKET_SNAPSHOT_PBR_MISSING": snapshot.valuation.pbr,
+            "MARKET_SNAPSHOT_PSR_MISSING": snapshot.valuation.psr,
+            "MARKET_SNAPSHOT_MARKET_CAP_MISSING": snapshot.valuation.market_cap,
+            "MARKET_SNAPSHOT_EPS_MISSING": snapshot.per_share.eps,
+            "MARKET_SNAPSHOT_BPS_MISSING": snapshot.per_share.bps,
+            "MARKET_SNAPSHOT_ROE_MISSING": snapshot.profitability.roe,
+            "MARKET_SNAPSHOT_ROA_MISSING": snapshot.profitability.roa,
+            "MARKET_SNAPSHOT_OPERATING_MARGIN_MISSING": snapshot.profitability.operating_margin,
+            "MARKET_SNAPSHOT_NET_MARGIN_MISSING": snapshot.profitability.net_margin,
+            "MARKET_SNAPSHOT_DEBT_RATIO_MISSING": snapshot.stability.debt_ratio,
+            "MARKET_SNAPSHOT_CURRENT_RATIO_MISSING": snapshot.stability.current_ratio,
+            "MARKET_SNAPSHOT_QUICK_RATIO_MISSING": snapshot.stability.quick_ratio,
+            "MARKET_SNAPSHOT_INTEREST_COVERAGE_RATIO_MISSING": snapshot.stability.interest_coverage_ratio,
+            "MARKET_SNAPSHOT_FREE_CASH_FLOW_MISSING": snapshot.growth.free_cash_flow,
+            "MARKET_SNAPSHOT_REVENUE_GROWTH_MISSING": snapshot.growth.revenue_growth,
+            "MARKET_SNAPSHOT_EPS_GROWTH_MISSING": snapshot.growth.eps_growth,
+        }
+        missing_found = False
+        for warning_code, value in null_checks.items():
+            if value is None:
+                warnings.append(warning_code)
+                missing_found = True
+        if missing_found:
+            warnings.append("MARKET_SNAPSHOT_PARTIAL")
+        return snapshot
+
+    financials = _sort_financials(req.financials)
+    market_context = req.market_context
+    last_close = req.ohlcv[-1].c if req.ohlcv else None
+    as_of = None
+    if market_context and market_context.as_of:
+        as_of = market_context.as_of.isoformat()
+    elif req.ohlcv:
+        as_of = req.ohlcv[-1].t.date().isoformat()
+
+    shares_outstanding = market_context.shares_outstanding if market_context else None
+
+    quarters = [f for f in financials if (f.period_type or "").upper() == "Q"]
+    annuals = [f for f in financials if (f.period_type or "").upper() == "A"]
+    latest_q4 = _latest_contiguous_four_quarters(quarters)
+    latest_snapshot = financials[0] if financials else None
+
+    revenue_ttm = _sum_attr(latest_q4, "revenue") if latest_q4 else None
+    operating_income_ttm = _sum_attr(latest_q4, "operating_income") if latest_q4 else None
+    net_income_ttm = _sum_attr(latest_q4, "net_income") if latest_q4 else None
+
+    if revenue_ttm is None and annuals:
+        revenue_ttm = annuals[0].revenue
+        operating_income_ttm = annuals[0].operating_income
+        net_income_ttm = annuals[0].net_income
+        warnings.append("MARKET_SNAPSHOT_TTM_FALLBACK_TO_ANNUAL")
+
+    market_cap = None if last_close is None or shares_outstanding is None else last_close * shares_outstanding
+    eps = _safe_div(net_income_ttm, shares_outstanding)
+    bps = _safe_div(latest_snapshot.equity if latest_snapshot else None, shares_outstanding)
+
+    valuation = ValuationMetrics(
+        per=_safe_div(last_close, eps),
+        pbr=_safe_div(last_close, bps),
+        psr=_safe_div(market_cap, revenue_ttm),
+        market_cap=market_cap,
+    )
+    profitability = ProfitabilityMetrics(
+        roe=_ratio_percent(net_income_ttm, latest_snapshot.equity if latest_snapshot else None),
+        roa=_ratio_percent(net_income_ttm, latest_snapshot.assets if latest_snapshot else None),
+        operating_margin=_ratio_percent(operating_income_ttm, revenue_ttm),
+        net_margin=_ratio_percent(net_income_ttm, revenue_ttm),
+    )
+    stability = StabilityMetrics(
+        debt_ratio=_ratio_percent(latest_snapshot.liabilities if latest_snapshot else None,
+                                  latest_snapshot.equity if latest_snapshot else None),
+        current_ratio=_ratio_percent(latest_snapshot.current_assets if latest_snapshot else None,
+                                     latest_snapshot.current_liabilities if latest_snapshot else None),
+        quick_ratio=_ratio_percent(
+            (latest_snapshot.current_assets - latest_snapshot.inventories)
+            if latest_snapshot and latest_snapshot.current_assets is not None and latest_snapshot.inventories is not None
+            else (latest_snapshot.current_assets if latest_snapshot else None),
+            latest_snapshot.current_liabilities if latest_snapshot else None,
+        ),
+        interest_coverage_ratio=_safe_div(operating_income_ttm, latest_snapshot.interest_expense if latest_snapshot else None),
+    )
+    growth = GrowthMetrics()
+    if latest_q4 and len(quarters) >= 8:
+        previous_q4 = quarters[4:8]
+        if len(previous_q4) == 4 and _latest_contiguous_four_quarters(previous_q4):
+            prev_revenue_ttm = _sum_attr(previous_q4, "revenue")
+            prev_net_income_ttm = _sum_attr(previous_q4, "net_income")
+            growth.revenue_growth = _growth_percent(revenue_ttm, prev_revenue_ttm)
+            prev_eps = _safe_div(prev_net_income_ttm, shares_outstanding)
+            growth.eps_growth = _growth_percent(eps, prev_eps)
+    elif len(annuals) >= 2:
+        growth.revenue_growth = _growth_percent(annuals[0].revenue, annuals[1].revenue)
+        growth.eps_growth = _growth_percent(
+            _safe_div(annuals[0].net_income, shares_outstanding),
+            _safe_div(annuals[1].net_income, shares_outstanding),
+        )
+    growth.free_cash_flow = None
+    if latest_snapshot and latest_snapshot.operating_cash_flow is not None and latest_snapshot.capex is not None:
+        growth.free_cash_flow = latest_snapshot.operating_cash_flow - latest_snapshot.capex
+
+    per_share = PerShareMetrics(eps=eps, bps=bps)
+    snapshot = MarketSnapshotMetrics(
+        as_of=as_of,
+        currency=market_context.currency if market_context else None,
+        valuation=valuation,
+        profitability=profitability,
+        stability=stability,
+        growth=growth,
+        per_share=per_share,
+    )
+
+    null_checks = {
+        "MARKET_SNAPSHOT_AS_OF_MISSING": snapshot.as_of,
+        "MARKET_SNAPSHOT_CURRENCY_MISSING": snapshot.currency,
+        "MARKET_SNAPSHOT_PER_MISSING": snapshot.valuation.per,
+        "MARKET_SNAPSHOT_PBR_MISSING": snapshot.valuation.pbr,
+        "MARKET_SNAPSHOT_PSR_MISSING": snapshot.valuation.psr,
+        "MARKET_SNAPSHOT_MARKET_CAP_MISSING": snapshot.valuation.market_cap,
+        "MARKET_SNAPSHOT_EPS_MISSING": snapshot.per_share.eps,
+        "MARKET_SNAPSHOT_BPS_MISSING": snapshot.per_share.bps,
+        "MARKET_SNAPSHOT_ROE_MISSING": snapshot.profitability.roe,
+        "MARKET_SNAPSHOT_ROA_MISSING": snapshot.profitability.roa,
+        "MARKET_SNAPSHOT_OPERATING_MARGIN_MISSING": snapshot.profitability.operating_margin,
+        "MARKET_SNAPSHOT_NET_MARGIN_MISSING": snapshot.profitability.net_margin,
+        "MARKET_SNAPSHOT_DEBT_RATIO_MISSING": snapshot.stability.debt_ratio,
+        "MARKET_SNAPSHOT_CURRENT_RATIO_MISSING": snapshot.stability.current_ratio,
+        "MARKET_SNAPSHOT_QUICK_RATIO_MISSING": snapshot.stability.quick_ratio,
+        "MARKET_SNAPSHOT_INTEREST_COVERAGE_RATIO_MISSING": snapshot.stability.interest_coverage_ratio,
+        "MARKET_SNAPSHOT_FREE_CASH_FLOW_MISSING": snapshot.growth.free_cash_flow,
+        "MARKET_SNAPSHOT_REVENUE_GROWTH_MISSING": snapshot.growth.revenue_growth,
+        "MARKET_SNAPSHOT_EPS_GROWTH_MISSING": snapshot.growth.eps_growth,
+    }
+    missing_found = False
+    for warning_code, value in null_checks.items():
+        if value is None:
+            warnings.append(warning_code)
+            missing_found = True
+    if missing_found:
+        warnings.append("MARKET_SNAPSHOT_PARTIAL")
+
+    return snapshot
 
 
 def build_indicator_summary(indicators: IndicatorBundle, last_close: float | None) -> str:
@@ -120,7 +358,8 @@ async def analyze_stock(req: Feature1Request) -> Feature1Response:
     # ======================
     # Financial Summary (stub)
     # ======================
-    financial_summary = FinancialSummary()
+    financial_series = _build_financial_series(req.financials)
+    market_snapshot = _build_market_snapshot(req, warnings)
 
     # ======================
     # Indicator Calculation
@@ -165,7 +404,8 @@ async def analyze_stock(req: Feature1Request) -> Feature1Response:
         stock_code=req.stock_code,
         as_of=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         ohlcv_summary=ohlcv_summary,
-        financial_summary=financial_summary,
+        financial_series=financial_series,
+        market_snapshot=market_snapshot,
         indicators=indicators,
         indicator_summary=build_indicator_summary(indicators, ohlcv[-1].c if ohlcv else None),
         schema_version="1.0",

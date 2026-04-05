@@ -1,5 +1,6 @@
 package com.qaima.dto.featone;
 
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -11,8 +12,8 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FeatOneAnalysisExplainDto {
-    private String text;
-    private FeatOneAnalysisExplainSectionsDto sections;
-    private FeatOneAnalysisExplainOverallDto overall;
+public class FeatOneAnalysisExplainSectionDto {
+    private String title;
+    private String summary;
+    private List<String> bullets;
 }

@@ -2,6 +2,7 @@ package com.qaima.external.dto.feature1;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -14,8 +15,8 @@ import lombok.Setter;
 @AllArgsConstructor
 @Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class Feature1InboundExplainDto {
-    private String text;
-    private Feature1InboundExplainSectionsDto sections;
-    private Feature1InboundExplainOverallDto overall;
+public class Feature1InboundExplainSectionDto {
+    private String title;
+    private String summary;
+    private List<String> bullets;
 }

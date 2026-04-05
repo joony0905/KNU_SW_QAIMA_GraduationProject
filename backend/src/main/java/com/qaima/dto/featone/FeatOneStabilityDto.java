@@ -11,8 +11,9 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FeatOneAnalysisExplainDto {
-    private String text;
-    private FeatOneAnalysisExplainSectionsDto sections;
-    private FeatOneAnalysisExplainOverallDto overall;
+public class FeatOneStabilityDto {
+    private Double debtRatio;
+    private Double currentRatio;
+    private Double quickRatio;
+    private Double interestCoverageRatio;
 }
