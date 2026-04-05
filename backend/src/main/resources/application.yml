@@ -1,6 +1,14 @@
 analysis:
   base-url: "http://localhost:8000"
 
+auth:
+  cookie:
+    refresh-token-name: qaima_refresh_token
+    path: "/api/v1/auth"
+    same-site: "Lax"
+    secure: false
+    http-only: true
+
 opendart:
   base-url: "https://opendart.fss.or.kr/api"
   sync:
