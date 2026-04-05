@@ -67,7 +67,7 @@ export function buildSnapshotSections(
 }
 
 export function buildSectionsFromDto(
-  dto: FinancialDto,
+  dto: FinancialDto | null,
   snapshot?: MarketSnapshotDto | null,
 ): IndicatorSection[] {
   const per = snapshot?.per ?? dto.per;
