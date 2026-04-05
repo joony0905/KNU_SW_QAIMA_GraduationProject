@@ -38,42 +38,38 @@ export function buildSnapshotSections(
 }
 
 export function buildSectionsFromDto(
-  dto: FinancialDto,
+  dto: FinancialDto | null,
   snapshot?: MarketSnapshotDto | null,
 ): IndicatorSection[] {
-  const per = snapshot?.per ?? dto.per;
-  const pbr = snapshot?.pbr ?? dto.pbr;
-  const marketCap = snapshot?.marketCap ?? dto.marketCap;
-
   return [
     {
       sectionTitle: "밸류에이션",
       rows: [
-        { title: "PER", subtitle: "주가수익비율", value: fmtTimes(per) },
-        { title: "PBR", subtitle: "주가순자산비율", value: fmtTimes(pbr) },
-        { title: "PSR", subtitle: "주가매출비율", value: fmtTimes(dto.psr) },
-        { title: "Market Cap", subtitle: "시가총액", value: fmtWon(marketCap) },
-        { title: "EPS (TTM)", subtitle: "주당순이익", value: fmtNumber(dto.eps) },
-        { title: "BPS", subtitle: "주당순자산", value: fmtNumber(dto.bps) },
+        { title: "PER", subtitle: "주가수익비율", value: fmtTimes(snapshot?.per ?? dto?.per) },
+        { title: "PBR", subtitle: "주가순자산비율", value: fmtTimes(snapshot?.pbr ?? dto?.pbr) },
+        { title: "PSR", subtitle: "주가매출비율", value: fmtTimes(dto?.psr) },
+        { title: "Market Cap", subtitle: "시가총액", value: fmtWon(snapshot?.marketCap ?? dto?.marketCap) },
+        { title: "EPS (TTM)", subtitle: "주당순이익", value: fmtNumber(dto?.eps) },
+        { title: "BPS", subtitle: "주당순자산", value: fmtNumber(dto?.bps) },
       ],
     },
     {
       sectionTitle: "수익성",
       rows: [
-        { title: "ROE", subtitle: "자기자본이익률", value: fmtPercent(dto.roe) },
-        { title: "ROA", subtitle: "총자산이익률", value: fmtPercent(dto.roa) },
-        { title: "Operating Margin", subtitle: "영업이익률", value: fmtPercent(dto.operatingMargin) },
-        { title: "Net Margin", subtitle: "순이익률", value: fmtPercent(dto.netMargin) },
+        { title: "ROE", subtitle: "자기자본이익률", value: fmtPercent(dto?.roe) },
+        { title: "ROA", subtitle: "총자산이익률", value: fmtPercent(dto?.roa) },
+        { title: "Operating Margin", subtitle: "영업이익률", value: fmtPercent(dto?.operatingMargin) },
+        { title: "Net Margin", subtitle: "순이익률", value: fmtPercent(dto?.netMargin) },
       ],
     },
     {
       sectionTitle: "재무안정성",
       rows: [
-        { title: "Debt Ratio", subtitle: "부채비율", value: fmtPercent(dto.debtRatio) },
-        { title: "Current Ratio", subtitle: "유동비율", value: fmtPercent(dto.currentRatio) },
-        { title: "Quick Ratio", subtitle: "당좌비율", value: fmtPercent(dto.quickRatio) },
+        { title: "Debt Ratio", subtitle: "부채비율", value: fmtPercent(dto?.debtRatio) },
+        { title: "Current Ratio", subtitle: "유동비율", value: fmtPercent(dto?.currentRatio) },
+        { title: "Quick Ratio", subtitle: "당좌비율", value: fmtPercent(dto?.quickRatio) },
         { title: "Free Cash Flow", subtitle: "잉여현금흐름", value: "-" },
-        { title: "Interest Coverage Ratio", subtitle: "이자보상비율", value: fmtTimes(dto.interestCoverageRatio) },
+        { title: "Interest Coverage Ratio", subtitle: "이자보상비율", value: fmtTimes(dto?.interestCoverageRatio) },
       ],
     },
     {
