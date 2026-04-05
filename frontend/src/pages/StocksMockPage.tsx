@@ -3,8 +3,8 @@ import { isLoggedIn } from "../utils/auth";
 import { useNavigate } from "react-router-dom";
 import TradingViewWidget from "../components/TradingViewWidget";
 import AnalysisResultPanel from "../components/AnalysisResultPanel";
-import type { AnalysisPanelResult } from "../types/analysisPanel";
-import { useMemo, useRef, useEffect, useState } from "react";
+import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
+import { useRef, useEffect, useState } from "react";
 import StockCard from "../components/StockCard";
 import StockInputBox from "../components/StockInputBox";
 import { Star } from "lucide-react";
@@ -21,7 +21,7 @@ import type { Candle } from "../types/candle";
 import jsPDF from "jspdf";
 import downloadIcon from "../assets/download_button.png";
 import zoomIcon from "../assets/zoom_button.png";
-import type { AnalysisResponse, ParsedExplainText } from "../types/analysis";
+import type { AnalysisResponse } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
 import DictTerm from "../components/DictTerm";
 import {
@@ -93,105 +93,105 @@ type MainStockState = {
 
 type LoadMode = "INITIAL" | "ANALYZE";
 
-type ExplainParseResult = {
-  parsed: ParsedExplainText | null;
-  parseFailed: boolean;
+type CandleLoadOptions = {
+  fromDate?: Date;
+  toDate?: Date;
 };
 
-const decodeQuotedItems = (chunk: string): string[] => {
-  const items: string[] = [];
-  const regex = /"((?:\\.|[^"\\])*)"/g;
-  let match: RegExpExecArray | null = null;
+type TimelinePeriod = "A" | "H" | "Q";
 
-  while ((match = regex.exec(chunk)) !== null) {
-    try {
-      items.push(JSON.parse(`"${match[1]}"`));
-    } catch {
-      items.push(match[1]);
-    }
-  }
-
-  return items;
+const TIMELINE_PERIOD_CONFIG: Record<TimelinePeriod, { years: number }> = {
+  A: { years: 5 },
+  H: { years: 4 },
+  Q: { years: 3 },
 };
 
-const parseExplainText = (text?: string | null): ExplainParseResult => {
-  if (!text || !text.trim()) return { parsed: null, parseFailed: false };
+const pickTimelinePeriod = (fromIso?: string, toIso?: string): TimelinePeriod => {
+  if (!fromIso || !toIso) return "A";
+  const from = new Date(fromIso);
+  const to = new Date(toIso);
+  const diffMs = Math.max(0, to.getTime() - from.getTime());
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  if (diffDays <= 730) return "Q";
+  if (diffDays <= 1825) return "H";
+  return "A";
+};
 
-  const trimmed = text.trim();
-  const extractSection = (source: string, startKey: string, endKeys: string[]) => {
-    const start = source.indexOf(startKey);
-    if (start === -1) return "";
+const timelineLabel = (dto: FinancialDto): string => {
+  const yy = String(dto.year).slice(2);
+  if (dto.periodType === "Q") return `${yy}.Q${dto.periodNo ?? dto.quarter ?? ""}`;
+  if (dto.periodType === "H") return `${yy}.H${dto.periodNo ?? dto.half ?? ""}`;
+  return `${yy}년`;
+};
 
-    const from = start + startKey.length;
-    const candidateEnds = endKeys
-      .map((key) => source.indexOf(key, from))
-      .filter((idx) => idx !== -1);
-    const to = candidateEnds.length > 0 ? Math.min(...candidateEnds) : source.length;
-    return source.slice(from, to);
+const buildFinancialTimeline = (
+  items: FinancialDto[],
+  period: TimelinePeriod,
+  fromIso?: string,
+  toIso?: string,
+): FinancialTimelineSection | null => {
+  if (!items.length) return null;
+
+  const from = fromIso ? new Date(fromIso).getTime() : null;
+  const to = toIso ? new Date(toIso).getTime() : null;
+
+  const filtered = items
+    .filter((item) => item.periodType === period)
+    .filter((item) => {
+      const reportTs = Date.parse(item.reportDate);
+      if (Number.isNaN(reportTs)) return true;
+      if (from != null && reportTs < from) return false;
+      if (to != null && reportTs > to) return false;
+      return true;
+    });
+
+  const source = (filtered.length > 0 ? filtered : items.filter((item) => item.periodType === period))
+    .slice()
+    .sort((a, b) => Date.parse(a.reportDate) - Date.parse(b.reportDate))
+    .slice(-8);
+
+  if (!source.length) return null;
+
+  return {
+    period,
+    points: source.map((item) => ({
+      label: timelineLabel(item),
+      revenue: item.revenue ?? null,
+      operatingIncome: item.operatingIncome ?? null,
+      netIncome: item.netIncome ?? null,
+      operatingMargin:
+        item.operatingMargin ??
+        (item.operatingIncome != null && item.revenue ? (item.operatingIncome / item.revenue) * 100 : null),
+    })),
   };
+};
 
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (parsed && typeof parsed === "object") {
-      return { parsed: parsed as ParsedExplainText, parseFailed: false };
-    }
-  } catch {
-    // fall through to tolerant parsing
-  }
+const buildPriceFlowSummary = (
+  data: Candle[],
+  fromIso?: string,
+  toIso?: string,
+): PriceFlowSummary | null => {
+  if (!data.length) return null;
+  const ordered = data.slice().sort((a, b) => a.t - b.t);
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+  const high = Math.max(...ordered.map((item) => item.h));
+  const low = Math.min(...ordered.map((item) => item.l));
+  const avgVolume = ordered.reduce((sum, item) => sum + item.v, 0) / ordered.length;
+  const startClose = first.c;
+  const endClose = last.c;
+  const returnPct = startClose ? ((endClose - startClose) / startClose) * 100 : null;
 
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) {
-    const candidate = trimmed.slice(start, end + 1);
-    try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed === "object") {
-        return { parsed: parsed as ParsedExplainText, parseFailed: false };
-      }
-    } catch {
-      // continue with regex-based fallback
-    }
-  }
-
-  const summaryChunk = extractSection(trimmed, `"summary":[`, [`,"risks":[`, `"risks":[`, `,"conclusion":"`, `"conclusion":"`]);
-  const risksChunk = extractSection(trimmed, `"risks":[`, [`,"conclusion":"`, `"conclusion":"`]);
-
-  const summaryMatch = summaryChunk.match(/(.*)/s);
-  const risksMatch = risksChunk.match(/(.*)/s);
-  const conclusionMatch = trimmed.match(
-    /"conclusion"\s*:\s*"((?:\\.|[^"\\])*)"/s,
-  );
-
-  const summary = summaryMatch
-    ? decodeQuotedItems(summaryMatch[1]).slice(0, 3)
-    : [];
-  const risks = risksMatch ? decodeQuotedItems(risksMatch[1]).slice(0, 2) : [];
-
-  let conclusion: string | undefined;
-  if (conclusionMatch?.[1]) {
-    try {
-      conclusion = JSON.parse(`"${conclusionMatch[1]}"`);
-    } catch {
-      conclusion = conclusionMatch[1];
-    }
-  }
-
-  if (
-    summary.length > 0 ||
-    risks.length > 0 ||
-    (conclusion && conclusion.trim())
-  ) {
-    return {
-      parsed: {
-        summary: summary.length > 0 ? summary : undefined,
-        risks: risks.length > 0 ? risks : undefined,
-        conclusion,
-      },
-      parseFailed: false,
-    };
-  }
-
-  return { parsed: null, parseFailed: true };
+  return {
+    from: fromIso ?? new Date(first.t * 1000).toISOString(),
+    to: toIso ?? new Date(last.t * 1000).toISOString(),
+    startClose,
+    endClose,
+    returnPct,
+    high,
+    low,
+    avgVolume,
+  };
 };
 
 export default function StocksMockPage() {
@@ -206,20 +206,6 @@ export default function StocksMockPage() {
   );
 
   const analysisData = analysisResult?.data ?? null;
-
-  const explainParse = useMemo(
-    () => parseExplainText(analysisData?.explain?.text),
-    [analysisData?.explain?.text],
-  );
-
-  useEffect(() => {
-    if (analysisData?.explain?.text && explainParse.parseFailed) {
-      console.warn(
-        "[analysis] explain JSON parse failed",
-        analysisData.explain.text,
-      );
-    }
-  }, [analysisData?.explain?.text, explainParse.parseFailed]);
 
   // 차트용 indicators state (analysisResult와 분리)
   const [indicatorData, setIndicatorData] = useState<IndicatorData | null>(
@@ -240,18 +226,21 @@ export default function StocksMockPage() {
   const [analysisTo, setAnalysisTo] = useState<string>("");
   const [marketDivCode] = useState<string>("J");
   const [includeExplain] = useState<boolean>(true);
+  const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
 
   const [loading, setLoading] = useState(false);
+  const [analysisLoadingStage, setAnalysisLoadingStage] = useState<string>("");
   const [err, setErr] = useState("");
 
   const [hasSelectedStock, setHasSelectedStock] = useState(false);
   const [financial, setFinancial] = useState<FinancialDto | null>(null);
   const [snapshot, setSnapshot] = useState<MarketSnapshotDto | null>(null);
+  const [financialTimeline, setFinancialTimeline] = useState<FinancialTimelineSection | null>(null);
+  const [priceFlowSummary, setPriceFlowSummary] = useState<PriceFlowSummary | null>(null);
   const [sections, setSections] = useState<IndicatorSection[]>([]);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
   const [analysisZoom, setAnalysisZoom] = useState(1); // 1 = 100%
-  const [displayText, setDisplayText] = useState("");
 
   const [isOpen, setIsOpen] = useState(false);
 
@@ -316,24 +305,25 @@ export default function StocksMockPage() {
   };
 
   // mode에 따라 초기 범위는 달리 로딩하되, 줌아웃 하한은 항상 1년으로 설정
-  const loadCandles = async (stockCode: string, mode: LoadMode) => {
+  const loadCandles = async (
+    stockCode: string,
+    mode: LoadMode,
+    options?: CandleLoadOptions,
+  ): Promise<Candle[]> => {
     setChartLoading(true);
     setChartError(null);
 
-    const toDate = new Date();
-
+    const toDate = options?.toDate ?? new Date();
     const days = mode === "ANALYZE" ? MAX_HISTORY_DAYS : INITIAL_HISTORY_DAYS;
-    const fromDate = shiftKstDays(toDate, -(days - 1));
+    const fromDate = options?.fromDate ?? shiftKstDays(toDate, -(days - 1));
     const fromIso = formatKstOffsetDateTime(fromDate);
     const toIso = formatKstOffsetDateTime(toDate);
 
     try {
       const usedFreq = "ONE_D" as const;
 
-      // 차트 로딩과 동시에 분석 파라미터도 동일하게 맞춰둠
+      // 분석 주기는 현재 ONE_D 고정 유지
       setAnalysisFreq(usedFreq);
-      setAnalysisFrom(formatKstDate(fromDate));
-      setAnalysisTo(formatKstDate(toDate));
 
       const response = await fetchCandles(
         stockCode,
@@ -401,6 +391,7 @@ export default function StocksMockPage() {
           changeRate: null,
         }));
       }
+      return data;
     } catch (e: any) {
       console.error("차트 데이터 조회 실패:", {
         message: e?.message,
@@ -421,6 +412,7 @@ export default function StocksMockPage() {
         change: null,
         changeRate: null,
       }));
+      return [];
     } finally {
       setChartLoading(false);
     }
@@ -500,6 +492,8 @@ export default function StocksMockPage() {
     setHasSelectedStock(true);
 
     setAnalysisResult(null);
+    setFinancialTimeline(null);
+    setPriceFlowSummary(null);
     setIndicatorData(null);
     setShowAnalyzeButton(true);
 
@@ -577,7 +571,7 @@ export default function StocksMockPage() {
       console.error("재무제표 조회 실패:", e);
     }
 
-    // 초기 표시만 30일
+    // 초기 차트는 30일만 로드하고, 분석기간 입력값은 유지
     await loadCandles(code, "INITIAL");
   };
 
@@ -588,21 +582,36 @@ export default function StocksMockPage() {
       return;
     }
     setLoading(true);
+    setAnalysisLoadingStage("분석 준비 중");
     setErr("");
     setAnalysisResult(null);
+    setFinancialTimeline(null);
+    setPriceFlowSummary(null);
     setIndicatorData(null);
 
     if (!mainStock.symbol) {
       setErr("먼저 종목을 검색한 뒤 분석을 실행해주세요.");
+      setAnalysisLoadingStage("");
       setLoading(false);
       return;
     }
 
     try {
       setShowAnalyzeButton(false); // ✅ 결과가 생기면 버튼 숨김
-      setDisplayText(""); // 타이핑용 초기화
-      // 분석 버튼에서만 1년 로딩으로 교체
-      await loadCandles(mainStock.symbol, "ANALYZE");
+
+      const requestedFromDate = analysisFrom
+        ? new Date(`${analysisFrom}T00:00:00+09:00`)
+        : undefined;
+      const requestedToDate = analysisTo
+        ? new Date(`${analysisTo}T23:59:59+09:00`)
+        : undefined;
+
+      // 사용자가 고른 기간으로 차트와 분석 범위를 맞춘다.
+      setAnalysisLoadingStage("가격 데이터를 불러오는 중");
+      const analysisCandles = await loadCandles(mainStock.symbol, "ANALYZE", {
+        fromDate: requestedFromDate,
+        toDate: requestedToDate,
+      });
 
       const range = chartRangeRef.current;
       if (!range) {
@@ -613,6 +622,7 @@ export default function StocksMockPage() {
       const fromDate = analysisFrom || range.fromIso;
       const toDate = analysisTo || range.toIso;
 
+      setAnalysisLoadingStage("LLM 분석 결과를 생성하는 중");
       const result = await fetchAnalysis({
         stockCode: mainStock.symbol,
         freq: analysisFreq,
@@ -620,11 +630,25 @@ export default function StocksMockPage() {
         to: toDate,
         marketDivCode,
         includeExplain,
+        llmVendor,
       });
 
       setAnalysisResult(result);
+      setPriceFlowSummary(buildPriceFlowSummary(analysisCandles, fromDate, toDate));
+
+      const timelinePeriod = pickTimelinePeriod(fromDate, toDate);
+      setAnalysisLoadingStage("재무 시계열을 정리하는 중");
+      const timelineFinancials = await fetchFinancials(
+        mainStock.symbol,
+        TIMELINE_PERIOD_CONFIG[timelinePeriod].years,
+        timelinePeriod,
+      ).catch(() => []);
+      setFinancialTimeline(
+        buildFinancialTimeline(timelineFinancials, timelinePeriod, fromDate, toDate),
+      );
 
       const ind = result?.data?.metrics?.indicators;
+      setAnalysisLoadingStage("투자 보조지표를 반영하는 중");
 
       setIndicatorData({
         ema: ind?.ema ?? null,
@@ -635,6 +659,7 @@ export default function StocksMockPage() {
     } catch (e) {
       setErr("분석 결과를 불러오지 못했습니다.");
     } finally {
+      setAnalysisLoadingStage("");
       setLoading(false);
     }
   };
@@ -809,31 +834,6 @@ export default function StocksMockPage() {
     document.addEventListener("click", handleClickOutsideTopic);
     return () => document.removeEventListener("click", handleClickOutsideTopic);
   }, []);
-
-  // 1) 타이핑 효과는 그대로 유지
-  useEffect(() => {
-    if (!analysisData) {
-      setDisplayText("");
-      return;
-    }
-
-    const fullText = analysisData.explain?.text ?? "";
-
-    setDisplayText("");
-
-    let index = 0;
-    const speed = 20;
-
-    const timer = setInterval(() => {
-      index += 1;
-      setDisplayText((prev) => prev + fullText.charAt(index - 1));
-      if (index >= fullText.length) {
-        clearInterval(timer);
-      }
-    }, speed);
-
-    return () => clearInterval(timer);
-  }, [analysisData]);
 
   // 2) mainStock 표시/색상 계산은 친구 코드 기반으로 개선
   const displayPrice =
@@ -1221,13 +1221,9 @@ export default function StocksMockPage() {
             <AnalysisResultPanel
               result={analysisData ? {
                 ...analysisData,
-                explain: {
-                  ...analysisData.explain,
-                  parsed: explainParse.parsed,
-                },
-                meta: analysisResult?.meta,
               } as AnalysisPanelResult : null}
               loading={loading}
+              loadingStage={analysisLoadingStage}
               err={err}
               showAnalyzeButton={showAnalyzeButton}
               onAnalyze={handleAnalyzeClick}
@@ -1236,7 +1232,11 @@ export default function StocksMockPage() {
                 setAnalysisZoom(1);
                 setIsAnalysisModalOpen(true);
               }}
-              displayText={displayText}
+              llmVendor={llmVendor}
+              onLlmVendorChange={setLlmVendor}
+              displayText={analysisData?.explain?.text ?? ""}
+              financialTimeline={financialTimeline}
+              priceFlowSummary={priceFlowSummary}
               layout="full"
             />
           </main>
@@ -1266,129 +1266,24 @@ export default function StocksMockPage() {
 
               {/* 내용 영역 — AnalysisResultPanel과 동일한 디자인 */}
               <div className="flex-1 overflow-y-auto p-5 sm:p-8">
-                <div className="flex flex-col gap-6">
-                  {/* 설명 섹션 */}
-                  <div>
-                    <h3 className="text-base sm:text-lg font-semibold text-zinc-900">설명</h3>
-                    {explainParse.parsed ? (
-                      <div className="mt-2 text-sm sm:text-base text-zinc-700 flex flex-col gap-3">
-                        <div>
-                          <p className="font-medium text-zinc-900">요약</p>
-                          <ul className="list-disc list-inside">
-                            {(explainParse.parsed.summary ?? []).slice(0, 3).map((item, idx) => (
-                              <li key={`modal-summary-${idx}`}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <p className="font-medium text-zinc-900">리스크</p>
-                          <ul className="list-disc list-inside">
-                            {(explainParse.parsed.risks ?? []).slice(0, 2).map((item, idx) => (
-                              <li key={`modal-risk-${idx}`}>{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div>
-                          <p className="font-medium text-zinc-900">결론</p>
-                          <p>{explainParse.parsed.conclusion ?? "-"}</p>
-                        </div>
-                      </div>
-                    ) : analysisData?.explain?.text?.trim() ? (
-                      <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
-                        {analysisData?.explain?.text}
-                      </p>
-                    ) : (
-                      <p className="text-sm sm:text-base text-zinc-500 mt-2">
-                        설명 생성이 비활성화되었거나 실패했습니다.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* OHLCV 요약 */}
-                  {analysisData?.metrics?.ohlcvSummary && (
-                    <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900"><DictTerm term="OHLCV">OHLCV</DictTerm> 요약</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
-                        <div>캔들 수: {analysisData.metrics.ohlcvSummary.count.toLocaleString()}</div>
-                        <div>기간: {formatDate(analysisData.metrics.ohlcvSummary.from)} ~ {formatDate(analysisData.metrics.ohlcvSummary.to)}</div>
-                        <div>마지막 <DictTerm term="종가">종가</DictTerm>: {formatNumber(analysisData.metrics.ohlcvSummary.lastClose)}</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Indicator Summary */}
-                  {analysisData?.metrics?.indicatorSummary !== undefined && (
-                    <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">Indicator Summary</h3>
-                      <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
-                        {analysisData.metrics.indicatorSummary?.trim()
-                          ? analysisData.metrics.indicatorSummary
-                          : "지표 요약 데이터를 생성하지 못했습니다."}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* 재무 요약 (5개년) */}
-                  {analysisData?.metrics?.financialSummary && (
-                    <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900"><DictTerm term="재무제표">재무 요약</DictTerm> (5개년)</h3>
-                      {analysisData.metrics.financialSummary.years.length > 0 ? (
-                        <div className="overflow-x-auto mt-2">
-                          <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
-                            <thead className="bg-zinc-100 text-zinc-900">
-                              <tr>
-                                <th className="px-3 py-2 text-left border-b">구분</th>
-                                {analysisData.metrics.financialSummary.years.map((year) => (
-                                  <th key={year} className="px-3 py-2 text-right border-b">{year}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr>
-                                <td className="px-3 py-2 border-b"><DictTerm term="매출">매출</DictTerm></td>
-                                {analysisData.metrics.financialSummary.years.map((year) => (
-                                  <td key={`modal-rev-${year}`} className="px-3 py-2 text-right border-b">
-                                    {formatNumber(analysisData.metrics!.financialSummary!.revenue[String(year)])}
-                                  </td>
-                                ))}
-                              </tr>
-                              <tr>
-                                <td className="px-3 py-2 border-b"><DictTerm term="영업이익">영업이익</DictTerm></td>
-                                {analysisData.metrics.financialSummary.years.map((year) => (
-                                  <td key={`modal-op-${year}`} className="px-3 py-2 text-right border-b">
-                                    {formatNumber(analysisData.metrics!.financialSummary!.operatingIncome[String(year)])}
-                                  </td>
-                                ))}
-                              </tr>
-                              <tr>
-                                <td className="px-3 py-2 border-b"><DictTerm term="순이익">순이익</DictTerm></td>
-                                {analysisData.metrics.financialSummary.years.map((year) => (
-                                  <td key={`modal-net-${year}`} className="px-3 py-2 text-right border-b">
-                                    {formatNumber(analysisData.metrics!.financialSummary!.netIncome[String(year)])}
-                                  </td>
-                                ))}
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : (
-                        <p className="text-sm sm:text-base text-zinc-500 mt-2">재무 요약 데이터를 확보하지 못했습니다.</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 경고 */}
-                  {(analysisResult.meta?.warnings ?? []).length > 0 && (
-                    <div>
-                      <h3 className="text-base sm:text-lg font-semibold text-zinc-900">경고</h3>
-                      <ul className="text-sm sm:text-base text-amber-700 mt-2 list-disc list-inside">
-                        {analysisResult.meta?.warnings?.map((warning) => (
-                          <li key={warning}>{warning}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
+                <AnalysisResultPanel
+                  result={analysisData ? {
+                    ...analysisData,
+                  } as AnalysisPanelResult : null}
+                  loading={false}
+                  loadingStage=""
+                  err=""
+                  showAnalyzeButton={false}
+                  onAnalyze={handleAnalyzeClick}
+                  onDownload={handleDownloadClick}
+                  onZoom={() => {}}
+                  llmVendor={llmVendor}
+                  onLlmVendorChange={setLlmVendor}
+                  displayText={analysisData?.explain?.text ?? ""}
+                  financialTimeline={financialTimeline}
+                  priceFlowSummary={priceFlowSummary}
+                  layout="full"
+                />
               </div>
             </div>
           </div>

@@ -128,14 +128,16 @@ public class MarketSnapshotService {
     }
 
     public MarketSnapshotDto toDto(MarketSnapshot snapshot) {
+        return toDto(snapshot, null);
+    }
+
+    public MarketSnapshotDto toDto(MarketSnapshot snapshot, Stock stock) {
         if (snapshot == null) {
             return null;
         }
-        GrowthMetrics growth = calculateGrowthMetrics(
-                snapshot.getStock(),
-                snapshot.getAsOfDate(),
-                snapshot.getSharesOutstanding()
-        );
+        GrowthMetrics growth = stock != null
+                ? calculateGrowthMetrics(stock, snapshot.getAsOfDate(), snapshot.getSharesOutstanding())
+                : GrowthMetrics.empty();
 
         return MarketSnapshotDto.builder()
                 .asOfDate(snapshot.getAsOfDate())

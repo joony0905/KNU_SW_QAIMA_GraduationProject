@@ -70,23 +70,24 @@ export function buildSectionsFromDto(
   dto: FinancialDto | null,
   snapshot?: MarketSnapshotDto | null,
 ): IndicatorSection[] {
-  const per = snapshot?.per ?? dto.per;
-  const pbr = snapshot?.pbr ?? dto.pbr;
-  const psr = snapshot?.psr ?? dto.psr;
-  const marketCap = snapshot?.marketCap ?? dto.marketCap;
-  const eps = snapshot?.epsTtm ?? dto.eps;
-  const bps = snapshot?.bps ?? dto.bps;
-  const roe = snapshot?.roe ?? dto.roe;
-  const roa = snapshot?.roa ?? dto.roa;
-  const operatingMargin = snapshot?.operatingMargin ?? dto.operatingMargin;
-  const netMargin = snapshot?.netMargin ?? dto.netMargin;
-  const debtRatio = snapshot?.debtRatio ?? dto.debtRatio;
-  const currentRatio = snapshot?.currentRatio ?? dto.currentRatio;
-  const quickRatio = snapshot?.quickRatio ?? dto.quickRatio;
-  const interestCoverageRatio = snapshot?.interestCoverageRatio ?? dto.interestCoverageRatio;
-  const freeCashFlow = snapshot?.freeCashFlow ?? dto.freeCashFlow;
-  const revenueGrowth = snapshot?.revenueGrowth ?? dto.revenueGrowth;
-  const epsGrowth = snapshot?.epsGrowth ?? dto.epsGrowth;
+  const base = dto ?? null;
+  const per = snapshot?.per ?? base?.per;
+  const pbr = snapshot?.pbr ?? base?.pbr;
+  const psr = snapshot?.psr ?? base?.psr;
+  const marketCap = snapshot?.marketCap ?? base?.marketCap;
+  const eps = snapshot?.epsTtm ?? base?.eps;
+  const bps = snapshot?.bps ?? base?.bps;
+  const roe = snapshot?.roe ?? base?.roe;
+  const roa = snapshot?.roa ?? base?.roa;
+  const operatingMargin = snapshot?.operatingMargin ?? base?.operatingMargin;
+  const netMargin = snapshot?.netMargin ?? base?.netMargin;
+  const debtRatio = snapshot?.debtRatio ?? base?.debtRatio;
+  const currentRatio = snapshot?.currentRatio ?? base?.currentRatio;
+  const quickRatio = snapshot?.quickRatio ?? base?.quickRatio;
+  const interestCoverageRatio = snapshot?.interestCoverageRatio ?? base?.interestCoverageRatio;
+  const freeCashFlow = snapshot?.freeCashFlow ?? base?.freeCashFlow;
+  const revenueGrowth = snapshot?.revenueGrowth ?? base?.revenueGrowth;
+  const epsGrowth = snapshot?.epsGrowth ?? base?.epsGrowth;
 
   return [
     {

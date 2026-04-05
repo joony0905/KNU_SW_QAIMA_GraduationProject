@@ -1,7 +1,9 @@
-package com.qaima.external.dto.feature1;
+package com.qaima.dto.featone;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -14,8 +16,8 @@ import lombok.Setter;
 @AllArgsConstructor
 @Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-public class Feature1InboundExplainDto {
-    private String text;
-    private Feature1InboundExplainSectionsDto sections;
-    private Feature1InboundExplainOverallDto overall;
+public class FeatOneMarketContextDto {
+    private LocalDate asOf;
+    private String currency;
+    private BigDecimal sharesOutstanding;
 }

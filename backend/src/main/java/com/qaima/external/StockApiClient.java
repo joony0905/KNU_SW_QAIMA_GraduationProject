@@ -222,8 +222,8 @@ public class StockApiClient implements StockClient {
 
         return switch (code) {
             case "KOSPI" -> "J";
-            case "KOSDAQ" -> "Q";
-            case "KONEX" -> "K";
+            case "KOSDAQ" -> "J";
+            case "KONEX" -> "J";
             case "KRX" -> "J";
             default -> "J";
         };

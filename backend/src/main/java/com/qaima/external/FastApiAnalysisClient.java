@@ -7,14 +7,20 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneAnalysisExplainDto;
+import com.qaima.dto.featone.FeatOneAnalysisExplainOverallDto;
+import com.qaima.dto.featone.FeatOneAnalysisExplainSectionDto;
+import com.qaima.dto.featone.FeatOneAnalysisExplainSectionsDto;
 import com.qaima.dto.featone.FeatOneAnalysisMetricsDto;
+import com.qaima.dto.featone.FeatOneFinancialSeriesDto;
+import com.qaima.dto.featone.FeatOneMarketSnapshotDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
-import com.qaima.dto.financial.FinancialSummaryMetricsDto;
 import com.qaima.dto.indicator.IndicatorBundleDto;
 import com.qaima.dto.indicator.IndicatorSpecDto;
 import com.qaima.dto.ohlcv.OhlcvSummaryDto;
 import com.qaima.external.dto.feature1.Feature1InboundExplainDto;
-import com.qaima.external.dto.feature1.Feature1InboundFinancialSummaryDto;
+import com.qaima.external.dto.feature1.Feature1InboundExplainOverallDto;
+import com.qaima.external.dto.feature1.Feature1InboundExplainSectionDto;
+import com.qaima.external.dto.feature1.Feature1InboundExplainSectionsDto;
 import com.qaima.external.dto.feature1.Feature1InboundIndicatorBundleDto;
 import com.qaima.external.dto.feature1.Feature1InboundIndicatorSpecDto;
 import com.qaima.external.dto.feature1.Feature1InboundMetricsDto;
@@ -86,11 +92,12 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                     dto.setWarnings(readWarnings(root, payloadNode));
 
                                     log.info(
-                                            "[FastAPI->Spring][Feature1] metrics fields stockCode={}, asOf={}, ohlcvSummary?={}, financialSummary?={}, indicatorSummary?={}, schemaVersion={}, indicators?={}",
+                                            "[FastAPI->Spring][Feature1] metrics fields stockCode={}, asOf={}, ohlcvSummary?={}, financialSeries?={}, marketSnapshot?={}, indicatorSummary?={}, schemaVersion={}, indicators?={}",
                                             dto.getMetrics() != null ? dto.getMetrics().getStockCode() : null,
                                             dto.getMetrics() != null ? dto.getMetrics().getAsOf() : null,
                                             dto.getMetrics() != null && dto.getMetrics().getOhlcvSummary() != null,
-                                            dto.getMetrics() != null && dto.getMetrics().getFinancialSummary() != null,
+                                            dto.getMetrics() != null && dto.getMetrics().getFinancialSeries() != null,
+                                            dto.getMetrics() != null && dto.getMetrics().getMarketSnapshot() != null,
                                             dto.getMetrics() != null && dto.getMetrics().getIndicatorSummary() != null,
                                             dto.getMetrics() != null ? dto.getMetrics().getSchemaVersion() : null,
                                             dto.getMetrics() != null && dto.getMetrics().getIndicators() != null
@@ -130,7 +137,8 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                 .stockCode(inbound.getStockCode())
                 .asOf(inbound.getAsOf())
                 .ohlcvSummary(toOhlcvSummaryDto(inbound.getOhlcvSummary()))
-                .financialSummary(toFinancialSummaryDto(inbound.getFinancialSummary()))
+                .financialSeries(inbound.getFinancialSeries())
+                .marketSnapshot(inbound.getMarketSnapshot())
                 .indicators(toIndicatorBundleDto(inbound.getIndicators()))
                 .indicatorSummary(inbound.getIndicatorSummary())
                 .schemaVersion(inbound.getSchemaVersion())
@@ -146,18 +154,6 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                 .from(inbound.getFrom())
                 .to(inbound.getTo())
                 .lastClose(inbound.getLastClose())
-                .build();
-    }
-
-    private FinancialSummaryMetricsDto toFinancialSummaryDto(Feature1InboundFinancialSummaryDto inbound) {
-        if (inbound == null) {
-            return null;
-        }
-        return FinancialSummaryMetricsDto.builder()
-                .years(inbound.getYears())
-                .revenue(inbound.getRevenue())
-                .operatingIncome(inbound.getOperatingIncome())
-                .netIncome(inbound.getNetIncome())
                 .build();
     }
 
@@ -194,6 +190,43 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
         }
         return FeatOneAnalysisExplainDto.builder()
                 .text(inbound.getText())
+                .sections(toExplainSectionsDto(inbound.getSections()))
+                .overall(toExplainOverallDto(inbound.getOverall()))
+                .build();
+    }
+
+    private FeatOneAnalysisExplainSectionsDto toExplainSectionsDto(Feature1InboundExplainSectionsDto inbound) {
+        if (inbound == null) {
+            return null;
+        }
+        return FeatOneAnalysisExplainSectionsDto.builder()
+                .priceFlow(toExplainSectionDto(inbound.getPriceFlow()))
+                .marketSnapshot(toExplainSectionDto(inbound.getMarketSnapshot()))
+                .indicators(toExplainSectionDto(inbound.getIndicators()))
+                .financialTimeline(toExplainSectionDto(inbound.getFinancialTimeline()))
+                .build();
+    }
+
+    private FeatOneAnalysisExplainOverallDto toExplainOverallDto(Feature1InboundExplainOverallDto inbound) {
+        if (inbound == null) {
+            return null;
+        }
+        return FeatOneAnalysisExplainOverallDto.builder()
+                .summary(inbound.getSummary())
+                .bullets(inbound.getBullets())
+                .risks(inbound.getRisks())
+                .conclusion(inbound.getConclusion())
+                .build();
+    }
+
+    private FeatOneAnalysisExplainSectionDto toExplainSectionDto(Feature1InboundExplainSectionDto inbound) {
+        if (inbound == null) {
+            return null;
+        }
+        return FeatOneAnalysisExplainSectionDto.builder()
+                .title(inbound.getTitle())
+                .summary(inbound.getSummary())
+                .bullets(inbound.getBullets())
                 .build();
     }
 
@@ -209,7 +242,8 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                 dto.getMetrics().getStockCode() == null
                         && dto.getMetrics().getAsOf() == null
                         && dto.getMetrics().getOhlcvSummary() == null
-                        && dto.getMetrics().getFinancialSummary() == null
+                        && dto.getMetrics().getFinancialSeries() == null
+                        && dto.getMetrics().getMarketSnapshot() == null
                         && dto.getMetrics().getIndicators() == null
                         && dto.getMetrics().getIndicatorSummary() == null
                         && dto.getMetrics().getSchemaVersion() == null;

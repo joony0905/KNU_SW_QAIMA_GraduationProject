@@ -34,7 +34,8 @@ public class FeatOneController {
                         request.getFrom(),
                         request.getTo(),
                         request.getMarketDivCode(),
-                        request.getIncludeExplain()
+                        request.getIncludeExplain(),
+                        request.getLlmVendor()
                 )
                 .map(this::toApiResponse)
                 .onErrorResume(ex -> Mono.just(ApiResponse.internalError(

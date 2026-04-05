@@ -21,4 +21,6 @@ public class FeatOneAnalyzeRequestDto {
     private String marketDivCode;
 
     private Boolean includeExplain;
+
+    private String llmVendor;
 }
