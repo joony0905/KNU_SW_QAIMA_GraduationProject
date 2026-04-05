@@ -14,8 +14,7 @@ import java.util.ArrayList;
 @Table(
         name = "industry",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_industry_name", columnNames = {"name"}),
-                @UniqueConstraint(name = "uk_industry_scheme_code", columnNames = {"scheme", "code"})
+                @UniqueConstraint(name = "uk_industry_exchange_sector_scheme_code", columnNames = {"exchange_id", "sector_id", "scheme", "code"})
         }
 )
 public class Industry {
@@ -25,13 +24,17 @@ public class Industry {
     private Long industryId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sector_id")
+    @JoinColumn(name = "exchange_id", nullable = false)
+    private Exchange exchange;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sector_id", nullable = false)
     private Sector sector;
 
     @Column(length = 30)
     private String scheme; // e.g., KRX_BZTP_S
 
-    @Column(length = 100, nullable = false, unique = true)
+    @Column(length = 100, nullable = false)
     private String name;
 
     @Column(length = 50)

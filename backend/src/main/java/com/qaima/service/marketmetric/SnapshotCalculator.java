@@ -71,12 +71,12 @@ public class SnapshotCalculator {
                 MetricMath.ratioPercent(operatingIncomeBase, revenueBase),
                 MetricMath.ratioPercent(netIncomeBase, revenueBase),
                 MetricMath.ratioPercent(liabilities, equity),
-                input.currentAssets(),
-                input.currentLiabilities(),
-                input.inventory(),
-                input.interestExpense(),
-                input.operatingCashFlow(),
-                input.capex(),
+                anchor.getCurrentAssets(),
+                anchor.getCurrentLiabilities(),
+                anchor.getInventories(),
+                anchor.getInterestExpense(),
+                anchor.getOperatingCashFlow(),
+                sumNullable(anchor.getCapexPpe(), anchor.getCapexIntangible()),
                 warnings,
                 "BATCH_SNAPSHOT"
         );
@@ -130,5 +130,18 @@ public class SnapshotCalculator {
             total = total.add(value);
         }
         return total;
+    }
+
+    private BigDecimal sumNullable(BigDecimal left, BigDecimal right) {
+        if (left == null && right == null) {
+            return null;
+        }
+        if (left == null) {
+            return right;
+        }
+        if (right == null) {
+            return left;
+        }
+        return left.add(right);
     }
 }
