@@ -9,13 +9,11 @@ public class LoginResponseDto {
     private final String email;
     private final String name;
     private final String accessToken;
-    private final String refreshToken;
 
-    public LoginResponseDto(Long userId, String email, String name, String accessToken, String refreshToken) {
+    public LoginResponseDto(Long userId, String email, String name, String accessToken) {
         this.userId = userId;
         this.email = email;
         this.name = name;
         this.accessToken = accessToken;
-        this.refreshToken = refreshToken;
     }
 }

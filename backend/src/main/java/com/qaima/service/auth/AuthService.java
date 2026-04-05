@@ -25,6 +25,10 @@ public class AuthService {
     private final AuthLoginLogService authLoginLogService;
     private final LoginSessionService loginSessionService;
 
+    public record LoginResult(LoginResponseDto response, String refreshToken) {}
+
+    public record RefreshResult(TokenRefreshResponseDto response, String refreshToken) {}
+
     public Mono<UserResponseDto> signup(SignupRequestDto requestDto, String ip, String ua) {
         final String email = requestDto.getEmail();
 
@@ -78,7 +82,7 @@ public class AuthService {
                 );
     }
 
-    public Mono<LoginResponseDto> login(LoginRequestDto requestDto, String ip, String ua) {
+    public Mono<LoginResult> login(LoginRequestDto requestDto, String ip, String ua) {
         final String email = requestDto.getEmail();
 
         return Blocking.call(() -> userRepository.findByEmail(email)
@@ -103,13 +107,12 @@ public class AuthService {
                                         user.getUserId(),
                                         user.getEmail(),
                                         user.getName(),
-                                        accessToken,
-                                        refreshToken
+                                        accessToken
                                 );
 
                                 return authLoginLogService.success(user.getUserId(), user.getEmail(), ip, ua)
                                         .onErrorResume(e -> Mono.empty())
-                                        .thenReturn(dto);
+                                        .thenReturn(new LoginResult(dto, refreshToken));
                             });
                 })
                 .onErrorResume(ex ->
@@ -119,18 +122,18 @@ public class AuthService {
                 );
     }
 
-    public Mono<TokenRefreshResponseDto> refresh(String refreshToken, String ip, String ua) {
+    public Mono<RefreshResult> refresh(String refreshToken, String ip, String ua) {
         return loginSessionService.rotateRefreshToken(refreshToken, ip, ua)
                 .flatMap(rotated -> {
                     User user = rotated.user();
                     String role = (user.getRole() == null) ? "USER" : user.getRole().name().toUpperCase();
                     String accessToken = jwtTokenProvider.createAccessToken(user.getUserId(), role);
 
-                    TokenRefreshResponseDto dto = new TokenRefreshResponseDto(accessToken, rotated.refreshToken());
+                    TokenRefreshResponseDto dto = new TokenRefreshResponseDto(accessToken);
 
                     return authLoginLogService.event("TOKEN_REFRESHED", true, user.getUserId(), user.getEmail(), ip, ua, null, null)
                             .onErrorResume(e -> Mono.empty())
-                            .thenReturn(dto);
+                            .thenReturn(new RefreshResult(dto, rotated.refreshToken()));
                 })
                 .onErrorResume(ex ->
                         authLoginLogService.event("TOKEN_REFRESHED", false, null, null, ip, ua,
