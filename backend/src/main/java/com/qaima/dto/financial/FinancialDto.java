@@ -55,4 +55,10 @@ public class FinancialDto {
     private Double pbr;                      // 주가순자산비율
     private Double psr;                      // 주가매출비율 = marketCap / revenue
     private Double debtRatio;                // 부채비율 = liabilities / equity * 100
+    private Double currentRatio;             // 유동비율 = currentAssets / currentLiabilities * 100
+    private Double quickRatio;               // 당좌비율 = (currentAssets - inventories) / currentLiabilities * 100
+    private Double interestCoverageRatio;    // 이자보상배율 = operatingIncome / interestExpense
+    private BigDecimal freeCashFlow;         // 잉여현금흐름 = operatingCashFlow - capex
+    private Double revenueGrowth;            // 전년 동기 대비 매출 성장률
+    private Double epsGrowth;                // 전년 동기 대비 EPS 성장률
 }

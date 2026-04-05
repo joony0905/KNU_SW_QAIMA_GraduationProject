@@ -18,12 +18,35 @@ CREATE TABLE financial (
                            gross_profit DECIMAL(20,2) NULL,
                            operating_income DECIMAL(20,2) NULL,
                            net_income DECIMAL(20,2) NULL,
+
                            assets DECIMAL(20,2) NULL,
+                           current_assets DECIMAL(20,2) NULL,
                            liabilities DECIMAL(20,2) NULL,
+                           current_liabilities DECIMAL(20,2) NULL,
                            equity DECIMAL(20,2) NULL,
+
                            capital_stock DECIMAL(20,2) NULL,
                            retained_earnings DECIMAL(20,2) NULL,
+
                            cash_and_equivalents DECIMAL(20,2) NULL,
+                           accounts_receivable DECIMAL(20,2) NULL,
+                           inventories DECIMAL(20,2) NULL,
+
+                           short_term_borrowings DECIMAL(20,2) NULL,
+                           current_portion_of_long_term_borrowings DECIMAL(20,2) NULL,
+                           long_term_borrowings DECIMAL(20,2) NULL,
+
+                           operating_cash_flow DECIMAL(20,2) NULL,
+                           investing_cash_flow DECIMAL(20,2) NULL,
+                           financing_cash_flow DECIMAL(20,2) NULL,
+
+                           interest_expense DECIMAL(20,2) NULL,
+                           capex_ppe DECIMAL(20,2) NULL,
+                           capex_intangible DECIMAL(20,2) NULL,
+                           depreciation_expense DECIMAL(20,2) NULL,
+                           amortization_expense DECIMAL(20,2) NULL,
+                           income_tax_expense DECIMAL(20,2) NULL,
+
                            market_cap DECIMAL(20,2) NULL,
 
                            operating_margin DECIMAL(10,4) NULL,
@@ -36,8 +59,15 @@ CREATE TABLE financial (
                            updated_at DATETIME(6) NOT NULL,
 
                            PRIMARY KEY (financial_id),
-                           UNIQUE KEY uk_stock_fiscal_period (stock_id, fiscal_year, period_type, period_no),
-                           KEY idx_financials_stock_fiscal_period (stock_id, period_type, fiscal_year, period_no),
+
+                           UNIQUE KEY uk_financial_stock_period (
+                                                                 stock_id, fiscal_year, period_type, period_no
+                               ),
+
+                           KEY idx_financials_stock_fiscal_period (
+                                                                   stock_id, period_type, fiscal_year, period_no
+                               ),
+
                            CONSTRAINT fk_financial_stock
                                FOREIGN KEY (stock_id) REFERENCES stock(stock_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

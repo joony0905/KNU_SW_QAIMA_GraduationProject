@@ -20,7 +20,7 @@ import java.time.LocalDate;
         name = "financial",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uk_stock_fiscal_period",
+                        name = "uk_financial_stock_period",
                         columnNames = {"stock_id", "fiscal_year", "period_type", "period_no"}
                 )
         },
@@ -51,7 +51,6 @@ public class Financial {
     private int fiscalYear;
 
     /**
-     * 신규 표준 키 (NOT NULL)
      * Q: 1~4, H: 1~2, A: 1, TTM: 0
      */
     @Column(name = "period_no", nullable = false)
@@ -64,6 +63,7 @@ public class Financial {
     @Column(name = "period_type", length = 10, nullable = false)
     private PeriodType periodType;
 
+    @Column(name = "filing_date")
     private LocalDate filingDate;
 
     @Column(length = 10)
@@ -88,7 +88,13 @@ public class Financial {
     private BigDecimal assets;
 
     @Column(precision = 20, scale = 2)
+    private BigDecimal currentAssets;
+
+    @Column(precision = 20, scale = 2)
     private BigDecimal liabilities;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal currentLiabilities;
 
     @Column(precision = 20, scale = 2)
     private BigDecimal equity;
@@ -101,6 +107,48 @@ public class Financial {
 
     @Column(precision = 20, scale = 2)
     private BigDecimal cashAndEquivalents;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal accountsReceivable;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal inventories;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal shortTermBorrowings;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal currentPortionOfLongTermBorrowings;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal longTermBorrowings;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal operatingCashFlow;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal investingCashFlow;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal financingCashFlow;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal interestExpense;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal capexPpe;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal capexIntangible;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal depreciationExpense;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal amortizationExpense;
+
+    @Column(precision = 20, scale = 2)
+    private BigDecimal incomeTaxExpense;
 
     @Column(precision = 20, scale = 2)
     private BigDecimal marketCap;
@@ -131,7 +179,9 @@ public class Financial {
     @PrePersist
     @PreUpdate
     private void syncPeriodNo() {
-        if (periodType == null) return;
+        if (periodType == null) {
+            return;
+        }
 
         switch (periodType) {
             case A -> {
@@ -143,24 +193,21 @@ public class Financial {
                 this.fiscalQuarter = null;
             }
             case Q -> {
-                // quarter가 있으면 그걸 최우선
                 if (this.fiscalQuarter != null && this.fiscalQuarter >= 1 && this.fiscalQuarter <= 4) {
                     this.periodNo = this.fiscalQuarter;
                 } else {
-                    // quarter가 없으면 기존 periodNo가 1~4면 유지, 아니면 1
-                    if (this.periodNo < 1 || this.periodNo > 4) this.periodNo = 1;
-                    // 필요하면 호환성을 위해 quarter도 맞춰줌
+                    if (this.periodNo < 1 || this.periodNo > 4) {
+                        this.periodNo = 1;
+                    }
                     this.fiscalQuarter = this.periodNo;
                 }
             }
             case H -> {
-                // CSV 서비스에서 periodNo(1/2)를 넣었다면 그대로 유지
                 if (this.periodNo == 1 || this.periodNo == 2) {
-                    // ok
+                    // keep
                 } else {
-                    // 없으면 reportDate 월로 유추
-                    int m = (this.reportDate != null) ? this.reportDate.getMonthValue() : 1;
-                    this.periodNo = (m <= 6) ? 1 : 2;
+                    int month = (this.reportDate != null) ? this.reportDate.getMonthValue() : 1;
+                    this.periodNo = (month <= 6) ? 1 : 2;
                 }
                 this.fiscalQuarter = null;
             }

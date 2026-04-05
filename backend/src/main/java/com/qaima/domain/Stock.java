@@ -42,6 +42,10 @@ public class Stock {
     @Column(nullable = false, length = 255)
     private String companyName;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sector_id")
+    private Sector sector;
+
     // (ERD: industry_id bigint [ref: > industry.industry_id])
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "industry_id")

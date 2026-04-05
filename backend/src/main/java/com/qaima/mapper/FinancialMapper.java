@@ -105,7 +105,55 @@ public class FinancialMapper {
                 && financial.getAssets().signum() != 0) {
             roa = financial.getNetIncome()
                     .divide(financial.getAssets(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
                     .doubleValue();
+        }
+
+        Double currentRatio = null;
+        if (financial.getCurrentAssets() != null
+                && financial.getCurrentLiabilities() != null
+                && financial.getCurrentLiabilities().signum() != 0) {
+            currentRatio = financial.getCurrentAssets()
+                    .divide(financial.getCurrentLiabilities(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+        }
+
+        Double quickRatio = null;
+        if (financial.getCurrentAssets() != null
+                && financial.getCurrentLiabilities() != null
+                && financial.getCurrentLiabilities().signum() != 0) {
+            BigDecimal quickAssets = financial.getInventories() != null
+                    ? financial.getCurrentAssets().subtract(financial.getInventories())
+                    : financial.getCurrentAssets();
+            quickRatio = quickAssets
+                    .divide(financial.getCurrentLiabilities(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100))
+                    .doubleValue();
+        }
+
+        Double interestCoverageRatio = null;
+        if (financial.getOperatingIncome() != null
+                && financial.getInterestExpense() != null
+                && financial.getInterestExpense().signum() != 0) {
+            interestCoverageRatio = financial.getOperatingIncome()
+                    .divide(financial.getInterestExpense(), METRIC_SCALE, RoundingMode.HALF_UP)
+                    .doubleValue();
+        }
+
+        BigDecimal freeCashFlow = null;
+        if (financial.getOperatingCashFlow() != null) {
+            BigDecimal capex = BigDecimal.ZERO;
+            boolean hasCapex = false;
+            if (financial.getCapexPpe() != null) {
+                capex = capex.add(financial.getCapexPpe());
+                hasCapex = true;
+            }
+            if (financial.getCapexIntangible() != null) {
+                capex = capex.add(financial.getCapexIntangible());
+                hasCapex = true;
+            }
+            freeCashFlow = hasCapex ? financial.getOperatingCashFlow().subtract(capex) : financial.getOperatingCashFlow();
         }
 
         Double per = null;
@@ -177,6 +225,10 @@ public class FinancialMapper {
                 .pbr(pbr)
                 .psr(psr)
                 .debtRatio(debtRatio)
+                .currentRatio(currentRatio)
+                .quickRatio(quickRatio)
+                .interestCoverageRatio(interestCoverageRatio)
+                .freeCashFlow(freeCashFlow)
                 .build();
     }
 }

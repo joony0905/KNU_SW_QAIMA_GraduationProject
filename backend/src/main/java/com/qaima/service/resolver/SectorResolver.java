@@ -1,5 +1,6 @@
 package com.qaima.service.resolver;
 
+import com.qaima.domain.Exchange;
 import com.qaima.domain.Sector;
 import com.qaima.repository.SectorRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,18 +19,23 @@ public class SectorResolver {
 
     private final SectorRepository sectorRepository;
 
-    public Mono<Sector> resolve(String code, String name) {
+    public Mono<Sector> resolve(Exchange exchange, String code, String name) {
         if (code == null || code.isBlank()) return Mono.empty(); // 추론 금지: 코드 없으면 저장 안 함
         final String scheme = SCHEME_KRX_BZTP_M;
 
-        return Mono.fromCallable(() -> sectorRepository.findBySchemeAndCode(scheme, code))
+        return Mono.fromCallable(() -> sectorRepository.findByExchangeExchangeIdAndSchemeAndCode(
+                        exchange.getExchangeId(),
+                        scheme,
+                        code
+                ))
                 .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(opt -> opt.map(Mono::just).orElseGet(() -> insertRecover(scheme, code, name)));
+                .flatMap(opt -> opt.map(Mono::just).orElseGet(() -> insertRecover(exchange, scheme, code, name)));
     }
 
-    private Mono<Sector> insertRecover(String scheme, String code, String name) {
+    private Mono<Sector> insertRecover(Exchange exchange, String scheme, String code, String name) {
         return Mono.fromCallable(() -> {
                     Sector s = new Sector();
+                    s.setExchange(exchange);
                     s.setScheme(scheme);
                     s.setCode(code);
                     s.setName(name != null ? name : code);
@@ -37,9 +43,13 @@ public class SectorResolver {
                 })
                 .subscribeOn(Schedulers.boundedElastic())
                 .onErrorResume(DataIntegrityViolationException.class, e -> {
-                    // unique 충돌이면 재조회로 복구
-                    log.warn("[SectorResolver] unique conflict -> re-fetch. scheme={}, code={}", scheme, code);
-                    return Mono.fromCallable(() -> sectorRepository.findBySchemeAndCode(scheme, code)
+                    log.warn("[SectorResolver] unique conflict -> re-fetch. exchange={}, scheme={}, code={}",
+                            exchange.getCode(), scheme, code);
+                    return Mono.fromCallable(() -> sectorRepository.findByExchangeExchangeIdAndSchemeAndCode(
+                                            exchange.getExchangeId(),
+                                            scheme,
+                                            code
+                                    )
                                     .orElseThrow(() -> e))
                             .subscribeOn(Schedulers.boundedElastic());
                 });

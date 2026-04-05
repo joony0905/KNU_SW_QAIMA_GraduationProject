@@ -38,8 +38,8 @@ public class FinancialImportService {
     /**
      * 정책:
      * - financial은 "(stock_id, fiscal_year, period_type, period_no) 기준 최신 스냅샷 1개 유지"
-     * - UNIQUE KEY uk_stock_fiscal_period (stock_id, fiscal_year, period_type, period_no)
-     *   와 맞물려 ON DUPLICATE KEY UPDATE 수행
+     * - version은 별도 메타로 저장하지만 unique key에는 포함하지 않음
+     * - 동일 기간 재적재 시 ON DUPLICATE KEY UPDATE로 최신값으로 덮어씀
      */
     private static final String UPSERT_SQL = """
             INSERT INTO financial (
@@ -58,12 +58,35 @@ public class FinancialImportService {
                 gross_profit,
                 operating_income,
                 net_income,
+
                 assets,
+                current_assets,
                 liabilities,
+                current_liabilities,
                 equity,
+
                 capital_stock,
                 retained_earnings,
+
                 cash_and_equivalents,
+                accounts_receivable,
+                inventories,
+
+                short_term_borrowings,
+                current_portion_of_long_term_borrowings,
+                long_term_borrowings,
+
+                operating_cash_flow,
+                investing_cash_flow,
+                financing_cash_flow,
+
+                interest_expense,
+                capex_ppe,
+                capex_intangible,
+                depreciation_expense,
+                amortization_expense,
+                income_tax_expense,
+
                 market_cap,
 
                 operating_margin,
@@ -74,7 +97,19 @@ public class FinancialImportService {
 
                 created_at,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?,
+                ?, ?, ?, ?, ?,
+                ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?,
+                ?, ?, ?, ?, ?, ?,
+                ?,
+                ?, ?, ?, ?, ?,
+                ?, ?
+            )
             ON DUPLICATE KEY UPDATE
                 report_date = VALUES(report_date),
                 version = VALUES(version),
@@ -87,12 +122,35 @@ public class FinancialImportService {
                 gross_profit = VALUES(gross_profit),
                 operating_income = VALUES(operating_income),
                 net_income = VALUES(net_income),
+
                 assets = VALUES(assets),
+                current_assets = VALUES(current_assets),
                 liabilities = VALUES(liabilities),
+                current_liabilities = VALUES(current_liabilities),
                 equity = VALUES(equity),
+
                 capital_stock = VALUES(capital_stock),
                 retained_earnings = VALUES(retained_earnings),
+
                 cash_and_equivalents = VALUES(cash_and_equivalents),
+                accounts_receivable = VALUES(accounts_receivable),
+                inventories = VALUES(inventories),
+
+                short_term_borrowings = VALUES(short_term_borrowings),
+                current_portion_of_long_term_borrowings = VALUES(current_portion_of_long_term_borrowings),
+                long_term_borrowings = VALUES(long_term_borrowings),
+
+                operating_cash_flow = VALUES(operating_cash_flow),
+                investing_cash_flow = VALUES(investing_cash_flow),
+                financing_cash_flow = VALUES(financing_cash_flow),
+
+                interest_expense = VALUES(interest_expense),
+                capex_ppe = VALUES(capex_ppe),
+                capex_intangible = VALUES(capex_intangible),
+                depreciation_expense = VALUES(depreciation_expense),
+                amortization_expense = VALUES(amortization_expense),
+                income_tax_expense = VALUES(income_tax_expense),
+
                 market_cap = VALUES(market_cap),
 
                 operating_margin = VALUES(operating_margin),
@@ -266,12 +324,35 @@ public class FinancialImportService {
                 decimalValue(getString(cols, idx, "gross_profit")),
                 decimalValue(getString(cols, idx, "operating_income")),
                 decimalValue(getString(cols, idx, "net_income")),
+
                 decimalValue(getString(cols, idx, "assets")),
+                decimalValue(getString(cols, idx, "current_assets")),
                 decimalValue(getString(cols, idx, "liabilities")),
+                decimalValue(getString(cols, idx, "current_liabilities")),
                 decimalValue(getString(cols, idx, "equity")),
+
                 decimalValue(getString(cols, idx, "capital_stock")),
                 decimalValue(getString(cols, idx, "retained_earnings")),
+
                 decimalValue(getString(cols, idx, "cash_and_equivalents")),
+                decimalValue(getString(cols, idx, "accounts_receivable")),
+                decimalValue(getString(cols, idx, "inventories")),
+
+                decimalValue(getString(cols, idx, "short_term_borrowings")),
+                decimalValue(getString(cols, idx, "current_portion_of_long_term_borrowings")),
+                decimalValue(getString(cols, idx, "long_term_borrowings")),
+
+                decimalValue(getString(cols, idx, "operating_cash_flow")),
+                decimalValue(getString(cols, idx, "investing_cash_flow")),
+                decimalValue(getString(cols, idx, "financing_cash_flow")),
+
+                decimalValue(getString(cols, idx, "interest_expense")),
+                decimalValue(getString(cols, idx, "capex_ppe")),
+                decimalValue(getString(cols, idx, "capex_intangible")),
+                decimalValue(getString(cols, idx, "depreciation_expense")),
+                decimalValue(getString(cols, idx, "amortization_expense")),
+                decimalValue(getString(cols, idx, "income_tax_expense")),
+
                 decimalValue(getString(cols, idx, "market_cap")),
 
                 decimalValue(getString(cols, idx, "operating_margin")),
@@ -323,10 +404,6 @@ public class FinancialImportService {
         return value;
     }
 
-    /**
-     * CSV의 stock_code가 5930 형태로 들어와도 005930으로 정규화
-     * 국내 6자리 기준
-     */
     private String normalizeStockCode(String stockCode) {
         String trimmed = stockCode.trim().toUpperCase();
 
@@ -344,13 +421,6 @@ public class FinancialImportService {
         };
     }
 
-    /**
-     * 정책:
-     * - A   -> 1
-     * - TTM -> 0
-     * - Q   -> 1~4
-     * - H   -> 1~2
-     */
     private Integer normalizePeriodNo(String periodType, Integer rawPeriodNo) {
         return switch (periodType) {
             case "A" -> 1;

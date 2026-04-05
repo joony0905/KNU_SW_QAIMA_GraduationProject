@@ -7,7 +7,8 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -26,23 +27,18 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("load_index_ohlcv")
 
-
-# ============================================================
-# ENV / CONST
-# ============================================================
 
 DEFAULT_KIS_BASE_URL = os.getenv("KIS_BASE_URL", "https://openapi.koreainvestment.com:9443")
 DEFAULT_KIS_APP_KEY = os.getenv("KIS_APP_KEY", "")
 DEFAULT_KIS_APP_SECRET = os.getenv("KIS_APP_SECRET", "")
 DEFAULT_KIS_TOKEN_PATH = os.getenv("KIS_TOKEN_PATH", "/oauth2/tokenP")
-
-DEFAULT_KIS_DAILY_CHART_PATH = os.getenv(
-    "KIS_DAILY_CHART_PATH",
-    "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice",
+DEFAULT_KIS_INDEX_CHART_PATH = os.getenv(
+    "KIS_INDEX_CHART_PATH",
+    "/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice",
 )
-DEFAULT_KIS_DAILY_CHART_TR_ID = os.getenv("KIS_DAILY_CHART_TR_ID", "FHKST03010100")
+DEFAULT_KIS_INDEX_CHART_TR_ID = os.getenv("KIS_INDEX_CHART_TR_ID", "FHKUP03500100")
 DEFAULT_KIS_CUSTTYPE = os.getenv("KIS_CUSTTYPE", "P")
 
 DEFAULT_DB_HOST = os.getenv("DB_HOST", "127.0.0.1")
@@ -55,32 +51,24 @@ DEFAULT_REQUEST_TIMEOUT = int(os.getenv("BOOTSTRAP_HTTP_TIMEOUT_SEC", "15"))
 DEFAULT_SLEEP_MS = int(os.getenv("BOOTSTRAP_SLEEP_MS", "0"))
 DEFAULT_KIS_TOKEN_CACHE_FILE = os.getenv("KIS_TOKEN_CACHE_FILE", "./.kis_token_cache.json")
 
-# Freq enum:
-# 0=ONE_MIN, 1=FIVE_MIN, 2=FIFTEEN_MIN, 3=ONE_H, 4=ONE_D, 5=ONE_W, 6=ONE_M
 DEFAULT_FREQ_ONE_D = int(os.getenv("PRICE_OHLCV_FREQ_ONE_D", "4"))
-
-DEFAULT_LOOKBACK_DAYS = int(os.getenv("PRICE_OHLCV_LOOKBACK_DAYS", "1095"))
-DEFAULT_REFRESH_TAIL_DAYS = int(os.getenv("PRICE_OHLCV_REFRESH_TAIL_DAYS", "10"))
-DEFAULT_LIMIT = int(os.getenv("PRICE_OHLCV_LIMIT", "0"))
-
-# KIS 일봉 조회는 시작~종료 범위당 최대 100건까지 조회된다고 보고 청크 분할
-DEFAULT_MAX_DAILY_RANGE_DAYS = int(os.getenv("KIS_MAX_DAILY_RANGE_DAYS", "100"))
+DEFAULT_LOOKBACK_DAYS = int(os.getenv("INDEX_OHLCV_LOOKBACK_DAYS", "1095"))
+DEFAULT_REFRESH_TAIL_DAYS = int(os.getenv("INDEX_OHLCV_REFRESH_TAIL_DAYS", "10"))
+DEFAULT_LIMIT = int(os.getenv("INDEX_OHLCV_LIMIT", "0"))
+DEFAULT_MAX_DAILY_RANGE_DAYS = int(os.getenv("KIS_MAX_INDEX_RANGE_DAYS", "100"))
 DEFAULT_MIN_INTERVAL_MS = int(os.getenv("BOOTSTRAP_MIN_INTERVAL_MS", "300"))
 DEFAULT_RATE_LIMIT_BACKOFF_SEC = int(os.getenv("BOOTSTRAP_RATE_LIMIT_BACKOFF_SEC", "30"))
+DEFAULT_UPSERT_BATCH_SIZE = int(os.getenv("INDEX_OHLCV_UPSERT_BATCH_SIZE", "300"))
 
-
-# ============================================================
-# DATA CLASSES
-# ============================================================
 
 @dataclass
 class CandleRow:
     trade_date: date
-    open_price: Optional[float]
-    high_price: Optional[float]
-    low_price: Optional[float]
-    close_price: Optional[float]
-    volume: Optional[float]
+    open_price: Optional[Decimal]
+    high_price: Optional[Decimal]
+    low_price: Optional[Decimal]
+    close_price: Optional[Decimal]
+    volume: Optional[Decimal]
 
 
 @dataclass
@@ -93,10 +81,6 @@ class BootstrapResult:
     partial_codes: List[Tuple[str, str]]
     hard_failed_codes: List[Tuple[str, str]]
 
-
-# ============================================================
-# HELPERS
-# ============================================================
 
 def required_env(name: str, default: str = "") -> str:
     value = os.getenv(name, default)
@@ -117,25 +101,20 @@ def parse_yyyymmdd(value: Any) -> Optional[date]:
         return None
 
 
-def to_float(value: Any) -> Optional[float]:
+def to_decimal(value: Any) -> Optional[Decimal]:
     if value is None:
         return None
     s = str(value).strip().replace(",", "")
     if not s or s.lower() in {"nan", "none"}:
         return None
     try:
-        return float(s)
-    except ValueError:
+        return Decimal(s)
+    except Exception:
         return None
 
 
 def yyyymmdd(d: date) -> str:
     return d.strftime("%Y%m%d")
-
-
-def choose_market_div(exchange_code: str) -> str:
-    # KRX domestic markets are handled with J in current KIS requests.
-    return "J"
 
 
 def dedupe_candles(rows: List[CandleRow]) -> List[CandleRow]:
@@ -147,10 +126,6 @@ def dedupe_candles(rows: List[CandleRow]) -> List[CandleRow]:
     return result
 
 
-# ============================================================
-# KIS CLIENT
-# ============================================================
-
 class KisClient:
     def __init__(
         self,
@@ -158,8 +133,8 @@ class KisClient:
         app_secret: str,
         base_url: str = DEFAULT_KIS_BASE_URL,
         token_path: str = DEFAULT_KIS_TOKEN_PATH,
-        daily_chart_path: str = DEFAULT_KIS_DAILY_CHART_PATH,
-        daily_chart_tr_id: str = DEFAULT_KIS_DAILY_CHART_TR_ID,
+        index_chart_path: str = DEFAULT_KIS_INDEX_CHART_PATH,
+        index_chart_tr_id: str = DEFAULT_KIS_INDEX_CHART_TR_ID,
         custtype: str = DEFAULT_KIS_CUSTTYPE,
         timeout_sec: int = DEFAULT_REQUEST_TIMEOUT,
         token_cache_file: str = DEFAULT_KIS_TOKEN_CACHE_FILE,
@@ -168,8 +143,8 @@ class KisClient:
         self.app_secret = app_secret
         self.base_url = base_url.rstrip("/")
         self.token_path = token_path
-        self.daily_chart_path = daily_chart_path
-        self.daily_chart_tr_id = daily_chart_tr_id
+        self.index_chart_path = index_chart_path
+        self.index_chart_tr_id = index_chart_tr_id
         self.custtype = custtype
         self.timeout_sec = timeout_sec
         self.token_cache_file = token_cache_file
@@ -180,10 +155,6 @@ class KisClient:
         self.token_ttl_sec: int = 3600
 
         self._load_cached_token()
-
-        logger.info("KIS base_url=%s", self.base_url)
-        logger.info("KIS daily_chart_path=%s", self.daily_chart_path)
-        logger.info("KIS daily_chart_tr_id=%s", self.daily_chart_tr_id)
 
     def _load_cached_token(self) -> None:
         try:
@@ -204,7 +175,6 @@ class KisClient:
                 self.access_token = token_value
                 self.token_issued_at = float(issued_at) if issued_at else time.time()
                 self.token_ttl_sec = max(60, int(float(expires_at) - self.token_issued_at))
-                logger.info("Loaded cached KIS token from file")
         except Exception:
             logger.warning("Failed to load cached KIS token; will issue a new one")
 
@@ -233,56 +203,24 @@ class KisClient:
         }
         headers = {"content-type": "application/json; charset=UTF-8"}
 
-        logger.info("Issuing KIS access token...")
+        resp = self.session.post(url, json=payload, headers=headers, timeout=self.timeout_sec)
+        resp.raise_for_status()
+        data = resp.json()
 
-        max_attempts = 5
-        for attempt in range(1, max_attempts + 1):
-            resp = self.session.post(url, json=payload, headers=headers, timeout=self.timeout_sec)
+        access_token = data.get("access_token")
+        if not access_token:
+            raise RuntimeError(f"KIS token issuance failed: {data}")
 
-            if resp.status_code == 403:
-                err_data: Dict[str, Any] = {}
-                try:
-                    err_data = resp.json()
-                except Exception:
-                    pass
+        expires_in = data.get("expires_in")
+        try:
+            self.token_ttl_sec = max(60, int(expires_in)) if expires_in is not None else 3600
+        except Exception:
+            self.token_ttl_sec = 3600
 
-                err_code = err_data.get("error_code")
-                err_desc = err_data.get("error_description")
-
-                if err_code == "EGW00133":
-                    logger.warning(
-                        "KIS token issuance rate-limited (attempt %d/%d): %s",
-                        attempt,
-                        max_attempts,
-                        err_desc,
-                    )
-                    if attempt < max_attempts:
-                        time.sleep(60)
-                        continue
-
-                resp.raise_for_status()
-
-            resp.raise_for_status()
-            data = resp.json()
-
-            access_token = data.get("access_token")
-            if not access_token:
-                raise RuntimeError(f"KIS token issuance failed: {data}")
-
-            expires_in = data.get("expires_in")
-            try:
-                self.token_ttl_sec = max(60, int(expires_in)) if expires_in is not None else 3600
-            except Exception:
-                self.token_ttl_sec = 3600
-
-            self.access_token = access_token
-            self.token_issued_at = time.time()
-            self._save_cached_token(access_token, self.token_ttl_sec)
-
-            logger.info("KIS access token issued successfully (ttl=%s sec)", self.token_ttl_sec)
-            return access_token
-
-        raise RuntimeError("KIS token issuance failed after maximum retry attempts")
+        self.access_token = access_token
+        self.token_issued_at = time.time()
+        self._save_cached_token(access_token, self.token_ttl_sec)
+        return access_token
 
     def _auth_headers(self) -> Dict[str, str]:
         if not self.access_token:
@@ -290,7 +228,6 @@ class KisClient:
         elif self.token_issued_at is not None:
             expire_before = 5
             if time.time() - self.token_issued_at >= (self.token_ttl_sec - expire_before):
-                logger.info("KIS access token near expiry; re-issuing")
                 self.issue_token()
 
         return {
@@ -298,30 +235,29 @@ class KisClient:
             "authorization": f"Bearer {self.access_token}",
             "appkey": self.app_key,
             "appsecret": self.app_secret,
-            "tr_id": self.daily_chart_tr_id,
+            "tr_id": self.index_chart_tr_id,
             "custtype": self.custtype,
         }
 
-    def fetch_daily_candles_page(
+    def fetch_index_page(
         self,
-        stock_code: str,
-        market_div_code: str,
+        index_code: str,
         from_date: date,
         to_date: date,
+        period: str = "D",
     ) -> List[CandleRow]:
-        """
-        KIS 단일 호출 1페이지.
-        보통 최근 최대 100건 수준만 반환.
-        """
-        url = f"{self.base_url}{self.daily_chart_path}"
+        if len(index_code) < 2:
+            raise ValueError(f"Invalid index_code: {index_code}")
+
+        iscd = index_code[1:]
+        url = f"{self.base_url}{self.index_chart_path}"
         headers = self._auth_headers()
         params = {
-            "FID_COND_MRKT_DIV_CODE": market_div_code,
-            "FID_INPUT_ISCD": stock_code,
-            "FID_PERIOD_DIV_CODE": "D",
+            "FID_COND_MRKT_DIV_CODE": "U",
+            "FID_INPUT_ISCD": iscd,
             "FID_INPUT_DATE_1": yyyymmdd(from_date),
             "FID_INPUT_DATE_2": yyyymmdd(to_date),
-            "FID_ORG_ADJ_PRC": "0",
+            "FID_PERIOD_DIV_CODE": period,
         }
 
         max_attempts = 3
@@ -331,9 +267,8 @@ class KisClient:
 
             if not resp.ok:
                 logger.error(
-                    "KIS candle HTTP error stock_code=%s market_div=%s from=%s to=%s status=%s body=%s",
-                    stock_code,
-                    market_div_code,
+                    "KIS index HTTP error index_code=%s from=%s to=%s status=%s body=%s",
+                    index_code,
                     from_date,
                     to_date,
                     resp.status_code,
@@ -352,8 +287,8 @@ class KisClient:
             msg1 = str(data.get("msg1", "") or "")
             if "거래건수" in msg1 and attempt < max_attempts:
                 logger.warning(
-                    "KIS candle rate limit hit stock_code=%s from=%s to=%s attempt=%d/%d msg1=%s",
-                    stock_code,
+                    "KIS index rate limit hit index_code=%s from=%s to=%s attempt=%d/%d msg1=%s",
+                    index_code,
                     from_date,
                     to_date,
                     attempt,
@@ -362,137 +297,104 @@ class KisClient:
                 )
                 time.sleep(DEFAULT_RATE_LIMIT_BACKOFF_SEC)
                 continue
-            raise RuntimeError(f"KIS candle request failed for {stock_code}: {data}")
+            raise RuntimeError(
+                f"KIS index request failed index_code={index_code} rt_cd={data.get('rt_cd')} "
+                f"msg_cd={data.get('msg_cd')} msg1={data.get('msg1')}"
+            )
         else:
-            raise RuntimeError(f"KIS candle request failed after retries for {stock_code}")
+            raise RuntimeError(f"KIS index request failed after retries for {index_code}")
 
         output2 = data.get("output2")
         if not isinstance(output2, list):
             return []
 
-        candles: List[CandleRow] = []
+        rows: List[CandleRow] = []
         for item in output2:
             trade_date = parse_yyyymmdd(item.get("stck_bsop_date"))
             if trade_date is None:
                 continue
 
-            open_price = to_float(item.get("stck_oprc"))
-            high_price = to_float(item.get("stck_hgpr"))
-            low_price = to_float(item.get("stck_lwpr"))
-            close_price = to_float(item.get("stck_clpr"))
-            volume = to_float(item.get("acml_vol"))
-
+            close_price = to_decimal(item.get("bstp_nmix_prpr"))
             if close_price is None:
                 continue
 
-            candles.append(
+            rows.append(
                 CandleRow(
                     trade_date=trade_date,
-                    open_price=open_price,
-                    high_price=high_price,
-                    low_price=low_price,
+                    open_price=to_decimal(item.get("bstp_nmix_oprc")),
+                    high_price=to_decimal(item.get("bstp_nmix_hgpr")),
+                    low_price=to_decimal(item.get("bstp_nmix_lwpr")),
                     close_price=close_price,
-                    volume=volume,
+                    volume=to_decimal(item.get("acml_vol")),
                 )
             )
 
-        candles.sort(key=lambda x: x.trade_date)
-        return candles
+        rows.sort(key=lambda x: x.trade_date)
+        return rows
 
-    def fetch_daily_candles_full(
+    def fetch_index_full(
         self,
-        stock_code: str,
-        market_div_code: str,
+        index_code: str,
         from_date: date,
         to_date: date,
-        sleep_ms_between_pages: int = 120,
+        sleep_ms_between_pages: int = 0,
     ) -> List[CandleRow]:
-        """
-        KIS 시작~종료 범위 최대 100건 제한을 고려해 날짜 범위를 청크로 분할 조회.
-        """
         all_rows: List[CandleRow] = []
         current_from = from_date
-        page_no = 0
-
         while current_from <= to_date:
-            page_no += 1
             current_to = min(
                 current_from + timedelta(days=DEFAULT_MAX_DAILY_RANGE_DAYS - 1),
                 to_date,
             )
-
-            rows = self.fetch_daily_candles_page(
-                stock_code=stock_code,
-                market_div_code=market_div_code,
+            rows = self.fetch_index_page(
+                index_code=index_code,
                 from_date=current_from,
                 to_date=current_to,
+                period="D",
             )
-
-            if not rows:
-                pass
-            else:
-                all_rows.extend(rows)
-
+            all_rows.extend(rows)
             current_from = current_to + timedelta(days=1)
-
             if sleep_ms_between_pages > 0:
                 time.sleep(sleep_ms_between_pages / 1000.0)
-
-        deduped = dedupe_candles(all_rows)
-
-        # from_date ~ to_date 범위 최종 필터
-        filtered = [r for r in deduped if from_date <= r.trade_date <= to_date]
+        filtered = [r for r in dedupe_candles(all_rows) if from_date <= r.trade_date <= to_date]
         filtered.sort(key=lambda x: x.trade_date)
         return filtered
 
 
-# ============================================================
-# DB LAYER
-# ============================================================
-
-class PriceOhlcvBootstrapRepository:
+class IndustryIndexOhlcvRepository:
     def __init__(self, conn: MySQLConnection) -> None:
         self.conn = conn
 
-    def list_target_stocks(
-        self,
-        stock_code: Optional[str] = None,
-        only_missing: bool = False,
-        limit: int = 0,
-    ) -> List[Dict[str, Any]]:
-        where_clauses = [
-            "s.delisted_at IS NULL",
-            "s.asset_type = 'EQUITY'",
-        ]
+    def list_target_indexes(self, index_code: Optional[str], only_missing: bool, limit: int) -> List[Dict[str, Any]]:
+        where_clauses = ["1 = 1"]
         params: List[Any] = []
 
-        if stock_code:
-            where_clauses.append("s.stock_code = %s")
-            params.append(stock_code)
+        if index_code:
+            where_clauses.append("ii.code = %s")
+            params.append(index_code)
 
         if only_missing:
             where_clauses.append("""
             NOT EXISTS (
                 SELECT 1
-                FROM price_ohlcv p
-                WHERE p.stock_id = s.stock_id
-                  AND p.freq = %s
+                FROM industry_index_ohlcv o
+                WHERE o.index_id = ii.index_id
+                  AND o.freq = %s
             )
             """)
             params.append(DEFAULT_FREQ_ONE_D)
 
         sql = f"""
         SELECT
-            s.stock_id,
-            s.stock_code,
-            s.company_name,
-            e.code AS exchange_code
-        FROM stock s
-        JOIN exchange e ON s.exchange_id = e.exchange_id
+            ii.index_id,
+            ii.code,
+            ii.name,
+            ii.provider,
+            ii.currency
+        FROM industry_index ii
         WHERE {' AND '.join(where_clauses)}
-        ORDER BY s.stock_code
+        ORDER BY ii.code
         """
-
         if limit > 0:
             sql += " LIMIT %s"
             params.append(limit)
@@ -504,35 +406,28 @@ class PriceOhlcvBootstrapRepository:
         finally:
             cur.close()
 
-    def get_latest_ts(self, stock_id: int, freq: int = DEFAULT_FREQ_ONE_D) -> Optional[datetime]:
+    def get_latest_ts(self, index_id: int, freq: int = DEFAULT_FREQ_ONE_D) -> Optional[datetime]:
         sql = """
         SELECT MAX(ts) AS latest_ts
-        FROM price_ohlcv
-        WHERE stock_id = %s
+        FROM industry_index_ohlcv
+        WHERE index_id = %s
           AND freq = %s
         """
         cur: MySQLCursorDict = self.conn.cursor(dictionary=True)
         try:
-            cur.execute(sql, (stock_id, freq))
+            cur.execute(sql, (index_id, freq))
             row = cur.fetchone()
-            if not row:
-                return None
-            return row.get("latest_ts")
+            return row.get("latest_ts") if row else None
         finally:
             cur.close()
 
-    def upsert_price_rows(
-        self,
-        stock_id: int,
-        rows: List[CandleRow],
-        freq: int = DEFAULT_FREQ_ONE_D,
-    ) -> int:
+    def upsert_rows(self, index_id: int, rows: List[CandleRow], freq: int = DEFAULT_FREQ_ONE_D) -> int:
         if not rows:
             return 0
 
         sql = """
-        INSERT INTO price_ohlcv(
-            stock_id,
+        INSERT INTO industry_index_ohlcv(
+            index_id,
             ts,
             freq,
             open,
@@ -550,34 +445,24 @@ class PriceOhlcvBootstrapRepository:
             volume = VALUES(volume)
         """
 
-        params: List[Tuple[Any, ...]] = []
-        for r in rows:
-            ts = datetime.combine(r.trade_date, datetime.min.time())
-            params.append(
-                (
-                    stock_id,
-                    ts,
-                    freq,
-                    r.open_price,
-                    r.high_price,
-                    r.low_price,
-                    r.close_price,
-                    r.volume,
-                )
-            )
-
+        total = 0
         cur = self.conn.cursor()
         try:
-            cur.executemany(sql, params)
-            self.conn.commit()
-            return cur.rowcount
+            for start in range(0, len(rows), DEFAULT_UPSERT_BATCH_SIZE):
+                chunk = rows[start:start + DEFAULT_UPSERT_BATCH_SIZE]
+                params = []
+                for r in chunk:
+                    ts = datetime.combine(r.trade_date, datetime.min.time())
+                    params.append(
+                        (index_id, ts, freq, r.open_price, r.high_price, r.low_price, r.close_price, r.volume)
+                    )
+                cur.executemany(sql, params)
+                self.conn.commit()
+                total += len(chunk)
+            return total
         finally:
             cur.close()
 
-
-# ============================================================
-# BUSINESS LOGIC
-# ============================================================
 
 def decide_fetch_range(
     latest_ts: Optional[datetime],
@@ -589,7 +474,6 @@ def decide_fetch_range(
         return today - timedelta(days=lookback_days), today, "BACKFILL"
 
     latest_date = latest_ts.date()
-
     if latest_date >= today:
         return latest_date, today, "SKIP"
 
@@ -597,29 +481,24 @@ def decide_fetch_range(
     return start_date, today, "REFRESH"
 
 
-def bootstrap_price_ohlcv(
+def bootstrap_index_ohlcv(
     kis: KisClient,
-    repo: PriceOhlcvBootstrapRepository,
-    stock_code: Optional[str],
+    repo: IndustryIndexOhlcvRepository,
+    index_code: Optional[str],
     only_missing: bool,
     limit: int,
     sleep_ms: int,
     lookback_days: int,
     refresh_tail_days: int,
 ) -> BootstrapResult:
-    stocks = repo.list_target_stocks(
-        stock_code=stock_code,
-        only_missing=only_missing,
-        limit=limit,
-    )
-    total = len(stocks)
+    indexes = repo.list_target_indexes(index_code=index_code, only_missing=only_missing, limit=limit)
+    total = len(indexes)
 
-    logger.info("Loaded %d target stocks", total)
+    logger.info("Loaded %d target indexes", total)
 
     success = 0
     partial = 0
     hard_fail = 0
-
     partial_codes: List[Tuple[str, str]] = []
     hard_failed_codes: List[Tuple[str, str]] = []
 
@@ -628,12 +507,10 @@ def bootstrap_price_ohlcv(
     min_interval_sec = DEFAULT_MIN_INTERVAL_MS / 1000.0
     today = date.today()
 
-    for idx, row in enumerate(stocks):
-        stock_id = int(row["stock_id"])
-        stock_code_value = str(row["stock_code"])
-        company_name = str(row.get("company_name") or "")
-        exchange_code = str(row.get("exchange_code") or "KOSPI")
-        market_div_code = choose_market_div(exchange_code)
+    for idx, row in enumerate(indexes):
+        index_id = int(row["index_id"])
+        code = str(row["code"])
+        name = str(row.get("name") or "")
 
         now = time.time()
         wait = min_interval_sec - (now - last_request_ts)
@@ -641,7 +518,7 @@ def bootstrap_price_ohlcv(
             time.sleep(wait)
 
         try:
-            latest_ts = repo.get_latest_ts(stock_id, DEFAULT_FREQ_ONE_D)
+            latest_ts = repo.get_latest_ts(index_id, DEFAULT_FREQ_ONE_D)
             fetch_from, fetch_to, mode = decide_fetch_range(
                 latest_ts=latest_ts,
                 today=today,
@@ -651,48 +528,41 @@ def bootstrap_price_ohlcv(
 
             if mode == "SKIP":
                 partial += 1
-                partial_codes.append((stock_code_value, "already up-to-date"))
+                partial_codes.append((code, "already up-to-date"))
                 continue
 
-            candles = kis.fetch_daily_candles_full(
-                stock_code=stock_code_value,
-                market_div_code=market_div_code,
+            candles = kis.fetch_index_full(
+                index_code=code,
                 from_date=fetch_from,
                 to_date=fetch_to,
-                sleep_ms_between_pages=max(50, sleep_ms),
+                sleep_ms_between_pages=0,
             )
             last_request_ts = time.time()
 
             if not candles:
                 partial += 1
-                partial_codes.append((stock_code_value, f"empty candles mode={mode}"))
+                partial_codes.append((code, f"empty candles mode={mode}"))
                 logger.warning(
-                    "[%d/%d] PARTIAL stock_code=%s company=%s exchange=%s mode=%s reason=empty candles",
+                    "[%d/%d] PARTIAL index_code=%s name=%s mode=%s reason=empty candles",
                     idx + 1,
                     total,
-                    stock_code_value,
-                    company_name,
-                    exchange_code,
+                    code,
+                    name,
                     mode,
                 )
             else:
-                affected = repo.upsert_price_rows(
-                    stock_id=stock_id,
-                    rows=candles,
-                    freq=DEFAULT_FREQ_ONE_D,
-                )
+                repo.upsert_rows(index_id=index_id, rows=candles, freq=DEFAULT_FREQ_ONE_D)
                 success += 1
 
         except Exception as e:
             hard_fail += 1
-            hard_failed_codes.append((stock_code_value, str(e)))
+            hard_failed_codes.append((code, str(e)))
             logger.exception(
-                "[%d/%d] HARD-FAIL stock_code=%s company=%s exchange=%s",
+                "[%d/%d] HARD-FAIL index_code=%s name=%s",
                 idx + 1,
                 total,
-                stock_code_value,
-                company_name,
-                exchange_code,
+                code,
+                name,
             )
 
         if sleep_ms > 0:
@@ -701,7 +571,7 @@ def bootstrap_price_ohlcv(
     elapsed = time.time() - start_ts
 
     logger.info("===================================================")
-    logger.info("Price OHLCV bootstrap finished")
+    logger.info("Industry Index OHLCV bootstrap finished")
     logger.info("total      = %d", total)
     logger.info("success    = %d", success)
     logger.info("partial    = %d", partial)
@@ -709,12 +579,12 @@ def bootstrap_price_ohlcv(
     logger.info("elapsed    = %.2f sec", elapsed)
 
     if partial_codes:
-        logger.info("Partial stock codes:")
+        logger.info("Partial index codes:")
         for code, reason in partial_codes:
             logger.info(" - %s :: %s", code, reason)
 
     if hard_failed_codes:
-        logger.info("Hard failed stock codes:")
+        logger.info("Hard failed index codes:")
         for code, reason in hard_failed_codes:
             logger.info(" - %s :: %s", code, reason)
 
@@ -729,19 +599,15 @@ def bootstrap_price_ohlcv(
     )
 
 
-# ============================================================
-# MAIN
-# ============================================================
-
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Bootstrap QAIMA ONE_D price_ohlcv from KIS candle API.")
-    parser.add_argument("--stock-code", default=None, help="Single stock code to load")
+    parser = argparse.ArgumentParser(description="Bootstrap QAIMA ONE_D industry_index_ohlcv from KIS index API.")
+    parser.add_argument("--index-code", default=None, help="Single index code to load")
     parser.add_argument(
         "--only-missing",
         action="store_true",
-        help="Load only stocks with no ONE_D rows in price_ohlcv",
+        help="Load only indexes with no ONE_D rows in industry_index_ohlcv",
     )
-    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Max number of stocks to process")
+    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Max number of indexes to process")
     parser.add_argument("--sleep-ms", type=int, default=DEFAULT_SLEEP_MS, help="Sleep milliseconds between requests")
     parser.add_argument(
         "--lookback-days",
@@ -781,17 +647,17 @@ def main() -> int:
             app_secret=app_secret,
             base_url=DEFAULT_KIS_BASE_URL,
             token_path=DEFAULT_KIS_TOKEN_PATH,
-            daily_chart_path=DEFAULT_KIS_DAILY_CHART_PATH,
-            daily_chart_tr_id=DEFAULT_KIS_DAILY_CHART_TR_ID,
+            index_chart_path=DEFAULT_KIS_INDEX_CHART_PATH,
+            index_chart_tr_id=DEFAULT_KIS_INDEX_CHART_TR_ID,
             custtype=DEFAULT_KIS_CUSTTYPE,
             timeout_sec=DEFAULT_REQUEST_TIMEOUT,
+            token_cache_file=DEFAULT_KIS_TOKEN_CACHE_FILE,
         )
-        repo = PriceOhlcvBootstrapRepository(conn)
-
-        bootstrap_price_ohlcv(
+        repo = IndustryIndexOhlcvRepository(conn)
+        bootstrap_index_ohlcv(
             kis=kis,
             repo=repo,
-            stock_code=args.stock_code,
+            index_code=args.index_code,
             only_missing=args.only_missing,
             limit=args.limit,
             sleep_ms=args.sleep_ms,
@@ -799,11 +665,9 @@ def main() -> int:
             refresh_tail_days=args.refresh_tail_days,
         )
         return 0
-
     except Exception:
-        logger.exception("Price OHLCV bootstrap failed")
+        logger.exception("Industry index OHLCV bootstrap failed")
         return 1
-
     finally:
         try:
             conn.close()

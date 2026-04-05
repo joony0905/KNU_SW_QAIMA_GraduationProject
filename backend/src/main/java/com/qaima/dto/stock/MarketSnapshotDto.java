@@ -25,12 +25,31 @@ public class MarketSnapshotDto {
     private Double per;
     // 주가순자산비율
     private Double pbr;
+    // 주가매출비율
+    private Double psr;
     // 유통주식수 / 발행주식수
     private Double floatRatio;
     // 자기주식수 / 발행주식수
     private Double treasuryRatio;
     // 계산에 사용한 기준 발행주식수
     private BigDecimal sharesOutstanding;
+    // 최근 12개월 기준 주당순이익
+    private BigDecimal epsTtm;
+    // 주당순자산
+    private BigDecimal bps;
+    // 주당매출
+    private BigDecimal sps;
+    private Double roe;
+    private Double roa;
+    private Double operatingMargin;
+    private Double netMargin;
+    private Double debtRatio;
+    private Double currentRatio;
+    private Double quickRatio;
+    private Double interestCoverageRatio;
+    private BigDecimal freeCashFlow;
+    private Double revenueGrowth;
+    private Double epsGrowth;
     // 값 산출 기준 출처
     private String source;
 }

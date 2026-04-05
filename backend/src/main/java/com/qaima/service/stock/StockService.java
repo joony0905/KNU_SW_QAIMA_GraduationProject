@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -247,84 +248,101 @@ public class StockService {
                         )
                         .subscribeOn(Schedulers.boundedElastic());
 
-        Mono<Sector> sectorMono =
-                sectorResolver.resolve(meta.getSectorCode(), meta.getSectorName())
-                        .switchIfEmpty(Mono.error(new IllegalStateException(
-                                "Sector resolve 실패: code=" + meta.getSectorCode() + ", name=" + meta.getSectorName()
-                        )))
-                        .doOnNext(sec ->
-                                log.info("[SectorResolver] resolved: scheme={} code={} name={}",
-                                        SectorResolver.SCHEME_KRX_BZTP_M,
-                                        sec.getCode(), sec.getName()
-                                )
-                        );
+        return exchangeMono.flatMap(exchange -> {
+            Mono<Sector> sectorMono =
+                    sectorResolver.resolve(exchange, meta.getSectorCode(), meta.getSectorName())
+                            .switchIfEmpty(Mono.error(new IllegalStateException(
+                                    "Sector resolve 실패: exchange=" + exchange.getCode()
+                                            + ", code=" + meta.getSectorCode()
+                                            + ", name=" + meta.getSectorName()
+                            )))
+                            .doOnNext(sec ->
+                                    log.info("[SectorResolver] resolved: exchange={} scheme={} code={} name={}",
+                                            exchange.getCode(),
+                                            SectorResolver.SCHEME_KRX_BZTP_M,
+                                            sec.getCode(), sec.getName()
+                                    )
+                            );
 
-        Mono<Industry> industryMono =
-                sectorMono.flatMap(sec ->
-                        industryResolver.resolve(
+            Mono<Industry> industryMono =
+                    sectorMono.flatMap(sec -> {
+                        if (meta.getIndustryCode() == null || meta.getIndustryCode().isBlank()) {
+                            return Mono.empty();
+                        }
+                        return industryResolver.resolve(
+                                        exchange,
                                         meta.getIndustryCode(),
                                         meta.getIndustryName(),
                                         sec
                                 )
                                 .switchIfEmpty(Mono.error(new IllegalStateException(
-                                        "Industry resolve 실패: code=" + meta.getIndustryCode() + ", name=" + meta.getIndustryName()
+                                        "Industry resolve 실패: exchange=" + exchange.getCode()
+                                                + ", sector=" + sec.getCode()
+                                                + ", code=" + meta.getIndustryCode()
+                                                + ", name=" + meta.getIndustryName()
                                 )))
                                 .doOnNext(ind ->
-                                        log.info("[IndustryResolver] resolved: scheme={} code={} name={} sector={}",
+                                        log.info("[IndustryResolver] resolved: exchange={} scheme={} code={} name={} sector={}",
+                                                exchange.getCode(),
                                                 IndustryResolver.SCHEME_KRX_BZTP_S,
                                                 ind.getCode(), ind.getName(),
                                                 sec.getCode()
                                         )
-                                )
-                );
+                                );
+                    });
 
-        return Mono.zip(exchangeMono, industryMono)
-                .flatMap(tuple -> {
-                    Exchange exchange = tuple.getT1();
-                    Industry industry = tuple.getT2();
+            return sectorMono.flatMap(sector ->
+                    industryMono
+                            .map(Optional::of)
+                            .defaultIfEmpty(Optional.empty())
+                            .flatMap(industryOpt -> {
+                                Industry industry = industryOpt.orElse(null);
 
-                    return Mono.fromCallable(() ->
-                                    stockRepository.findByExchangeAndStockCode(exchange, normalizedCode)
-                            )
-                            .subscribeOn(Schedulers.boundedElastic())
-                            .flatMap(opt -> opt
-                                    .map(existing -> {
-                                        log.info("[createStock] existing stock reused: {}", normalizedCode);
-                                        return Mono.just(existing);
-                                    })
-                                    .orElseGet(() ->
-                                            Mono.fromCallable(() -> {
-                                                        Stock stock = new Stock();
-                                                        stock.setStockCode(normalizedCode);
-                                                        stock.setCompanyName(
-                                                                meta.getCompanyName() != null && !meta.getCompanyName().isBlank()
-                                                                        ? meta.getCompanyName()
-                                                                        : normalizedCode
-                                                        );
-                                                        stock.setAssetType("EQUITY");
-                                                        stock.setCurrency(
-                                                                meta.getCurrency() != null && !meta.getCurrency().isBlank()
-                                                                        ? meta.getCurrency()
-                                                                        : "KRW"
-                                                        );
-                                                        stock.setExchange(exchange);
-                                                        stock.setIndustry(industry);
-                                                        stock.setIsin(null);
+                                return Mono.fromCallable(() ->
+                                                stockRepository.findByExchangeAndStockCode(exchange, normalizedCode)
+                                        )
+                                        .subscribeOn(Schedulers.boundedElastic())
+                                        .flatMap(opt -> opt
+                                                .map(existing -> {
+                                                    log.info("[createStock] existing stock reused: {}", normalizedCode);
+                                                    return Mono.just(existing);
+                                                })
+                                                .orElseGet(() ->
+                                                        Mono.fromCallable(() -> {
+                                                                    Stock stock = new Stock();
+                                                                    stock.setStockCode(normalizedCode);
+                                                                    stock.setCompanyName(
+                                                                            meta.getCompanyName() != null && !meta.getCompanyName().isBlank()
+                                                                                    ? meta.getCompanyName()
+                                                                                    : normalizedCode
+                                                                    );
+                                                                    stock.setAssetType("EQUITY");
+                                                                    stock.setCurrency(
+                                                                            meta.getCurrency() != null && !meta.getCurrency().isBlank()
+                                                                                    ? meta.getCurrency()
+                                                                                    : "KRW"
+                                                                    );
+                                                                    stock.setExchange(exchange);
+                                                                    stock.setSector(sector);
+                                                                    stock.setIndustry(industry);
+                                                                    stock.setIsin(null);
 
-                                                        log.info(
-                                                                "[createStock] new stock saved: code={}, exchange={}, sector={}, industry={}",
-                                                                normalizedCode,
-                                                                exchange.getCode(),
-                                                                industry.getSector().getCode(),
-                                                                industry.getCode()
-                                                        );
+                                                                    log.info(
+                                                                            "[createStock] new stock saved: code={}, exchange={}, sector={}, industry={}",
+                                                                            normalizedCode,
+                                                                            exchange.getCode(),
+                                                                            sector.getCode(),
+                                                                            industry != null ? industry.getCode() : null
+                                                                    );
 
-                                                        return stockRepository.save(stock);
-                                                    })
-                                                    .subscribeOn(Schedulers.boundedElastic())
-                                    )
-                            );
-                });
+                                                                    return stockRepository.save(stock);
+                                                                })
+                                                                .subscribeOn(Schedulers.boundedElastic())
+                                                )
+                                        );
+                            })
+            );
+        });
     }
 
     /* ===========================
@@ -337,7 +355,8 @@ public class StockService {
      * 현재 정책:
      * - exchangeCode 필수
      * - companyName 권장 (없으면 code fallback 허용)
-     * - 국내주식(6자리 숫자)은 sector/industry 코드/이름 필수
+     * - 국내주식(6자리 숫자)은 sector 코드/이름 필수
+     * - industry는 선택이며, sector가 있을 때만 저장 가능
      */
     private void validateMetaForPersist(String normalizedCode, StockMeta meta) {
         if (meta == null) {
@@ -357,11 +376,9 @@ public class StockService {
             if (meta.getSectorName() == null || meta.getSectorName().isBlank()) {
                 throw new IllegalStateException("국내주식 sectorName 없음. stock 저장 불가: " + normalizedCode);
             }
-            if (meta.getIndustryCode() == null || meta.getIndustryCode().isBlank()) {
-                throw new IllegalStateException("국내주식 industryCode 없음. stock 저장 불가: " + normalizedCode);
-            }
-            if (meta.getIndustryName() == null || meta.getIndustryName().isBlank()) {
-                throw new IllegalStateException("국내주식 industryName 없음. stock 저장 불가: " + normalizedCode);
+            if (meta.getIndustryCode() != null && !meta.getIndustryCode().isBlank()
+                    && (meta.getIndustryName() == null || meta.getIndustryName().isBlank())) {
+                throw new IllegalStateException("국내주식 industryCode는 있으나 industryName 없음. stock 저장 불가: " + normalizedCode);
             }
         }
     }

@@ -1,11 +1,9 @@
 package com.qaima.service.stock;
 
 import com.qaima.domain.Exchange;
-import com.qaima.domain.Industry;
 import com.qaima.domain.Stock;
 import com.qaima.dto.mkstack.MarketStackTickersResponse.TickerData;
 import com.qaima.repository.ExchangeRepository;
-import com.qaima.repository.IndustryRepository;
 import com.qaima.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +20,6 @@ public class StockSyncService {
 
     private final StockRepository stockRepository;
     private final ExchangeRepository exchangeRepository;
-    private final IndustryRepository industryRepository;
 
     @Transactional
     public Mono<Void> syncMarketStackTickers(List<TickerData> tickersFromApi) {
@@ -53,21 +50,14 @@ public class StockSyncService {
                                     return exchangeRepository.save(newEx);
                                 });
 
-                        Industry industry = industryRepository.findByName("Unknown")
-                                .orElseGet(() -> {
-                                    log.info("기본 Industry (Unknown) 생성");
-                                    Industry newInd = new Industry();
-                                    newInd.setName("Unknown");
-                                    return industryRepository.save(newInd);
-                                });
-
                         Stock stock = stockRepository.findByExchangeAndStockCode(exchange, dto.getSymbol())
                                 .orElse(new Stock());
 
                         stock.setStockCode(dto.getSymbol());
                         stock.setCompanyName(dto.getName());
                         stock.setExchange(exchange);
-                        stock.setIndustry(industry);
+                        stock.setIndustry(null);
+                        stock.setSector(null);
 
                         stockRepository.save(stock);
                     }

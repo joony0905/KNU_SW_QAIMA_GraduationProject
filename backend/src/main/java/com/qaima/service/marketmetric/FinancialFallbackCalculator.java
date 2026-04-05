@@ -44,14 +44,27 @@ public class FinancialFallbackCalculator {
                 MetricMath.ratioPercent(latest.getOperatingIncome(), latest.getRevenue()),
                 MetricMath.ratioPercent(latest.getNetIncome(), latest.getRevenue()),
                 MetricMath.ratioPercent(latest.getLiabilities(), latest.getEquity()),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
+                latest.getCurrentAssets(),
+                latest.getCurrentLiabilities(),
+                latest.getInventories(),
+                latest.getInterestExpense(),
+                latest.getOperatingCashFlow(),
+                sumNullable(latest.getCapexPpe(), latest.getCapexIntangible()),
                 warnings,
                 "FINANCIAL_FALLBACK"
         );
+    }
+
+    private BigDecimal sumNullable(BigDecimal left, BigDecimal right) {
+        if (left == null && right == null) {
+            return null;
+        }
+        if (left == null) {
+            return right;
+        }
+        if (right == null) {
+            return left;
+        }
+        return left.add(right);
     }
 }

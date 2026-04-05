@@ -13,7 +13,10 @@ import com.qaima.service.marketmetric.RealtimePriceService;
 import com.qaima.service.marketmetric.ShareBasisResolver;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -57,7 +60,7 @@ public class FinancialReadService {
                         .flatMap(currentPriceOpt -> Blocking.call(() -> {
                             BigDecimal currentPrice = currentPriceOpt.orElse(null);
                             List<Financial> financials = queryFinancials(stock, periodType, periodNo, fromYear, toYear);
-                            return financials.stream()
+                            List<FinancialDto> dtos = financials.stream()
                                     .map(financial -> {
                                         BigDecimal shares = resolveValuationShares(stock, financial, snapshotAsOfDate);
                                         BigDecimal marketCap = (currentPrice != null && shares != null)
@@ -66,6 +69,8 @@ public class FinancialReadService {
                                         return financialMapper.toDto(financial, marketCap, currentPrice, shares);
                                     })
                                     .toList();
+                            applyGrowthMetrics(stock, financials, dtos, snapshotAsOfDate);
+                            return dtos;
                         })));
     }
 
@@ -151,5 +156,72 @@ public class FinancialReadService {
                 }
             }
         }
+    }
+
+    private void applyGrowthMetrics(
+            Stock stock,
+            List<Financial> financials,
+            List<FinancialDto> dtos,
+            LocalDate fallbackDate
+    ) {
+        if (financials == null || financials.isEmpty() || dtos == null || dtos.isEmpty()) {
+            return;
+        }
+
+        Map<String, Financial> byKey = new HashMap<>();
+        for (Financial financial : financials) {
+            byKey.put(financialKey(financial), financial);
+        }
+
+        Map<Long, BigDecimal> sharesByFinancialId = new HashMap<>();
+        for (Financial financial : financials) {
+            LocalDate effectiveDate = financial.getReportDate() != null ? financial.getReportDate() : fallbackDate;
+            sharesByFinancialId.put(financial.getFinancialId(), resolveValuationShares(stock, financial, effectiveDate));
+        }
+
+        for (int i = 0; i < financials.size() && i < dtos.size(); i++) {
+            Financial current = financials.get(i);
+            FinancialDto dto = dtos.get(i);
+            Financial previous = previousComparableFinancial(current, byKey);
+            if (previous == null) {
+                continue;
+            }
+
+            dto.setRevenueGrowth(growthPercent(current.getRevenue(), previous.getRevenue()));
+
+            BigDecimal currentShares = sharesByFinancialId.get(current.getFinancialId());
+            BigDecimal previousShares = sharesByFinancialId.get(previous.getFinancialId());
+            BigDecimal currentEps = epsValue(current, currentShares);
+            BigDecimal previousEps = epsValue(previous, previousShares);
+            dto.setEpsGrowth(growthPercent(currentEps, previousEps));
+        }
+    }
+
+    private Financial previousComparableFinancial(Financial current, Map<String, Financial> byKey) {
+        if (current == null || current.getPeriodType() == null) {
+            return null;
+        }
+        return byKey.get(current.getPeriodType().name() + ":" + (current.getFiscalYear() - 1) + ":" + current.getPeriodNo());
+    }
+
+    private String financialKey(Financial financial) {
+        return financial.getPeriodType().name() + ":" + financial.getFiscalYear() + ":" + financial.getPeriodNo();
+    }
+
+    private Double growthPercent(BigDecimal current, BigDecimal previous) {
+        if (current == null || previous == null || previous.signum() == 0) {
+            return null;
+        }
+        return current.subtract(previous)
+                .divide(previous, 8, java.math.RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100))
+                .doubleValue();
+    }
+
+    private BigDecimal epsValue(Financial financial, BigDecimal shares) {
+        if (financial == null || shares == null || shares.signum() == 0 || financial.getNetIncome() == null) {
+            return null;
+        }
+        return financial.getNetIncome().divide(shares, 4, java.math.RoundingMode.HALF_UP);
     }
 }

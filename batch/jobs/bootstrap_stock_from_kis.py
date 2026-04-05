@@ -11,6 +11,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, date
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -22,6 +23,7 @@ except ImportError:
 import mysql.connector
 import pandas as pd
 import requests
+from mysql.connector.errors import IntegrityError
 from mysql.connector.connection import MySQLConnection
 from mysql.connector.cursor import MySQLCursorDict
 
@@ -65,6 +67,12 @@ DEFAULT_DB_NAME = os.getenv("DB_NAME", "qaima")
 DEFAULT_REQUEST_TIMEOUT = int(os.getenv("BOOTSTRAP_HTTP_TIMEOUT_SEC", "15"))
 DEFAULT_SLEEP_MS = int(os.getenv("BOOTSTRAP_SLEEP_MS", "120"))
 DEFAULT_KIS_TOKEN_CACHE_FILE = os.getenv("KIS_TOKEN_CACHE_FILE", "./.kis_token_cache.json")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SEED_CSV_CANDIDATES = [
+    PROJECT_ROOT / "data" / "financials_kospi.csv",
+    PROJECT_ROOT / "data" / "financials_kosdaq.csv",
+]
+CSV_ENCODING_CANDIDATES = ("utf-8-sig", "utf-8", "cp949")
 
 EXCHANGE_SEED = [
     ("KOSPI", "KOSPI", "Asia/Seoul", "KR"),
@@ -138,7 +146,26 @@ def normalize_market_div(value: Any) -> Optional[str]:
     s = str(value).strip().upper()
     if not s:
         return None
+    if s in {"J", "Q", "K"}:
+        return "J"
     return s
+
+
+def infer_market_div_from_path(csv_path: str) -> Optional[str]:
+    name = Path(csv_path).name.lower()
+    if "kosdaq" in name or "kospi" in name or "konex" in name:
+        return "J"
+    return None
+
+
+def read_csv_with_fallback(csv_path: str) -> pd.DataFrame:
+    last_error: Optional[Exception] = None
+    for encoding in CSV_ENCODING_CANDIDATES:
+        try:
+            return pd.read_csv(csv_path, dtype=str, encoding=encoding)
+        except UnicodeDecodeError as e:
+            last_error = e
+    raise RuntimeError(f"Failed to read CSV with supported encodings: {csv_path}") from last_error
 
 
 def parse_yyyymmdd(value: Any) -> Optional[date]:
@@ -162,6 +189,28 @@ def pick_first_non_empty(d: Dict[str, Any], keys: List[str]) -> Optional[str]:
         if s and s.lower() != "nan":
             return s
     return None
+
+
+def extract_raw_classification_codes(kis_output: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    sector_code = pick_first_non_empty(
+        kis_output,
+        [
+            "idx_bztp_mcls_cd",
+            "idx_bztp_mcls_code",
+            "mcls_code",
+            "mcls_cd",
+        ],
+    )
+    industry_code = pick_first_non_empty(
+        kis_output,
+        [
+            "idx_bztp_scls_cd",
+            "idx_bztp_scls_code",
+            "scls_code",
+            "scls_cd",
+        ],
+    )
+    return sector_code, industry_code
 
 
 def infer_exchange_code(kis_output: Dict[str, Any], csv_market_div: Optional[str]) -> str:
@@ -434,7 +483,6 @@ class KisClient:
         if not isinstance(output, dict) or not output:
             raise RuntimeError(f"KIS search-stock-info empty output for {stock_code}: {data}")
 
-        logger.info("[search-stock-info] output for %s: %s", stock_code, output)
         return output
 
 
@@ -472,14 +520,19 @@ class StockMasterBootstrapRepository:
         finally:
             cur.close()
 
-    def upsert_sector(self, scheme: str, code: str, name: str) -> Optional[int]:
+    def upsert_sector(self, exchange_id: int, scheme: str, code: str, name: str) -> Optional[int]:
         if not code:
             return None
 
-        sql_check = "SELECT sector_id FROM sector WHERE scheme = %s AND code = %s LIMIT 1"
+        sql_check = """
+        SELECT sector_id
+        FROM sector
+        WHERE exchange_id = %s AND scheme = %s AND code = %s
+        LIMIT 1
+        """
         cur = self.conn.cursor()
         try:
-            cur.execute(sql_check, (scheme, code))
+            cur.execute(sql_check, (exchange_id, scheme, code))
             row = cur.fetchone()
             if row:
                 return int(row[0])
@@ -487,16 +540,17 @@ class StockMasterBootstrapRepository:
             cur.close()
 
         sql_insert = """
-        INSERT INTO sector(scheme, code, name)
-        VALUES (%s, %s, %s)
+        INSERT INTO sector(exchange_id, scheme, code, name)
+        VALUES (%s, %s, %s, %s)
         """
         cur = self.conn.cursor()
         try:
-            cur.execute(sql_insert, (scheme, code, name if name else code))
+            cur.execute(sql_insert, (exchange_id, scheme, code, name if name else code))
             self.conn.commit()
             return int(cur.lastrowid)
-        except Exception:
-            cur.execute(sql_check, (scheme, code))
+        except IntegrityError:
+            # Recover only on canonical identity collisions.
+            cur.execute(sql_check, (exchange_id, scheme, code))
             row = cur.fetchone()
             if row:
                 return int(row[0])
@@ -504,14 +558,26 @@ class StockMasterBootstrapRepository:
         finally:
             cur.close()
 
-    def upsert_industry(self, sector_id: Optional[int], scheme: str, code: str, name: str) -> Optional[int]:
-        if not code:
+    def upsert_industry(
+        self,
+        exchange_id: int,
+        sector_id: Optional[int],
+        scheme: str,
+        code: str,
+        name: str,
+    ) -> Optional[int]:
+        if not code or sector_id is None:
             return None
 
-        sql_check = "SELECT industry_id FROM industry WHERE scheme = %s AND code = %s LIMIT 1"
+        sql_check = """
+        SELECT industry_id
+        FROM industry
+        WHERE exchange_id = %s AND sector_id = %s AND scheme = %s AND code = %s
+        LIMIT 1
+        """
         cur = self.conn.cursor()
         try:
-            cur.execute(sql_check, (scheme, code))
+            cur.execute(sql_check, (exchange_id, sector_id, scheme, code))
             row = cur.fetchone()
             if row:
                 return int(row[0])
@@ -519,16 +585,17 @@ class StockMasterBootstrapRepository:
             cur.close()
 
         sql_insert = """
-        INSERT INTO industry(sector_id, scheme, code, name)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO industry(exchange_id, sector_id, scheme, code, name)
+        VALUES (%s, %s, %s, %s, %s)
         """
         cur = self.conn.cursor()
         try:
-            cur.execute(sql_insert, (sector_id, scheme, code, name if name else code))
+            cur.execute(sql_insert, (exchange_id, sector_id, scheme, code, name if name else code))
             self.conn.commit()
             return int(cur.lastrowid)
-        except Exception:
-            cur.execute(sql_check, (scheme, code))
+        except IntegrityError:
+            # Recover only on canonical identity collisions.
+            cur.execute(sql_check, (exchange_id, sector_id, scheme, code))
             row = cur.fetchone()
             if row:
                 return int(row[0])
@@ -539,6 +606,7 @@ class StockMasterBootstrapRepository:
     def upsert_stock(
         self,
         exchange_id: int,
+        sector_id: Optional[int],
         industry_id: Optional[int],
         stock_code: str,
         company_name: str,
@@ -550,6 +618,7 @@ class StockMasterBootstrapRepository:
         sql = """
         INSERT INTO stock(
             exchange_id,
+            sector_id,
             industry_id,
             stock_code,
             company_name,
@@ -558,8 +627,9 @@ class StockMasterBootstrapRepository:
             asset_type,
             currency
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
+            sector_id = VALUES(sector_id),
             industry_id = VALUES(industry_id),
             company_name = VALUES(company_name),
             isin = VALUES(isin),
@@ -574,6 +644,7 @@ class StockMasterBootstrapRepository:
                 sql,
                 (
                     exchange_id,
+                    sector_id,
                     industry_id,
                     stock_code,
                     company_name,
@@ -591,7 +662,7 @@ class StockMasterBootstrapRepository:
 
     def get_stock_by_code(self, stock_code: str) -> Optional[Dict[str, Any]]:
         sql = """
-        SELECT s.stock_id, s.stock_code, s.company_name, s.industry_id, i.sector_id
+        SELECT s.stock_id, s.stock_code, s.company_name, s.sector_id, s.industry_id, i.sector_id AS industry_sector_id
         FROM stock s
         LEFT JOIN industry i ON s.industry_id = i.industry_id
         WHERE s.stock_code = %s
@@ -606,11 +677,11 @@ class StockMasterBootstrapRepository:
 
     def get_resolved_classification_rows(self) -> List[Dict[str, Any]]:
         sql = """
-        SELECT s.stock_code, s.company_name, s.industry_id, i.sector_id
+        SELECT s.stock_code, s.company_name, s.sector_id, s.industry_id, COALESCE(s.sector_id, i.sector_id) AS resolved_sector_id
         FROM stock s
-        JOIN industry i ON s.industry_id = i.industry_id
+        LEFT JOIN industry i ON s.industry_id = i.industry_id
         WHERE s.industry_id IS NOT NULL
-          AND i.sector_id IS NOT NULL
+          AND COALESCE(s.sector_id, i.sector_id) IS NOT NULL
         """
         cur: MySQLCursorDict = self.conn.cursor(dictionary=True)
         try:
@@ -619,15 +690,16 @@ class StockMasterBootstrapRepository:
         finally:
             cur.close()
 
-    def update_stock_industry(self, stock_id: int, industry_id: int) -> None:
+    def update_stock_industry(self, stock_id: int, industry_id: int, sector_id: Optional[int] = None) -> None:
         sql = """
         UPDATE stock
-        SET industry_id = %s
+        SET sector_id = COALESCE(sector_id, %s),
+            industry_id = %s
         WHERE stock_id = %s
         """
         cur = self.conn.cursor()
         try:
-            cur.execute(sql, (industry_id, stock_id))
+            cur.execute(sql, (sector_id, industry_id, stock_id))
             self.conn.commit()
         finally:
             cur.close()
@@ -738,19 +810,6 @@ def build_kis_stock_info(
         ],
     )
 
-    if not sector_code or not sector_name:
-        logger.warning(
-            "stock_code=%s: sector not found in KIS response. available keys: %s",
-            stock_code,
-            list(kis_output.keys()),
-        )
-    if not industry_code or not industry_name:
-        logger.warning(
-            "stock_code=%s: industry not found in KIS response. available keys: %s",
-            stock_code,
-            list(kis_output.keys()),
-        )
-
     return KisStockInfo(
         stock_code=stock_code,
         company_name=company_name,
@@ -764,27 +823,59 @@ def build_kis_stock_info(
     )
 
 
-def load_seed_stock_rows(csv_path: str, stock_code_col: str, market_div_col: Optional[str]) -> pd.DataFrame:
-    df = pd.read_csv(csv_path, dtype=str, encoding="cp949")
+def resolve_csv_paths(csv_args: Optional[List[str]]) -> List[str]:
+    if csv_args:
+        resolved: List[str] = []
+        for raw in csv_args:
+            if raw is None:
+                continue
+            for item in str(raw).split(","):
+                candidate = item.strip()
+                if candidate:
+                    resolved.append(candidate)
+        if resolved:
+            return resolved
 
-    if stock_code_col not in df.columns:
-        raise ValueError(f"CSV missing required column: {stock_code_col}")
+    defaults = [str(path) for path in DEFAULT_SEED_CSV_CANDIDATES if path.exists()]
+    if defaults:
+        return defaults
 
-    work = pd.DataFrame()
-    work["stock_code"] = df[stock_code_col].map(normalize_stock_code)
+    raise ValueError(
+        "No seed CSV provided. Pass --csv or place data/financials_kospi.csv and/or data/financials_kosdaq.csv."
+    )
 
-    if market_div_col and market_div_col in df.columns:
-        work["market_div"] = df[market_div_col].map(normalize_market_div)
-    else:
-        work["market_div"] = None
 
+def load_seed_stock_rows(csv_paths: List[str], stock_code_col: str, market_div_col: Optional[str]) -> pd.DataFrame:
+    frames: List[pd.DataFrame] = []
+
+    for csv_path in csv_paths:
+        logger.info("Loading seed CSV: %s", csv_path)
+        df = read_csv_with_fallback(csv_path)
+
+        if stock_code_col not in df.columns:
+            raise ValueError(f"CSV missing required column: {stock_code_col} :: {csv_path}")
+
+        work = pd.DataFrame()
+        work["stock_code"] = df[stock_code_col].map(normalize_stock_code)
+
+        if market_div_col and market_div_col in df.columns:
+            work["market_div"] = df[market_div_col].map(normalize_market_div)
+        else:
+            work["market_div"] = infer_market_div_from_path(csv_path)
+
+        frames.append(work)
+
+    if not frames:
+        raise ValueError("No seed rows loaded from CSV input")
+
+    work = pd.concat(frames, ignore_index=True)
     work = work.dropna(subset=["stock_code"]).drop_duplicates(subset=["stock_code"], keep="first")
     work = work.sort_values("stock_code").reset_index(drop=True)
     return work
 
 
 def bootstrap_stock_master(
-    csv_path: str,
+    csv_paths: List[str],
     stock_code_col: str,
     market_div_col: Optional[str],
     kis: KisClient,
@@ -798,10 +889,10 @@ def bootstrap_stock_master(
         if code not in exchange_id_map:
             raise RuntimeError(f"exchange seed missing: {code}")
 
-    seed_df = load_seed_stock_rows(csv_path, stock_code_col, market_div_col)
+    seed_df = load_seed_stock_rows(csv_paths, stock_code_col, market_div_col)
     total = len(seed_df)
 
-    logger.info("Loaded %d unique stock codes from CSV: %s", total, csv_path)
+    logger.info("Loaded %d unique stock codes from CSV sources: %s", total, ", ".join(csv_paths))
 
     success_full = 0
     success_partial = 0
@@ -817,6 +908,7 @@ def bootstrap_stock_master(
     for idx, row in seed_df.iterrows():
         stock_code = row["stock_code"]
         csv_market_div = row["market_div"] or "J"
+        kis_output: Dict[str, Any] = {}
 
         now = time.time()
         wait = min_interval_sec - (now - last_request_ts)
@@ -831,72 +923,56 @@ def bootstrap_stock_master(
 
             exchange_id = exchange_id_map[stock_info.exchange_code]
 
+            raw_sector_code, raw_industry_code = extract_raw_classification_codes(kis_output)
+            sector_id: Optional[int] = None
             industry_id: Optional[int] = None
 
-            if (
-                stock_info.sector_code and stock_info.sector_name
-                and stock_info.industry_code and stock_info.industry_name
-            ):
+            if stock_info.sector_code:
                 sector_id = repo.upsert_sector(
+                    exchange_id=exchange_id,
                     scheme=SECTOR_SCHEME,
                     code=stock_info.sector_code,
-                    name=stock_info.sector_name,
+                    name=stock_info.sector_name or stock_info.sector_code,
                 )
 
+            if stock_info.industry_code and sector_id is not None:
                 industry_id = repo.upsert_industry(
+                    exchange_id=exchange_id,
                     sector_id=sector_id,
                     scheme=INDUSTRY_SCHEME,
                     code=stock_info.industry_code,
-                    name=stock_info.industry_name,
+                    name=stock_info.industry_name or stock_info.industry_code,
                 )
 
-                stock_id = repo.upsert_stock(
-                    exchange_id=exchange_id,
-                    industry_id=industry_id,
-                    stock_code=stock_info.stock_code,
-                    company_name=stock_info.company_name,
-                    isin=stock_info.isin,
-                    listed_at=stock_info.listed_at,
-                    asset_type="EQUITY",
-                    currency="KRW",
-                )
+            stock_id = repo.upsert_stock(
+                exchange_id=exchange_id,
+                sector_id=sector_id,
+                industry_id=industry_id,
+                stock_code=stock_info.stock_code,
+                company_name=stock_info.company_name,
+                isin=stock_info.isin,
+                listed_at=stock_info.listed_at,
+                asset_type="EQUITY",
+                currency="KRW",
+            )
 
+            if sector_id is not None and industry_id is not None:
                 success_full += 1
-                logger.info(
-                    "[%d/%d] OK-FULL stock_code=%s stock_id=%s exchange=%s sector=%s industry=%s company=%s",
-                    idx + 1,
-                    total,
-                    stock_info.stock_code,
-                    stock_id,
-                    stock_info.exchange_code,
-                    stock_info.sector_code,
-                    stock_info.industry_code,
-                    stock_info.company_name,
-                )
             else:
-                stock_id = repo.upsert_stock(
-                    exchange_id=exchange_id,
-                    industry_id=None,
-                    stock_code=stock_info.stock_code,
-                    company_name=stock_info.company_name,
-                    isin=stock_info.isin,
-                    listed_at=stock_info.listed_at,
-                    asset_type="EQUITY",
-                    currency="KRW",
-                )
-
                 reason_parts = []
-                if not stock_info.sector_code or not stock_info.sector_name:
+                if not stock_info.sector_code:
                     reason_parts.append("missing sector info")
-                if not stock_info.industry_code or not stock_info.industry_name:
+                if not stock_info.industry_code:
                     reason_parts.append("missing industry info")
+                elif sector_id is None:
+                    reason_parts.append("industry skipped without sector context")
                 reason = ", ".join(reason_parts) if reason_parts else "missing classification"
 
                 success_partial += 1
                 missing_classification_codes.append((stock_info.stock_code, reason))
 
                 logger.warning(
-                    "[%d/%d] OK-PARTIAL stock_code=%s stock_id=%s exchange=%s company=%s reason=%s",
+                    "[%d/%d] OK-PARTIAL stock_code=%s stock_id=%s exchange=%s company=%s reason=%s raw(idx_bztp_mcls_cd=%s, idx_bztp_scls_cd=%s)",
                     idx + 1,
                     total,
                     stock_info.stock_code,
@@ -904,12 +980,22 @@ def bootstrap_stock_master(
                     stock_info.exchange_code,
                     stock_info.company_name,
                     reason,
+                    raw_sector_code,
+                    raw_industry_code,
                 )
 
         except Exception as e:
             hard_fail += 1
             hard_failed_codes.append((stock_code, str(e)))
-            logger.exception("[%d/%d] HARD-FAIL stock_code=%s", idx + 1, total, stock_code)
+            raw_sector_code, raw_industry_code = extract_raw_classification_codes(kis_output) if kis_output else (None, None)
+            logger.exception(
+                "[%d/%d] HARD-FAIL stock_code=%s raw(idx_bztp_mcls_cd=%s, idx_bztp_scls_cd=%s)",
+                idx + 1,
+                total,
+                stock_code,
+                raw_sector_code,
+                raw_industry_code,
+            )
 
         if sleep_ms > 0:
             time.sleep(sleep_ms / 1000.0)
@@ -953,7 +1039,7 @@ def build_prefix_classification_map(repo: StockMasterBootstrapRepository) -> Tup
         stock_code = row["stock_code"]
         company_name = row["company_name"] or ""
         normalized_name = normalize_company_name_for_backfill(company_name)
-        sector_id = int(row["sector_id"])
+        sector_id = int(row["resolved_sector_id"])
         industry_id = int(row["industry_id"])
         prefix = company_prefix(stock_code)
         grouped[prefix].add((sector_id, industry_id, normalized_name))
@@ -989,7 +1075,7 @@ def backfill_missing_classification(
 
         stock_id = int(row["stock_id"])
         current_industry_id = row["industry_id"]
-        current_sector_id = row["sector_id"]
+        current_sector_id = row["sector_id"] if row["sector_id"] is not None else row["industry_sector_id"]
         target_name = row["company_name"] or ""
 
         # 이미 해결되었으면 skip
@@ -1017,7 +1103,11 @@ def backfill_missing_classification(
             )
             continue
 
-        repo.update_stock_industry(stock_id=stock_id, industry_id=source_industry_id)
+        repo.update_stock_industry(
+            stock_id=stock_id,
+            industry_id=source_industry_id,
+            sector_id=source_sector_id,
+        )
         updated += 1
 
         logger.info(
@@ -1070,7 +1160,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--csv",
-        required=True,
+        action="append",
+        default=None,
         help="Path to source CSV (financial CSV etc.)",
     )
     parser.add_argument(
@@ -1108,6 +1199,7 @@ def main() -> int:
 
     app_key = required_env("KIS_APP_KEY", DEFAULT_KIS_APP_KEY)
     app_secret = required_env("KIS_APP_SECRET", DEFAULT_KIS_APP_SECRET)
+    csv_paths = resolve_csv_paths(args.csv)
 
     conn = mysql.connector.connect(
         host=DEFAULT_DB_HOST,
@@ -1134,7 +1226,7 @@ def main() -> int:
         repo = StockMasterBootstrapRepository(conn)
 
         bootstrap_result = bootstrap_stock_master(
-            csv_path=args.csv,
+            csv_paths=csv_paths,
             stock_code_col=args.stock_code_col,
             market_div_col=market_div_col,
             kis=kis,
