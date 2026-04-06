@@ -1,3 +1,5 @@
+import type { BaseRateSeriesPoint, PeerItem, ShortSellingSeriesPoint } from "./feature2";
+
 export interface AnalysisPanelResult {
   explain?: {
     text?: string | null;
@@ -32,6 +34,9 @@ export interface AnalysisPanelResult {
   } | null;
 
   warnings?: string[] | null;
+  meta?: {
+    warnings?: string[] | null;
+  } | null;
 
   metrics?: {
     ohlcvSummary?: {
@@ -77,7 +82,8 @@ export interface AnalysisPanelResult {
         eps?: number;
         bps?: number;
       };
-    };
+      };
+    indicators?: unknown;
     shortSelling?: {
       stockCode: string;
       companyName: string;
@@ -93,6 +99,12 @@ export interface AnalysisPanelResult {
       date: string;
       value: number;
       unit: string;
+    } | null;
+    baseRateSeries?: BaseRateSeriesPoint[] | null;
+    shortSellingSeries?: ShortSellingSeriesPoint[] | null;
+    peerCluster?: {
+      peerCount: number;
+      peers: PeerItem[];
     } | null;
   } | null;
   summary?: string;

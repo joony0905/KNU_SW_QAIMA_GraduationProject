@@ -57,6 +57,7 @@ export default function FinancialTimelineChart({
 }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [animated, setAnimated] = useState(false);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   useEffect(() => {
     setAnimated(false);
@@ -163,6 +164,7 @@ export default function FinancialTimelineChart({
     { color: COLORS.netIncome, label: "순이익" },
     { color: COLORS.operatingMargin, label: "영업이익률" },
   ];
+  const hoveredPoint = hoveredIndex == null ? null : points[hoveredIndex] ?? null;
 
   return (
     <div
@@ -188,6 +190,7 @@ export default function FinancialTimelineChart({
           className="min-w-[720px] w-full"
           role="img"
           aria-label={`${title} 차트`}
+          onMouseLeave={() => setHoveredIndex(null)}
         >
           <line
             x1={leftPad}
@@ -238,6 +241,29 @@ export default function FinancialTimelineChart({
               </text>
             );
           })}
+
+          {hoveredPoint && (
+            <g pointerEvents="none">
+              <line
+                x1={leftPad + hoveredIndex! * groupWidth + groupCenterOffset}
+                x2={leftPad + hoveredIndex! * groupWidth + groupCenterOffset}
+                y1={topPad}
+                y2={height - bottomPad}
+                stroke="#111827"
+                strokeDasharray="6 6"
+              />
+              <text
+                x={leftPad + hoveredIndex! * groupWidth + groupCenterOffset}
+                y={height - 16}
+                textAnchor="middle"
+                fontSize="11"
+                fill="#111827"
+                fontWeight="600"
+              >
+                {hoveredPoint.label}
+              </text>
+            </g>
+          )}
 
           {points.map((point, index) => {
             const groupX = leftPad + index * groupWidth;
@@ -304,6 +330,15 @@ export default function FinancialTimelineChart({
                 >
                   {point.label}
                 </text>
+                <rect
+                  x={groupX}
+                  y={topPad}
+                  width={groupWidth}
+                  height={chartHeight}
+                  fill="transparent"
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onFocus={() => setHoveredIndex(index)}
+                />
               </g>
             );
           })}

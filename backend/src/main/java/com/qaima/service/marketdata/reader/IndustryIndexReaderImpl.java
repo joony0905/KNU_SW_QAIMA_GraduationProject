@@ -121,7 +121,7 @@ public class IndustryIndexReaderImpl implements IndustryIndexReader {
                     log.info("[IndustryIndexReader] db rows insufficient. indexCode={}, indexId={}, freq={}, window={}, rows={}",
                             index.getCode(), index.getIndexId(), freq, window, size);
 
-                    return fetchFromKisAndMaybeSave(index, meta, freq, window);
+                    return fetchFromKisAndMaybeSave(index, meta, freq, window, rows == null ? List.of() : rows);
                 });
     }
 
@@ -129,7 +129,8 @@ public class IndustryIndexReaderImpl implements IndustryIndexReader {
             IndustryIndex index,
             Feature2MetaDto meta,
             Freq freq,
-            int window
+            int window,
+            List<IndustryIndexOhlcv> fallbackRows
     ) {
         LocalDate to = LocalDate.now(KST);
         LocalDate from = estimateFromDate(freq, window, to);
@@ -145,7 +146,7 @@ public class IndustryIndexReaderImpl implements IndustryIndexReader {
 
                     if (fetched == null || fetched.isEmpty()) {
                         meta.addWarning(Feat2WarningCode.INDUSTRY_INDEX_FETCH_FAILED);
-                        return Mono.empty();
+                        return fallbackToExisting(index, fallbackRows, meta, "fetch returned empty rows");
                     }
 
                     List<IndustryIndexOhlcv> entities = fetched.stream()
@@ -158,7 +159,7 @@ public class IndustryIndexReaderImpl implements IndustryIndexReader {
 
                     if (entities.isEmpty()) {
                         meta.addWarning(Feat2WarningCode.INDUSTRY_INDEX_OHLCV_EMPTY);
-                        return Mono.empty();
+                        return fallbackToExisting(index, fallbackRows, meta, "mapped entities empty");
                     }
 
                     List<IndustryIndexOhlcv> sanitized = entities.stream()
@@ -172,7 +173,7 @@ public class IndustryIndexReaderImpl implements IndustryIndexReader {
 
                     if (sanitized.isEmpty()) {
                         meta.addWarning(Feat2WarningCode.INDUSTRY_INDEX_OHLCV_EMPTY);
-                        return Mono.empty();
+                        return fallbackToExisting(index, fallbackRows, meta, "sanitized entities empty");
                     }
 
                     List<IndustryIndexOhlcv> limited = sanitized.stream()
@@ -184,7 +185,7 @@ public class IndustryIndexReaderImpl implements IndustryIndexReader {
 
                     if (limited.isEmpty()) {
                         meta.addWarning(Feat2WarningCode.INDUSTRY_INDEX_OHLCV_EMPTY);
-                        return Mono.empty();
+                        return fallbackToExisting(index, fallbackRows, meta, "limited entities empty");
                     }
 
                     Mono<List<IndustryIndexOhlcv>> saveMono = Mono.fromCallable(() -> ohlcvRepository.saveAll(entities))
@@ -207,8 +208,24 @@ public class IndustryIndexReaderImpl implements IndustryIndexReader {
                     log.warn("[IndustryIndexReader] fetch failed. indexCode={}, cause={}",
                             index.getCode(), ex.getMessage(), ex);
                     meta.addWarning(Feat2WarningCode.INDUSTRY_INDEX_FETCH_FAILED);
-                    return Mono.empty();
+                    return fallbackToExisting(index, fallbackRows, meta, "fetch exception");
                 });
+    }
+
+    private Mono<IndustryIndexBlockDto> fallbackToExisting(
+            IndustryIndex index,
+            List<IndustryIndexOhlcv> fallbackRows,
+            Feature2MetaDto meta,
+            String reason
+    ) {
+        if (fallbackRows == null || fallbackRows.isEmpty()) {
+            log.info("[IndustryIndexReader] no fallback rows. indexCode={}, reason={}", index.getCode(), reason);
+            return Mono.empty();
+        }
+
+        log.info("[IndustryIndexReader] fallback to existing DB rows. indexCode={}, rows={}, reason={}",
+                index.getCode(), fallbackRows.size(), reason);
+        return buildBlock(index, fallbackRows, meta);
     }
 
     private Mono<IndustryIndexBlockDto> buildBlock(

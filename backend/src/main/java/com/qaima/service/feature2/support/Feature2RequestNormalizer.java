@@ -10,14 +10,14 @@ public class Feature2RequestNormalizer {
 
     private static final Freq DEFAULT_FREQ = Freq.ONE_D;
     private static final int DEFAULT_WINDOW = 90;
-    private static final int DEFAULT_PEER_COUNT = 8;
+    private static final int DEFAULT_PEER_COUNT = 30;
     private static final int DEFAULT_MAX_LAG = 5;
 
     private static final int MIN_WINDOW = 20;
     private static final int MAX_WINDOW = 365;
 
     private static final int MIN_PEER_COUNT = 3;
-    private static final int MAX_PEER_COUNT = 20;
+    private static final int MAX_PEER_COUNT = 30;
 
     private static final int MIN_MAX_LAG = 1;
     private static final int MAX_MAX_LAG = 20;

@@ -1,5 +1,13 @@
 import api from "./apiClient";
-import type { Feature2AnalyzeResponse } from "../types/feature2";
+import type {
+  BaseRateSeriesPoint,
+  BaseRateMetrics,
+  Feature2AnalyzeResponse,
+  IndustryIndexBlock,
+  RelatedStockCard,
+  ShortSellingSeriesPoint,
+  ShortSellingMetrics,
+} from "../types/feature2";
 import type { ApiResponse } from "../types/common/api";
 import type { NewsItemDto } from "../types/news";
 
@@ -7,10 +15,12 @@ export const fetchFeature2Analysis = async (
   stockCode: string,
   freq?: string,
   window?: number,
+  peerCount?: number,
 ): Promise<ApiResponse<Feature2AnalyzeResponse>> => {
   const body: Record<string, unknown> = { stockCode };
   if (freq) body.freq = freq;
   if (window) body.window = window;
+  if (peerCount) body.peerCount = peerCount;
   const res = await api.post<ApiResponse<Feature2AnalyzeResponse>>(
     "/feature2/analyze",
     body,
@@ -23,6 +33,60 @@ export const fetchFeature2NewsList = async (
 ): Promise<ApiResponse<NewsItemDto[]>> => {
   const res = await api.get<ApiResponse<NewsItemDto[]>>("/feature2/news", {
     params: { stockCode },
+  });
+  return res.data;
+};
+
+export const fetchFeature2BaseRate = async (): Promise<ApiResponse<BaseRateMetrics | null>> => {
+  const res = await api.get<ApiResponse<BaseRateMetrics | null>>("/feature2/cards/base-rate");
+  return res.data;
+};
+
+export const fetchFeature2BaseRateSeries = async (
+  limit = 365,
+): Promise<ApiResponse<BaseRateSeriesPoint[]>> => {
+  const res = await api.get<ApiResponse<BaseRateSeriesPoint[]>>("/feature2/cards/base-rate-series", {
+    params: { limit },
+  });
+  return res.data;
+};
+
+export const fetchFeature2IndustryIndex = async (
+  stockCode: string,
+  freq = "ONE_D",
+  window = 120,
+): Promise<ApiResponse<IndustryIndexBlock | null>> => {
+  const res = await api.get<ApiResponse<IndustryIndexBlock | null>>("/feature2/cards/industry-index", {
+    params: { stockCode, freq, window },
+  });
+  return res.data;
+};
+
+export const fetchFeature2ShortSelling = async (
+  stockCode: string,
+): Promise<ApiResponse<ShortSellingMetrics | null>> => {
+  const res = await api.get<ApiResponse<ShortSellingMetrics | null>>("/feature2/cards/short-selling", {
+    params: { stockCode },
+  });
+  return res.data;
+};
+
+export const fetchFeature2ShortSellingSeries = async (
+  stockCode: string,
+  limit = 60,
+): Promise<ApiResponse<ShortSellingSeriesPoint[]>> => {
+  const res = await api.get<ApiResponse<ShortSellingSeriesPoint[]>>("/feature2/cards/short-selling-series", {
+    params: { stockCode, limit },
+  });
+  return res.data;
+};
+
+export const fetchFeature2RelatedStocks = async (
+  stockCode: string,
+  limit = 30,
+): Promise<ApiResponse<RelatedStockCard[]>> => {
+  const res = await api.get<ApiResponse<RelatedStockCard[]>>("/feature2/cards/related-stocks", {
+    params: { stockCode, limit },
   });
   return res.data;
 };

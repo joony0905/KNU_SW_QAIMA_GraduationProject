@@ -3,14 +3,30 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import StockInputBox from "../components/StockInputBox";
 import StockCard from "../components/StockCard";
-import { fetchCandles } from "../api/charts";
+import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import TradingViewWidget from "../components/TradingViewWidget";
 
 import AnalysisResultPanel from "../components/AnalysisResultPanel";
-import { fetchFeature2Analysis } from "../api/feature2";
+import {
+  fetchFeature2Analysis,
+  fetchFeature2BaseRate,
+  fetchFeature2BaseRateSeries,
+  fetchFeature2IndustryIndex,
+  fetchFeature2RelatedStocks,
+  fetchFeature2ShortSellingSeries,
+  fetchFeature2ShortSelling,
+} from "../api/feature2";
 import RelativeLineWidget from "../components/RelativeLineWidget";
-import type { Feature2AnalyzeResponse } from "../types/feature2";
+import type {
+  BaseRateSeriesPoint,
+  BaseRateMetrics,
+  Feature2AnalyzeResponse,
+  IndustryIndexBlock,
+  RelatedStockCard,
+  ShortSellingSeriesPoint,
+  ShortSellingMetrics,
+} from "../types/feature2";
 import type { ApiResponse } from "../types/common/api";
 import { fetchNewsByStock } from "../api/news";
 import type { NewsItemDto } from "../types/news";
@@ -24,6 +40,13 @@ const getColorClass = (rate: string) => {
   if (rate.startsWith("-")) return "text-blue-600";
   return "text-black";
 };
+
+const INITIAL_INDUSTRY_FREQ = "ONE_D";
+const INITIAL_INDUSTRY_WINDOW = 120;
+const INITIAL_HISTORY_DAYS = 30;
+const MAX_HISTORY_DAYS = 365;
+const LOAD_MORE_LIMIT = 5;
+const INITIAL_RELATED_STOCK_LIMIT = 30;
 
 interface RelatedStockDisplay {
   stockCode: string;
@@ -55,24 +78,46 @@ const formatTimeAgo = (isoStr: string): string => {
   return new Date(isoStr).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
 };
 
+const mapRelatedStocks = (rows: RelatedStockCard[]): RelatedStockDisplay[] =>
+  rows.map((row) => ({
+    stockCode: row.stockCode,
+    companyName: row.companyName,
+    price: row.price ?? 0,
+    change: row.changeAmount ?? 0,
+    changeRate: row.changeRate ?? 0,
+    volume: row.volume ?? 0,
+  }));
+
 export default function Feature2MockPage() {
   const navigate = useNavigate();
+  const searchRequestIdRef = useRef(0);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
+  const requestedRangesRef = useRef<Set<string>>(new Set());
+  const isLoadingMoreRef = useRef(false);
+  const chartRangeRef = useRef<{
+    stockCode: string;
+    freq: "ONE_D";
+    fromIso: string;
+    toIso: string;
+    absoluteMinFromIso: string;
+  } | null>(null);
 
   const loadCandles = async (stockCode: string) => {
     setChartLoading(true);
     setChartError(null);
     const toDate = new Date();
-    const fromDate = shiftKstDays(toDate, -30);
+    const fromDate = shiftKstDays(toDate, -(INITIAL_HISTORY_DAYS - 1));
+    const fromIso = formatKstOffsetDateTime(fromDate);
+    const toIso = formatKstOffsetDateTime(toDate);
 
     try {
       const response = await fetchCandles(
         stockCode,
         "ONE_D",
-        formatKstOffsetDateTime(fromDate),
-        formatKstOffsetDateTime(toDate),
+        fromIso,
+        toIso,
       );
 
       if (response.data.length === 0) {
@@ -80,12 +125,73 @@ export default function Feature2MockPage() {
       }
 
       setCandles(response.data);
+      const absoluteMin = shiftKstDays(toDate, -MAX_HISTORY_DAYS);
+      chartRangeRef.current = {
+        stockCode,
+        freq: "ONE_D",
+        fromIso,
+        toIso,
+        absoluteMinFromIso: formatKstOffsetDateTime(absoluteMin),
+      };
+      requestedRangesRef.current.clear();
     } catch (e: any) {
       console.error("차트 데이터 조회 실패:", e);
       setChartError("차트를 불러오지 못했습니다.");
       setCandles([]);
     } finally {
       setChartLoading(false);
+    }
+  };
+
+  const handleRequestMoreHistory = async () => {
+    if (isLoadingMoreRef.current) return;
+    if (!chartRangeRef.current) return;
+    if (!candles || candles.length === 0) return;
+
+    const { stockCode, freq, absoluteMinFromIso } = chartRangeRef.current;
+    const oldest = candles[0];
+    if (typeof oldest.t !== "number") return;
+
+    const oldestEpochSec = oldest.t;
+    const oldestIso = new Date(oldestEpochSec * 1000).toISOString();
+    const absoluteMinDate = new Date(absoluteMinFromIso);
+
+    if (new Date(oldestIso) <= absoluteMinDate) return;
+
+    const rangeKey = `to=${oldestEpochSec}__limit=${LOAD_MORE_LIMIT}`;
+    if (requestedRangesRef.current.has(rangeKey)) return;
+    requestedRangesRef.current.add(rangeKey);
+
+    isLoadingMoreRef.current = true;
+    try {
+      const response = await fetchCandlesBefore(
+        stockCode,
+        freq,
+        oldestIso,
+        LOAD_MORE_LIMIT,
+      );
+
+      const incoming: Candle[] = response.data ?? [];
+      if (incoming.length === 0) return;
+
+      setCandles((prev) => {
+        const map = new Map<number, Candle>();
+        for (const candle of prev) map.set(candle.t, candle);
+        for (const candle of incoming) map.set(candle.t, candle);
+        return Array.from(map.values()).sort((a, b) => a.t - b.t);
+      });
+
+      const minIncomingT = Math.min(...incoming.map((candle) => candle.t));
+      if (Number.isFinite(minIncomingT)) {
+        chartRangeRef.current = {
+          ...chartRangeRef.current,
+          fromIso: new Date(minIncomingT * 1000).toISOString(),
+        };
+      }
+    } catch (e) {
+      console.error("추가 캔들 로딩 실패:", e);
+    } finally {
+      isLoadingMoreRef.current = false;
     }
   };
 
@@ -141,6 +247,11 @@ export default function Feature2MockPage() {
 
   const [analysisResult, setAnalysisResult] = useState<ApiResponse<Feature2AnalyzeResponse> | null>(null);
   const analysisData = analysisResult?.data ?? null;
+  const [baseRateResult, setBaseRateResult] = useState<ApiResponse<BaseRateMetrics | null> | null>(null);
+  const [shortSellingResult, setShortSellingResult] = useState<ApiResponse<ShortSellingMetrics | null> | null>(null);
+  const [shortSellingSeriesResult, setShortSellingSeriesResult] = useState<ApiResponse<ShortSellingSeriesPoint[]> | null>(null);
+  const [baseRateSeriesResult, setBaseRateSeriesResult] = useState<ApiResponse<BaseRateSeriesPoint[]> | null>(null);
+  const [industryIndexResult, setIndustryIndexResult] = useState<ApiResponse<IndustryIndexBlock | null> | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
@@ -156,7 +267,7 @@ export default function Feature2MockPage() {
   });
 
   const industrySeries = useMemo(() => {
-  const raw = analysisData?.metrics?.industryIndex?.series;
+  const raw = (analysisData?.metrics?.industryIndex ?? industryIndexResult?.data ?? null)?.series;
 
   console.log("🔥 [RAW industryIndex.series]", raw);
 
@@ -177,43 +288,114 @@ export default function Feature2MockPage() {
   console.log("🔥 [MAPPED industrySeries]", mapped);
 
   return mapped;
-}, [analysisData]);
+}, [analysisData, industryIndexResult]);
 
   const handleSearch = async (value: string) => {
     const q = value.trim();
     if (!q) return;
+    const requestId = ++searchRequestIdRef.current;
 
     setHasSelectedStock(true);
     setShowAnalyzeButton(true);
     setAnalysisResult(null);
+    setShortSellingResult(null);
+    setShortSellingSeriesResult(null);
+    setBaseRateSeriesResult(null);
+    setIndustryIndexResult(null);
     setDisplayText("");
     setErr("");
     setMainStock((prev) => ({ ...prev, symbol: q }));
+
+    let resolvedStockCode = q;
 
     // 종목명 조회
     try {
       const stockInfo = await getStockByCode(q);
       if (stockInfo) {
-        setMainStock({ name: stockInfo.companyName || q, symbol: q });
+        resolvedStockCode = stockInfo.stockCode || q;
+        setMainStock({ name: stockInfo.companyName || q, symbol: resolvedStockCode });
       }
     } catch {
       setMainStock({ name: q, symbol: q });
     }
 
-    // 뉴스 조회
     setNewsLoading(true);
     setNewsError(null);
     setNewsItems([]);
-    try {
-      const news = await fetchNewsByStock(q);
-      setNewsItems(news);
-    } catch {
-      setNewsError("뉴스를 불러오지 못했습니다.");
-    } finally {
-      setNewsLoading(false);
-    }
+    setRelatedLoading(true);
+    setRelatedError(null);
+    setRelatedStocks([]);
 
-    await loadCandles(q);
+    const baseRateTask = (async () => {
+      try {
+        const result = await fetchFeature2BaseRate();
+        setBaseRateResult(result);
+      } catch {
+        setBaseRateResult(null);
+      }
+    })();
+
+    const newsTask = (async () => {
+      try {
+        const news = await fetchNewsByStock(resolvedStockCode);
+        if (searchRequestIdRef.current !== requestId) return;
+        setNewsItems(news);
+      } catch {
+        if (searchRequestIdRef.current !== requestId) return;
+        setNewsError("뉴스를 불러오지 못했습니다.");
+      } finally {
+        if (searchRequestIdRef.current !== requestId) return;
+        setNewsLoading(false);
+      }
+    })();
+
+    const shortSellingTask = (async () => {
+      try {
+        const result = await fetchFeature2ShortSelling(resolvedStockCode);
+        setShortSellingResult(result);
+      } catch {
+        setShortSellingResult(null);
+      }
+    })();
+
+    const industryIndexTask = (async () => {
+      setIndustryChartLoading(true);
+      try {
+        const result = await fetchFeature2IndustryIndex(
+          resolvedStockCode,
+          INITIAL_INDUSTRY_FREQ,
+          INITIAL_INDUSTRY_WINDOW,
+        );
+        setIndustryIndexResult(result);
+      } catch {
+        setIndustryIndexResult(null);
+      } finally {
+        setIndustryChartLoading(false);
+      }
+    })();
+
+    const relatedStocksTask = (async () => {
+      try {
+        const result = await fetchFeature2RelatedStocks(
+          resolvedStockCode,
+          INITIAL_RELATED_STOCK_LIMIT,
+        );
+        setRelatedStocks(mapRelatedStocks(result.data ?? []));
+      } catch {
+        setRelatedError("유사 종목을 불러오지 못했습니다.");
+      } finally {
+        setRelatedLoading(false);
+      }
+    })();
+
+    await Promise.all([
+      loadCandles(resolvedStockCode),
+      newsTask,
+      baseRateTask,
+      shortSellingTask,
+      industryIndexTask,
+      relatedStocksTask,
+    ]);
   };
 
   const [newsItems, setNewsItems] = useState<NewsItemDto[]>([]);
@@ -221,15 +403,12 @@ export default function Feature2MockPage() {
   const [newsError, setNewsError] = useState<string | null>(null);
 
   const [hoveredDayKey, setHoveredDayKey] = useState<string | null>(null);
-  const [relatedStocks, setRelatedStocks] = useState<RelatedStockDisplay[]>([
-    { stockCode: "000660", companyName: "SK하이닉스", price: 178000, change: 3000, changeRate: 1.71, volume: 3200000 },
-    { stockCode: "042700", companyName: "한미반도체", price: 95400, change: -1200, changeRate: -1.24, volume: 1500000 },
-    { stockCode: "034730", companyName: "SK Inc.", price: 152000, change: 0, changeRate: 0, volume: 800000 },
-    { stockCode: "035420", companyName: "NAVER", price: 213500, change: 4500, changeRate: 2.15, volume: 2100000 },
-    { stockCode: "006400", companyName: "삼성SDI", price: 380000, change: -5000, changeRate: -1.30, volume: 900000 },
-  ]);
+  const [relatedStocks, setRelatedStocks] = useState<RelatedStockDisplay[]>([]);
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedError, setRelatedError] = useState<string | null>(null);
+  const baseRateMetrics = analysisData?.metrics?.baseRate ?? baseRateResult?.data ?? null;
+  const shortSellingMetrics = analysisData?.metrics?.shortSelling ?? shortSellingResult?.data ?? null;
+  const displayIndustryIndex = analysisData?.metrics?.industryIndex ?? industryIndexResult?.data ?? null;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -278,21 +457,20 @@ export default function Feature2MockPage() {
   }, [analysisData]);
 
   useEffect(() => {
-    if (loading) {
-      setIndustryChartLoading(true);
+    if (loading || industryChartLoading) {
       setIndustryChartError(null);
       return;
     }
 
-    setIndustryChartLoading(false);
-
-    if (!analysisData) {
+    if (!displayIndustryIndex && !industryIndexResult && !analysisResult) {
       setIndustryChartError(null);
       return;
     }
 
-    const industryIndex = analysisData?.metrics?.industryIndex;
-    const warnings: string[] = analysisResult?.meta?.warnings ?? [];
+    const industryIndex = displayIndustryIndex;
+    const warnings: string[] = analysisResult?.meta?.warnings
+      ?? industryIndexResult?.meta?.warnings
+      ?? [];
 
     if (!industryIndex) {
       if (warnings.includes("INDUSTRY_INDEX_OHLCV_EMPTY")) {
@@ -309,7 +487,7 @@ export default function Feature2MockPage() {
     }
 
     setIndustryChartError(null);
-  }, [analysisResult, loading]);
+  }, [analysisResult, industryIndexResult, loading, industryChartLoading, displayIndustryIndex]);
 
   const handleAnalyzeClick = async () => {
     if (!isLoggedIn()) {
@@ -324,8 +502,14 @@ export default function Feature2MockPage() {
 
     try {
       setShowAnalyzeButton(false);
-      const result = await fetchFeature2Analysis(mainStock.symbol, selectedFreq, selectedWindow);
+      const [result, shortSellingSeries, baseRateSeries] = await Promise.all([
+        fetchFeature2Analysis(mainStock.symbol, selectedFreq, selectedWindow, 30),
+        fetchFeature2ShortSellingSeries(mainStock.symbol, selectedWindow),
+        fetchFeature2BaseRateSeries(Math.max(selectedWindow, 365)),
+      ]);
       setAnalysisResult(result);
+      setShortSellingSeriesResult(shortSellingSeries);
+      setBaseRateSeriesResult(baseRateSeries);
 
       // 분석 응답의 뉴스 데이터로 갱신
       const analyzeNews = result?.data?.metrics?.newsList;
@@ -333,38 +517,6 @@ export default function Feature2MockPage() {
         setNewsItems(analyzeNews);
       }
 
-      // 유사 종목 시세 조회 후 갱신
-      const peers = result?.data?.metrics?.peerCluster?.peers;
-      if (peers && peers.length > 0) {
-        const displays = await Promise.all(
-          peers.map(async (peer) => {
-            try {
-              const stock = await getStockByCode(peer.stockCode);
-              const price = stock.price ?? 0;
-              const rate = stock.changeRate ?? 0;
-              const change = Math.round(price * rate / (100 + rate));
-              return {
-                stockCode: peer.stockCode,
-                companyName: peer.companyName,
-                price,
-                change,
-                changeRate: rate,
-                volume: peer.avgVolume,
-              };
-            } catch {
-              return {
-                stockCode: peer.stockCode,
-                companyName: peer.companyName,
-                price: 0,
-                change: 0,
-                changeRate: 0,
-                volume: peer.avgVolume,
-              };
-            }
-          }),
-        );
-        setRelatedStocks(displays);
-      }
     } catch {
       setErr("분석 결과를 불러오지 못했습니다.");
     } finally {
@@ -507,6 +659,7 @@ export default function Feature2MockPage() {
                   <TradingViewWidget
                   candles={candles}
                   showSubPanes={false}
+                  onRequestMoreHistory={handleRequestMoreHistory}
                   hoveredDayKey={hoveredDayKey}
                   onHoverDayKeyChange={setHoveredDayKey}
                   />
@@ -539,6 +692,10 @@ export default function Feature2MockPage() {
               <RelativeLineWidget
               data={industrySeries}
               height={420}
+              overlayCentroid={analysisData?.metrics?.peerCluster?.centroid ?? null}
+              overlayBand={analysisData?.metrics?.peerCluster?.band ?? null}
+              overlayPeers={analysisData?.metrics?.peerCluster?.peers ?? null}
+              showPeerOverlay={Boolean(analysisData?.metrics?.peerCluster)}
               hoveredDayKey={hoveredDayKey}
               onHoverDayKeyChange={setHoveredDayKey}
               />
@@ -558,7 +715,7 @@ export default function Feature2MockPage() {
               <div className="flex items-center justify-between">
                 <h3 className="text-black text-base sm:text-lg font-medium"><DictTerm term="기준금리">기준금리</DictTerm></h3>
                 {(() => {
-                  const br = analysisData?.metrics?.baseRate;
+                  const br = baseRateMetrics;
                   if (!br) {
                     return (
                       <span className="text-sm text-gray-400">데이터 없음</span>
@@ -721,7 +878,7 @@ export default function Feature2MockPage() {
                 </h3>
 
                 {(() => {
-                  const ss = analysisData?.metrics?.shortSelling;
+                  const ss = shortSellingMetrics;
                   if (!ss) {
                     return (
                       <div className="min-h-[230px] flex items-center justify-center text-sm text-gray-500">
@@ -835,9 +992,13 @@ export default function Feature2MockPage() {
             analysisResult
               ? {
                   explain: { text: analysisData?.explain },
+                  warnings: analysisResult?.meta?.warnings ?? null,
                   metrics: {
+                    peerCluster: analysisData?.metrics?.peerCluster ?? null,
                     shortSelling: analysisData?.metrics?.shortSelling ?? null,
+                    shortSellingSeries: shortSellingSeriesResult?.data ?? null,
                     baseRate: analysisData?.metrics?.baseRate ?? null,
+                    baseRateSeries: baseRateSeriesResult?.data ?? null,
                   },
                   meta: analysisResult?.meta,
                 }

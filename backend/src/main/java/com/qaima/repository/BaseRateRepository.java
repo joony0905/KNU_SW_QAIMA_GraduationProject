@@ -4,6 +4,7 @@ import com.qaima.domain.BaseRate;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface BaseRateRepository extends JpaRepository<BaseRate, Long> {
@@ -34,5 +35,12 @@ public interface BaseRateRepository extends JpaRepository<BaseRate, Long> {
             String cycle,
             LocalDate from,
             LocalDate to
+    );
+
+    List<BaseRate> findByStatCodeAndItemCodeAndCycleOrderByBaseDateDesc(
+            String statCode,
+            String itemCode,
+            String cycle,
+            Pageable pageable
     );
 }
