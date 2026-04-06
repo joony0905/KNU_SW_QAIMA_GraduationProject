@@ -82,6 +82,33 @@ def _avg_last_window(vals: List[float]) -> Optional[float]:
     return float(np.mean(arr))
 
 
+def _series_volatility(series: PriceSeries) -> Optional[float]:
+    if series is None or not series.close:
+        return None
+    try:
+        returns = _log_returns(np.asarray(series.close, dtype=float))
+    except Exception:
+        return None
+
+    returns = returns[~np.isnan(returns)]
+    if returns.size < 20:
+        return None
+
+    vol = float(np.std(returns))
+    if math.isnan(vol) or vol <= 0:
+        return None
+    return vol
+
+
+def _within_ratio(value: Optional[float], anchor: Optional[float], low: float, high: float) -> bool:
+    if value is None or anchor is None:
+        return False
+    if anchor <= 0:
+        return False
+    ratio = float(value) / float(anchor)
+    return low <= ratio <= high
+
+
 def _align_returns_by_common_dates(
     anchor: PriceSeries,
     other: PriceSeries,
@@ -348,27 +375,29 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     )
 
     # -------------------------
-    # 3) Liquidity prefilter
+    # 3) Liquidity + volatility prefilter
     # -------------------------
     avg_turnover: Dict[str, Optional[float]] = {}
     avg_volume: Dict[str, Optional[float]] = {}
+    volatility_map: Dict[str, Optional[float]] = {}
 
     for code in members:
         liq = liq_map.get(code)
         if liq is None:
             avg_turnover[code] = None
             avg_volume[code] = None
-            continue
+        else:
+            try:
+                avg_turnover[code] = _avg_last_window(list(getattr(liq, "turnover")))
+            except Exception:
+                avg_turnover[code] = None
 
-        try:
-            avg_turnover[code] = _avg_last_window(list(getattr(liq, "turnover")))
-        except Exception:
-            avg_turnover[code] = None
+            try:
+                avg_volume[code] = _avg_last_window(list(getattr(liq, "volume")))
+            except Exception:
+                avg_volume[code] = None
 
-        try:
-            avg_volume[code] = _avg_last_window(list(getattr(liq, "volume")))
-        except Exception:
-            avg_volume[code] = None
+        volatility_map[code] = _series_volatility(price_map.get(code))
 
     candidates = [c for c in members if c != req.anchor_stock_code]
     print(f"[DEBUG][liquidity] initial candidates = {len(candidates)}")
@@ -408,6 +437,88 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         print(f"[DEBUG][liquidity] min_volume applied: {before} -> {len(candidates)}")
         if len(candidates) < before:
             warnings.append("LIQUIDITY_MIN_VOLUME_APPLIED")
+
+    anchor_turnover = avg_turnover.get(req.anchor_stock_code)
+    anchor_volatility = volatility_map.get(req.anchor_stock_code)
+
+    print(
+        "[DEBUG][prefilter] anchor metrics: "
+        f"avg_turnover={anchor_turnover}, volatility={anchor_volatility}"
+    )
+
+    def apply_rule_based_filter(pool: List[str], turn_low: float, turn_high: float, vol_low: float, vol_high: float) -> List[str]:
+        out: List[str] = []
+        for code in pool:
+            if not _within_ratio(avg_turnover.get(code), anchor_turnover, turn_low, turn_high):
+                continue
+            if not _within_ratio(volatility_map.get(code), anchor_volatility, vol_low, vol_high):
+                continue
+            out.append(code)
+        return out
+
+    rule_filtered = candidates
+    if anchor_turnover is not None and anchor_volatility is not None:
+        candidate_count = len(candidates)
+        if candidate_count > 30:
+            primary_turn_low, primary_turn_high = 0.7, 1.3
+            primary_vol_low, primary_vol_high = 0.7, 1.3
+            strictness_label = "strict"
+        elif candidate_count >= 20:
+            primary_turn_low, primary_turn_high = 0.6, 1.6
+            primary_vol_low, primary_vol_high = 0.7, 1.4
+            strictness_label = "mid"
+        else:
+            primary_turn_low, primary_turn_high = 0.4, 2.5
+            primary_vol_low, primary_vol_high = 0.6, 1.7
+            strictness_label = "loose"
+
+        primary_filtered = apply_rule_based_filter(
+            candidates,
+            turn_low=primary_turn_low,
+            turn_high=primary_turn_high,
+            vol_low=primary_vol_low,
+            vol_high=primary_vol_high,
+        )
+        print(
+            "[DEBUG][prefilter] primary turnover+volatility: "
+            f"mode={strictness_label}, candidates={candidate_count}, "
+            f"turnover_range=({primary_turn_low}, {primary_turn_high}), "
+            f"vol_range=({primary_vol_low}, {primary_vol_high}), "
+            f"result={len(primary_filtered)}"
+        )
+
+        if len(primary_filtered) >= req.peer_count:
+            rule_filtered = primary_filtered
+            warnings.append("TURNOVER_VOLATILITY_FILTER_APPLIED")
+        else:
+            relaxed_filtered = apply_rule_based_filter(
+                candidates,
+                turn_low=0.5,
+                turn_high=2.0,
+                vol_low=0.7,
+                vol_high=1.5,
+            )
+            print(f"[DEBUG][prefilter] relaxed turnover+volatility: {len(candidates)} -> {len(relaxed_filtered)}")
+
+            if len(relaxed_filtered) >= req.peer_count:
+                rule_filtered = relaxed_filtered
+                warnings.append("TURNOVER_VOLATILITY_FILTER_RELAXED")
+            else:
+                turnover_only_filtered = [
+                    code for code in candidates
+                    if _within_ratio(avg_turnover.get(code), anchor_turnover, 0.5, 2.0)
+                ]
+                print(f"[DEBUG][prefilter] turnover-only fallback: {len(candidates)} -> {len(turnover_only_filtered)}")
+
+                if turnover_only_filtered:
+                    rule_filtered = turnover_only_filtered
+                    warnings.append("TURNOVER_ONLY_FILTER_FALLBACK")
+                else:
+                    warnings.append("TURNOVER_VOLATILITY_FILTER_SKIPPED")
+    else:
+        warnings.append("TURNOVER_VOLATILITY_ANCHOR_METRIC_MISSING")
+
+    candidates = rule_filtered
 
     if not candidates:
         print("[DEBUG][liquidity] NO_CANDIDATES_AFTER_LIQUIDITY_FILTER")

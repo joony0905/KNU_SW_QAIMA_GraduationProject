@@ -1,0 +1,121 @@
+package com.qaima.api.feat2;
+
+import com.qaima.common.ApiResponse;
+import com.qaima.domain.Freq;
+import com.qaima.dto.feature2.Feature2BaseRateSeriesPointDto;
+import com.qaima.dto.feature2.Feature2MetricsDto;
+import com.qaima.dto.feature2.Feature2RelatedStockCardDto;
+import com.qaima.dto.feature2.Feature2ShortSellingSeriesPointDto;
+import com.qaima.dto.industry.IndustryIndexBlockDto;
+import com.qaima.service.feature2.Feature2CardService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/feature2/cards")
+@RequiredArgsConstructor
+@Slf4j
+public class Feature2CardController {
+
+    private final Feature2CardService feature2CardService;
+
+    @GetMapping("/base-rate")
+    public Mono<ApiResponse<Feature2MetricsDto.BaseRateMetrics>> getBaseRate() {
+        return feature2CardService.loadBaseRate()
+                .map(result -> ApiResponse.successWithWarnings(
+                        result.data(),
+                        result.meta() == null || result.meta().getWarnings() == null
+                                ? List.of()
+                                : result.meta().getWarnings()
+                ))
+                .doOnError(ex -> log.error("[Feature2CardController] base-rate failed. cause={}", ex.getMessage(), ex));
+    }
+
+    @GetMapping("/base-rate-series")
+    public Mono<ApiResponse<List<Feature2BaseRateSeriesPointDto>>> getBaseRateSeries(
+            @RequestParam(defaultValue = "365") Integer limit
+    ) {
+        int safeLimit = limit == null ? 365 : limit;
+        return feature2CardService.loadBaseRateSeries(safeLimit)
+                .map(result -> ApiResponse.successWithWarnings(
+                        result.data(),
+                        result.meta() == null || result.meta().getWarnings() == null
+                                ? List.of()
+                                : result.meta().getWarnings()
+                ))
+                .doOnError(ex -> log.error("[Feature2CardController] base-rate-series failed. cause={}", ex.getMessage(), ex));
+    }
+
+    @GetMapping("/industry-index")
+    public Mono<ApiResponse<IndustryIndexBlockDto>> getIndustryIndex(
+            @RequestParam String stockCode,
+            @RequestParam(defaultValue = "ONE_D") Freq freq,
+            @RequestParam(defaultValue = "120") Integer window
+    ) {
+        return feature2CardService.loadIndustryIndex(stockCode, freq, window)
+                .map(result -> ApiResponse.successWithWarnings(
+                        result.data(),
+                        result.meta() == null || result.meta().getWarnings() == null
+                                ? List.of()
+                                : result.meta().getWarnings()
+                ))
+                .doOnError(ex -> log.error("[Feature2CardController] industry-index failed. stockCode={}, cause={}",
+                        stockCode, ex.getMessage(), ex));
+    }
+
+    @GetMapping("/short-selling")
+    public Mono<ApiResponse<Feature2MetricsDto.ShortSellingMetrics>> getShortSelling(
+            @RequestParam String stockCode
+    ) {
+        return feature2CardService.loadShortSelling(stockCode)
+                .map(result -> ApiResponse.successWithWarnings(
+                        result.data(),
+                        result.meta() == null || result.meta().getWarnings() == null
+                                ? List.of()
+                                : result.meta().getWarnings()
+                ))
+                .doOnError(ex -> log.error("[Feature2CardController] short-selling failed. stockCode={}, cause={}",
+                        stockCode, ex.getMessage(), ex));
+    }
+
+    @GetMapping("/short-selling-series")
+    public Mono<ApiResponse<List<Feature2ShortSellingSeriesPointDto>>> getShortSellingSeries(
+            @RequestParam String stockCode,
+            @RequestParam(defaultValue = "60") Integer limit
+    ) {
+        int safeLimit = limit == null ? 60 : limit;
+        return feature2CardService.loadShortSellingSeries(stockCode, safeLimit)
+                .map(result -> ApiResponse.successWithWarnings(
+                        result.data(),
+                        result.meta() == null || result.meta().getWarnings() == null
+                                ? List.of()
+                                : result.meta().getWarnings()
+                ))
+                .doOnError(ex -> log.error("[Feature2CardController] short-selling-series failed. stockCode={}, cause={}",
+                        stockCode, ex.getMessage(), ex));
+    }
+
+    @GetMapping("/related-stocks")
+    public Mono<ApiResponse<List<Feature2RelatedStockCardDto>>> getRelatedStocks(
+            @RequestParam String stockCode,
+            @RequestParam(defaultValue = "30") Integer limit
+    ) {
+        int safeLimit = limit == null ? 30 : limit;
+        return feature2CardService.loadRelatedStocks(stockCode, safeLimit)
+                .map(result -> ApiResponse.successWithWarnings(
+                        result.data(),
+                        result.meta() == null || result.meta().getWarnings() == null
+                                ? List.of()
+                                : result.meta().getWarnings()
+                ))
+                .doOnError(ex -> log.error("[Feature2CardController] related-stocks failed. stockCode={}, cause={}",
+                        stockCode, ex.getMessage(), ex));
+    }
+}

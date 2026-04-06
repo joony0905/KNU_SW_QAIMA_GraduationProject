@@ -1,4 +1,5 @@
 import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
+import type { PeerItem } from "../types/feature2";
 import downloadIcon from "../assets/download_button.png";
 import zoomIcon from "../assets/zoom_button.png";
 import DictTerm from "./DictTerm";
@@ -6,6 +7,8 @@ import FinancialTimelineChart from "./FinancialTimelineChart";
 import MarketSnapshotBars from "./MarketSnapshotBars";
 import IndicatorSnapshotCards from "./IndicatorSnapshotCards";
 import PriceFlowBars from "./PriceFlowBars";
+import ShortSellingTrendChart from "./ShortSellingTrendChart";
+import BaseRateStepChart from "./BaseRateStepChart";
 
 const LLM_VENDOR_OPTIONS = [
   "GPT-5.4",
@@ -53,6 +56,52 @@ type ExplainSection = NonNullable<NonNullable<AnalysisPanelResult["explain"]>["s
 const formatNumber = (value?: number | null) => {
   if (value === null || value === undefined || !Number.isFinite(value)) return "-";
   return value.toLocaleString("ko-KR");
+};
+
+const formatScore = (value?: number | null) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return value.toFixed(3);
+};
+
+const formatRelationTitle = (relation: PeerItem["relation"]) => {
+  switch (relation) {
+    case "LEADER":
+      return "메인 종목보다 먼저 움직인 종목";
+    case "FOLLOWER":
+      return "메인 종목보다 늦게 움직인 종목";
+    case "COINCIDENT":
+      return "메인 종목과 비슷하게 움직인 종목";
+    default:
+      return "중립 성격 종목";
+  }
+};
+
+const formatRelationBadge = (relation: PeerItem["relation"]) => {
+  switch (relation) {
+    case "LEADER":
+      return "선행";
+    case "FOLLOWER":
+      return "후행";
+    case "COINCIDENT":
+      return "동행";
+    default:
+      return "중립";
+  }
+};
+
+const relationDescription = (peer: PeerItem) => {
+  if (peer.bestLag == null) return "메인 종목과의 시차를 뚜렷하게 판단하기 어려운 종목입니다.";
+
+  if (peer.relation === "LEADER") {
+    return `${Math.abs(peer.bestLag)}일 먼저 반응한 흐름이 관찰됩니다.`;
+  }
+  if (peer.relation === "FOLLOWER") {
+    return `${Math.abs(peer.bestLag)}일 늦게 따라 움직이는 흐름이 관찰됩니다.`;
+  }
+  if (peer.relation === "COINCIDENT") {
+    return "메인 종목과 비슷한 시점에 움직이는 경향이 강합니다.";
+  }
+  return "메인 종목과의 반응 순서를 단정하기 어려운 종목입니다.";
 };
 
 const renderExplainSection = (section?: ExplainSection | null) => {
@@ -256,6 +305,70 @@ export default function AnalysisResultPanel({
             </div>
           )}
 
+          {result.metrics?.peerCluster?.peers && result.metrics.peerCluster.peers.length > 0 && (
+            <div>
+              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                유사 종목 반응 구조
+              </h3>
+              <div className="mt-3 flex flex-col gap-4">
+                {(["LEADER", "COINCIDENT", "FOLLOWER"] as const).map((relation) => {
+                  const peers = result.metrics?.peerCluster?.peers
+                    ?.filter((peer) => peer.relation === relation)
+                    .sort((a, b) => (b.score ?? -999) - (a.score ?? -999))
+                    .slice(0, 3) ?? [];
+
+                  if (peers.length === 0) return null;
+
+                  return (
+                    <div key={relation} className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+                      <h4 className="text-sm font-semibold text-zinc-900">
+                        {formatRelationTitle(relation)}
+                      </h4>
+                      <div className="mt-3 grid grid-cols-1 gap-3">
+                        {peers.map((peer) => (
+                          <div key={peer.stockCode} className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-zinc-900">{peer.companyName}</p>
+                                <p className="text-xs text-zinc-500">{peer.stockCode}</p>
+                              </div>
+                              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-700">
+                                {formatRelationBadge(peer.relation)}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-zinc-700">
+                              {relationDescription(peer)}
+                            </p>
+                            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-zinc-600">
+                              <div>
+                                <p className="text-zinc-400">동행 상관도</p>
+                                <p className="font-medium text-zinc-800">{formatScore(peer.corr)}</p>
+                              </div>
+                              <div>
+                                <p className="text-zinc-400">유사도 점수</p>
+                                <p className="font-medium text-zinc-800">{formatScore(peer.score)}</p>
+                              </div>
+                              <div>
+                                <p className="text-zinc-400">시차</p>
+                                <p className="font-medium text-zinc-800">
+                                  {peer.bestLag == null ? "-" : `${Math.abs(peer.bestLag)}일`}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-zinc-400">평균 거래대금</p>
+                                <p className="font-medium text-zinc-800">{formatNumber(peer.avgTurnover)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {(overallExplain?.summary
             || (overallExplain?.bullets && overallExplain.bullets.length > 0)
             || (overallExplain?.risks && overallExplain.risks.length > 0)
@@ -323,7 +436,14 @@ export default function AnalysisResultPanel({
           )}
 
           {/* 기준금리 */}
-          {result.metrics?.baseRate && (
+          {result.metrics?.baseRateSeries && result.metrics.baseRateSeries.length > 0 ? (
+            <div>
+              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                <DictTerm term="기준금리">기준금리</DictTerm> 추이
+              </h3>
+              <BaseRateStepChart points={result.metrics.baseRateSeries} />
+            </div>
+          ) : result.metrics?.baseRate ? (
             <div>
               <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
                 <DictTerm term="기준금리">기준금리</DictTerm>
@@ -333,10 +453,17 @@ export default function AnalysisResultPanel({
                 <div>금리: {result.metrics.baseRate.value}{result.metrics.baseRate.unit}</div>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* 공매도 현황 */}
-          {result.metrics?.shortSelling && (
+          {result.metrics?.shortSellingSeries && result.metrics.shortSellingSeries.length > 0 ? (
+            <div>
+              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                <DictTerm term="공매도">공매도</DictTerm> 추이
+              </h3>
+              <ShortSellingTrendChart points={result.metrics.shortSellingSeries} />
+            </div>
+          ) : result.metrics?.shortSelling ? (
             <div>
               <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
                 <DictTerm term="공매도">공매도</DictTerm> 현황
@@ -382,7 +509,7 @@ export default function AnalysisResultPanel({
                 </table>
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* 경고 */}
           {(result.meta?.warnings ?? []).length > 0 && (

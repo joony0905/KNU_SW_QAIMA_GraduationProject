@@ -72,6 +72,15 @@ export interface PeerCluster {
   asOf: string;
 }
 
+export interface RelatedStockCard {
+  stockCode: string;
+  companyName: string;
+  price: number | null;
+  changeAmount: number | null;
+  changeRate: number | null;
+  volume: number | null;
+}
+
 // --- 공매도 ---
 export interface ShortSellingMetrics {
   shortSellingId: number;
@@ -100,6 +109,22 @@ export interface BaseRateMetrics {
   date: string;
   value: number;
   unit: string;
+}
+
+export interface BaseRateSeriesPoint {
+  date: string;
+  value: number;
+  unit: string;
+}
+
+export interface ShortSellingSeriesPoint {
+  reportDate: string;
+  shortVolumeRatio: number | null;
+  shortAmountRatio: number | null;
+  shortVolumeTotal: number | null;
+  totalVolume: number | null;
+  shortAmountTotal: number | null;
+  totalAmount: number | null;
 }
 
 // --- Feature2 전체 메트릭스 ---

@@ -48,8 +48,6 @@ class SpringMarketDataProvider(MarketDataProvider):
             "anchor_stock_code": anchor_stock_code,
             "freq": freq,
             "window": window,
-            "peer_count": 0,
-            "max_lag": 0,
         }
         self._last_payload = payload
         print(f"[DEBUG][spring-pack] payload={payload}")
