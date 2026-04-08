@@ -1,6 +1,7 @@
 package com.qaima.external;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.qaima.common.NewsWarningCodes;
 import com.qaima.external.dto.feature2news.Feature2NewsSentimentExternalEnvelopeDto;
 import com.qaima.external.dto.feature2news.Feature2NewsSentimentExternalItemDto;
 import com.qaima.external.dto.feature2news.Feature2NewsSentimentExternalRequestDto;
@@ -73,18 +74,18 @@ public class Feature2NewsSentimentClient {
             }
 
             if (payload.getResults() == null) {
-                warnings.add("NEWS_SENTIMENT_INVALID_RESPONSE");
+                warnings.add(NewsWarningCodes.SENTIMENT_INVALID_RESPONSE);
                 return new SentimentBatchResponse(List.of(), dedupe(warnings), List.of());
             }
 
             List<NewsSentimentResult> results = new ArrayList<>();
             payload.getResults().forEach(item -> {
                 if (item == null || item.getUrl() == null || item.getUrl().isBlank()) {
-                    warnings.add("NEWS_SENTIMENT_INVALID_RESPONSE");
+                    warnings.add(NewsWarningCodes.SENTIMENT_INVALID_RESPONSE);
                     return;
                 }
                 if (item.getSentimentScore() == null) {
-                    warnings.add("NEWS_SENTIMENT_INVALID_RESPONSE");
+                    warnings.add(NewsWarningCodes.SENTIMENT_INVALID_RESPONSE);
                     invalidScoreUrls.add(item.getUrl());
                     return;
                 }

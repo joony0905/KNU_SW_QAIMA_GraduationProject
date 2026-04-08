@@ -71,8 +71,20 @@ const toKstDayKeyFromEpochSec = (sec: number) => {
    Candle / Volume Mapper
 ========================= */
 
+const normalizeCandles = (candles: Candle[]): Candle[] => {
+  const byTime = new Map<number, Candle>();
+  for (const candle of candles) {
+    const time = toEpochSeconds(Number(candle.t));
+    byTime.set(time, {
+      ...candle,
+      t: time,
+    });
+  }
+  return Array.from(byTime.values()).sort((a, b) => Number(a.t) - Number(b.t));
+};
+
 const mapCandles = (candles: Candle[]): CandlestickData<Time>[] =>
-  candles
+  normalizeCandles(candles)
     .map((c) => ({
       time: toEpochSeconds(Number(c.t)) as UTCTimestamp,
       open: Number((c as any).o),
@@ -83,7 +95,7 @@ const mapCandles = (candles: Candle[]): CandlestickData<Time>[] =>
     .sort((a, b) => Number(a.time) - Number(b.time));
 
 const mapVolumes = (candles: Candle[]): HistogramData<Time>[] =>
-  candles
+  normalizeCandles(candles)
     .map((c) => ({
       time: toEpochSeconds(Number(c.t)) as UTCTimestamp,
       value: Number((c as any).v),
