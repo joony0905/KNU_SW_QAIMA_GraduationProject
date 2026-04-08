@@ -1,0 +1,12 @@
+__pycache__/
+.venv/
+*.pyc
+models/*
+!models/.gitkeep
+outputs/*
+!outputs/eval/
+!outputs/logs/
+!outputs/predictions/
+!outputs/eval/.gitkeep
+!outputs/logs/.gitkeep
+!outputs/predictions/.gitkeep
