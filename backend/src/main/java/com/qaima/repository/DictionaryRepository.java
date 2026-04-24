@@ -5,6 +5,7 @@ import com.qaima.dto.dictionary.DictionaryInitialCountDto;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -19,6 +20,70 @@ public interface DictionaryRepository extends JpaRepository<DictionaryTerm, Stri
     List<DictionaryTerm> findByInitialOrderByTermAsc(String initial, Pageable pageable);
 
     List<DictionaryTerm> findByInitialAndTermContainingIgnoreCaseOrderByTermAsc(String initial, String q, Pageable pageable);
+
+    @Query("""
+        select d
+        from DictionaryTerm d
+        where d.term like concat('%', :normalizedQuery, '%')
+        order by
+            case
+                when d.term = :normalizedQuery then 0
+                when d.term like concat(:normalizedQuery, '%') then 1
+                else 2
+            end asc,
+            d.term asc
+    """)
+    List<DictionaryTerm> findAutocompleteTermCandidates(
+            @Param("normalizedQuery") String normalizedQuery,
+            Pageable pageable
+    );
+
+    @Query("""
+        select d
+        from DictionaryTerm d
+        where (:initial is null or d.initial = :initial)
+          and (
+              :normalizedQuery is null
+              or d.term like concat('%', :normalizedQuery, '%')
+              or exists (
+                  select a.aliasId
+                  from DictionaryAlias a
+                  where a.canonicalTerm = d
+                    and a.normalizedAliasTerm like concat('%', :normalizedQuery, '%')
+              )
+          )
+        order by
+            case
+                when d.term = :normalizedQuery then 0
+                when exists (
+                    select exactAlias.aliasId
+                    from DictionaryAlias exactAlias
+                    where exactAlias.canonicalTerm = d
+                      and exactAlias.normalizedAliasTerm = :normalizedQuery
+                ) then 1
+                when d.term like concat(:normalizedQuery, '%') then 2
+                when exists (
+                    select prefixAlias.aliasId
+                    from DictionaryAlias prefixAlias
+                    where prefixAlias.canonicalTerm = d
+                      and prefixAlias.normalizedAliasTerm like concat(:normalizedQuery, '%')
+                ) then 3
+                when d.term like concat('%', :normalizedQuery, '%') then 4
+                when exists (
+                    select containsAlias.aliasId
+                    from DictionaryAlias containsAlias
+                    where containsAlias.canonicalTerm = d
+                      and containsAlias.normalizedAliasTerm like concat('%', :normalizedQuery, '%')
+                ) then 5
+                else 6
+            end asc,
+            d.term asc
+    """)
+    List<DictionaryTerm> searchByQueryIncludingAliases(
+            @Param("normalizedQuery") String normalizedQuery,
+            @Param("initial") String initial,
+            Pageable pageable
+    );
 
     @Query("""
         select new com.qaima.dto.dictionary.DictionaryInitialCountDto(d.initial, count(d))

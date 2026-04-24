@@ -1,6 +1,7 @@
 package com.qaima.api.DictionaryController;
 
 import com.qaima.common.ApiResponse;
+import com.qaima.dto.dictionary.DictionaryAliasDto;
 import com.qaima.dto.dictionary.DictionaryInitialCountDto;
 import com.qaima.dto.dictionary.DictionaryTermDto;
 import com.qaima.service.dictionary.DictionaryService;
@@ -50,6 +51,12 @@ public class DictionaryController {
     @GetMapping("/{term}")
     public Mono<ApiResponse<DictionaryTermDto>> getOne(@PathVariable("term") String term) {
         return dictionaryService.getByTerm(term)
+                .map(ApiResponse::success);
+    }
+
+    @GetMapping("/{term}/aliases")
+    public Mono<ApiResponse<List<DictionaryAliasDto>>> aliases(@PathVariable("term") String term) {
+        return dictionaryService.getAliases(term)
                 .map(ApiResponse::success);
     }
 }
