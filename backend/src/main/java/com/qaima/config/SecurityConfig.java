@@ -3,6 +3,8 @@ package com.qaima.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.common.ApiResponse;
 import com.qaima.security.JwtAuthFilter;
+import com.qaima.security.OAuth2LoginFailureHandler;
+import com.qaima.security.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +30,8 @@ public class SecurityConfig {
 
     private final ObjectMapper objectMapper;
     private final JwtAuthFilter jwtAuthFilter;
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    private final OAuth2LoginFailureHandler oAuth2LoginFailureHandler;
 
     @Bean
     public SecurityWebFilterChain filterChain(ServerHttpSecurity http) {
@@ -36,11 +40,17 @@ public class SecurityConfig {
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
+                .oauth2Login(oauth2 -> oauth2
+                        .authenticationSuccessHandler(oAuth2LoginSuccessHandler)
+                        .authenticationFailureHandler(oAuth2LoginFailureHandler)
+                )
                 .addFilterAt(jwtAuthFilter, SecurityWebFiltersOrder.AUTHENTICATION)
 
                 .authorizeExchange(ex -> ex
                         // 공개
                         .pathMatchers("/api/v1/auth/**").permitAll()
+                        .pathMatchers("/oauth2/**").permitAll()
+                        .pathMatchers("/login/oauth2/**").permitAll()
                         .pathMatchers("/api/v1/email/**").permitAll()
                         .pathMatchers("/api/v1/meta/**").permitAll()
                         .pathMatchers("/api/v1/dictionary/**").permitAll()
@@ -82,7 +92,9 @@ public class SecurityConfig {
         // Vite(5173) / CRA(3000) 둘 다 허용
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:5173",
-                "http://localhost:3000"
+                "http://localhost:3000",
+                "https://localhost:5173",
+                "https://localhost:3000"
         ));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
