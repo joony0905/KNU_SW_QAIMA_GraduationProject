@@ -28,8 +28,7 @@ public class DictionaryV2ImportRunner implements CommandLineRunner {
                 .orElse(null);
 
         if (csvArg == null) {
-            log.error("CSV path is required. e.g. ../data/dictionary_v2.csv");
-            return;
+            throw new IllegalArgumentException("CSV path is required. e.g. ../data/dictionary_v2.csv");
         }
 
         boolean dryRun = Arrays.stream(args)
