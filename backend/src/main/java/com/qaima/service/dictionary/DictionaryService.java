@@ -57,7 +57,14 @@ public class DictionaryService {
         return Blocking.call(() -> {
             List<DictionaryTerm> list;
             if (normalizedQuery != null) {
-                list = dictionaryRepository.searchByQueryIncludingAliases(normalizedQuery, initialKey, pageable);
+                LikePatterns likePatterns = LikePatterns.from(normalizedQuery);
+                list = dictionaryRepository.searchByQueryIncludingAliases(
+                        normalizedQuery,
+                        likePatterns.prefix(),
+                        likePatterns.contains(),
+                        initialKey,
+                        pageable
+                );
             } else if (initialKey != null) {
                 list = dictionaryRepository.findByInitialOrderByTermAsc(initialKey, pageable);
             } else {
@@ -78,15 +85,26 @@ public class DictionaryService {
 
         return Blocking.call(() -> {
             Map<String, AutocompleteCandidate> suggestions = new LinkedHashMap<>();
+            LikePatterns likePatterns = LikePatterns.from(prefix);
 
-            dictionaryRepository.findAutocompleteTermCandidates(prefix, candidatePageable)
+            dictionaryRepository.findAutocompleteTermCandidates(
+                            prefix,
+                            likePatterns.prefix(),
+                            likePatterns.contains(),
+                            candidatePageable
+                    )
                     .forEach(term -> addAutocompleteCandidate(
                             suggestions,
                             term.getTerm(),
                             autocompleteScore(term.getTerm(), prefix, false)
                     ));
 
-            dictionaryAliasRepository.findAutocompleteAliasCandidates(prefix, candidatePageable)
+            dictionaryAliasRepository.findAutocompleteAliasCandidates(
+                            prefix,
+                            likePatterns.prefix(),
+                            likePatterns.contains(),
+                            candidatePageable
+                    )
                     .forEach(alias -> addAutocompleteCandidate(
                             suggestions,
                             alias.getAliasTerm(),
@@ -259,6 +277,13 @@ public class DictionaryService {
         return DictionaryTermNormalizer.normalizeTerm(q);
     }
 
+    private static String escapeLike(String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+
     private static String normalizeInitial(String initial) {
         if (initial == null) return null;
         String trimmed = initial.trim();
@@ -332,5 +357,13 @@ public class DictionaryService {
     }
 
     private record AutocompleteCandidate(String value, int score) {
+    }
+
+    private record LikePatterns(String prefix, String contains) {
+
+        private static LikePatterns from(String normalizedQuery) {
+            String escaped = escapeLike(normalizedQuery);
+            return new LikePatterns(escaped + "%", "%" + escaped + "%");
+        }
     }
 }

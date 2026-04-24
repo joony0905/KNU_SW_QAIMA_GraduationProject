@@ -24,17 +24,19 @@ public interface DictionaryRepository extends JpaRepository<DictionaryTerm, Stri
     @Query("""
         select d
         from DictionaryTerm d
-        where d.term like concat('%', :normalizedQuery, '%')
+        where d.term like :containsPattern escape '\\'
         order by
             case
                 when d.term = :normalizedQuery then 0
-                when d.term like concat(:normalizedQuery, '%') then 1
+                when d.term like :prefixPattern escape '\\' then 1
                 else 2
             end asc,
             d.term asc
     """)
     List<DictionaryTerm> findAutocompleteTermCandidates(
             @Param("normalizedQuery") String normalizedQuery,
+            @Param("prefixPattern") String prefixPattern,
+            @Param("containsPattern") String containsPattern,
             Pageable pageable
     );
 
@@ -44,12 +46,12 @@ public interface DictionaryRepository extends JpaRepository<DictionaryTerm, Stri
         where (:initial is null or d.initial = :initial)
           and (
               :normalizedQuery is null
-              or d.term like concat('%', :normalizedQuery, '%')
+              or d.term like :containsPattern escape '\\'
               or exists (
                   select a.aliasId
                   from DictionaryAlias a
                   where a.canonicalTerm = d
-                    and a.normalizedAliasTerm like concat('%', :normalizedQuery, '%')
+                    and a.normalizedAliasTerm like :containsPattern escape '\\'
               )
           )
         order by
@@ -61,19 +63,19 @@ public interface DictionaryRepository extends JpaRepository<DictionaryTerm, Stri
                     where exactAlias.canonicalTerm = d
                       and exactAlias.normalizedAliasTerm = :normalizedQuery
                 ) then 1
-                when d.term like concat(:normalizedQuery, '%') then 2
+                when d.term like :prefixPattern escape '\\' then 2
                 when exists (
                     select prefixAlias.aliasId
                     from DictionaryAlias prefixAlias
                     where prefixAlias.canonicalTerm = d
-                      and prefixAlias.normalizedAliasTerm like concat(:normalizedQuery, '%')
+                      and prefixAlias.normalizedAliasTerm like :prefixPattern escape '\\'
                 ) then 3
-                when d.term like concat('%', :normalizedQuery, '%') then 4
+                when d.term like :containsPattern escape '\\' then 4
                 when exists (
                     select containsAlias.aliasId
                     from DictionaryAlias containsAlias
                     where containsAlias.canonicalTerm = d
-                      and containsAlias.normalizedAliasTerm like concat('%', :normalizedQuery, '%')
+                      and containsAlias.normalizedAliasTerm like :containsPattern escape '\\'
                 ) then 5
                 else 6
             end asc,
@@ -81,6 +83,8 @@ public interface DictionaryRepository extends JpaRepository<DictionaryTerm, Stri
     """)
     List<DictionaryTerm> searchByQueryIncludingAliases(
             @Param("normalizedQuery") String normalizedQuery,
+            @Param("prefixPattern") String prefixPattern,
+            @Param("containsPattern") String containsPattern,
             @Param("initial") String initial,
             Pageable pageable
     );

@@ -22,17 +22,19 @@ public interface DictionaryAliasRepository extends JpaRepository<DictionaryAlias
     @Query("""
         select a
         from DictionaryAlias a
-        where a.normalizedAliasTerm like concat('%', :normalizedQuery, '%')
+        where a.normalizedAliasTerm like :containsPattern escape '\\'
         order by
             case
                 when a.normalizedAliasTerm = :normalizedQuery then 0
-                when a.normalizedAliasTerm like concat(:normalizedQuery, '%') then 1
+                when a.normalizedAliasTerm like :prefixPattern escape '\\' then 1
                 else 2
             end asc,
             a.aliasTerm asc
     """)
     List<DictionaryAlias> findAutocompleteAliasCandidates(
             @Param("normalizedQuery") String normalizedQuery,
+            @Param("prefixPattern") String prefixPattern,
+            @Param("containsPattern") String containsPattern,
             Pageable pageable
     );
 

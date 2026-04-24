@@ -11,6 +11,7 @@ import org.springframework.security.web.server.authentication.ServerAuthenticati
 import org.springframework.security.web.server.DefaultServerRedirectStrategy;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.server.WebSession;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
@@ -43,7 +44,9 @@ public class OAuth2LoginSuccessHandler implements ServerAuthenticationSuccessHan
     }
 
     private Mono<Void> redirectFailure(ServerWebExchange exchange, String provider, String code) {
-        return redirectStrategy.sendRedirect(exchange, buildFailureUri(provider, code));
+        return exchange.getSession()
+                .flatMap(WebSession::invalidate)
+                .then(redirectStrategy.sendRedirect(exchange, buildFailureUri(provider, code)));
     }
 
     private URI buildSuccessUri(String provider) {
