@@ -9,6 +9,7 @@ import org.springframework.security.web.server.WebFilterExchange;
 import org.springframework.security.web.server.authentication.ServerAuthenticationFailureHandler;
 import org.springframework.security.web.server.DefaultServerRedirectStrategy;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.WebSession;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
@@ -33,7 +34,9 @@ public class OAuth2LoginFailureHandler implements ServerAuthenticationFailureHan
                 .build(true)
                 .toUri();
 
-        return redirectStrategy.sendRedirect(webFilterExchange.getExchange(), uri);
+        return webFilterExchange.getExchange().getSession()
+                .flatMap(WebSession::invalidate)
+                .then(redirectStrategy.sendRedirect(webFilterExchange.getExchange(), uri));
     }
 
     private static String resolveProvider(String path) {

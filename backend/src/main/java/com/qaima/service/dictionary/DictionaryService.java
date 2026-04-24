@@ -157,6 +157,10 @@ public class DictionaryService {
         String tag = normalizeOptional(dto.getTag());
 
         return Blocking.call(() -> {
+            if (dictionaryAliasRepository.existsByNormalizedAliasTerm(term)) {
+                throw new IllegalArgumentException("term must not duplicate an existing alias");
+            }
+
             DictionaryTerm entity = dictionaryRepository.findById(term).orElseGet(() -> new DictionaryTerm(term));
             entity.setTerm(term);
             entity.setDescription(description);

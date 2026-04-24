@@ -38,15 +38,19 @@ public class OAuth2LoginSuccessHandler implements ServerAuthenticationSuccessHan
         return oAuth2SocialLoginService.login(registrationId, oauth2Token.getPrincipal().getAttributes(), ip, ua)
                 .flatMap(result -> {
                     refreshTokenCookieService.writeRefreshTokenCookie(exchange.getResponse(), result.refreshToken());
-                    return redirectStrategy.sendRedirect(exchange, buildSuccessUri(registrationId));
+                    return clearSessionAndRedirect(exchange, buildSuccessUri(registrationId));
                 })
                 .onErrorResume(ex -> redirectFailure(exchange, registrationId, resolveCode(ex)));
     }
 
     private Mono<Void> redirectFailure(ServerWebExchange exchange, String provider, String code) {
+        return clearSessionAndRedirect(exchange, buildFailureUri(provider, code));
+    }
+
+    private Mono<Void> clearSessionAndRedirect(ServerWebExchange exchange, URI uri) {
         return exchange.getSession()
                 .flatMap(WebSession::invalidate)
-                .then(redirectStrategy.sendRedirect(exchange, buildFailureUri(provider, code)));
+                .then(redirectStrategy.sendRedirect(exchange, uri));
     }
 
     private URI buildSuccessUri(String provider) {
