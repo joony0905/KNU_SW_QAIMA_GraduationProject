@@ -161,21 +161,20 @@ public class DictionaryV2ImportService {
         List<FlatRow> rows = new ArrayList<>();
         List<String> header;
         try (BufferedReader reader = Files.newBufferedReader(csvPath, StandardCharsets.UTF_8)) {
-            String headerLine = reader.readLine();
-            if (headerLine == null) {
+            int[] physicalLineNo = {0};
+            CsvRecord headerRecord = readCsvRecord(reader, physicalLineNo);
+            if (headerRecord == null) {
                 throw new IOException("Empty CSV file: " + csvPath);
             }
-            header = parseCsvLine(headerLine.replace("\uFEFF", ""));
+            header = parseCsvLine(headerRecord.text().replace("\uFEFF", ""));
 
-            String line;
-            int lineNo = 1;
-            while ((line = reader.readLine()) != null) {
-                lineNo++;
-                if (line.isBlank()) {
+            CsvRecord record;
+            while ((record = readCsvRecord(reader, physicalLineNo)) != null) {
+                if (record.text().isBlank()) {
                     continue;
                 }
-                List<String> cols = parseCsvLine(line);
-                rows.add(FlatRow.from(lineNo, header, cols));
+                List<String> cols = parseCsvLine(record.text());
+                rows.add(FlatRow.from(record.startLineNo(), header, cols));
             }
         }
 
@@ -430,6 +429,45 @@ public class DictionaryV2ImportService {
         }
     }
 
+    private static CsvRecord readCsvRecord(BufferedReader reader, int[] physicalLineNo) throws IOException {
+        String line = reader.readLine();
+        if (line == null) {
+            return null;
+        }
+
+        physicalLineNo[0]++;
+        int startLineNo = physicalLineNo[0];
+        StringBuilder record = new StringBuilder(line);
+
+        while (hasOpenQuote(record)) {
+            String nextLine = reader.readLine();
+            if (nextLine == null) {
+                throw new IOException("Unclosed quoted CSV record starting at line " + startLineNo);
+            }
+            physicalLineNo[0]++;
+            record.append('\n').append(nextLine);
+        }
+
+        return new CsvRecord(startLineNo, record.toString());
+    }
+
+    private static boolean hasOpenQuote(CharSequence text) {
+        boolean inQuotes = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c != '"') {
+                continue;
+            }
+
+            if (inQuotes && i + 1 < text.length() && text.charAt(i + 1) == '"') {
+                i++;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        }
+        return inQuotes;
+    }
+
     private static List<String> parseCsvLine(String line) {
         List<String> out = new ArrayList<>();
         StringBuilder sb = new StringBuilder();
@@ -481,6 +519,9 @@ public class DictionaryV2ImportService {
         private List<FlatRow> aliasRows() {
             return rows.stream().filter(row -> "ALIAS".equals(row.entryType())).toList();
         }
+    }
+
+    private record CsvRecord(int startLineNo, String text) {
     }
 
     private record FlatRow(
