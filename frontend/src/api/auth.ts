@@ -11,13 +11,27 @@ export interface LoginResponse {
   email: string;
   name: string;
   accessToken: string;
-  refreshToken: string;
+}
+
+export interface TokenRefreshResponse {
+  accessToken: string;
 }
 
 export const login = async (payload: LoginRequest): Promise<LoginResponse> => {
   const res = await api.post("/auth/login", payload);
-  // ApiResponse<LoginResponseDto>라고 가정
+  // ApiResponse<LoginResponseDto>
   return res.data.data;
+};
+
+// AT 재발급 — RT는 httpOnly 쿠키로 자동 전송된다.
+export const refresh = async (): Promise<TokenRefreshResponse> => {
+  const res = await api.post("/auth/refresh");
+  return res.data.data;
+};
+
+// 로그아웃 — 서버가 RT 쿠키를 만료시킨다.
+export const logout = async (): Promise<void> => {
+  await api.post("/auth/logout");
 };
 
 // 이메일 인증 요청 (인증코드 발송)

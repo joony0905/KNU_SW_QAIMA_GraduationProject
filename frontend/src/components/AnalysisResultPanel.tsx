@@ -58,11 +58,6 @@ const formatNumber = (value?: number | null) => {
   return value.toLocaleString("ko-KR");
 };
 
-const formatScore = (value?: number | null) => {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
-  return value.toFixed(3);
-};
-
 const formatRelationTitle = (relation: PeerItem["relation"]) => {
   switch (relation) {
     case "LEADER":
@@ -89,19 +84,26 @@ const formatRelationBadge = (relation: PeerItem["relation"]) => {
   }
 };
 
-const relationDescription = (peer: PeerItem) => {
-  if (peer.bestLag == null) return "메인 종목과의 시차를 뚜렷하게 판단하기 어려운 종목입니다.";
+const correlationColorClass = (corr?: number | null): string => {
+  if (corr == null || !Number.isFinite(corr)) return "text-zinc-500";
+  const abs = Math.abs(corr);
+  if (abs >= 0.7) return "text-red-600";
+  if (abs >= 0.5) return "text-orange-500";
+  if (abs >= 0.3) return "text-amber-500";
+  return "text-zinc-500";
+};
 
-  if (peer.relation === "LEADER") {
-    return `${Math.abs(peer.bestLag)}일 먼저 반응한 흐름이 관찰됩니다.`;
+const relationColorClass = (relation: PeerItem["relation"]): string => {
+  switch (relation) {
+    case "LEADER":
+      return "text-green-600";
+    case "FOLLOWER":
+      return "text-purple-600";
+    case "COINCIDENT":
+      return "text-zinc-900";
+    default:
+      return "text-zinc-400";
   }
-  if (peer.relation === "FOLLOWER") {
-    return `${Math.abs(peer.bestLag)}일 늦게 따라 움직이는 흐름이 관찰됩니다.`;
-  }
-  if (peer.relation === "COINCIDENT") {
-    return "메인 종목과 비슷한 시점에 움직이는 경향이 강합니다.";
-  }
-  return "메인 종목과의 반응 순서를 단정하기 어려운 종목입니다.";
 };
 
 const renderExplainSection = (section?: ExplainSection | null) => {
@@ -320,44 +322,80 @@ export default function AnalysisResultPanel({
                   if (peers.length === 0) return null;
 
                   return (
-                    <div key={relation} className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
-                      <h4 className="text-sm font-semibold text-zinc-900">
-                        {formatRelationTitle(relation)}
-                      </h4>
-                      <div className="mt-3 grid grid-cols-1 gap-3">
+                    <div key={relation} className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
+                      <div className="px-4 py-3 border-b border-zinc-200 bg-zinc-50">
+                        <h4 className="text-sm font-semibold text-zinc-900">
+                          {formatRelationTitle(relation)}
+                        </h4>
+                      </div>
+                      <div className="divide-y divide-zinc-200">
                         {peers.map((peer) => (
-                          <div key={peer.stockCode} className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="text-sm font-semibold text-zinc-900">{peer.companyName}</p>
-                                <p className="text-xs text-zinc-500">{peer.stockCode}</p>
-                              </div>
-                              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-medium text-zinc-700">
+                          <div
+                            key={peer.stockCode}
+                            className="flex items-center gap-3 sm:gap-4 px-4 py-3"
+                          >
+                            {/* 종목명 + 코드 */}
+                            <div className="min-w-0 w-[120px] sm:w-[160px] flex-shrink-0">
+                              <p className="text-sm sm:text-base font-semibold text-zinc-900 truncate">
+                                {peer.companyName}
+                              </p>
+                              <p className="text-[11px] sm:text-xs text-zinc-400">
+                                {peer.stockCode}
+                              </p>
+                            </div>
+
+                            {/* 상관계수 */}
+                            <div className="flex flex-col items-end flex-1 min-w-0">
+                              <span className="text-[11px] sm:text-xs text-zinc-400">
+                                상관계수
+                              </span>
+                              <span className={`text-sm sm:text-base font-bold ${correlationColorClass(peer.corr)}`}>
+                                {peer.corr == null || !Number.isFinite(peer.corr)
+                                  ? "-"
+                                  : peer.corr.toFixed(2)}
+                              </span>
+                            </div>
+
+                            {/* 관계 */}
+                            <div className="flex flex-col items-end flex-1 min-w-0">
+                              <span className="text-[11px] sm:text-xs text-zinc-400">
+                                관계
+                              </span>
+                              <span className={`text-sm sm:text-base font-semibold ${relationColorClass(peer.relation)}`}>
                                 {formatRelationBadge(peer.relation)}
                               </span>
                             </div>
-                            <p className="mt-2 text-sm text-zinc-700">
-                              {relationDescription(peer)}
-                            </p>
-                            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-zinc-600">
-                              <div>
-                                <p className="text-zinc-400">동행 상관도</p>
-                                <p className="font-medium text-zinc-800">{formatScore(peer.corr)}</p>
-                              </div>
-                              <div>
-                                <p className="text-zinc-400">유사도 점수</p>
-                                <p className="font-medium text-zinc-800">{formatScore(peer.score)}</p>
-                              </div>
-                              <div>
-                                <p className="text-zinc-400">시차</p>
-                                <p className="font-medium text-zinc-800">
-                                  {peer.bestLag == null ? "-" : `${Math.abs(peer.bestLag)}일`}
-                                </p>
-                              </div>
-                              <div>
-                                <p className="text-zinc-400">평균 거래대금</p>
-                                <p className="font-medium text-zinc-800">{formatNumber(peer.avgTurnover)}</p>
-                              </div>
+
+                            {/* 점수 */}
+                            <div className="flex flex-col items-end flex-1 min-w-0">
+                              <span className="text-[11px] sm:text-xs text-zinc-400">
+                                점수
+                              </span>
+                              <span className="text-sm sm:text-base font-bold text-zinc-900">
+                                {peer.score == null || !Number.isFinite(peer.score)
+                                  ? "-"
+                                  : peer.score.toFixed(2)}
+                              </span>
+                            </div>
+
+                            {/* 시차 */}
+                            <div className="hidden sm:flex flex-col items-end flex-1 min-w-0">
+                              <span className="text-[11px] sm:text-xs text-zinc-400">
+                                시차
+                              </span>
+                              <span className="text-sm sm:text-base font-medium text-zinc-800">
+                                {peer.bestLag == null ? "-" : `${Math.abs(peer.bestLag)}일`}
+                              </span>
+                            </div>
+
+                            {/* 평균 거래대금 */}
+                            <div className="hidden md:flex flex-col items-end flex-[1.2] min-w-0">
+                              <span className="text-[11px] sm:text-xs text-zinc-400">
+                                평균 거래대금
+                              </span>
+                              <span className="text-sm sm:text-base font-medium text-zinc-800">
+                                {formatNumber(peer.avgTurnover)}
+                              </span>
                             </div>
                           </div>
                         ))}
