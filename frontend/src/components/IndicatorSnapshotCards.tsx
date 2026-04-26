@@ -14,6 +14,14 @@ const latestDefined = <T,>(items: T[] | null | undefined, pick: (item: T) => num
   return null;
 };
 
+const latestItemWith = <T,>(items: T[] | null | undefined, hasValue: (item: T) => boolean) => {
+  if (!items?.length) return null;
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    if (hasValue(items[i])) return items[i];
+  }
+  return null;
+};
+
 const fmt = (value: number | null | undefined, digits = 2) => {
   if (value == null || !Number.isFinite(value)) return "-";
   return value.toLocaleString("ko-KR", {
@@ -68,7 +76,16 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
           : "혼합"
       : "확인 불가";
 
-  const bbLatest = indicators.bb20_2?.length ? indicators.bb20_2[indicators.bb20_2.length - 1] : null;
+  const bbLatest = latestItemWith(
+    indicators.bb20_2,
+    (item) =>
+      item.upper != null &&
+      Number.isFinite(item.upper) &&
+      item.mid != null &&
+      Number.isFinite(item.mid) &&
+      item.lower != null &&
+      Number.isFinite(item.lower)
+  );
   const percentB =
     bbLatest && bbLatest.upper != null && bbLatest.lower != null && bbLatest.mid != null
       ? (((bbLatest.mid - bbLatest.lower) / (bbLatest.upper - bbLatest.lower || 1)) * 100)
@@ -76,9 +93,10 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
   const bbWidth =
     bbLatest && bbLatest.upper != null && bbLatest.lower != null ? bbLatest.upper - bbLatest.lower : null;
 
-  const stochLatest = indicators.stoch14_3_3?.length
-    ? indicators.stoch14_3_3[indicators.stoch14_3_3.length - 1]
-    : null;
+  const stochLatest = latestItemWith(
+    indicators.stoch14_3_3,
+    (item) => item.k != null && Number.isFinite(item.k) && item.d != null && Number.isFinite(item.d)
+  );
   const stochZone =
     stochLatest?.k != null
       ? stochLatest.k >= 80
