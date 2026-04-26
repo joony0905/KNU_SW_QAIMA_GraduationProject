@@ -1,70 +1,82 @@
 package com.qaima.service.marketmetric;
 
 import com.qaima.domain.Financial;
+import com.qaima.service.marketmetric.model.MarketSnapshotInput;
+import com.qaima.service.marketmetric.model.ShareBasisView;
 import com.qaima.service.marketmetric.model.SnapshotMetricView;
-import com.qaima.service.marketmetric.support.MetricMath;
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
 public class FinancialFallbackCalculator {
 
-    public SnapshotMetricView calculate(List<Financial> financials, BigDecimal sharesOutstanding, LocalDate asOfDate) {
-        List<String> warnings = List.of("SNAPSHOT_FALLBACK_USED");
-        Financial latest = (financials == null ? List.<Financial>of() : financials).stream()
-                .filter(financial -> financial != null)
-                .sorted(Comparator
-                        .comparing(Financial::getFiscalYear)
-                        .thenComparing(Financial::getPeriodNo)
-                        .thenComparing(Financial::getReportDate, Comparator.nullsLast(LocalDate::compareTo))
-                        .reversed())
-                .findFirst()
-                .orElse(null);
+    private final SnapshotCalculator snapshotCalculator;
 
-        if (latest == null) {
-            return new SnapshotMetricView(
-                    asOfDate, sharesOutstanding, null, null, null, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, warnings, "FINANCIAL_FALLBACK"
-            );
-        }
+    public FinancialFallbackCalculator(SnapshotCalculator snapshotCalculator) {
+        this.snapshotCalculator = snapshotCalculator;
+    }
+
+    public SnapshotMetricView calculate(List<Financial> financials, ShareBasisView shareBasis, LocalDate asOfDate) {
+        SnapshotMetricView snapshot = snapshotCalculator.calculate(new MarketSnapshotInput(
+                financials,
+                shareBasis == null ? null : shareBasis.sharesOutstanding(),
+                shareBasis == null ? null : shareBasis.valuationShares(),
+                shareBasis == null ? null : shareBasis.floatingShares(),
+                shareBasis == null ? null : shareBasis.treasuryShares(),
+                asOfDate,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        ));
+
+        List<String> warnings = new ArrayList<>();
+        warnings.add("SNAPSHOT_FALLBACK_USED");
+        warnings.addAll(snapshot.warnings() == null ? List.of() : snapshot.warnings());
+
+        BigDecimal sharesOutstanding = firstNonNull(
+                snapshot.sharesOutstanding(),
+                shareBasis == null ? null : shareBasis.sharesOutstanding()
+        );
+        BigDecimal floatingShares = firstNonNull(
+                snapshot.floatingShares(),
+                shareBasis == null ? null : shareBasis.floatingShares()
+        );
+        BigDecimal treasuryShares = firstNonNull(
+                snapshot.treasuryShares(),
+                shareBasis == null ? null : shareBasis.treasuryShares()
+        );
 
         return new SnapshotMetricView(
-                asOfDate,
+                snapshot.asOfDate(),
                 sharesOutstanding,
-                null,
-                null,
-                MetricMath.divide(latest.getNetIncome(), sharesOutstanding),
-                MetricMath.divide(latest.getEquity(), sharesOutstanding),
-                MetricMath.divide(latest.getRevenue(), sharesOutstanding),
-                MetricMath.ratioPercent(latest.getNetIncome(), latest.getEquity()),
-                MetricMath.ratioPercent(latest.getNetIncome(), latest.getAssets()),
-                MetricMath.ratioPercent(latest.getOperatingIncome(), latest.getRevenue()),
-                MetricMath.ratioPercent(latest.getNetIncome(), latest.getRevenue()),
-                MetricMath.ratioPercent(latest.getLiabilities(), latest.getEquity()),
-                latest.getCurrentAssets(),
-                latest.getCurrentLiabilities(),
-                latest.getInventories(),
-                latest.getInterestExpense(),
-                latest.getOperatingCashFlow(),
-                sumNullable(latest.getCapexPpe(), latest.getCapexIntangible()),
+                floatingShares,
+                treasuryShares,
+                snapshot.epsTtm(),
+                snapshot.bps(),
+                snapshot.sps(),
+                snapshot.roe(),
+                snapshot.roa(),
+                snapshot.operatingMargin(),
+                snapshot.netMargin(),
+                snapshot.debtRatio(),
+                snapshot.currentAssets(),
+                snapshot.currentLiabilities(),
+                snapshot.inventory(),
+                snapshot.interestExpense(),
+                snapshot.operatingCashFlow(),
+                snapshot.capex(),
                 warnings,
                 "FINANCIAL_FALLBACK"
         );
     }
 
-    private BigDecimal sumNullable(BigDecimal left, BigDecimal right) {
-        if (left == null && right == null) {
-            return null;
-        }
-        if (left == null) {
-            return right;
-        }
-        if (right == null) {
-            return left;
-        }
-        return left.add(right);
+    private BigDecimal firstNonNull(BigDecimal primary, BigDecimal fallback) {
+        return primary != null ? primary : fallback;
     }
 }

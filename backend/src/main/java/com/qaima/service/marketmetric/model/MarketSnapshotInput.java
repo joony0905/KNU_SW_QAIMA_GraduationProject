@@ -8,6 +8,7 @@ import java.util.List;
 public record MarketSnapshotInput(
         List<Financial> financials,
         BigDecimal sharesOutstanding,
+        BigDecimal valuationShares,
         BigDecimal floatingShares,
         BigDecimal treasuryShares,
         LocalDate asOfDate,

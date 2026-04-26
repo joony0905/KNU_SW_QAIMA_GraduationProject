@@ -124,9 +124,7 @@ public class FinancialReadService {
 
         LocalDate reportDate = financial.getReportDate();
         LocalDate effectiveDate = reportDate != null ? reportDate : fallbackDate;
-        return shareBasisResolver.fromIssuedShares(
-                shareBasisResolver.findPrimaryIssuedShares(stock, effectiveDate)
-        ).sharesOutstanding();
+        return shareBasisResolver.resolveFromIssuedShares(stock, effectiveDate).valuationShares();
     }
 
     private void validatePeriodNo(PeriodType periodType, Integer periodNo) {

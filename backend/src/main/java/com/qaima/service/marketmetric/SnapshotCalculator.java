@@ -57,14 +57,17 @@ public class SnapshotCalculator {
         BigDecimal equity = anchor.getEquity();
         BigDecimal assets = anchor.getAssets();
         BigDecimal liabilities = anchor.getLiabilities();
+        BigDecimal valuationShares = input.valuationShares() != null
+                ? input.valuationShares()
+                : input.sharesOutstanding();
 
         return new SnapshotMetricView(
                 input.asOfDate(),
                 input.sharesOutstanding(),
                 input.floatingShares(),
                 input.treasuryShares(),
-                MetricMath.divide(netIncomeBase, input.sharesOutstanding()),
-                MetricMath.divide(equity, input.sharesOutstanding()),
+                MetricMath.divide(netIncomeBase, valuationShares),
+                MetricMath.divide(equity, valuationShares),
                 MetricMath.divide(revenueBase, input.sharesOutstanding()),
                 MetricMath.ratioPercent(netIncomeBase, equity),
                 MetricMath.ratioPercent(netIncomeBase, assets),
