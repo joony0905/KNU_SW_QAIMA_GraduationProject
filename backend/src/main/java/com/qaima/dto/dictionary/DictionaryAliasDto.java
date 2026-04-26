@@ -1,29 +1,22 @@
 package com.qaima.dto.dictionary;
 
+import java.time.Instant;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.Instant;
-
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DictionaryTermDto {
-    private String term;
-    private String initial;
-    private String description;
-    private String source;
-    private String sourceOrg;
-    private String sourceUrl;
+public class DictionaryAliasDto {
+    private String alias;
+    private String canonicalTerm;
     private String sourceType;
-    private String status;
-    private Instant reviewedAt;
-    private String tag;
+    private String notes;
     private Instant createdAt;
     private Instant updatedAt;
 }
