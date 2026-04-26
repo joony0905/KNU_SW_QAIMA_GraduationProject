@@ -44,10 +44,10 @@ public class Feature2AnalyzeService {
         final Feature2MetricsDto metrics = metricsAssembler.empty();
         final Feature2Command command = requestNormalizer.normalize(req);
 
-        log.info("[Feature2][service-start] incoming req={}, normalized stockCode={}, freq={}, window={}, peerCount={}, maxLag={}",
-                req, command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag());
-        log.info("[Feat2] analyze start. stockCode={}, freq={}, window={}, peerCount={}, maxLag={}",
-                command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag());
+        log.info("[Feature2][service-start] incoming req={}, normalized stockCode={}, freq={}, window={}, peerCount={}, maxLag={}, displayLimit={}",
+                req, command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag(), command.displayLimit());
+        log.info("[Feat2] analyze start. stockCode={}, freq={}, window={}, peerCount={}, maxLag={}, displayLimit={}",
+                command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag(), command.displayLimit());
 
         if (command.stockCode() == null || command.stockCode().isBlank()) {
             meta.addWarning(Feat2WarningCode.STOCK_NOT_FOUND);
@@ -140,7 +140,8 @@ public class Feature2AnalyzeService {
                         command.freq(),
                         command.window(),
                         command.peerCount(),
-                        command.maxLag()
+                        command.maxLag(),
+                        command.displayLimit()
                 )
                 .onErrorResume(ex -> {
                     log.warn("[Feat2] peerCluster load failed. industryId={}, stockCode={}, cause={}",

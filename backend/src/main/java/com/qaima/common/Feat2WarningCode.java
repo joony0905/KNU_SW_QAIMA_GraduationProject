@@ -2,17 +2,17 @@ package com.qaima.common;
 
 public enum Feat2WarningCode {
 
-    // ----- Stock / Industry -----
+    // ----- 종목 / 산업 -----
     STOCK_NOT_FOUND,
     INDUSTRY_MISSING,
 
-    // ----- Industry Index (FR-17) -----
+    // ----- 산업지수 (FR-17) -----
     INDUSTRY_INDEX_MISSING,
     INDUSTRY_INDEX_OHLCV_EMPTY,
     INDUSTRY_INDEX_SAVE_FAILED,
     INDUSTRY_INDEX_FETCH_FAILED,
 
-    // ----- Peer / Cluster (FR-18) -----
+    // ----- 유사 종목 / 클러스터 (FR-18) -----
     PEER_CLUSTER_CACHE_MISS,
     PEER_CLUSTER_EMPTY,
     PEER_CLUSTER_MISSING,
@@ -25,20 +25,30 @@ public enum Feat2WarningCode {
     PEER_CLUSTER_LOAD_FAILED,
     PEER_CLUSTER_INDUSTRY_ID_MISSING,
     PEER_CLUSTER_ANCHOR_MISSING,
+    PEER_CLUSTER_LOW_POSITIVE_CORR_CANDIDATES,
+    INDUSTRY_ADJUSTED_RETURN_FALLBACK_RAW,
+    PEER_CORR_STABILITY_INSUFFICIENT_DATA,
+    PEER_FILTER_RELAXED,
+    PEER_CANDIDATES_LOW_AFTER_QUALITY_FILTER,
+    PEER_CANDIDATES_LOW_AFTER_LIQUIDITY_FILTER,
+    PEER_CANDIDATES_LOW_AFTER_VOLATILITY_FILTER,
+    PEER_COUNT_REDUCED_BY_CANDIDATE_SIZE,
+    PEER_CANDIDATES_INSUFFICIENT,
+    PEER_DISPLAY_CANDIDATES_LOW,
 
-    // ----- News / Sentiment -----
+    // ----- 뉴스 / 감성 -----
     NEWS_NOT_FOUND,
     SENTIMENT_NOT_FOUND,
 
-    // ----- Short Selling -----
+    // ----- 공매도 -----
     SHORT_SELLING_MISSING,
     SHORT_SELLING_LOAD_FAILED,
 
-    // ----- Base Rate -----
+    // ----- 기준금리 -----
     BASE_RATE_MISSING,
     BASE_RATE_LOAD_FAILED,
 
-    // ----- External / Fallback -----
+    // ----- 외부 연동 / 대체 처리 -----
     EXTERNAL_API_FALLBACK_USED,
 
     // ----- LLM -----

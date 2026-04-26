@@ -14,8 +14,8 @@ import {
 import type { PeerItem } from "../types/feature2";
 
 export type RelativeLinePoint = {
-  t: string;      // ISO datetime
-  value: number;  // rebased %
+  t: string;      // 표준 날짜/시간 문자열
+  value: number;  // 리베이스된 변화율
 };
 
 interface Props {
@@ -25,10 +25,11 @@ interface Props {
   height?: number;
   overlayCentroid?: RelativeLinePoint[] | null;
   overlayBand?: { t: string; p20: number; p80: number }[] | null;
+  overlayAnchor?: RelativeLinePoint[] | null;
   overlayPeers?: PeerItem[] | null;
   showPeerOverlay?: boolean;
 
-  // 부모와 공유할 KST day key
+  // 부모와 공유할 KST 날짜 키
   hoveredDayKey?: string | null;
   onHoverDayKeyChange?: (dayKey: string | null) => void;
 }
@@ -37,7 +38,7 @@ const isoToEpochSeconds = (iso: string) =>
   Math.floor(new Date(iso).getTime() / 1000);
 
 /**
- * epoch seconds -> KST day key (YYYY-MM-DD)
+ * epoch seconds를 KST 날짜 키(YYYY-MM-DD)로 변환한다.
  * Asia/Seoul 기준
  */
 const toKstDayKeyFromEpochSec = (sec: number) => {
@@ -95,6 +96,13 @@ const formatRelationLabel = (relation?: PeerItem["relation"] | null) => {
   }
 };
 
+const formatAdjustmentBasis = (peer: PeerItem) => {
+  if (peer.adjustedCorrValid && !peer.rawCorrValid) return "산업조정 기준 유사";
+  if (peer.adjustmentBasis === "SIMPLE_SUBTRACTION") return "산업조정 상관";
+  if (peer.adjustmentBasis === "FALLBACK_RAW") return "원시 상관 기준";
+  return "원시 상관 기준";
+};
+
 function RelativeLineWidget({
   data,
   lineColor = "#2563eb",
@@ -102,6 +110,7 @@ function RelativeLineWidget({
   height = 320,
   overlayCentroid,
   overlayBand,
+  overlayAnchor,
   overlayPeers,
   showPeerOverlay = false,
   hoveredDayKey,
@@ -110,6 +119,7 @@ function RelativeLineWidget({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const anchorSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const centroidSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bandHighSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const bandLowSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
@@ -119,72 +129,106 @@ function RelativeLineWidget({
   const syncingCrosshairRef = useRef(false);
   const [isInfoOpen, setIsInfoOpen] = React.useState(false);
   const [selectedDetailDayKey, setSelectedDetailDayKey] = React.useState<string | null>(null);
+  const [hoverTooltipDayKey, setHoverTooltipDayKey] = React.useState<string | null>(null);
+
+  const toSortedLineData = (points: RelativeLinePoint[] | null | undefined, scale = 1): LineData<Time>[] => {
+    return (points ?? [])
+      .filter(
+        (p) =>
+          p &&
+          typeof p.t === "string" &&
+          Number.isFinite(Number(p.value))
+      )
+      .map((p) => ({
+        time: isoToEpochSeconds(p.t) as UTCTimestamp,
+        value: Number(p.value) * scale,
+      }))
+      .sort((a, b) => Number(a.time) - Number(b.time));
+  };
+
+  const rawIndustryData = useMemo<LineData<Time>[]>(() => toSortedLineData(data, 1), [data]);
+  const rawAnchorData = useMemo<LineData<Time>[]>(() => toSortedLineData(overlayAnchor, 100), [overlayAnchor]);
+  const rawCentroidData = useMemo<LineData<Time>[]>(() => toSortedLineData(overlayCentroid, 100), [overlayCentroid]);
+
+  const commonTimes = useMemo(() => {
+    if (!showPeerOverlay || rawAnchorData.length === 0) return null;
+    let common = new Set(rawIndustryData.map((p) => Number(p.time)));
+    for (const series of [rawAnchorData, rawCentroidData]) {
+      if (series.length === 0) continue;
+      const times = new Set(series.map((p) => Number(p.time)));
+      common = new Set([...common].filter((time) => times.has(time)));
+    }
+    if (overlayBand && overlayBand.length > 0) {
+      const bandTimes = new Set(
+        overlayBand
+          .filter((p) => p && typeof p.t === "string" && Number.isFinite(Number(p.p20)) && Number.isFinite(Number(p.p80)))
+          .map((p) => isoToEpochSeconds(p.t))
+      );
+      common = new Set([...common].filter((time) => bandTimes.has(time)));
+    }
+    return common.size > 0 ? common : null;
+  }, [overlayBand, rawAnchorData, rawCentroidData, rawIndustryData, showPeerOverlay]);
+
+  const normalizeSeries = (series: LineData<Time>[], times: Set<number> | null) => {
+    const filtered = times ? series.filter((p) => times.has(Number(p.time))) : series;
+    const first = filtered[0]?.value;
+    if (first == null || !Number.isFinite(Number(first))) return filtered;
+    return filtered.map((p) => ({ ...p, value: Number(p.value) - Number(first) }));
+  };
 
   const lineData = useMemo<LineData<Time>[]>(() => {
-    return (data ?? [])
-      .filter(
-        (p) =>
-          p &&
-          typeof p.t === "string" &&
-          Number.isFinite(Number(p.value))
-      )
-      .map((p) => ({
-        time: isoToEpochSeconds(p.t) as UTCTimestamp,
-        value: Number(p.value),
-      }))
-      .sort((a, b) => Number(a.time) - Number(b.time));
-  }, [data]);
+    return normalizeSeries(rawIndustryData, commonTimes);
+  }, [commonTimes, rawIndustryData]);
+
+  const anchorData = useMemo<LineData<Time>[]>(() => {
+    return normalizeSeries(rawAnchorData, commonTimes);
+  }, [commonTimes, rawAnchorData]);
 
   const centroidData = useMemo<LineData<Time>[]>(() => {
-    return (overlayCentroid ?? [])
-      .filter(
-        (p) =>
-          p &&
-          typeof p.t === "string" &&
-          Number.isFinite(Number(p.value))
-      )
-      .map((p) => ({
-        time: isoToEpochSeconds(p.t) as UTCTimestamp,
-        value: Number(p.value) * 100,
-      }))
-      .sort((a, b) => Number(a.time) - Number(b.time));
-  }, [overlayCentroid]);
+    return normalizeSeries(rawCentroidData, commonTimes);
+  }, [commonTimes, rawCentroidData]);
 
   const bandHighData = useMemo<AreaData<Time>[]>(() => {
     if (!showPeerOverlay) return [];
-    return (overlayBand ?? [])
+    const mapped = (overlayBand ?? [])
       .filter(
         (p) =>
           p &&
           typeof p.t === "string" &&
-          Number.isFinite(Number(p.p80))
+          Number.isFinite(Number(p.p80)) &&
+          (!commonTimes || commonTimes.has(isoToEpochSeconds(p.t)))
       )
       .map((p) => ({
         time: isoToEpochSeconds(p.t) as UTCTimestamp,
         value: Number(p.p80) * 100,
       }))
       .sort((a, b) => Number(a.time) - Number(b.time));
-  }, [overlayBand, showPeerOverlay]);
+    const first = mapped[0]?.value ?? 0;
+    return mapped.map((p) => ({ ...p, value: Number(p.value) - Number(first) }));
+  }, [commonTimes, overlayBand, showPeerOverlay]);
 
   const bandLowData = useMemo<AreaData<Time>[]>(() => {
     if (!showPeerOverlay) return [];
-    return (overlayBand ?? [])
+    const mapped = (overlayBand ?? [])
       .filter(
         (p) =>
           p &&
           typeof p.t === "string" &&
-          Number.isFinite(Number(p.p20))
+          Number.isFinite(Number(p.p20)) &&
+          (!commonTimes || commonTimes.has(isoToEpochSeconds(p.t)))
       )
       .map((p) => ({
         time: isoToEpochSeconds(p.t) as UTCTimestamp,
         value: Number(p.p20) * 100,
       }))
       .sort((a, b) => Number(a.time) - Number(b.time));
-  }, [overlayBand, showPeerOverlay]);
+    const first = mapped[0]?.value ?? 0;
+    return mapped.map((p) => ({ ...p, value: Number(p.value) - Number(first) }));
+  }, [commonTimes, overlayBand, showPeerOverlay]);
 
   /**
-   * KST day key -> 실제 차트 time/value
-   * 같은 day key가 여러 개면 마지막 값으로 덮어씀
+   * KST 날짜 키를 실제 차트 time/value로 변환한다.
+   * 같은 날짜 키가 여러 개면 마지막 값으로 덮어쓴다.
    */
   const dayMap = useMemo(() => {
     const map = new Map<string, { time: Time; value: number }>();
@@ -208,6 +252,14 @@ function RelativeLineWidget({
     }
     return map;
   }, [centroidData]);
+
+  const anchorDayMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of anchorData) {
+      map.set(toKstDayKeyFromEpochSec(Number(p.time)), Number(p.value));
+    }
+    return map;
+  }, [anchorData]);
 
   const bandDayMap = useMemo(() => {
     const map = new Map<string, { p20: number; p80: number }>();
@@ -236,9 +288,12 @@ function RelativeLineWidget({
   }, [dayMap]);
 
   const activeDetailDayKey = selectedDetailDayKey ?? hoveredDayKey ?? latestDayKey;
+  const tooltipDayKey = hoverTooltipDayKey ?? hoveredDayKey;
   const activeIndustryValue = activeDetailDayKey ? (dayMap.get(activeDetailDayKey)?.value ?? null) : null;
+  const activeAnchorValue = activeDetailDayKey ? (anchorDayMap.get(activeDetailDayKey) ?? null) : null;
   const activeCentroidValue = activeDetailDayKey ? (centroidDayMap.get(activeDetailDayKey) ?? null) : null;
   const activeBand = activeDetailDayKey ? (bandDayMap.get(activeDetailDayKey) ?? null) : null;
+  const tooltipBand = tooltipDayKey ? (bandDayMap.get(tooltipDayKey) ?? null) : null;
 
   useEffect(() => {
     if (!isInfoOpen) return;
@@ -283,7 +338,15 @@ function RelativeLineWidget({
 
     const lineSeries = chart.addSeries(LineSeries, {
       color: lineColor,
-      lineWidth: 2,
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: true,
+      crosshairMarkerVisible: true,
+    });
+
+    const anchorSeries = chart.addSeries(LineSeries, {
+      color: "#0f766e",
+      lineWidth: 3,
       priceLineVisible: false,
       lastValueVisible: true,
       crosshairMarkerVisible: true,
@@ -291,9 +354,9 @@ function RelativeLineWidget({
 
     const bandHighSeries = chart.addSeries(AreaSeries, {
       lineColor: "rgba(217, 119, 6, 0)",
-      topColor: "rgba(217, 119, 6, 0.18)",
-      bottomColor: "rgba(217, 119, 6, 0.06)",
-      lineWidth: 0,
+      topColor: "rgba(217, 119, 6, 0.08)",
+      bottomColor: "rgba(217, 119, 6, 0.03)",
+      lineWidth: 1,
       priceLineVisible: false,
       lastValueVisible: false,
       crosshairMarkerVisible: false,
@@ -303,7 +366,7 @@ function RelativeLineWidget({
       lineColor: "rgba(255,255,255,0)",
       topColor: "#ffffff",
       bottomColor: "#ffffff",
-      lineWidth: 0,
+      lineWidth: 1,
       priceLineVisible: false,
       lastValueVisible: false,
       crosshairMarkerVisible: false,
@@ -311,7 +374,8 @@ function RelativeLineWidget({
 
     const centroidSeries = chart.addSeries(LineSeries, {
       color: "#d97706",
-      lineWidth: 3,
+      lineWidth: 2,
+      lineStyle: 2,
       priceLineVisible: false,
       lastValueVisible: true,
       crosshairMarkerVisible: true,
@@ -337,6 +401,7 @@ function RelativeLineWidget({
 
     chartRef.current = chart;
     lineSeriesRef.current = lineSeries;
+    anchorSeriesRef.current = anchorSeries;
     centroidSeriesRef.current = centroidSeries;
     bandHighSeriesRef.current = bandHighSeries;
     bandLowSeriesRef.current = bandLowSeries;
@@ -373,6 +438,7 @@ function RelativeLineWidget({
 
       chartRef.current = null;
       lineSeriesRef.current = null;
+      anchorSeriesRef.current = null;
       centroidSeriesRef.current = null;
       bandHighSeriesRef.current = null;
       bandLowSeriesRef.current = null;
@@ -383,22 +449,24 @@ function RelativeLineWidget({
 
   useEffect(() => {
     const lineSeries = lineSeriesRef.current;
+    const anchorSeries = anchorSeriesRef.current;
     const centroidSeries = centroidSeriesRef.current;
     const bandHighSeries = bandHighSeriesRef.current;
     const bandLowSeries = bandLowSeriesRef.current;
     const bandUpperLine = bandUpperLineRef.current;
     const bandLowerLine = bandLowerLineRef.current;
     const chart = chartRef.current;
-    if (!lineSeries || !chart || !centroidSeries || !bandHighSeries || !bandLowSeries || !bandUpperLine || !bandLowerLine) return;
+    if (!lineSeries || !anchorSeries || !chart || !centroidSeries || !bandHighSeries || !bandLowSeries || !bandUpperLine || !bandLowerLine) return;
 
     lineSeries.setData(lineData);
+    anchorSeries.setData(showPeerOverlay ? anchorData : []);
     centroidSeries.setData(showPeerOverlay ? centroidData : []);
     bandHighSeries.setData(showPeerOverlay ? bandHighData : []);
     bandLowSeries.setData(showPeerOverlay ? bandLowData : []);
     bandUpperLine.setData(showPeerOverlay ? bandHighData : []);
     bandLowerLine.setData(showPeerOverlay ? bandLowData : []);
     chart.timeScale().fitContent();
-  }, [lineData, centroidData, bandHighData, bandLowData, showPeerOverlay]);
+  }, [anchorData, lineData, centroidData, bandHighData, bandLowData, showPeerOverlay]);
 
   /**
    * 차트에서 hover하면 부모에 KST day key 전달
@@ -412,10 +480,12 @@ function RelativeLineWidget({
 
       if (!param?.time) {
         onHoverDayKeyChange(null);
+        setHoverTooltipDayKey(null);
         return;
       }
 
       const key = toKstDayKeyFromEpochSec(Number(param.time));
+      setHoverTooltipDayKey(key);
       onHoverDayKeyChange(key);
     };
 
@@ -429,7 +499,7 @@ function RelativeLineWidget({
   }, [onHoverDayKeyChange]);
 
   /**
-   * 외부 hoveredDayKey를 받아 내 차트의 실제 time/value로 crosshair 세팅
+   * 외부 hoveredDayKey를 받아 이 차트의 실제 time/value로 crosshair를 설정한다.
    */
   useEffect(() => {
     const chart = chartRef.current;
@@ -458,13 +528,19 @@ function RelativeLineWidget({
   }, [hoveredDayKey, dayMap]);
 
   return (
-    <div className="w-full h-full min-h-0 flex flex-col">
+    <div className="relative w-full h-full min-h-0 flex flex-col">
       {title && (
         <div className="px-1 pb-2 text-sm font-medium text-zinc-700">
           {title}
         </div>
       )}
       <div className="px-1 pb-2 flex flex-wrap gap-4 text-xs sm:text-sm text-zinc-600">
+        {showPeerOverlay && (
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#0f766e" }} />
+            <span>선택 종목</span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: lineColor }} />
           <span>산업 지수</span>
@@ -485,8 +561,8 @@ function RelativeLineWidget({
       {showPeerOverlay && (
         <div className="px-1 pb-3 flex items-start justify-between gap-3 text-[11px] sm:text-xs text-zinc-500">
           <p className="leading-relaxed">
-            파란선은 산업 전체 흐름, 주황선은 유사 종목군 평균 흐름입니다.
-            주황 음영은 유사 종목군 분산 범위(p20~p80)입니다.
+            선택 종목, 관련 산업지수, 유사 종목군 평균을 동일 기준일 0%로 환산해 비교합니다.
+            음영은 유사 종목군의 p20~p80 범위입니다.
           </p>
           <div className="shrink-0">
             <button
@@ -513,6 +589,15 @@ function RelativeLineWidget({
         className="w-full flex-1 min-h-0"
         style={{ height }}
       />
+      {showPeerOverlay && tooltipDayKey && (
+        <div className="pointer-events-none absolute right-4 top-20 z-10 rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[11px] text-zinc-600 shadow-sm">
+          <p className="font-semibold text-zinc-900">{tooltipDayKey}</p>
+          <p>선택 종목 {formatPct(anchorDayMap.get(tooltipDayKey) ?? null)}</p>
+          <p>산업지수 {formatPct(dayMap.get(tooltipDayKey)?.value ?? null)}</p>
+          <p>유사 평균 {formatPct(centroidDayMap.get(tooltipDayKey) ?? null)}</p>
+          <p>p20 / p80 {formatPct(tooltipBand?.p20 ?? null)} / {formatPct(tooltipBand?.p80 ?? null)}</p>
+        </div>
+      )}
       {showPeerOverlay && isInfoOpen && (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
@@ -534,8 +619,8 @@ function RelativeLineWidget({
 
             <div className="px-5 py-4 overflow-y-auto flex-1">
               <p className="text-sm text-zinc-700 leading-relaxed">
-                파란선은 산업 전체의 상대 변화율이고, 주황선은 이 종목과 유사하게 움직인 종목군의 평균 흐름이에요.
-                주황 음영은 해당 종목군의 실제 분산 범위(p20~p80)이며, 예측 구간이 아닌 실제 분포 범위랍니다!
+                선택 종목, 관련 산업지수, 유사 종목군 평균을 동일 기준일 0%로 환산해 비교합니다.
+                음영은 유사 종목군의 p20~p80 범위입니다.
               </p>
               <p className="mt-3 text-sm text-zinc-700 leading-relaxed">
                 모든 값은 시작 시점을 0으로 맞춘 상대 변화율 기준이에요.
@@ -563,6 +648,10 @@ function RelativeLineWidget({
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
+                    <p className="text-xs text-zinc-500">선택 종목</p>
+                    <p className="mt-1 text-sm font-semibold text-zinc-900">{formatPct(activeAnchorValue)}</p>
+                  </div>
                   <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
                     <p className="text-xs text-zinc-500">산업 지수</p>
                     <p className="mt-1 text-sm font-semibold text-zinc-900">{formatPct(activeIndustryValue)}</p>
@@ -611,11 +700,14 @@ function RelativeLineWidget({
                         <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-zinc-600">
                           <div>
                             <span className="text-zinc-400">동행 상관도</span>
-                            <p className="font-medium text-zinc-800">{formatScore(peer.corr)}</p>
+                            <p className="font-medium text-zinc-800">
+                              {formatScore(peer.adjustedCorrValid ? peer.adjustedCorr : peer.corr)}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-zinc-400">{formatAdjustmentBasis(peer)}</p>
                           </div>
                           <div>
                             <span className="text-zinc-400">유사도 점수</span>
-                            <p className="font-medium text-zinc-800">{formatScore(peer.score)}</p>
+                            <p className="font-medium text-zinc-800">{formatScore(peer.peerScore ?? peer.score)}</p>
                           </div>
                           <div>
                             <span className="text-zinc-400">시차</span>

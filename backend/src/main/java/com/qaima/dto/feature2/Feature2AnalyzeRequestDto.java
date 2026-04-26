@@ -16,4 +16,5 @@ public class Feature2AnalyzeRequestDto {
     private Integer window;
     private Integer peerCount;
     private Integer maxLag;
+    private Integer displayLimit;
 }

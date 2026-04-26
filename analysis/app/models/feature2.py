@@ -7,11 +7,11 @@ from typing import List, Optional, Literal
 from pydantic import BaseModel, Field, ConfigDict
 
 
-Freq = Literal["ONE_D", "ONE_W"]  # MVP: ONE_D 권장, 미지원 시 warning + fallback
+Freq = Literal["ONE_D", "ONE_W"]  # MVP: ONE_D 권장, 미지원 시 경고 후 대체 처리
 
 
 # =========================
-# Shared points
+# 공통 시계열 포인트
 # =========================
 class RelativePoint(BaseModel):
     """Rebased relative series point (e.g., +0.012 = +1.2%)."""
@@ -31,45 +31,69 @@ class BandPoint(BaseModel):
 
 
 # =========================
-# Peer item (contract)
+# Peer 항목 응답 계약
 # - market_cap/cap_score 제거
 # - leader/follower 판단 포함
 # =========================
 Relation = Literal["LEADER", "FOLLOWER", "COINCIDENT", "UNKNOWN"]
+AdjustmentMethod = Literal["SIMPLE_SUBTRACTION", "BETA_RESIDUAL_RESERVED"]
+AdjustmentBasis = Literal["RAW_ONLY", "SIMPLE_SUBTRACTION", "FALLBACK_RAW"]
+DisplayStatus = Literal[
+    "SELECTED",
+    "ELIGIBLE_NOT_SELECTED",
+    "DISPLAY_ONLY",
+    "LOW_CORR",
+    "RAW_ONLY",
+    "ADJUSTED_ONLY",
+    "FALLBACK_RAW",
+]
 
 
 class PeerItem(BaseModel):
-    """Selected peer summary (market-cap excluded, leader/follower included)."""
+    """선정/표시용 peer 요약. 시총은 제외하고 선행/후행 관계를 포함한다."""
     model_config = ConfigDict(extra="forbid")
 
     stock_code: str
     company_name: Optional[str] = None
 
-    # screening/scoring metadata (optional in response)
+    # 필터링/점수화 메타데이터. 응답에서는 선택적으로 포함된다.
     avg_turnover: Optional[float] = None   # 거래대금(평균)
     avg_volume: Optional[float] = None     # 거래량(평균)
 
-    # same-time correlation (co-movement)
+    # 동시점 상관계수. 함께 움직이는 정도를 나타낸다.
     corr: Optional[float] = None
+    adjusted_corr: Optional[float] = None
+    corr_stability: Optional[float] = None
+    raw_corr_valid: bool = False
+    adjusted_corr_valid: bool = False
+    adjusted_return_sample_size: Optional[int] = None
+    adjusted_return_coverage_ratio: Optional[float] = None
+    adjustment_basis: AdjustmentBasis = "RAW_ONLY"
+    display_status: DisplayStatus = "DISPLAY_ONLY"
 
-    # lead/lag detection
-    # best_lag convention (ONE_D 기준, days):
+    # 선행/후행 탐지
+    # best_lag 기준(ONE_D 기준, 일):
     #   +k  => peer가 k일 "뒤따름" (anchor가 선행)  -> FOLLOWER
     #   -k  => peer가 k일 "앞섬"   (peer가 선행)    -> LEADER
     best_lag: Optional[int] = None
     lead_lag_corr: Optional[float] = None
+    lag_confidence: Optional[float] = None
     relation: Relation = "UNKNOWN"
 
-    # overall ranking score (MVP: corr 중심 + lead_lag_corr 보조)
+    liquidity_similarity_score: Optional[float] = None
+    volatility_similarity_score: Optional[float] = None
+
+    # 전체 순위 점수. 기존 score 별칭은 호환성을 위해 유지한다.
     score: Optional[float] = None
+    peer_score: Optional[float] = None
 
 
 # =========================
-# Request
+# 요청
 # =========================
 class PeerClusterRequest(BaseModel):
     """
-    PeerCluster v1 request.
+    PeerCluster v1 요청.
     - industry_id: 산업 ID
     - anchor_stock_code: 기준 종목(메인 종목)
     - freq/window: 시계열 주기/윈도우
@@ -85,20 +109,21 @@ class PeerClusterRequest(BaseModel):
     window: int = Field(default=90, ge=30, le=365)
     peer_count: int = Field(default=8, ge=3, le=30)
 
-    # Liquidity filters (v1 scope)
+    # 유동성 필터(v1 범위)
     liquidity_min_turnover: Optional[float] = Field(default=None, ge=0)
     liquidity_min_volume: Optional[float] = Field(default=None, ge=0)
 
-    # If you want “top K by turnover” prefilter (optional)
+    # 거래대금 상위 K개 사전 필터. 선택적으로 사용한다.
     liquidity_top_k_turnover: Optional[int] = Field(default=None, ge=5, le=500)
 
-    # lead/lag params (optional, MVP default)
+    # 선행/후행 파라미터. 선택값이며 MVP 기본값을 사용한다.
     # - max_lag: ONE_D 기준 최대 시차(일)
     max_lag: int = Field(default=5, ge=1, le=20)
+    display_limit: int = Field(default=30, ge=1, le=100)
 
 
 # =========================
-# Response
+# 응답
 # =========================
 class PeerClusterResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -111,12 +136,35 @@ class PeerClusterResponse(BaseModel):
     freq: Freq
     window: int
     peer_count: int
+    requested_peer_count: Optional[int] = None
+    effective_peer_count: Optional[int] = None
+    raw_candidate_count: Optional[int] = None
+    evaluated_candidate_count: Optional[int] = None
+    eligible_candidate_count: Optional[int] = None
+    selected_peer_count: Optional[int] = None
+    displayed_candidate_count: Optional[int] = None
+    display_limit: Optional[int] = None
 
+    adjustment_method: AdjustmentMethod = "SIMPLE_SUBTRACTION"
+    industry_index_code: Optional[str] = None
+    industry_index_name: Optional[str] = None
+    adjusted_return_sample_size: Optional[int] = None
+    adjusted_return_coverage_ratio: Optional[float] = None
+    adjustment_valid: bool = False
+    adjustment_fallback_reason: Optional[str] = None
+
+    anchor_series: List[RelativePoint] = Field(default_factory=list)
+    industry_index_series: List[RelativePoint] = Field(default_factory=list)
+    # TODO: 프론트가 peer_centroid/peer_band로 완전히 전환되면 centroid/band는 폐기한다.
     centroid: List[RelativePoint] = Field(default_factory=list)
     band: List[BandPoint] = Field(default_factory=list)
+    peer_centroid: List[RelativePoint] = Field(default_factory=list)
+    peer_band: List[BandPoint] = Field(default_factory=list)
     peers: List[PeerItem] = Field(default_factory=list)
+    candidates: List[PeerItem] = Field(default_factory=list)
 
     as_of: datetime
+    interpretation_note: Optional[str] = None
     warnings: List[str] = Field(default_factory=list)
 
 

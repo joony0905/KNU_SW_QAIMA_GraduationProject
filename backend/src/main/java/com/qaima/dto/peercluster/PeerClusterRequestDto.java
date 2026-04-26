@@ -21,4 +21,5 @@ public class PeerClusterRequestDto {
     private Integer window;
     private Integer peerCount;
     private Integer maxLag;
+    private Integer displayLimit;
 }

@@ -1,14 +1,19 @@
 package com.qaima.service.feature2.impl;
 
 import com.qaima.domain.Freq;
+import com.qaima.domain.IndustryIndexOhlcv;
 import com.qaima.domain.PriceOhlcv;
 import com.qaima.domain.Stock;
 import com.qaima.dto.peercluster.PeerClusterRequestDto;
+import com.qaima.repository.IndustryIndexMapRepository;
+import com.qaima.repository.IndustryIndexOhlcvRepository;
 import com.qaima.repository.PriceOhlcvRepository;
 import com.qaima.repository.StockRepository;
 import com.qaima.service.feature2.PeerClusterDataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -25,6 +30,8 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
 
     private final StockRepository stockRepository;
     private final PriceOhlcvRepository priceOhlcvRepository;
+    private final IndustryIndexMapRepository industryIndexMapRepository;
+    private final IndustryIndexOhlcvRepository industryIndexOhlcvRepository;
 
     // 휴장/결측 대비로 range를 넉넉히 당겨서 가져온 뒤, 각 종목별로 tail(window)로 자른다.
     private static final int RANGE_MULTIPLIER = 3;
@@ -93,7 +100,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
 
             if (stocks.size() > MAX_UNIVERSE) {
                 warnings.add("UNIVERSE_CAPPED:" + MAX_UNIVERSE);
-                stocks = stocks.subList(0, MAX_UNIVERSE);
+                stocks = capUniverseKeepingAnchor(stocks, anchor);
             }
 
             List<String> allCodes = stocks.stream()
@@ -165,6 +172,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
             List<Map<String, Object>> prices = new ArrayList<>();
             List<Map<String, Object>> liquidity = new ArrayList<>();
             List<String> members = new ArrayList<>();
+            Map<String, Object> industryIndex = industryIndexItem(industryId, freq, window, warnings);
 
             for (Stock s : stocks) {
                 String code = (s == null) ? null : safeTrim(s.getStockCode());
@@ -184,6 +192,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
                 List<PriceOhlcv> series = rawSeries.stream()
                         .filter(Objects::nonNull)
                         .filter(p -> safeTs(p) != null)
+                        .filter(p -> safeClose(p) != null)
                         .sorted(Comparator.comparing(PeerClusterDataServiceImpl::safeTs))
                         .collect(Collectors.toList());
 
@@ -221,6 +230,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
             pack.put("metas", metas);
             pack.put("prices", prices);
             pack.put("liquidity", liquidity);
+            pack.put("industry_index", industryIndex);
 
             log.info("[PeerClusterData] buildPack success members={}, metas={}, prices={}, liquidity={}, warnings={}",
                     members.size(), metas.size(), prices.size(), liquidity.size(), warnings.size());
@@ -249,6 +259,42 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         if (window <= 0) return ascSeries;
         if (ascSeries.size() <= window) return ascSeries;
         return ascSeries.subList(ascSeries.size() - window, ascSeries.size());
+    }
+
+    private static List<Stock> capUniverseKeepingAnchor(List<Stock> stocks, String anchor) {
+        if (stocks == null || stocks.size() <= MAX_UNIVERSE) {
+            return stocks;
+        }
+
+        List<Stock> capped = new ArrayList<>(MAX_UNIVERSE);
+        Stock anchorStock = null;
+
+        for (Stock stock : stocks) {
+            String code = stock == null ? null : safeTrim(stock.getStockCode());
+            if (anchor != null && anchor.equals(code)) {
+                anchorStock = stock;
+                break;
+            }
+        }
+
+        if (anchorStock != null) {
+            capped.add(anchorStock);
+        }
+
+        for (Stock stock : stocks) {
+            if (stock == null) {
+                continue;
+            }
+            if (anchorStock != null && stock == anchorStock) {
+                continue;
+            }
+            capped.add(stock);
+            if (capped.size() >= MAX_UNIVERSE) {
+                break;
+            }
+        }
+
+        return capped;
     }
 
     private static boolean isAllZeroClose(List<PriceOhlcv> cut) {
@@ -356,6 +402,67 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         return out;
     }
 
+    private Map<String, Object> industryIndexItem(Long industryId, Freq freq, int window, List<String> warnings) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (industryId == null || freq == null || window <= 0) {
+            warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+            return out;
+        }
+
+        try {
+            return industryIndexMapRepository.findFirstByIdIndustryId(industryId)
+                    .map(map -> {
+                        Long indexId = map.getIndustryIndex() == null ? null : map.getIndustryIndex().getIndexId();
+                        String code = map.getIndustryIndex() == null ? null : map.getIndustryIndex().getCode();
+                        String name = map.getIndustryIndex() == null ? null : map.getIndustryIndex().getName();
+                        if (indexId == null) {
+                            warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+                            return out;
+                        }
+
+                        List<IndustryIndexOhlcv> rows = industryIndexOhlcvRepository.findRecent(
+                                indexId,
+                                freq,
+                                PageRequest.of(0, window, Sort.by(Sort.Direction.DESC, "id.ts"))
+                        );
+
+                        List<IndustryIndexOhlcv> asc = rows == null ? List.of() : rows.stream()
+                                .filter(Objects::nonNull)
+                                .filter(row -> row.getId() != null && row.getId().getTs() != null)
+                                .filter(row -> row.getClose() != null)
+                                .sorted(Comparator.comparing(row -> row.getId().getTs()))
+                                .collect(Collectors.toList());
+
+                        if (asc.size() < MIN_POINTS) {
+                            warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+                            return out;
+                        }
+
+                        List<String> dates = new ArrayList<>(asc.size());
+                        List<Double> close = new ArrayList<>(asc.size());
+                        for (IndustryIndexOhlcv row : asc) {
+                            dates.add(row.getId().getTs().toInstant().toString());
+                            close.add(toDouble(row.getClose()));
+                        }
+
+                        Map<String, Object> item = new LinkedHashMap<>();
+                        item.put("code", code == null ? "INDUSTRY_INDEX" : code);
+                        item.put("name", name);
+                        item.put("dates", dates);
+                        item.put("close", close);
+                        return item;
+                    })
+                    .orElseGet(() -> {
+                        warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+                        return out;
+                    });
+        } catch (Exception e) {
+            log.warn("[PeerClusterData] industry index lookup failed. industryId={}, cause={}", industryId, e.getMessage(), e);
+            warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+            return out;
+        }
+    }
+
     private static double toDouble(BigDecimal v) {
         if (v == null) return 0.0;
         try {
@@ -372,6 +479,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         pack.put("metas", List.of());
         pack.put("prices", List.of());
         pack.put("liquidity", List.of());
+        pack.put("industry_index", Map.of());
         return pack;
     }
 
@@ -395,6 +503,7 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         pack.put("metas", metas);
         pack.put("prices", List.of());
         pack.put("liquidity", List.of());
+        pack.put("industry_index", Map.of());
         return pack;
     }
 }

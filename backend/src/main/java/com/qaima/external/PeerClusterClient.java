@@ -71,11 +71,32 @@ public class PeerClusterClient {
         response.setFreq(inbound.getFreq());
         response.setWindow(inbound.getWindow());
         response.setPeerCount(inbound.getPeerCount());
+        response.setRequestedPeerCount(inbound.getRequestedPeerCount());
+        response.setEffectivePeerCount(inbound.getEffectivePeerCount());
+        response.setRawCandidateCount(inbound.getRawCandidateCount());
+        response.setEvaluatedCandidateCount(inbound.getEvaluatedCandidateCount());
+        response.setEligibleCandidateCount(inbound.getEligibleCandidateCount());
+        response.setSelectedPeerCount(inbound.getSelectedPeerCount());
+        response.setDisplayedCandidateCount(inbound.getDisplayedCandidateCount());
+        response.setDisplayLimit(inbound.getDisplayLimit());
+        response.setAdjustmentMethod(inbound.getAdjustmentMethod());
+        response.setIndustryIndexCode(inbound.getIndustryIndexCode());
+        response.setIndustryIndexName(inbound.getIndustryIndexName());
+        response.setAdjustedReturnSampleSize(inbound.getAdjustedReturnSampleSize());
+        response.setAdjustedReturnCoverageRatio(inbound.getAdjustedReturnCoverageRatio());
+        response.setAdjustmentValid(inbound.getAdjustmentValid());
+        response.setAdjustmentFallbackReason(inbound.getAdjustmentFallbackReason());
         response.setAnchorStockCode(inbound.getAnchorStockCode());
+        response.setAnchorSeries(mapCentroid(inbound.getAnchorSeries()));
+        response.setIndustryIndexSeries(mapCentroid(inbound.getIndustryIndexSeries()));
         response.setCentroid(mapCentroid(inbound.getCentroid()));
         response.setBand(mapBand(inbound.getBand()));
+        response.setPeerCentroid(mapCentroid(inbound.getPeerCentroid()));
+        response.setPeerBand(mapBand(inbound.getPeerBand()));
         response.setPeers(mapPeers(inbound.getPeers()));
+        response.setCandidates(mapPeers(inbound.getCandidates()));
         response.setAsOf(inbound.getAsOf());
+        response.setInterpretationNote(inbound.getInterpretationNote());
         response.setWarnings(inbound.getWarnings());
         return response;
     }
@@ -121,10 +142,22 @@ public class PeerClusterClient {
                 .avgTurnover(peer.getAvgTurnover())
                 .avgVolume(peer.getAvgVolume())
                 .corr(peer.getCorr())
+                .adjustedCorr(peer.getAdjustedCorr())
+                .corrStability(peer.getCorrStability())
+                .rawCorrValid(peer.getRawCorrValid())
+                .adjustedCorrValid(peer.getAdjustedCorrValid())
+                .adjustedReturnSampleSize(peer.getAdjustedReturnSampleSize())
+                .adjustedReturnCoverageRatio(peer.getAdjustedReturnCoverageRatio())
+                .adjustmentBasis(peer.getAdjustmentBasis())
+                .displayStatus(peer.getDisplayStatus())
                 .bestLag(peer.getBestLag())
                 .leadLagCorr(peer.getLeadLagCorr())
+                .lagConfidence(peer.getLagConfidence())
                 .relation(peer.getRelation())
+                .liquiditySimilarityScore(peer.getLiquiditySimilarityScore())
+                .volatilitySimilarityScore(peer.getVolatilitySimilarityScore())
                 .score(peer.getScore())
+                .peerScore(peer.getPeerScore())
                 .build();
     }
 
