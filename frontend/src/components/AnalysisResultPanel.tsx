@@ -58,19 +58,6 @@ const formatNumber = (value?: number | null) => {
   return value.toLocaleString("ko-KR");
 };
 
-const formatRelationTitle = (relation: PeerItem["relation"]) => {
-  switch (relation) {
-    case "LEADER":
-      return "메인 종목보다 먼저 움직인 종목";
-    case "FOLLOWER":
-      return "메인 종목보다 늦게 움직인 종목";
-    case "COINCIDENT":
-      return "메인 종목과 비슷하게 움직인 종목";
-    default:
-      return "중립 성격 종목";
-  }
-};
-
 const formatRelationBadge = (relation: PeerItem["relation"]) => {
   switch (relation) {
     case "LEADER":
@@ -91,6 +78,59 @@ const correlationColorClass = (corr?: number | null): string => {
   if (abs >= 0.5) return "text-orange-500";
   if (abs >= 0.3) return "text-amber-500";
   return "text-zinc-500";
+};
+
+const displayPeerCorr = (peer: PeerItem): number | null => {
+  if (peer.adjustedCorrValid && peer.adjustedCorr != null && Number.isFinite(peer.adjustedCorr)) {
+    return peer.adjustedCorr;
+  }
+  return peer.corr == null || !Number.isFinite(peer.corr) ? null : peer.corr;
+};
+
+const displayPeerCorrLabel = (peer: PeerItem): string => {
+  if (peer.adjustedCorrValid && !peer.rawCorrValid) return "산업조정 기준";
+  if (peer.adjustedCorrValid) return "산업조정 상관";
+  return "상관계수";
+};
+
+const formatPeerScore = (peer: PeerItem): string => {
+  const value = peer.peerScore ?? peer.score;
+  return value == null || !Number.isFinite(value) ? "-" : value.toFixed(2);
+};
+
+const formatDisplayStatus = (peer: PeerItem): string => {
+  switch (peer.displayStatus) {
+    case "SELECTED":
+      return "클러스터 포함";
+    case "ELIGIBLE_NOT_SELECTED":
+      return "유사하지만 제외됨";
+    case "LOW_CORR":
+      return "상관 낮음";
+    case "ADJUSTED_ONLY":
+      return "산업조정 기준 유사";
+    case "RAW_ONLY":
+      return "원시 상관 기준";
+    case "FALLBACK_RAW":
+      return "원시 상관 대체";
+    default:
+      return "참고 후보";
+  }
+};
+
+const peerCardClass = (peer: PeerItem): string => {
+  switch (peer.displayStatus) {
+    case "SELECTED":
+      return "border-sky-300 bg-sky-50/70";
+    case "LOW_CORR":
+      return "border-zinc-200 bg-zinc-50 opacity-75";
+    case "DISPLAY_ONLY":
+    case "RAW_ONLY":
+    case "ADJUSTED_ONLY":
+    case "FALLBACK_RAW":
+      return "border-zinc-200 bg-white";
+    default:
+      return "border-zinc-200 bg-white";
+  }
 };
 
 const relationColorClass = (relation: PeerItem["relation"]): string => {
@@ -137,6 +177,11 @@ const WARNING_MESSAGE_MAP: Array<[RegExp, string]> = [
   [/^MARKET_SNAPSHOT_TTM_FALLBACK_TO_ANNUAL$/, "각 분기의 데이터가 부족해 일부 투자지표는 연간 실적 기준으로 계산될 수 있어요."],
   [/^PRICE_STALE_USED$/, "실시간 가격 대신 최근 캐시 가격이 사용될 수 있어요."],
   [/^PRICE_FETCH_FAILED$/, "실시간 가격을 가져오지 못해 일부 가격 기반 지표가 정확하지 않을 수 있어요."],
+  [/^PEER_CLUSTER_LOW_POSITIVE_CORR_CANDIDATES$/, "양의 동행성이 충분한 유사 종목 후보가 적어 표시 종목 수가 줄어들 수 있어요."],
+  [/^INDUSTRY_ADJUSTED_RETURN_FALLBACK_RAW$/, "산업지수 보정 수익률을 계산할 수 없어 원 수익률 기준으로 유사 종목을 비교했어요."],
+  [/^PEER_CORR_STABILITY_INSUFFICIENT_DATA$/, "구간별 상관 안정성을 판단하기에는 일부 종목의 데이터가 부족할 수 있어요."],
+  [/^PEER_FILTER_RELAXED$/, "요청한 유사 종목 수를 평가하기 위해 극단값 필터를 완화했어요."],
+  [/^PEER_COUNT_REDUCED_BY_CANDIDATE_SIZE$/, "동일 산업 내 비교 가능한 후보 수가 요청한 종목 수보다 적어 실제 표시 수가 줄었어요."],
   [/^LLM_EXPLAIN_TIMEOUT$/, "설명 생성이 지연되어 일부 해설이 생략될 수 있어요."],
   [/^LLM_EXPLAIN_RATE_LIMITED$/, "설명 생성 요청이 많아 해설 생성이 제한될 수 있어요."],
   [/^LLM_EXPLAIN_MAX_OUTPUT_TOKENS$/, "설명 생성 분량 제한으로 일부 해설이 축약될 수 있어요."],
@@ -191,7 +236,7 @@ export default function AnalysisResultPanel({
   const overallExplain = result?.explain?.overall ?? null;
   const warningNotes = expandWarningLines(mapWarningsToNotes(result?.warnings));
 
-  // --- wrapper class ---
+  // --- 래퍼 클래스 ---
   const wrapperClass = isPanel
     ? result
       ? "w-full bg-neutral-50 rounded-2xl border-2 border-stone-300 flex flex-col items-center py-6 sm:py-8 gap-4"
@@ -279,7 +324,7 @@ export default function AnalysisResultPanel({
             </div>
           )}
 
-          {/* Market Snapshot */}
+          {/* 시장 스냅샷 */}
           {result.metrics?.marketSnapshot && (
             <div>
               <MarketSnapshotBars snapshot={result.metrics.marketSnapshot} />
@@ -287,7 +332,7 @@ export default function AnalysisResultPanel({
             </div>
           )}
 
-          {/* Indicator Summary */}
+          {/* 보조지표 요약 */}
           {result.metrics?.indicators && (
             <div>
               <IndicatorSnapshotCards
@@ -307,103 +352,71 @@ export default function AnalysisResultPanel({
             </div>
           )}
 
-          {result.metrics?.peerCluster?.peers && result.metrics.peerCluster.peers.length > 0 && (
+          {result.metrics?.peerCluster && ((result.metrics.peerCluster.candidates?.length ?? 0) > 0 || result.metrics.peerCluster.peers.length > 0) && (
             <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                유사 종목 반응 구조
-              </h3>
-              <div className="mt-3 flex flex-col gap-4">
-                {(["LEADER", "COINCIDENT", "FOLLOWER"] as const).map((relation) => {
-                  const peers = result.metrics?.peerCluster?.peers
-                    ?.filter((peer) => peer.relation === relation)
-                    .sort((a, b) => (b.score ?? -999) - (a.score ?? -999))
-                    .slice(0, 3) ?? [];
-
-                  if (peers.length === 0) return null;
-
-                  return (
-                    <div key={relation} className="rounded-2xl border border-zinc-200 bg-white overflow-hidden">
-                      <div className="px-4 py-3 border-b border-zinc-200 bg-zinc-50">
-                        <h4 className="text-sm font-semibold text-zinc-900">
-                          {formatRelationTitle(relation)}
-                        </h4>
-                      </div>
-                      <div className="divide-y divide-zinc-200">
-                        {peers.map((peer) => (
-                          <div
-                            key={peer.stockCode}
-                            className="flex items-center gap-3 sm:gap-4 px-4 py-3"
-                          >
-                            {/* 종목명 + 코드 */}
-                            <div className="min-w-0 w-[120px] sm:w-[160px] flex-shrink-0">
-                              <p className="text-sm sm:text-base font-semibold text-zinc-900 truncate">
-                                {peer.companyName}
-                              </p>
-                              <p className="text-[11px] sm:text-xs text-zinc-400">
-                                {peer.stockCode}
-                              </p>
-                            </div>
-
-                            {/* 상관계수 */}
-                            <div className="flex flex-col items-end flex-1 min-w-0">
-                              <span className="text-[11px] sm:text-xs text-zinc-400">
-                                상관계수
-                              </span>
-                              <span className={`text-sm sm:text-base font-bold ${correlationColorClass(peer.corr)}`}>
-                                {peer.corr == null || !Number.isFinite(peer.corr)
-                                  ? "-"
-                                  : peer.corr.toFixed(2)}
-                              </span>
-                            </div>
-
-                            {/* 관계 */}
-                            <div className="flex flex-col items-end flex-1 min-w-0">
-                              <span className="text-[11px] sm:text-xs text-zinc-400">
-                                관계
-                              </span>
-                              <span className={`text-sm sm:text-base font-semibold ${relationColorClass(peer.relation)}`}>
-                                {formatRelationBadge(peer.relation)}
-                              </span>
-                            </div>
-
-                            {/* 점수 */}
-                            <div className="flex flex-col items-end flex-1 min-w-0">
-                              <span className="text-[11px] sm:text-xs text-zinc-400">
-                                점수
-                              </span>
-                              <span className="text-sm sm:text-base font-bold text-zinc-900">
-                                {peer.score == null || !Number.isFinite(peer.score)
-                                  ? "-"
-                                  : peer.score.toFixed(2)}
-                              </span>
-                            </div>
-
-                            {/* 시차 */}
-                            <div className="hidden sm:flex flex-col items-end flex-1 min-w-0">
-                              <span className="text-[11px] sm:text-xs text-zinc-400">
-                                시차
-                              </span>
-                              <span className="text-sm sm:text-base font-medium text-zinc-800">
-                                {peer.bestLag == null ? "-" : `${Math.abs(peer.bestLag)}일`}
-                              </span>
-                            </div>
-
-                            {/* 평균 거래대금 */}
-                            <div className="hidden md:flex flex-col items-end flex-[1.2] min-w-0">
-                              <span className="text-[11px] sm:text-xs text-zinc-400">
-                                평균 거래대금
-                              </span>
-                              <span className="text-sm sm:text-base font-medium text-zinc-800">
-                                {formatNumber(peer.avgTurnover)}
-                              </span>
-                            </div>
+              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">유사 종목 반응 구조</h3>
+              <p className="mt-1 text-xs sm:text-sm text-zinc-500">
+                산업조정 상관은 산업 공통 움직임을 단순 차감한 관측용 지표이며, 정교한 요인 모델이나 가격 방향 신호가 아닙니다.
+              </p>
+              {(() => {
+                const selectedCodes = new Set(result.metrics?.peerCluster?.peers.map((peer) => peer.stockCode) ?? []);
+                const candidates = result.metrics?.peerCluster?.candidates?.length
+                  ? result.metrics.peerCluster.candidates
+                  : result.metrics?.peerCluster?.peers ?? [];
+                const selected = candidates.filter((peer) => peer.displayStatus === "SELECTED" || selectedCodes.has(peer.stockCode));
+                const extra = candidates.filter((peer) => !(peer.displayStatus === "SELECTED" || selectedCodes.has(peer.stockCode)));
+                const renderRows = (peers: PeerItem[]) => (
+                  <div className="grid grid-cols-1 gap-2">
+                    {peers.map((peer) => (
+                      <div key={peer.stockCode} className={`rounded-lg border px-4 py-3 ${peerCardClass(peer)}`}>
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="min-w-0 w-[120px] sm:w-[170px] flex-shrink-0">
+                            <p className="text-sm sm:text-base font-semibold text-zinc-900 truncate">{peer.companyName ?? "-"}</p>
+                            <p className="text-[11px] sm:text-xs text-zinc-400">{peer.stockCode}</p>
                           </div>
-                        ))}
+                          <div className="flex flex-col items-start sm:items-end flex-1 min-w-[80px]">
+                            <span className="text-[11px] sm:text-xs text-zinc-400">{displayPeerCorrLabel(peer)}</span>
+                            <span className={`text-sm sm:text-base font-bold ${correlationColorClass(displayPeerCorr(peer))}`}>
+                              {displayPeerCorr(peer) == null ? "-" : displayPeerCorr(peer)?.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-end flex-1 min-w-[70px]">
+                            <span className="text-[11px] sm:text-xs text-zinc-400">관계</span>
+                            <span className={`text-sm sm:text-base font-semibold ${relationColorClass(peer.relation)}`}>
+                              {formatRelationBadge(peer.relation)}
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-end flex-1 min-w-[70px]">
+                            <span className="text-[11px] sm:text-xs text-zinc-400">점수</span>
+                            <span className="text-sm sm:text-base font-bold text-zinc-900">{formatPeerScore(peer)}</span>
+                          </div>
+                          <div className="flex flex-col items-start sm:items-end flex-1 min-w-[92px]">
+                            <span className="text-[11px] sm:text-xs text-zinc-400">상태</span>
+                            <span className="text-xs sm:text-sm font-medium text-zinc-700">{formatDisplayStatus(peer)}</span>
+                          </div>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                );
+
+                return (
+                  <div className="mt-3 max-h-[420px] overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50/60 p-3 pr-2">
+                    <div className="flex flex-col gap-4">
+                      <div>
+                        <h4 className="text-sm font-semibold text-zinc-900">핵심 유사 종목</h4>
+                        <div className="mt-2">{selected.length > 0 ? renderRows(selected) : <p className="text-sm text-zinc-500">선정된 유사 종목이 없습니다.</p>}</div>
+                      </div>
+                      {extra.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-zinc-900">추가 후보</h4>
+                          <div className="mt-2">{renderRows(extra)}</div>
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

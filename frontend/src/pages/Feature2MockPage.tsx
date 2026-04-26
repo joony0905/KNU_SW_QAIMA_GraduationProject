@@ -914,10 +914,19 @@ export default function Feature2MockPage() {
 
               {!industryChartLoading && !industryChartError && industrySeries.length > 0 && (
               <RelativeLineWidget
-              data={industrySeries}
+              data={analysisData?.metrics?.peerCluster?.industryIndexSeries ?? industrySeries}
               height={420}
-              overlayCentroid={analysisData?.metrics?.peerCluster?.centroid ?? null}
-              overlayBand={analysisData?.metrics?.peerCluster?.band ?? null}
+              overlayAnchor={analysisData?.metrics?.peerCluster?.anchorSeries ?? null}
+              overlayCentroid={
+                analysisData?.metrics?.peerCluster?.peerCentroid
+                ?? analysisData?.metrics?.peerCluster?.centroid
+                ?? null
+              }
+              overlayBand={
+                analysisData?.metrics?.peerCluster?.peerBand
+                ?? analysisData?.metrics?.peerCluster?.band
+                ?? null
+              }
               overlayPeers={analysisData?.metrics?.peerCluster?.peers ?? null}
               showPeerOverlay={Boolean(analysisData?.metrics?.peerCluster)}
               hoveredDayKey={hoveredDayKey}

@@ -49,14 +49,34 @@ export interface BandPoint {
 
 export interface PeerItem {
   stockCode: string;
-  companyName: string;
-  avgTurnover: number;
-  avgVolume: number;
-  corr: number;
-  bestLag: number;
-  leadLagCorr: number;
+  companyName?: string | null;
+  avgTurnover?: number | null;
+  avgVolume?: number | null;
+  corr?: number | null;
+  adjustedCorr?: number | null;
+  corrStability?: number | null;
+  rawCorrValid?: boolean | null;
+  adjustedCorrValid?: boolean | null;
+  adjustedReturnSampleSize?: number | null;
+  adjustedReturnCoverageRatio?: number | null;
+  adjustmentBasis?: "RAW_ONLY" | "SIMPLE_SUBTRACTION" | "FALLBACK_RAW" | null;
+  displayStatus?:
+    | "SELECTED"
+    | "ELIGIBLE_NOT_SELECTED"
+    | "DISPLAY_ONLY"
+    | "LOW_CORR"
+    | "RAW_ONLY"
+    | "ADJUSTED_ONLY"
+    | "FALLBACK_RAW"
+    | null;
+  bestLag?: number | null;
+  leadLagCorr?: number | null;
+  lagConfidence?: number | null;
   relation: PeerRelation;
-  score: number;
+  liquiditySimilarityScore?: number | null;
+  volatilitySimilarityScore?: number | null;
+  score?: number | null;
+  peerScore?: number | null;
 }
 
 export interface PeerCluster {
@@ -65,11 +85,32 @@ export interface PeerCluster {
   freq: string;
   window: number;
   peerCount: number;
+  requestedPeerCount?: number | null;
+  effectivePeerCount?: number | null;
+  rawCandidateCount?: number | null;
+  evaluatedCandidateCount?: number | null;
+  eligibleCandidateCount?: number | null;
+  selectedPeerCount?: number | null;
+  displayedCandidateCount?: number | null;
+  displayLimit?: number | null;
+  adjustmentMethod?: "SIMPLE_SUBTRACTION" | "BETA_RESIDUAL_RESERVED" | null;
+  industryIndexCode?: string | null;
+  industryIndexName?: string | null;
+  adjustedReturnSampleSize?: number | null;
+  adjustedReturnCoverageRatio?: number | null;
+  adjustmentValid?: boolean | null;
+  adjustmentFallbackReason?: string | null;
   anchorStockCode: string;
+  anchorSeries?: RelativePoint[];
+  industryIndexSeries?: RelativePoint[];
   centroid: RelativePoint[];
   band: BandPoint[];
+  peerCentroid?: RelativePoint[];
+  peerBand?: BandPoint[];
   peers: PeerItem[];
+  candidates?: PeerItem[];
   asOf: string;
+  interpretationNote?: string | null;
 }
 
 export interface RelatedStockCard {

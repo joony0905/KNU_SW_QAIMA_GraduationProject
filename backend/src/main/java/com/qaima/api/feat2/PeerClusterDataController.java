@@ -40,6 +40,7 @@ public class PeerClusterDataController {
                 .window(asInteger(first(body, "window")))
                 .peerCount(asInteger(first(body, "peer_count", "peerCount")))
                 .maxLag(asInteger(first(body, "max_lag", "maxLag")))
+                .displayLimit(asInteger(first(body, "display_limit", "displayLimit")))
                 .build();
     }
 

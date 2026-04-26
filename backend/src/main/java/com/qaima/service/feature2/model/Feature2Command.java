@@ -7,6 +7,7 @@ public record Feature2Command(
         Freq freq,
         int window,
         int peerCount,
-        int maxLag
+        int maxLag,
+        int displayLimit
 ) {
 }

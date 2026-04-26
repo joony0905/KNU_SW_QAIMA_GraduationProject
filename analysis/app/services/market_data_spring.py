@@ -42,7 +42,7 @@ class SpringMarketDataProvider(MarketDataProvider):
     ) -> dict:
         url = f"{self.cfg.base_url}/api/v1/feature2/peercluster/data"
 
-        # Spring DTO = snake_case contract
+        # Spring DTO는 FastAPI 경계에서 snake_case 계약을 사용한다.
         payload = {
             "industry_id": industry_id,
             "anchor_stock_code": anchor_stock_code,
@@ -83,6 +83,8 @@ class SpringMarketDataProvider(MarketDataProvider):
         Dict[str, PriceSeries],
         Dict[str, LiquiditySeries],
         List[str],
+        Optional[PriceSeries],
+        Optional[str],
     ]:
         data = self._post_peercluster_data(industry_id, anchor_stock_code, freq, window)
 
@@ -116,4 +118,18 @@ class SpringMarketDataProvider(MarketDataProvider):
                 volume=s["volume"],
             )
 
-        return members, metas, prices, liquidity, warnings
+        industry_index = None
+        industry_index_name = None
+        idx = data.get("industry_index")
+        if idx:
+            industry_index_name = idx.get("name")
+            dates = [datetime.fromisoformat(x.replace("Z", "+00:00")) for x in idx.get("dates", [])]
+            close = idx.get("close", []) or []
+            if dates and close and len(dates) == len(close):
+                industry_index = PriceSeries(
+                    stock_code=idx.get("code") or "INDUSTRY_INDEX",
+                    dates=dates,
+                    close=close,
+                )
+
+        return members, metas, prices, liquidity, warnings, industry_index, industry_index_name
