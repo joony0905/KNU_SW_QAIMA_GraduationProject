@@ -91,8 +91,7 @@ const mapCandles = (candles: Candle[]): CandlestickData<Time>[] =>
       high: Number((c as any).h),
       low: Number((c as any).l),
       close: Number((c as any).c),
-    }))
-    .sort((a, b) => Number(a.time) - Number(b.time));
+    }));
 
 const mapVolumes = (candles: Candle[]): HistogramData<Time>[] =>
   normalizeCandles(candles)
@@ -103,8 +102,7 @@ const mapVolumes = (candles: Candle[]): HistogramData<Time>[] =>
         Number((c as any).c) >= Number((c as any).o)
           ? "rgba(239, 68, 68, 0.6)"
           : "rgba(59, 130, 246, 0.6)",
-    }))
-    .sort((a, b) => Number(a.time) - Number(b.time));
+    }));
 
 /* =========================
    Indicator mappers

@@ -1,4 +1,5 @@
 // src/App.tsx
+import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layout/MainLayout";
 import LoginPage from "./pages/LoginPage";
@@ -9,8 +10,28 @@ import PortfolioMockPage from "./pages/PortfolioMockPage";
 import DictionaryMockPage from "./pages/DictionaryMockPage";
 import SignupPage from "./pages/SignupPage";
 import SettingPage from "./pages/SettingPage";
+import SurveyPage from "./pages/SurveyPage";
+import { bootstrapAccessToken } from "./api/tokenStore";
+
+const API_BASE_URL = "http://localhost:8080/api/v1";
 
 export default function App() {
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    bootstrapAccessToken(API_BASE_URL).finally(() => {
+      if (mounted) setAuthReady(true);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (!authReady) {
+    return null;
+  }
+
   return (
     <Routes>
       {/* 로그인은 단독 화면 nav바 없이*/}
@@ -73,6 +94,14 @@ export default function App() {
         element={
           <MainLayout>
             <SettingPage />
+          </MainLayout>
+        }
+      />
+      <Route
+        path="/survey"
+        element={
+          <MainLayout>
+            <SurveyPage />
           </MainLayout>
         }
       />

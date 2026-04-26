@@ -1,6 +1,7 @@
 // Feature2MockPage.tsx
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { Star } from "lucide-react";
 import StockInputBox from "../components/StockInputBox";
 import StockCard from "../components/StockCard";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
@@ -33,12 +34,71 @@ import type { NewsItemDto } from "../types/news";
 import { getStockByCode } from "../api/stock";
 import { isLoggedIn } from "../utils/auth";
 import DictTerm from "../components/DictTerm";
+import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { formatKstOffsetDateTime, shiftKstDays } from "../utils/kst";
 
 const getColorClass = (rate: string) => {
   if (rate.startsWith("+")) return "text-red-600";
   if (rate.startsWith("-")) return "text-blue-600";
   return "text-black";
+};
+
+const getColorClassByNumber = (n: number | null) => {
+  if (n === null || !Number.isFinite(n)) return "text-black";
+  if (n > 0) return "text-red-600";
+  if (n < 0) return "text-blue-600";
+  return "text-black";
+};
+
+const formatPrice = (n: number) => {
+  if (!Number.isFinite(n)) return "0";
+  return Math.round(n).toLocaleString("ko-KR");
+};
+
+const formatSignedNumber = (n: number) => {
+  if (!Number.isFinite(n)) return "0";
+  if (n === 0) return "0";
+  const sign = n > 0 ? "+" : "-";
+  return `${sign}${Math.abs(Math.round(n)).toLocaleString("ko-KR")}`;
+};
+
+const formatSignedPercent = (n: number) => {
+  if (!Number.isFinite(n)) return "0%";
+  if (n === 0) return "0.00%";
+  const sign = n > 0 ? "+" : "-";
+  return `${sign}${Math.abs(n).toFixed(2)}%`;
+};
+
+function useKSTTime() {
+  const [time, setTime] = useState("");
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date().toLocaleString("ko-KR", {
+        timeZone: "Asia/Seoul",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+      setTime(now);
+    };
+
+    update();
+    const interval = setInterval(update, 1000 * 30);
+    return () => clearInterval(interval);
+  }, []);
+
+  return time;
+}
+
+type MainStockState = {
+  name: string;
+  symbol: string;
+  price: number | null;
+  change: number | null;
+  changeRate: number | null;
 };
 
 const INITIAL_INDUSTRY_FREQ = "ONE_D";
@@ -120,11 +180,13 @@ export default function Feature2MockPage() {
         toIso,
       );
 
-      if (response.data.length === 0) {
+      const data = response.data;
+
+      if (data.length === 0) {
         setChartError("차트 데이터가 없습니다.");
       }
 
-      setCandles(response.data);
+      setCandles(data);
       const absoluteMin = shiftKstDays(toDate, -MAX_HISTORY_DAYS);
       chartRangeRef.current = {
         stockCode,
@@ -134,10 +196,54 @@ export default function Feature2MockPage() {
         absoluteMinFromIso: formatKstOffsetDateTime(absoluteMin),
       };
       requestedRangesRef.current.clear();
+
+      // 현재가/전일대비/등락률을 candles 기반으로 산출 (기능1과 동일)
+      if (data.length > 0) {
+        const last = data[data.length - 1];
+        const prev = data.length > 1 ? data[data.length - 2] : null;
+        const lastClose = Number((last as any).c);
+        const prevClose = prev ? Number((prev as any).c) : lastClose;
+
+        if (Number.isFinite(lastClose) && Number.isFinite(prevClose)) {
+          const diff = lastClose - prevClose;
+          const rate = prevClose !== 0 ? (diff / prevClose) * 100 : 0;
+
+          setMainStock((prevState) => ({
+            ...prevState,
+            symbol: stockCode,
+            price: lastClose,
+            change: diff,
+            changeRate: rate,
+          }));
+        } else {
+          setMainStock((prevState) => ({
+            ...prevState,
+            symbol: stockCode,
+            price: null,
+            change: null,
+            changeRate: null,
+          }));
+        }
+      } else {
+        setMainStock((prevState) => ({
+          ...prevState,
+          symbol: stockCode,
+          price: null,
+          change: null,
+          changeRate: null,
+        }));
+      }
     } catch (e: any) {
       console.error("차트 데이터 조회 실패:", e);
       setChartError("차트를 불러오지 못했습니다.");
       setCandles([]);
+      setMainStock((prevState) => ({
+        ...prevState,
+        symbol: stockCode,
+        price: null,
+        change: null,
+        changeRate: null,
+      }));
     } finally {
       setChartLoading(false);
     }
@@ -261,10 +367,39 @@ export default function Feature2MockPage() {
   const [selectedWindow, setSelectedWindow] = useState<60 | 120 | 180 | 252>(120);
 
   const [hasSelectedStock, setHasSelectedStock] = useState(false);
-  const [mainStock, setMainStock] = useState({
+  const [mainStock, setMainStock] = useState<MainStockState>({
     name: "",
     symbol: "",
+    price: null,
+    change: null,
+    changeRate: null,
   });
+
+  const currentTime = useKSTTime();
+
+  const [isInterested, setIsInterested] = useState(false);
+  const [toast, setToast] = useState<{ message: string; visible: boolean }>({
+    message: "",
+    visible: false,
+  });
+
+  useEffect(() => {
+    if (!toast.visible) return;
+    const t = setTimeout(() => {
+      setToast((prev) => ({ ...prev, visible: false }));
+    }, 1800);
+    return () => clearTimeout(t);
+  }, [toast.visible]);
+
+  const toggleInterest = () => {
+    setIsInterested((prev) => !prev);
+    setToast({
+      message: isInterested
+        ? "관심종목에서 삭제되었습니다."
+        : "관심종목에 추가되었습니다.",
+      visible: true,
+    });
+  };
 
   const industrySeries = useMemo(() => {
   const raw = (analysisData?.metrics?.industryIndex ?? industryIndexResult?.data ?? null)?.series;
@@ -304,7 +439,6 @@ export default function Feature2MockPage() {
     setIndustryIndexResult(null);
     setDisplayText("");
     setErr("");
-    setMainStock((prev) => ({ ...prev, symbol: q }));
 
     let resolvedStockCode = q;
 
@@ -313,10 +447,23 @@ export default function Feature2MockPage() {
       const stockInfo = await getStockByCode(q);
       if (stockInfo) {
         resolvedStockCode = stockInfo.stockCode || q;
-        setMainStock({ name: stockInfo.companyName || q, symbol: resolvedStockCode });
+        setMainStock({
+          name: stockInfo.companyName || q,
+          symbol: resolvedStockCode,
+          price: stockInfo.price ?? null,
+          change: null,
+          changeRate: stockInfo.changeRate ?? null,
+        });
       }
     } catch {
-      setMainStock({ name: q, symbol: q });
+      // 종목명 조회 실패 시 코드를 이름으로 사용
+      setMainStock({
+        name: q,
+        symbol: q,
+        price: null,
+        change: null,
+        changeRate: null,
+      });
     }
 
     setNewsLoading(true);
@@ -525,17 +672,20 @@ export default function Feature2MockPage() {
   };
 
   useEffect(() => {
-    if (!mainStock || !mainStock.symbol) return;
+    if (!mainStock.symbol) return;
     loadCandles(mainStock.symbol);
-  }, [mainStock]);
+    // loadCandles가 mainStock 자체를 업데이트하므로 symbol만 의존성으로 둔다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mainStock.symbol]);
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
-        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
+        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
             외부요인
           </h1>
+          <TokenBalanceBadge />
         </header>
 
         <section className="w-full flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -626,16 +776,90 @@ export default function Feature2MockPage() {
         </section>
 
         {hasSelectedStock && (<>
+        {(() => {
+          const mainNumericChange =
+            mainStock.change !== null && Number.isFinite(mainStock.change)
+              ? mainStock.change
+              : 0;
+          const displayPrice =
+            mainStock.price !== null && Number.isFinite(mainStock.price)
+              ? formatPrice(mainStock.price)
+              : "-";
+          const displayChange =
+            mainStock.change !== null && Number.isFinite(mainStock.change)
+              ? formatSignedNumber(mainStock.change)
+              : "0";
+          const displayRate =
+            mainStock.changeRate !== null && Number.isFinite(mainStock.changeRate)
+              ? formatSignedPercent(mainStock.changeRate)
+              : "0.00%";
+          const mainColorClass = getColorClassByNumber(mainNumericChange);
+          return (
         <main className="w-full mt-6 flex flex-col xl:flex-row justify-center items-start gap-6">
           <div className="flex-1 flex flex-col gap-5">
             <section className="w-full bg-zinc-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
-              <div className="flex items-baseline gap-1">
-                <h2 className="text-lg sm:text-2xl font-medium text-black">
-                  {mainStock.name}
-                </h2>
-                <span className="text-sm sm:text-base text-black">
-                  ({mainStock.symbol})
+              <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-end gap-1.5">
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-medium text-black">
+                    {mainStock.name}
+                  </h2>
+                  <span className="text-sm sm:text-base md:text-lg text-black">
+                    ({mainStock.symbol})
+                  </span>
+                  <button
+                    onClick={toggleInterest}
+                    className="ml-2 inline-block"
+                  >
+                    <Star
+                      size={22}
+                      className="relative -top-1 transition-colors text-yellow-400"
+                      fill={isInterested ? "currentColor" : "none"}
+                    />
+                  </button>
+                </div>
+
+                <span className="text-[10px] sm:text-xs font-medium text-black">
+                  {currentTime} KST
                 </span>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-2xl md:text-3xl font-medium text-black">
+                    {displayPrice}
+                  </span>
+
+                  <div className="flex items-center gap-1.5 text-sm md:text-base font-medium">
+                    <span className={mainColorClass}>{displayChange}</span>
+                    <span className={mainColorClass}>({displayRate})</span>
+                    {mainNumericChange > 0 && (
+                      <div
+                        className={`${mainColorClass} w-0 h-0
+                        border-l-[6px] border-r-[6px]
+                        border-b-[9px] border-transparent
+                        border-b-current`}
+                      />
+                    )}
+                    {mainNumericChange < 0 && (
+                      <div
+                        className={`${mainColorClass} w-0 h-0
+                        border-l-[6px] border-r-[6px]
+                        border-t-[9px] border-transparent
+                        border-t-current`}
+                      />
+                    )}
+                    {mainNumericChange === 0 && (
+                      <span
+                        className={`
+                        ${mainColorClass}
+                        text-xl sm:text-2xl
+                        font-extrabold
+                        leading-none
+                      `}
+                      >
+                        -
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="w-full h-80 sm:h-[420px] bg-white rounded-xl overflow-hidden">
@@ -920,6 +1144,8 @@ export default function Feature2MockPage() {
             </section>
           </div>
         </main>
+          );
+        })()}
 
         {/* 분석 옵션 라디오버튼 */}
         <div className="w-full bg-white rounded-2xl border border-stone-300 px-4 sm:px-6 py-4 flex flex-col gap-4">
@@ -1044,6 +1270,19 @@ export default function Feature2MockPage() {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {toast.visible && (
+          <div
+            className="
+              fixed bottom-8 left-1/2 -translate-x-1/2
+              bg-black/70 text-white
+              px-4 py-2 rounded-md
+              text-sm sm:text-base
+            "
+          >
+            {toast.message}
           </div>
         )}
       </div>
