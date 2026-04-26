@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   createChart,
   CandlestickSeries,
@@ -67,6 +67,18 @@ const toKstDayKeyFromEpochSec = (sec: number) => {
   return `${y}-${m}-${d}`;
 };
 
+const normalizeSeriesByTime = <T extends { time: Time }>(items: T[]): T[] => {
+  const byTime = new Map<number, T>();
+
+  for (const item of items) {
+    const time = Number(item.time);
+    if (!Number.isFinite(time)) continue;
+    byTime.set(time, item);
+  }
+
+  return Array.from(byTime.values()).sort((a, b) => Number(a.time) - Number(b.time));
+};
+
 /* =========================
    Candle / Volume Mapper
 ========================= */
@@ -108,18 +120,26 @@ const mapVolumes = (candles: Candle[]): HistogramData<Time>[] =>
    Indicator mappers
 ========================= */
 
-const toLineSeries = (points: { t: string; value: number | null }[]): LineData<Time>[] =>
-  points
-    .filter((p) => p.value !== null && p.value !== undefined)
-    .map((p) => ({
-      time: isoToEpochSeconds(p.t) as UTCTimestamp,
-      value: Number(p.value),
-    }));
+const toLineSeries = (
+  points: { t: string; value: number | null }[],
+  candleTimes?: number[]
+): LineData<Time>[] =>
+  normalizeSeriesByTime(
+    points
+      .filter((p) => p.value !== null && p.value !== undefined)
+      .map((p) => ({
+        time: snapIsoToCandleTime(p.t, candleTimes) as UTCTimestamp,
+        value: Number(p.value),
+      }))
+  );
 
-const toEmaLineSeriesMap = (ema: Record<string, { t: string; value: number | null }[]>) => {
+const toEmaLineSeriesMap = (
+  ema: Record<string, { t: string; value: number | null }[]>,
+  candleTimes?: number[]
+) => {
   const out: Record<string, LineData<Time>[]> = {};
   Object.entries(ema).forEach(([period, pts]) => {
-    out[String(period)] = toLineSeries(pts ?? []);
+    out[String(period)] = toLineSeries(pts ?? [], candleTimes);
   });
   return out;
 };
@@ -213,6 +233,25 @@ function alignTimesToCandles(points: { t: string }[], candleTimes: number[]): nu
   return points.map((p) => nearest(isoToEpochSeconds(p.t)));
 }
 
+function snapIsoToCandleTime(iso: string, candleTimes?: number[]): number {
+  const raw = isoToEpochSeconds(iso);
+  if (!candleTimes?.length) return raw;
+
+  let lo = 0;
+  let hi = candleTimes.length - 1;
+
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (candleTimes[mid] < raw) lo = mid + 1;
+    else hi = mid;
+  }
+
+  const i = lo;
+  const next = candleTimes[i];
+  const prev = i > 0 ? candleTimes[i - 1] : next;
+  return Math.abs(next - raw) < Math.abs(raw - prev) ? next : prev;
+}
+
 function snapIsoToCandleTimeMap<T extends { t: string }>(
   points: T[],
   candleTimes: number[],
@@ -269,7 +308,7 @@ function TradingViewWidget({
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
 
   // markers
-  const candleMarkersRef = useRef<ISeriesMarkersPluginApi<UTCTimestamp> | null>(null);
+  const candleMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
 
   // indicators registry
   const emaSeriesRef = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
@@ -304,10 +343,13 @@ function TradingViewWidget({
 
   // candle time list (sorted epoch seconds)
   const candleTimeList = useMemo(() => {
-    return (candles ?? [])
-      .map((c) => toEpochSeconds(Number(c.t)))
-      .filter((x) => Number.isFinite(x))
-      .sort((a, b) => a - b);
+    return Array.from(
+      new Set(
+        (candles ?? [])
+          .map((c) => toEpochSeconds(Number(c.t)))
+          .filter((x) => Number.isFinite(x))
+      )
+    ).sort((a, b) => a - b);
   }, [candles]);
 
   /**
@@ -707,7 +749,7 @@ function TradingViewWidget({
     const ema = indicators?.ema;
     if (!ema || Object.keys(ema).length === 0) return;
 
-    const emaSeriesMap = toEmaLineSeriesMap(ema);
+    const emaSeriesMap = toEmaLineSeriesMap(ema, candleTimeList);
 
     Object.entries(emaSeriesMap).forEach(([period, data]) => {
       if (!data || data.length === 0) return;
@@ -717,7 +759,7 @@ function TradingViewWidget({
       series.setData(data);
       emaSeriesRef.current.set(period, series);
     });
-  }, [indicators?.ema]);
+  }, [indicators?.ema, candleTimeList]);
 
   /* =========================
      BB
@@ -742,23 +784,29 @@ function TradingViewWidget({
     const lower = chart.addSeries(LineSeries, { color: "rgba(59,130,246,0.6)", lineWidth: 1 });
 
     upper.setData(
-      bb
-        .filter((p) => p.upper !== null && p.upper !== undefined)
-        .map((p) => ({ time: isoToEpochSeconds(p.t) as UTCTimestamp, value: Number(p.upper) }))
+      normalizeSeriesByTime(
+        bb
+          .filter((p) => p.upper !== null && p.upper !== undefined)
+          .map((p) => ({ time: snapIsoToCandleTime(p.t, candleTimeList) as UTCTimestamp, value: Number(p.upper) }))
+      )
     );
     mid.setData(
-      bb
-        .filter((p) => p.mid !== null && p.mid !== undefined)
-        .map((p) => ({ time: isoToEpochSeconds(p.t) as UTCTimestamp, value: Number(p.mid) }))
+      normalizeSeriesByTime(
+        bb
+          .filter((p) => p.mid !== null && p.mid !== undefined)
+          .map((p) => ({ time: snapIsoToCandleTime(p.t, candleTimeList) as UTCTimestamp, value: Number(p.mid) }))
+      )
     );
     lower.setData(
-      bb
-        .filter((p) => p.lower !== null && p.lower !== undefined)
-        .map((p) => ({ time: isoToEpochSeconds(p.t) as UTCTimestamp, value: Number(p.lower) }))
+      normalizeSeriesByTime(
+        bb
+          .filter((p) => p.lower !== null && p.lower !== undefined)
+          .map((p) => ({ time: snapIsoToCandleTime(p.t, candleTimeList) as UTCTimestamp, value: Number(p.lower) }))
+      )
     );
 
     bbSeriesRef.current = { upper, mid, lower };
-  }, [indicators?.bb20_2]);
+  }, [indicators?.bb20_2, candleTimeList]);
 
   /* =========================
      STO
@@ -786,15 +834,19 @@ function TradingViewWidget({
     const kSeries = chart.addSeries(LineSeries, { color: "rgba(236,72,153,0.85)", lineWidth: 1 });
     const dSeries = chart.addSeries(LineSeries, { color: "rgba(34,197,94,0.85)", lineWidth: 1 });
 
-    const kData = st
-      .map((p, i) => ({ time: snappedTimes[i] as UTCTimestamp, value: p.k }))
-      .filter((p) => p.value !== null && p.value !== undefined)
-      .map((p) => ({ time: p.time, value: Number(p.value) }));
+    const kData = normalizeSeriesByTime(
+      st
+        .map((p, i) => ({ time: snappedTimes[i] as UTCTimestamp, value: p.k }))
+        .filter((p) => p.value !== null && p.value !== undefined)
+        .map((p) => ({ time: p.time, value: Number(p.value) }))
+    );
 
-    const dData = st
-      .map((p, i) => ({ time: snappedTimes[i] as UTCTimestamp, value: p.d }))
-      .filter((p) => p.value !== null && p.value !== undefined)
-      .map((p) => ({ time: p.time, value: Number(p.value) }));
+    const dData = normalizeSeriesByTime(
+      st
+        .map((p, i) => ({ time: snappedTimes[i] as UTCTimestamp, value: p.d }))
+        .filter((p) => p.value !== null && p.value !== undefined)
+        .map((p) => ({ time: p.time, value: Number(p.value) }))
+    );
 
     kSeries.setData(kData);
     dSeries.setData(dData);
@@ -860,7 +912,6 @@ function TradingViewWidget({
 
     const bb = indicators?.bb20_2 ?? [];
     const bbUpperMap = snapIsoToCandleTimeMap(bb, candleTimeList, (p) => p.upper);
-    const bbMidMap = snapIsoToCandleTimeMap(bb, candleTimeList, (p) => p.mid);
     const bbLowerMap = snapIsoToCandleTimeMap(bb, candleTimeList, (p) => p.lower);
 
     const st = indicators?.stoch14_3_3 ?? [];
@@ -912,7 +963,6 @@ function TradingViewWidget({
 
       const lower = bbLowerMap.get(cur.t);
       const upper = bbUpperMap.get(cur.t);
-      const mid = bbMidMap.get(cur.t);
       const prevLower = bbLowerMap.get(prev.t);
       const prevUpper = bbUpperMap.get(prev.t);
 

@@ -1,8 +1,11 @@
 package com.qaima;
 
+import com.qaima.importer.NewsDatasetExportProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
@@ -11,6 +14,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @SpringBootApplication
 @ConfigurationPropertiesScan
+@EnableConfigurationProperties(NewsDatasetExportProperties.class)
+@EnableAsync
 @EnableScheduling
 
 

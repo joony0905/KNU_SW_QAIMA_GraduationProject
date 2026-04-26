@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
 //gradlew.bat bootRun --args="--batch.news-export.enabled=true
 // --batch.news-export.stock-codes=377330 --batch.news-export.per-stock=20
 // --batch.news-export.output=C:\qaima\data\news_dataset_sample.csv" -> 특정 종목 기사 추출
-        @Component
+@Component
 @RequiredArgsConstructor
 @Slf4j
 public class NewsDatasetExportJob implements ApplicationRunner {
