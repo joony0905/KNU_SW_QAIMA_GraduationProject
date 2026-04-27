@@ -53,13 +53,7 @@ public class FeatOneController {
                         .map(this::toApiResponse)
                         .onErrorResume(ex -> creditService
                                 .refundFeature1(userId, referenceId, "FEATURE1_ANALYZE_FAILED")
-                                .thenReturn(feature1ErrorResponse(ex))))
-                .onErrorResume(ErrorException.class, ex -> {
-                    if (ex.getErrorCode() == ErrorCode.INSUFFICIENT_CREDIT) {
-                        return Mono.error(ex);
-                    }
-                    return Mono.just(feature1ErrorResponse(ex));
-                });
+                                .thenReturn(feature1ErrorResponse(ex))));
     }
 
     private ApiResponse<FeatOneAnalysisResponseDto> toApiResponse(FeatOneResult result) {

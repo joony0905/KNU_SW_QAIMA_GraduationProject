@@ -47,18 +47,10 @@ public class Feature2AnalyzeController {
                 .then(feature2AnalyzeService.analyze(req)
                         .map(this::wrapWithWarnings)
                         .onErrorResume(ex -> {
-                            log.error("[Feature2] unexpected error in controller. cause={}", ex.getMessage(), ex);
+                            log.error("[Feature2] analysis failed. cause={}", ex.getMessage(), ex);
                             return creditService.refundFeature2(userId, referenceId, "FEATURE2_ANALYZE_FAILED")
                                     .thenReturn(wrapWithWarnings(fallbackResponse()));
-                        }))
-                .onErrorResume(ex -> {
-                    if (ex instanceof ErrorException errorException
-                            && errorException.getErrorCode() == ErrorCode.INSUFFICIENT_CREDIT) {
-                        return Mono.error(ex);
-                    }
-                    log.error("[Feature2] unexpected error in controller. cause={}", ex.getMessage(), ex);
-                    return Mono.just(wrapWithWarnings(fallbackResponse()));
-                });
+                        }));
     }
 
     private ApiResponse<Feature2AnalyzeResponseDto> wrapWithWarnings(Feature2AnalyzeResponseDto res) {
