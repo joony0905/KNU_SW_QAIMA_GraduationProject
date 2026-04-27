@@ -11,6 +11,7 @@ import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.StockRepository;
 import com.qaima.service.marketmetric.RealtimePriceService;
 import com.qaima.service.marketmetric.ShareBasisResolver;
+import com.qaima.service.marketmetric.model.ShareBasisView;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Comparator;
@@ -62,11 +63,13 @@ public class FinancialReadService {
                             List<Financial> financials = queryFinancials(stock, periodType, periodNo, fromYear, toYear);
                             List<FinancialDto> dtos = financials.stream()
                                     .map(financial -> {
-                                        BigDecimal shares = resolveValuationShares(stock, financial, snapshotAsOfDate);
-                                        BigDecimal marketCap = (currentPrice != null && shares != null)
-                                                ? currentPrice.multiply(shares)
+                                        ShareBasisView shareBasis = resolveShareBasis(stock, financial, snapshotAsOfDate);
+                                        BigDecimal marketCapShares = shareBasis.sharesOutstanding();
+                                        BigDecimal valuationShares = shareBasis.valuationShares();
+                                        BigDecimal marketCap = (currentPrice != null && marketCapShares != null)
+                                                ? currentPrice.multiply(marketCapShares)
                                                 : null;
-                                        return financialMapper.toDto(financial, marketCap, currentPrice, shares);
+                                        return financialMapper.toDto(financial, marketCap, currentPrice, valuationShares);
                                     })
                                     .toList();
                             applyGrowthMetrics(stock, financials, dtos, snapshotAsOfDate);
@@ -118,13 +121,17 @@ public class FinancialReadService {
     }
 
     private BigDecimal resolveValuationShares(Stock stock, Financial financial, LocalDate fallbackDate) {
+        return resolveShareBasis(stock, financial, fallbackDate).valuationShares();
+    }
+
+    private ShareBasisView resolveShareBasis(Stock stock, Financial financial, LocalDate fallbackDate) {
         if (stock == null || financial == null) {
-            return null;
+            return shareBasisResolver.resolveFromIssuedShares(null, null);
         }
 
         LocalDate reportDate = financial.getReportDate();
         LocalDate effectiveDate = reportDate != null ? reportDate : fallbackDate;
-        return shareBasisResolver.resolveFromIssuedShares(stock, effectiveDate).valuationShares();
+        return shareBasisResolver.resolveFromIssuedShares(stock, effectiveDate);
     }
 
     private void validatePeriodNo(PeriodType periodType, Integer periodNo) {
