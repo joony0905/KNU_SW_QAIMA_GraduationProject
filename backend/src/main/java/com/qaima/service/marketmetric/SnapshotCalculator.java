@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Function;
 import org.springframework.stereotype.Component;
@@ -23,14 +24,14 @@ public class SnapshotCalculator {
         }
 
         List<Financial> financials = input.financials() == null ? List.of() : input.financials();
-        List<Financial> quarters = financials.stream()
+        List<Financial> quarters = latestPerPeriod(financials.stream()
                 .filter(financial -> financial != null && financial.getPeriodType() == PeriodType.Q)
-                .sorted(financialComparator().reversed())
-                .toList();
-        List<Financial> annuals = financials.stream()
+                .sorted(latestFirstComparator())
+                .toList());
+        List<Financial> annuals = latestPerPeriod(financials.stream()
                 .filter(financial -> financial != null && financial.getPeriodType() == PeriodType.A)
-                .sorted(financialComparator().reversed())
-                .toList();
+                .sorted(latestFirstComparator())
+                .toList());
 
         BigDecimal revenueBase = null;
         BigDecimal operatingIncomeBase = null;
@@ -116,11 +117,30 @@ public class SnapshotCalculator {
         );
     }
 
-    private Comparator<Financial> financialComparator() {
+    private List<Financial> latestPerPeriod(List<Financial> financials) {
+        LinkedHashMap<PeriodKey, Financial> latest = new LinkedHashMap<>();
+        for (Financial financial : financials) {
+            latest.putIfAbsent(new PeriodKey(financial.getFiscalYear(), financial.getPeriodNo()), financial);
+        }
+        return new ArrayList<>(latest.values());
+    }
+
+    private Comparator<Financial> latestFirstComparator() {
         return Comparator
-                .comparing(Financial::getFiscalYear)
-                .thenComparing(Financial::getPeriodNo)
-                .thenComparing(Financial::getReportDate, Comparator.nullsLast(LocalDate::compareTo));
+                .<Financial>comparingInt(Financial::getFiscalYear).reversed()
+                .thenComparing(Comparator.<Financial>comparingInt(Financial::getPeriodNo).reversed())
+                .thenComparing(Comparator.<Financial>comparingInt(Financial::getVersion).reversed())
+                .thenComparing(Comparator.comparing(
+                        Financial::getFilingDate,
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                ))
+                .thenComparing(Comparator.comparing(
+                        Financial::getReportDate,
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                ));
+    }
+
+    private record PeriodKey(int fiscalYear, int periodNo) {
     }
 
     private BigDecimal sumField(List<Financial> financials, Function<Financial, BigDecimal> getter) {
