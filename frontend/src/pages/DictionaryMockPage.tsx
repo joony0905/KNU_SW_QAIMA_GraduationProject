@@ -2,6 +2,7 @@
 import { useState, useMemo, useEffect } from "react";
 import type { DictionaryTermDto } from "../types/dictionary";
 import { fetchDictionaryTerms, fetchDictionaryTerm } from "../api/dictionary";
+import TokenBalanceBadge from "../components/TokenBalanceBadge";
 
 const HANGUL_LETTERS = [
   "ㄱ",
@@ -121,10 +122,11 @@ export default function DictionaryMockPage() {
     <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         {/* 헤더 */}
-        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
+        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
             용어사전
           </h1>
+          <TokenBalanceBadge />
         </header>
 
         {/* 메인 영역 */}

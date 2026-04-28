@@ -229,33 +229,50 @@ public class CandleLoadService {
     }
 
     private List<PriceOhlcv> filterMissingCandles(List<PriceOhlcv> existing, List<PriceOhlcv> fetched) {
-        Set<PriceOhlcvId> existingIds = (existing == null ? List.<PriceOhlcv>of() : existing).stream()
-                .map(PriceOhlcv::getId)
+        Set<String> existingKeys = (existing == null ? List.<PriceOhlcv>of() : existing).stream()
+                .map(this::candleLogicalKey)
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toCollection(HashSet::new));
 
         return (fetched == null ? List.<PriceOhlcv>of() : fetched).stream()
-                .filter(entity -> entity.getId() != null && !existingIds.contains(entity.getId()))
+                .filter(entity -> {
+                    String key = candleLogicalKey(entity);
+                    return key != null && !existingKeys.contains(key);
+                })
                 .toList();
     }
 
     private List<PriceOhlcv> mergeCandles(List<PriceOhlcv> existing, List<PriceOhlcv> fetched) {
-        java.util.LinkedHashMap<PriceOhlcvId, PriceOhlcv> merged = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, PriceOhlcv> merged = new java.util.LinkedHashMap<>();
 
         if (existing != null) {
             existing.stream()
                     .filter(entity -> entity != null && entity.getId() != null)
-                    .forEach(entity -> merged.put(entity.getId(), entity));
+                    .forEach(entity -> merged.put(candleLogicalKey(entity), entity));
         }
 
         if (fetched != null) {
             fetched.stream()
                     .filter(entity -> entity != null && entity.getId() != null)
-                    .forEach(entity -> merged.put(entity.getId(), entity));
+                    .forEach(entity -> merged.put(candleLogicalKey(entity), entity));
         }
 
         return merged.values().stream()
                 .sorted(Comparator.comparing(entity -> entity.getId().getTs()))
                 .toList();
+    }
+
+    private String candleLogicalKey(PriceOhlcv entity) {
+        if (entity == null || entity.getId() == null) return null;
+        PriceOhlcvId id = entity.getId();
+        if (id.getStockId() == null || id.getFreq() == null || id.getTs() == null) return null;
+
+        if (id.getFreq() == Freq.ONE_D) {
+            LocalDate tradingDay = id.getTs().atZoneSameInstant(KST).toLocalDate();
+            return id.getStockId() + "|" + id.getFreq() + "|" + tradingDay;
+        }
+
+        return id.getStockId() + "|" + id.getFreq() + "|" + id.getTs().toInstant();
     }
 
     /**
@@ -292,7 +309,7 @@ public class CandleLoadService {
 
         PriceOhlcvId id = new PriceOhlcvId(
                 stock.getStockId(),
-                dto.getTs(),
+                normalizeTsForFreq(dto.getTs(), resolvedFreq),
                 resolvedFreq
         );
 
@@ -305,5 +322,11 @@ public class CandleLoadService {
         e.setClose(dto.getClose());
         e.setVolume(dto.getVolume());
         return e;
+    }
+
+    private OffsetDateTime normalizeTsForFreq(OffsetDateTime ts, Freq freq) {
+        if (ts == null || freq != Freq.ONE_D) return ts;
+        LocalDate tradingDay = ts.atZoneSameInstant(KST).toLocalDate();
+        return tradingDay.atStartOfDay(KST).toOffsetDateTime();
     }
 }

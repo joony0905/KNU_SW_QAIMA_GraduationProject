@@ -15,25 +15,54 @@ public class PeerItemDto {
     private String stockCode;
     private String companyName;
 
-    // liquidity (optional)
+    // 유동성 정보. 선택적으로 포함된다.
     private Double avgTurnover;
     private Double avgVolume;
 
-    // correlation
-    private Double corr;            // same-time correlation
-    private Integer bestLag;        // lag (day)
-    private Double leadLagCorr;     // corr at bestLag
+    // 상관계수
+    private Double corr;            // 동시점 상관계수
+    private Double adjustedCorr;
+    private Double corrStability;
+    private Boolean rawCorrValid;
+    private Boolean adjustedCorrValid;
+    private Integer adjustedReturnSampleSize;
+    private Double adjustedReturnCoverageRatio;
+    private AdjustmentBasis adjustmentBasis;
+    private DisplayStatus displayStatus;
+    private Integer bestLag;        // 시차(일)
+    private Double leadLagCorr;     // bestLag 기준 상관계수
+    private Double lagConfidence;
 
     // relation 판단
     private Relation relation;      // LEADER / FOLLOWER / COINCIDENT / UNKNOWN
 
-    // ranking score (MVP: 0.7*corr + 0.3*leadLagCorr)
+    private Double liquiditySimilarityScore;
+    private Double volatilitySimilarityScore;
+
+    // 순위 점수. 기존 score 별칭과 명시적 peerScore를 함께 유지한다.
     private Double score;
+    private Double peerScore;
 
     public enum Relation {
         LEADER,
         FOLLOWER,
         COINCIDENT,
         UNKNOWN
+    }
+
+    public enum AdjustmentBasis {
+        RAW_ONLY,
+        SIMPLE_SUBTRACTION,
+        FALLBACK_RAW
+    }
+
+    public enum DisplayStatus {
+        SELECTED,
+        ELIGIBLE_NOT_SELECTED,
+        DISPLAY_ONLY,
+        LOW_CORR,
+        RAW_ONLY,
+        ADJUSTED_ONLY,
+        FALLBACK_RAW
     }
 }

@@ -15,8 +15,20 @@ public class PeerClusterInboundPeerItemDto {
     private Double avgTurnover;
     private Double avgVolume;
     private Double corr;
+    private Double adjustedCorr;
+    private Double corrStability;
+    private Boolean rawCorrValid;
+    private Boolean adjustedCorrValid;
+    private Integer adjustedReturnSampleSize;
+    private Double adjustedReturnCoverageRatio;
+    private PeerItemDto.AdjustmentBasis adjustmentBasis;
+    private PeerItemDto.DisplayStatus displayStatus;
     private Integer bestLag;
     private Double leadLagCorr;
+    private Double lagConfidence;
     private PeerItemDto.Relation relation;
+    private Double liquiditySimilarityScore;
+    private Double volatilitySimilarityScore;
     private Double score;
+    private Double peerScore;
 }

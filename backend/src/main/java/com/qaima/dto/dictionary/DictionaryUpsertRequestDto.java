@@ -22,5 +22,15 @@ public class DictionaryUpsertRequestDto {
 
     private String source;
 
+    private String sourceOrg;
+
+    private String sourceUrl;
+
+    private String sourceType;
+
+    private String status;
+
+    private String reviewedAt;
+
     private String tag;
 }

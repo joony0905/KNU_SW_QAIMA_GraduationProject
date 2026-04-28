@@ -18,6 +18,11 @@ public class DictionaryTermDto {
     private String initial;
     private String description;
     private String source;
+    private String sourceOrg;
+    private String sourceUrl;
+    private String sourceType;
+    private String status;
+    private Instant reviewedAt;
     private String tag;
     private Instant createdAt;
     private Instant updatedAt;

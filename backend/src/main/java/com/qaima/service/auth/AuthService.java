@@ -88,7 +88,7 @@ public class AuthService {
         return Blocking.call(() -> userRepository.findByEmail(email)
                         .orElseThrow(() -> new IllegalArgumentException("이메일 또는 비밀번호가 일치하지 않습니다.")))
                 .flatMap(user -> {
-                    if (!passwordEncoder.matches(requestDto.getPassword(), user.getPasswordHash())) {
+                    if (user.getPasswordHash() == null || !passwordEncoder.matches(requestDto.getPassword(), user.getPasswordHash())) {
                         return Mono.error(new IllegalArgumentException("이메일 또는 비밀번호가 일치하지 않습니다."));
                     }
                     if (user.getStatus() == null || !user.getStatus().equalsIgnoreCase("active")) {

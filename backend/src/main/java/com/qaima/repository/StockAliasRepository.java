@@ -9,4 +9,6 @@ public interface StockAliasRepository extends JpaRepository<StockAlias, Long> {
 
     @EntityGraph(attributePaths = {"stock", "stock.exchange"})
     List<StockAlias> findByNormalizedAlias(String normalizedAlias);
+
+    List<StockAlias> findByStock_StockId(Long stockId);
 }

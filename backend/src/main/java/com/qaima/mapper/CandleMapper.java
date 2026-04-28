@@ -1,14 +1,22 @@
 package com.qaima.mapper;
 
+import com.qaima.domain.Freq;
 import com.qaima.domain.PriceOhlcv;
 import com.qaima.dto.candle.CandleDto;
 
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class CandleMapper {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private CandleMapper() {}
 
@@ -24,7 +32,8 @@ public class CandleMapper {
             return null;
         }
 
-        long t = e.getId().getTs().toEpochSecond();
+        OffsetDateTime normalizedTs = normalizeTsForOutput(e);
+        long t = normalizedTs.toEpochSecond();
         long v = (e.getVolume() == null)
                 ? 0L
                 : e.getVolume().setScale(0, RoundingMode.DOWN).longValue();
@@ -53,15 +62,38 @@ public class CandleMapper {
     }
 
     /**
-     * series 변환: null row는 자동 제거
+     * series 변환: null row는 자동 제거하고, 일봉은 KST 거래일 기준으로 중복 제거
      */
     public static List<CandleDto> toSeries(List<PriceOhlcv> list) {
         if (list == null || list.isEmpty()) return List.of();
 
-        return list.stream()
+        Map<String, PriceOhlcv> deduped = new LinkedHashMap<>();
+        list.stream()
+                .filter(entity -> entity != null && entity.getId() != null)
+                .sorted(Comparator.comparing(entity -> entity.getId().getTs()))
+                .forEach(entity -> deduped.put(logicalKey(entity), entity));
+
+        return deduped.values().stream()
                 .map(CandleMapper::toDtoOrNull)
                 .filter(Objects::nonNull)
                 .sorted(Comparator.comparingLong(CandleDto::getT))
                 .toList();
+    }
+
+    private static OffsetDateTime normalizeTsForOutput(PriceOhlcv entity) {
+        OffsetDateTime ts = entity.getId().getTs();
+        if (entity.getId().getFreq() != Freq.ONE_D) return ts;
+
+        LocalDate tradingDay = ts.atZoneSameInstant(KST).toLocalDate();
+        return tradingDay.atStartOfDay(KST).toOffsetDateTime();
+    }
+
+    private static String logicalKey(PriceOhlcv entity) {
+        if (entity.getId().getFreq() == Freq.ONE_D) {
+            LocalDate tradingDay = entity.getId().getTs().atZoneSameInstant(KST).toLocalDate();
+            return entity.getId().getStockId() + "|" + entity.getId().getFreq() + "|" + tradingDay;
+        }
+
+        return entity.getId().getStockId() + "|" + entity.getId().getFreq() + "|" + entity.getId().getTs().toInstant();
     }
 }

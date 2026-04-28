@@ -37,7 +37,8 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             Freq freq,
             int window,
             int peerCount,
-            int maxLag
+            int maxLag,
+            int displayLimit
     ) {
         if (industryId == null) {
             return Mono.just(PeerClusterResult.empty(
@@ -51,7 +52,7 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             ));
         }
 
-        String cacheKey = buildCacheKey(industryId, anchorStockCode, freq, window, peerCount, maxLag);
+        String cacheKey = buildCacheKey(industryId, anchorStockCode, freq, window, peerCount, maxLag, displayLimit);
 
         return getFromCache(cacheKey)
                 .onErrorResume(e -> {
@@ -60,12 +61,7 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                 })
                 .flatMap(cached -> {
                     log.info("[PeerCluster] cache hit key={}", cacheKey);
-                    return Mono.just(
-                            PeerClusterResult.builder()
-                                    .peerCluster(cached)
-                                    .warnings(new ArrayList<>())
-                                    .build()
-                    );
+                    return Mono.just(cached);
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     log.info("[PeerCluster] cache miss key={}", cacheKey);
@@ -77,6 +73,7 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                             .window(window)
                             .peerCount(peerCount)
                             .maxLag(maxLag)
+                            .displayLimit(displayLimit)
                             .build();
 
                     return peerClusterClient.requestPeerCluster(req)
@@ -90,7 +87,7 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                                     ));
                                 }
 
-                                return putToCache(cacheKey, dto)
+                                return putToCache(cacheKey, result)
                                         .onErrorResume(e -> {
                                             log.warn("[PeerCluster] cache write failed. continue without cache. key={}", cacheKey, e);
                                             return Mono.just(false);
@@ -114,40 +111,64 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             Freq freq,
             int window,
             int peerCount,
-            int maxLag
+            int maxLag,
+            int displayLimit
     ) {
         return String.format(
-                "feature2:peercluster:v2:%d:%s:%s:%d:%d:%d",
+                "feature2:peercluster:v3:%d:%s:%s:%d:%d:%d:%d",
                 industryId,
                 anchorStockCode,
                 freq.name(),
                 window,
                 peerCount,
-                maxLag
+                maxLag,
+                displayLimit
         );
     }
 
-    private Mono<PeerClusterDto> getFromCache(String key) {
+    private Mono<PeerClusterResult> getFromCache(String key) {
         return redisTemplate.opsForValue()
                 .get(key)
                 .flatMap(json -> {
                     try {
-                        PeerClusterDto dto = objectMapper.readValue(json, PeerClusterDto.class);
-                        if (!isUsableCache(dto)) {
-                            log.warn("[PeerCluster] cache payload invalid. fallback to FastAPI. key={}", key);
-                            return Mono.empty();
+                        CachedPeerCluster cached = objectMapper.readValue(json, CachedPeerCluster.class);
+                        if (isUsableCache(cached.getPeerCluster())) {
+                            return Mono.just(PeerClusterResult.builder()
+                                    .peerCluster(cached.getPeerCluster())
+                                    .warnings(cached.getWarnings() != null ? cached.getWarnings() : new ArrayList<>())
+                                    .build());
                         }
-                        return Mono.just(dto);
+                        return readLegacyCache(json, key);
                     } catch (Exception e) {
-                        log.warn("[PeerCluster] cache deserialize failed key={}", key, e);
-                        return Mono.empty();
+                        return readLegacyCache(json, key);
                     }
                 });
     }
 
-    private Mono<Boolean> putToCache(String key, PeerClusterDto dto) {
+    private Mono<PeerClusterResult> readLegacyCache(String json, String key) {
         try {
-            String json = objectMapper.writeValueAsString(dto);
+            PeerClusterDto legacyDto = objectMapper.readValue(json, PeerClusterDto.class);
+            if (!isUsableCache(legacyDto)) {
+                log.warn("[PeerCluster] cache payload invalid. fallback to FastAPI. key={}", key);
+                return Mono.empty();
+            }
+            return Mono.just(PeerClusterResult.builder()
+                    .peerCluster(legacyDto)
+                    .warnings(new ArrayList<>())
+                    .build());
+        } catch (Exception legacyError) {
+            log.warn("[PeerCluster] cache deserialize failed key={}", key, legacyError);
+            return Mono.empty();
+        }
+    }
+
+    private Mono<Boolean> putToCache(String key, PeerClusterResult result) {
+        try {
+            CachedPeerCluster cached = new CachedPeerCluster(
+                    result.getPeerCluster(),
+                    result.getWarnings() != null ? result.getWarnings() : new ArrayList<>()
+            );
+            String json = objectMapper.writeValueAsString(cached);
             return redisTemplate.opsForValue()
                     .set(key, json, CACHE_TTL)
                     .doOnNext(saved ->
@@ -169,11 +190,32 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                 .freq(resp.getFreq())
                 .window(resp.getWindow())
                 .peerCount(resp.getPeerCount())
+                .requestedPeerCount(resp.getRequestedPeerCount())
+                .effectivePeerCount(resp.getEffectivePeerCount())
+                .rawCandidateCount(resp.getRawCandidateCount())
+                .evaluatedCandidateCount(resp.getEvaluatedCandidateCount())
+                .eligibleCandidateCount(resp.getEligibleCandidateCount())
+                .selectedPeerCount(resp.getSelectedPeerCount())
+                .displayedCandidateCount(resp.getDisplayedCandidateCount())
+                .displayLimit(resp.getDisplayLimit())
+                .adjustmentMethod(resp.getAdjustmentMethod())
+                .industryIndexCode(resp.getIndustryIndexCode())
+                .industryIndexName(resp.getIndustryIndexName())
+                .adjustedReturnSampleSize(resp.getAdjustedReturnSampleSize())
+                .adjustedReturnCoverageRatio(resp.getAdjustedReturnCoverageRatio())
+                .adjustmentValid(resp.getAdjustmentValid())
+                .adjustmentFallbackReason(resp.getAdjustmentFallbackReason())
                 .anchorStockCode(resp.getAnchorStockCode())
+                .anchorSeries(resp.getAnchorSeries())
+                .industryIndexSeries(resp.getIndustryIndexSeries())
                 .centroid(resp.getCentroid())
                 .band(resp.getBand())
+                .peerCentroid(resp.getPeerCentroid())
+                .peerBand(resp.getPeerBand())
                 .peers(resp.getPeers())
+                .candidates(resp.getCandidates())
                 .asOf(resp.getAsOf())
+                .interpretationNote(resp.getInterpretationNote())
                 .build();
 
         return PeerClusterResult.builder()
@@ -193,5 +235,34 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                 && dto.getMethod() != null
                 && dto.getFreq() != null
                 && dto.getWindow() != null;
+    }
+
+    private static class CachedPeerCluster {
+        private PeerClusterDto peerCluster;
+        private List<String> warnings;
+
+        public CachedPeerCluster() {
+        }
+
+        public CachedPeerCluster(PeerClusterDto peerCluster, List<String> warnings) {
+            this.peerCluster = peerCluster;
+            this.warnings = warnings;
+        }
+
+        public PeerClusterDto getPeerCluster() {
+            return peerCluster;
+        }
+
+        public void setPeerCluster(PeerClusterDto peerCluster) {
+            this.peerCluster = peerCluster;
+        }
+
+        public List<String> getWarnings() {
+            return warnings;
+        }
+
+        public void setWarnings(List<String> warnings) {
+            this.warnings = warnings;
+        }
     }
 }

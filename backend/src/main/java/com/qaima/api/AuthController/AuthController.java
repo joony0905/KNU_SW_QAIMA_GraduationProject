@@ -7,18 +7,15 @@ import com.qaima.dto.user.SignupRequestDto;
 import com.qaima.dto.user.TokenRefreshResponseDto;
 import com.qaima.dto.user.UserResponseDto;
 import com.qaima.security.AuthCookieProperties;
-import com.qaima.security.JwtProperties;
+import com.qaima.security.RefreshTokenCookieService;
 import com.qaima.service.auth.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
-
-import java.time.Duration;
 
 @RestController
 @RequiredArgsConstructor
@@ -27,7 +24,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final AuthCookieProperties authCookieProperties;
-    private final JwtProperties jwtProperties;
+    private final RefreshTokenCookieService refreshTokenCookieService;
 
     /**
      * 회원가입 API
@@ -55,7 +52,7 @@ public class AuthController {
         String ua = request.getHeaders().getFirst("User-Agent");
         return authService.login(requestDto, ip, ua)
                 .map(result -> {
-                    writeRefreshTokenCookie(response, result.refreshToken());
+                    refreshTokenCookieService.writeRefreshTokenCookie(response, result.refreshToken());
                     return ApiResponse.success(result.response());
                 });
     }
@@ -67,7 +64,7 @@ public class AuthController {
         String ua = request.getHeaders().getFirst("User-Agent");
         return authService.refresh(resolveRefreshToken(request), ip, ua)
                 .map(result -> {
-                    writeRefreshTokenCookie(response, result.refreshToken());
+                    refreshTokenCookieService.writeRefreshTokenCookie(response, result.refreshToken());
                     return ApiResponse.success(result.response());
                 });
     }
@@ -78,7 +75,7 @@ public class AuthController {
         String ip = extractClientIp(request);
         String ua = request.getHeaders().getFirst("User-Agent");
         return authService.logout(resolveRefreshToken(request), ip, ua)
-                .doOnSuccess(ignored -> expireRefreshTokenCookie(response))
+                .doOnSuccess(ignored -> refreshTokenCookieService.expireRefreshTokenCookie(response))
                 .thenReturn(ApiResponse.success(null));
     }
     
@@ -95,33 +92,5 @@ public class AuthController {
                 : null;
 
         return StringUtils.hasText(cookieRefreshToken) ? cookieRefreshToken : null;
-    }
-
-    private void writeRefreshTokenCookie(ServerHttpResponse response, String refreshToken) {
-        response.addCookie(buildRefreshTokenCookie(refreshToken, Duration.ofSeconds(
-                Math.max(60, jwtProperties.getRefreshTokenValiditySeconds())
-        )));
-    }
-
-    private void expireRefreshTokenCookie(ServerHttpResponse response) {
-        response.addCookie(buildRefreshTokenCookie("", Duration.ZERO));
-    }
-
-    private ResponseCookie buildRefreshTokenCookie(String value, Duration maxAge) {
-        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(
-                        authCookieProperties.getRefreshTokenName(),
-                        value == null ? "" : value
-                )
-                .httpOnly(authCookieProperties.isHttpOnly())
-                .secure(authCookieProperties.isSecure())
-                .path(authCookieProperties.getPath())
-                .maxAge(maxAge)
-                .sameSite(authCookieProperties.getSameSite());
-
-        if (StringUtils.hasText(authCookieProperties.getDomain())) {
-            builder.domain(authCookieProperties.getDomain());
-        }
-
-        return builder.build();
     }
 }

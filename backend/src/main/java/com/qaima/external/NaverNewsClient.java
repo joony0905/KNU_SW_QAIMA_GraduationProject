@@ -1,5 +1,6 @@
 package com.qaima.external;
 
+import com.qaima.common.NewsWarningCodes;
 import com.qaima.external.dto.news.NaverNewsSearchResponse;
 import java.net.URI;
 import java.time.OffsetDateTime;
@@ -48,7 +49,7 @@ public class NaverNewsClient {
         }
 
         if (query == null || query.isBlank()) {
-            return new NaverNewsSearchResult(List.of(), List.of("NEWS_LIST_FETCH_FAILED"));
+            return new NaverNewsSearchResult(List.of(), List.of(NewsWarningCodes.LIST_FETCH_FAILED));
         }
 
         NaverNewsSearchResponse response = webClient.get()
@@ -73,14 +74,14 @@ public class NaverNewsClient {
             String url = resolveUrl(item);
 
             if (title == null || title.isBlank() || url == null || url.isBlank()) {
-                warnings.add("NEWS_INVALID_ITEM_SKIPPED");
+                warnings.add(NewsWarningCodes.INVALID_ITEM_SKIPPED);
                 return;
             }
 
             OffsetDateTime publishedAt = parsePublishedAt(item.getPubDate());
             if (publishedAt == null) {
-                warnings.add("NEWS_PUBDATE_PARSE_FAILED");
-                warnings.add("NEWS_INVALID_ITEM_SKIPPED");
+                warnings.add(NewsWarningCodes.PUBDATE_PARSE_FAILED);
+                warnings.add(NewsWarningCodes.INVALID_ITEM_SKIPPED);
                 return;
             }
 

@@ -1,4 +1,8 @@
-"""finance_sentiment_corpus 전처리 CSV로 1차 감성 분류 모델을 학습한다."""
+"""감성 분류 모델을 학습한다.
+
+1차 finance_sentiment_corpus 학습과 2차 QAIMA 실제 뉴스 적응 학습을
+같은 진입점에서 실행할 수 있도록 구성한다.
+"""
 
 from __future__ import annotations
 
@@ -33,6 +37,7 @@ from src.dataset import validate_dataframe_columns
 from src.utils import save_json, set_seed
 
 DEFAULT_INPUT_PATH = PROCESSED_DATA_DIR / "finance_sentiment_train.csv"
+DEFAULT_SECOND_INPUT_PATH = PROCESSED_DATA_DIR / "real_news_sentiment_train.csv"
 DEFAULT_OUTPUT_DIR = MODELS_DIR / "kf_deberta_sentiment_v1"
 DEFAULT_MODEL_NAME = "kakaobank/kf-deberta-base"
 VALID_LABEL_IDS = {NEGATIVE, NEUTRAL, POSITIVE}
@@ -116,6 +121,46 @@ def split_dataframe(
     return train_df.reset_index(drop=True), validation_df.reset_index(drop=True)
 
 
+def oversample_training_dataframe(
+    dataframe: pd.DataFrame,
+    target_count: int | None,
+    seed: int,
+) -> pd.DataFrame:
+    """train split에만 minority class oversampling을 적용한다.
+
+    validation 데이터는 실제 서비스 분포를 보존해야 하므로 이 함수에 넣지 않는다.
+    target_count가 없으면 train split 내부의 최대 class count에 맞춘다.
+    이미 target_count 이상인 class는 줄이지 않는다.
+    """
+    if dataframe.empty:
+        return dataframe
+
+    label_counts = dataframe["label"].value_counts().sort_index()
+    if target_count is None:
+        target_count = int(label_counts.max())
+    if target_count <= 0:
+        raise ValueError(f"oversample target은 1 이상이어야 합니다: {target_count}")
+
+    sampled_frames: list[pd.DataFrame] = []
+    for label_id in sorted(VALID_LABEL_IDS):
+        label_frame = dataframe[dataframe["label"] == label_id]
+        if label_frame.empty:
+            continue
+        if len(label_frame) >= target_count:
+            sampled_frames.append(label_frame)
+            continue
+        replace = True
+        sampled = label_frame.sample(
+            n=target_count,
+            replace=replace,
+            random_state=seed + int(label_id),
+        )
+        sampled_frames.append(sampled)
+
+    oversampled = pd.concat(sampled_frames, ignore_index=True)
+    return oversampled.sample(frac=1.0, random_state=seed).reset_index(drop=True)
+
+
 def tokenize_batch(batch: dict[str, list[Any]], tokenizer, max_length: int) -> dict[str, Any]:
     """text 컬럼만 사용해 토큰화한다."""
     return tokenizer(
@@ -161,7 +206,16 @@ def compute_metrics(eval_pred) -> dict[str, float]:
 
     return {
         "accuracy": float(accuracy_score(labels, predictions)),
-        "macro_f1": float(f1_score(labels, predictions, average="macro")),
+        "macro_f1": float(f1_score(labels, predictions, average="macro", zero_division=0)),
+        "negative_f1": float(
+            f1_score(labels, predictions, labels=[NEGATIVE], average="macro", zero_division=0)
+        ),
+        "neutral_f1": float(
+            f1_score(labels, predictions, labels=[NEUTRAL], average="macro", zero_division=0)
+        ),
+        "positive_f1": float(
+            f1_score(labels, predictions, labels=[POSITIVE], average="macro", zero_division=0)
+        ),
     }
 
 
@@ -180,11 +234,17 @@ def save_metrics(metrics: dict[str, Any], output_path: Path) -> None:
 def parse_args() -> argparse.Namespace:
     """CLI 인자를 파싱한다."""
     parser = argparse.ArgumentParser(
-        description="finance_sentiment_corpus 기반 1차 감성 분류 학습 스크립트"
+        description="QAIMA 뉴스 감성 분류 학습 스크립트"
     )
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT_PATH)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--model-name", type=str, default=DEFAULT_MODEL_NAME)
+    parser.add_argument(
+        "--stage",
+        choices=("first", "second"),
+        default="first",
+        help="학습 단계 메타데이터입니다. second 선택 시 input/output 기본값만 2차용으로 바뀝니다.",
+    )
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--epochs", type=float, default=3.0)
     parser.add_argument("--train-batch-size", type=int, default=8)
@@ -192,8 +252,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learning-rate", type=float, default=2e-5)
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--val-size", type=float, default=0.1)
+    parser.add_argument(
+        "--oversample",
+        action="store_true",
+        help="train split에만 minority class oversampling을 적용합니다.",
+    )
+    parser.add_argument(
+        "--oversample-target",
+        type=int,
+        default=None,
+        help="각 라벨별 train row 목표 수입니다. 생략하면 train split의 최대 라벨 수에 맞춥니다.",
+    )
     parser.add_argument("--seed", type=int, default=42)
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.stage == "second":
+        if args.input == DEFAULT_INPUT_PATH:
+            args.input = DEFAULT_SECOND_INPUT_PATH
+        if args.output_dir == DEFAULT_OUTPUT_DIR:
+            args.output_dir = MODELS_DIR / "kf_deberta_sentiment_v2"
+        if args.oversample and args.oversample_target is None:
+            args.oversample_target = 350
+
+    return args
 
 
 def build_training_arguments(
@@ -259,14 +340,35 @@ def main() -> None:
         val_size=args.val_size,
         seed=args.seed,
     )
+    original_train_df = train_df.copy()
+    if args.oversample:
+        train_df = oversample_training_dataframe(
+            dataframe=train_df,
+            target_count=args.oversample_target,
+            seed=args.seed,
+        )
 
     print(f"Loaded rows: {cleaned_count} (raw: {original_count})")
-    print(f"Train rows: {len(train_df)}")
+    print(f"Train rows: {len(train_df)} (before oversampling: {len(original_train_df)})")
     print(f"Validation rows: {len(validation_df)}")
     print(
         "Label distribution: "
         + json.dumps(
             {id2label[int(k)]: int(v) for k, v in dataframe["label"].value_counts().sort_index().items()},
+            ensure_ascii=False,
+        )
+    )
+    print(
+        "Train label distribution: "
+        + json.dumps(
+            {id2label[int(k)]: int(v) for k, v in train_df["label"].value_counts().sort_index().items()},
+            ensure_ascii=False,
+        )
+    )
+    print(
+        "Validation label distribution: "
+        + json.dumps(
+            {id2label[int(k)]: int(v) for k, v in validation_df["label"].value_counts().sort_index().items()},
             ensure_ascii=False,
         )
     )
@@ -312,8 +414,37 @@ def main() -> None:
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
     save_metrics(eval_metrics, output_dir / "eval_metrics.json")
+    save_metrics(
+        {
+            "stage": args.stage,
+            "input": str(input_path),
+            "base_model": args.model_name,
+            "output_dir": str(output_dir),
+            "max_length": args.max_length,
+            "epochs": args.epochs,
+            "learning_rate": args.learning_rate,
+            "weight_decay": args.weight_decay,
+            "val_size": args.val_size,
+            "oversample": args.oversample,
+            "oversample_target": args.oversample_target,
+            "raw_label_distribution": {
+                id2label[int(k)]: int(v)
+                for k, v in dataframe["label"].value_counts().sort_index().items()
+            },
+            "train_label_distribution": {
+                id2label[int(k)]: int(v)
+                for k, v in train_df["label"].value_counts().sort_index().items()
+            },
+            "validation_label_distribution": {
+                id2label[int(k)]: int(v)
+                for k, v in validation_df["label"].value_counts().sort_index().items()
+            },
+        },
+        output_dir / "training_config.json",
+    )
 
     print("Evaluation metrics saved to:", output_dir / "eval_metrics.json")
+    print("Training config saved to:", output_dir / "training_config.json")
 
 
 if __name__ == "__main__":

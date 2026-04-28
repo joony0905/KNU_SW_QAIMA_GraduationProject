@@ -258,3 +258,9 @@ CLAUDE.md
 *.local.*
 *.local.json
 CLAUDE*.md
+data/경제용어사전_초기데이터.csv
+data/코스피_종목초기데이터1.csv
+data/코스피_공매도_2025-03-21_2026-03-20.csv
+data/코스피_종목초기데이터2.csv
+data/financials_kosdaq_2020_2025.csv
+.gitignore

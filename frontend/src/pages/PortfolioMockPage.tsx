@@ -1,9 +1,23 @@
 // src/pages/PortfolioMockPage.tsx
 
 import { useEffect, useRef, useState } from "react";
-import { Trash2, Plus, Info } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Trash2, Plus, Info, ClipboardList } from "lucide-react";
 import StockSearchCell from "../components/StockSearchCell";
+import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { fetchPortfolioAnalysis } from "../api/portfolio";
+
+const RISK_GAMMA_STORAGE_KEY = "qaima_risk_gamma";
+const SURVEY_RESULT_STORAGE_KEY = "qaima_survey_result";
+
+const clampRiskGamma = (v: number): number => {
+  if (!Number.isFinite(v)) return 0;
+  if (v < 0) return 0;
+  if (v > 1) return 1;
+  return Math.round(v * 100) / 100;
+};
+
+const formatRiskGamma = (v: number): string => v.toFixed(2);
 
 type HoldingRow = {
   id: number;
@@ -67,9 +81,76 @@ const EXTRA_OPTIONS: AnalysisOption[] = [
 import type { PortfolioAnalyzeResponse } from "../api/portfolio";
 
 export default function PortfolioMockPage() {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<"국내" | "해외">("국내");
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // 투자 성향 지수 (0.00 ~ 1.00, null 이면 미입력 상태)
+  const [riskGamma, setRiskGamma] = useState<number | null>(null);
+  // 숫자 입력 필드의 표시값 (타이핑 도중 소수점 입력을 허용하기 위해 문자열로 관리)
+  const [riskGammaInput, setRiskGammaInput] = useState<string>("");
+
+  // 설문에서 복귀했으면(sessionStorage) 그 값을, 없으면 마지막 저장값(localStorage)을 초기값으로 사용
+  useEffect(() => {
+    const fromSurvey = sessionStorage.getItem(SURVEY_RESULT_STORAGE_KEY);
+    if (fromSurvey !== null) {
+      const parsed = Number(fromSurvey);
+      if (Number.isFinite(parsed)) {
+        const clamped = clampRiskGamma(parsed);
+        setRiskGamma(clamped);
+        setRiskGammaInput(formatRiskGamma(clamped));
+        localStorage.setItem(RISK_GAMMA_STORAGE_KEY, String(clamped));
+      }
+      sessionStorage.removeItem(SURVEY_RESULT_STORAGE_KEY);
+      return;
+    }
+
+    const saved = localStorage.getItem(RISK_GAMMA_STORAGE_KEY);
+    if (saved !== null) {
+      const parsed = Number(saved);
+      if (Number.isFinite(parsed)) {
+        const clamped = clampRiskGamma(parsed);
+        setRiskGamma(clamped);
+        setRiskGammaInput(formatRiskGamma(clamped));
+      }
+    }
+  }, []);
+
+  const commitRiskGamma = (v: number) => {
+    const clamped = clampRiskGamma(v);
+    setRiskGamma(clamped);
+    setRiskGammaInput(formatRiskGamma(clamped));
+    localStorage.setItem(RISK_GAMMA_STORAGE_KEY, String(clamped));
+  };
+
+  const handleRiskGammaInputChange = (value: string) => {
+    // 숫자와 단일 소수점만 허용 (중간 타이핑 상태 고려)
+    if (value !== "" && !/^[0-9]*\.?[0-9]*$/.test(value)) {
+      return;
+    }
+    setRiskGammaInput(value);
+    if (value === "" || value === ".") {
+      setRiskGamma(null);
+      return;
+    }
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      setRiskGamma(clampRiskGamma(parsed));
+    }
+  };
+
+  const handleRiskGammaInputBlur = () => {
+    if (riskGamma === null) {
+      setRiskGammaInput("");
+      return;
+    }
+    commitRiskGamma(riskGamma);
+  };
+
+  const handleGoSurvey = () => {
+    navigate("/survey");
+  };
 
   // 국내 / 해외 각각의 포트폴리오 상태
   const [domesticRows, setDomesticRows] = useState<HoldingRow[]>([
@@ -115,6 +196,10 @@ export default function PortfolioMockPage() {
     const validRows = rows.filter((r) => r.name.trim() !== "");
     if (validRows.length === 0) {
       setErr("최소 1개 종목을 입력해주세요.");
+      return;
+    }
+    if (riskGamma === null) {
+      setErr("투자 성향 지수를 입력해주세요.");
       return;
     }
     setLoading(true);
@@ -221,10 +306,11 @@ export default function PortfolioMockPage() {
     <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         {/* 헤더 */}
-        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
+        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
             포트폴리오
           </h1>
+          <TokenBalanceBadge />
         </header>
 
         {/* 메인 2열 레이아웃 */}
@@ -474,16 +560,74 @@ export default function PortfolioMockPage() {
                 ))}
               </div>
 
+              {/* 투자 성향 지수 섹션 */}
+              <div className="flex flex-col gap-3 px-3 py-3 rounded-lg border border-[#3F51B5]/20 bg-[#3F51B5]/5">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-[#3F51B5]">
+                      투자 성향 지수
+                    </span>
+                    <span className="text-xs text-gray-400">(필수)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGoSurvey}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#3F51B5] bg-white border border-[#3F51B5]/30 hover:bg-[#3F51B5]/10 transition-colors"
+                  >
+                    <ClipboardList size={14} />
+                    설문으로 확인하기
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 flex flex-col gap-1">
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={riskGamma ?? 0.5}
+                      onChange={(e) => commitRiskGamma(Number(e.target.value))}
+                      className="w-full accent-[#3F51B5] cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[11px] text-gray-500">
+                      <span>0.00 · 보수적</span>
+                      <span>공격적 · 1.00</span>
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={riskGammaInput}
+                    onChange={(e) => handleRiskGammaInputChange(e.target.value)}
+                    onBlur={handleRiskGammaInputBlur}
+                    placeholder="0.00"
+                    className="w-20 text-center text-sm font-semibold text-gray-800 bg-white border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:border-[#3F51B5] transition-colors"
+                  />
+                </div>
+
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  0에 가까울수록 안정적인 자산 배분을, 1에 가까울수록 공격적인
+                  자산 배분을 기준으로 분석합니다. 잘 모르시겠다면 우측 상단의
+                  설문을 이용해보세요.
+                </p>
+              </div>
+
               {/* 2.3 실행 버튼 */}
-              <div className="w-full flex justify-center pt-2">
+              <div className="w-full flex flex-col items-center gap-1 pt-2">
                 <button
                   type="button"
                   onClick={handleAnalyzeClick}
-                  disabled={loading}
+                  disabled={loading || riskGamma === null}
                   className="px-10 py-3 bg-[#3F51B5] text-white font-semibold text-base rounded-xl shadow-md hover:bg-[#354499] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {loading ? "분석 중..." : "분석결과보기"}
                 </button>
+                {!loading && riskGamma === null && (
+                  <p className="text-xs text-gray-400 text-center">
+                    투자 성향 지수를 입력한 후 분석을 실행할 수 있습니다.
+                  </p>
+                )}
               </div>
 
               {err && (

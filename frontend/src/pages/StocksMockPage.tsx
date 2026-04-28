@@ -19,11 +19,13 @@ import { getStockByCode } from "../api/stock";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import jsPDF from "jspdf";
+import html2canvas from "html2canvas-pro";
 import downloadIcon from "../assets/download_button.png";
 import zoomIcon from "../assets/zoom_button.png";
 import type { AnalysisResponse } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
 import DictTerm from "../components/DictTerm";
+import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import {
   formatKstDate,
   formatKstDateTimeDisplay,
@@ -252,6 +254,7 @@ export default function StocksMockPage() {
 
   const isLoadingMoreRef = useRef(false);
   const requestedRangesRef = useRef<Set<string>>(new Set());
+  const pdfRef = useRef<HTMLDivElement | null>(null);
 
   const chartRangeRef = useRef<{
     stockCode: string;
@@ -664,58 +667,60 @@ export default function StocksMockPage() {
     }
   };
 
-  const handleDownloadClick = () => {
-    if (!analysisResult) return;
+  const handleDownloadClick = async () => {
+    if (!analysisResult || !pdfRef.current) return;
 
-    const doc = new jsPDF();
+    try {
+      const fullCanvas = await html2canvas(pdfRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        windowWidth: pdfRef.current.scrollWidth,
+        windowHeight: pdfRef.current.scrollHeight,
+      });
 
-    const title = `${mainStock.name} (${mainStock.symbol}) 심층 분석`;
-    const summary = analysisData?.summary ?? "";
-    const rating = analysisData?.rating ?? "";
-    const highlights = (analysisData?.highlights ?? []).join("\n- ");
-    const risks = (analysisData?.risks ?? []).join("\n- ");
+      const doc = new jsPDF("p", "mm", "a4");
+      const pdfWidth = doc.internal.pageSize.getWidth();
+      const pdfHeight = doc.internal.pageSize.getHeight();
+      const margin = 10;
+      const usableWidth = pdfWidth - margin * 2;
+      const usableHeight = pdfHeight - margin * 2;
 
-    let y = 20;
+      // 캔버스 픽셀당 PDF mm 환산
+      const pxPerMm = fullCanvas.width / usableWidth;
+      const pageSlicePx = Math.floor(usableHeight * pxPerMm);
 
-    doc.setFontSize(16);
-    doc.text(title, 10, y);
-    y += 10;
+      let yPx = 0;
+      let pageIndex = 0;
 
-    doc.setFontSize(12);
-    doc.text(`투자의견: ${rating}`, 10, y);
-    y += 10;
+      while (yPx < fullCanvas.height) {
+        const sliceHeightPx = Math.min(pageSlicePx, fullCanvas.height - yPx);
 
-    if (summary) {
-      doc.setFontSize(12);
-      doc.text("요약", 10, y);
-      y += 7;
-      doc.setFontSize(11);
-      const summaryLines = doc.splitTextToSize(summary, 180);
-      doc.text(summaryLines, 10, y);
-      y += summaryLines.length * 6 + 5;
+        // 페이지 1장에 들어갈 분량만 별도 캔버스에 잘라낸다 (페이지 경계 중복 방지)
+        const slice = document.createElement("canvas");
+        slice.width = fullCanvas.width;
+        slice.height = sliceHeightPx;
+        const ctx = slice.getContext("2d");
+        if (!ctx) throw new Error("Canvas context unavailable");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, slice.width, slice.height);
+        ctx.drawImage(fullCanvas, 0, -yPx);
+
+        const sliceImg = slice.toDataURL("image/png");
+        const sliceImgHeightMm = sliceHeightPx / pxPerMm;
+
+        if (pageIndex > 0) doc.addPage();
+        doc.addImage(sliceImg, "PNG", margin, margin, usableWidth, sliceImgHeightMm);
+
+        yPx += sliceHeightPx;
+        pageIndex++;
+      }
+
+      const fileName = `${mainStock.symbol}_analysis.pdf`;
+      doc.save(fileName);
+    } catch (e) {
+      console.error("PDF 생성 실패:", e);
     }
-
-    if (highlights) {
-      doc.setFontSize(12);
-      doc.text("핵심 포인트", 10, y);
-      y += 7;
-      doc.setFontSize(11);
-      const lines = doc.splitTextToSize(`- ${highlights}`, 180);
-      doc.text(lines, 10, y);
-      y += lines.length * 6 + 5;
-    }
-
-    if (risks) {
-      doc.setFontSize(12);
-      doc.text("리스크", 10, y);
-      y += 7;
-      doc.setFontSize(11);
-      const lines = doc.splitTextToSize(`- ${risks}`, 180);
-      doc.text(lines, 10, y);
-    }
-
-    const fileName = `${mainStock.symbol}_analysis.pdf`;
-    doc.save(fileName);
   };
 
   const handleFullscreenClick = () => {
@@ -861,10 +866,11 @@ export default function StocksMockPage() {
   return (
     <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
-        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center">
+        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
             심층분석
           </h1>
+          <TokenBalanceBadge />
         </header>
 
         <section className="w-full flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -1218,27 +1224,29 @@ export default function StocksMockPage() {
             </div>
 
             {/* ========== 하단 분석 결과 영역 ========== */}
-            <AnalysisResultPanel
-              result={analysisData ? {
-                ...analysisData,
-              } as AnalysisPanelResult : null}
-              loading={loading}
-              loadingStage={analysisLoadingStage}
-              err={err}
-              showAnalyzeButton={showAnalyzeButton}
-              onAnalyze={handleAnalyzeClick}
-              onDownload={handleDownloadClick}
-              onZoom={() => {
-                setAnalysisZoom(1);
-                setIsAnalysisModalOpen(true);
-              }}
-              llmVendor={llmVendor}
-              onLlmVendorChange={setLlmVendor}
-              displayText={analysisData?.explain?.text ?? ""}
-              financialTimeline={financialTimeline}
-              priceFlowSummary={priceFlowSummary}
-              layout="full"
-            />
+            <div ref={pdfRef}>
+              <AnalysisResultPanel
+                result={analysisData ? {
+                  ...analysisData,
+                } as AnalysisPanelResult : null}
+                loading={loading}
+                loadingStage={analysisLoadingStage}
+                err={err}
+                showAnalyzeButton={showAnalyzeButton}
+                onAnalyze={handleAnalyzeClick}
+                onDownload={handleDownloadClick}
+                onZoom={() => {
+                  setAnalysisZoom(1);
+                  setIsAnalysisModalOpen(true);
+                }}
+                llmVendor={llmVendor}
+                onLlmVendorChange={setLlmVendor}
+                displayText={analysisData?.explain?.text ?? ""}
+                financialTimeline={financialTimeline}
+                priceFlowSummary={priceFlowSummary}
+                layout="full"
+              />
+            </div>
           </main>
         )}
 

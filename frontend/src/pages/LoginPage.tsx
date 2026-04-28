@@ -5,6 +5,8 @@ import kakaoIcon from "../assets/kakaoicon.png";
 import naverIcon from "../assets/navericon.png";
 import googleIcon from "../assets/googleicon.png";
 import { login } from "../api/auth";
+import { setAccessToken } from "../api/tokenStore";
+import { setUser } from "../api/userStore";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -31,8 +33,8 @@ export default function LoginPage() {
 
       const data = await login({ email: form.email, password: form.password });
 
-      localStorage.setItem("qaima_token", data.accessToken);
-      localStorage.setItem("qaima_refresh_token", data.refreshToken);
+      setAccessToken(data.accessToken);
+      setUser({ email: data.email, name: data.name });
 
       const redirect = sessionStorage.getItem("qaima_redirect") || "/feature/1";
       sessionStorage.removeItem("qaima_redirect");

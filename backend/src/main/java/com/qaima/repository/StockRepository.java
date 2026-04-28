@@ -81,6 +81,16 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @EntityGraph(attributePaths = "exchange")
     List<Stock> findByDartCorpCodeIsNotNullOrderByStockCodeAsc();
 
+    @Query(value = """
+        SELECT s.stock_code
+        FROM stock s
+        WHERE s.stock_code IS NOT NULL
+          AND s.stock_code <> ''
+        ORDER BY RAND()
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<String> findRandomStockCodes(@Param("limit") int limit);
+
     Optional<Stock> findByExchangeAndStockCode(Exchange exchange, String stockCode);
     List<Stock> findAllByIndustryIndustryId(Long industryId);
 }

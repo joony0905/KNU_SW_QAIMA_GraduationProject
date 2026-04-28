@@ -16,11 +16,13 @@ export const fetchFeature2Analysis = async (
   freq?: string,
   window?: number,
   peerCount?: number,
+  displayLimit?: number,
 ): Promise<ApiResponse<Feature2AnalyzeResponse>> => {
   const body: Record<string, unknown> = { stockCode };
   if (freq) body.freq = freq;
   if (window) body.window = window;
   if (peerCount) body.peerCount = peerCount;
+  if (displayLimit) body.displayLimit = displayLimit;
   const res = await api.post<ApiResponse<Feature2AnalyzeResponse>>(
     "/feature2/analyze",
     body,
