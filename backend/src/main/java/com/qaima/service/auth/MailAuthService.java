@@ -63,7 +63,7 @@ public class MailAuthService {
             return;
         }
 
-        emailVerificationRepository.deleteByEmail(normalizedEmail);
+        emailVerificationRepository.deleteByEmailAndUsedAtIsNull(normalizedEmail);
 
         String code = generate6DigitCode();
         String tokenHash = sha256Hex(code);

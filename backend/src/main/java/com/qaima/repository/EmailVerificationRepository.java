@@ -22,6 +22,7 @@ public interface EmailVerificationRepository extends JpaRepository<EmailVerifica
 
     long deleteByUser(User user);
     long deleteByEmail(String email);
+    long deleteByEmailAndUsedAtIsNull(String email);
 
     boolean existsByUserAndCreatedAtAfter(User user, Instant after);
     boolean existsByEmailAndCreatedAtAfter(String email, Instant after);
