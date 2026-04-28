@@ -15,6 +15,7 @@ import java.time.Instant;
         name = "email_verification",
         indexes = {
                 @Index(name = "idx_evt_user", columnList = "user_id"),
+                @Index(name = "idx_evt_email_created", columnList = "email, created_at"),
                 @Index(name = "idx_evt_expires", columnList = "expires_at")
         }
 )
@@ -25,8 +26,11 @@ public class EmailVerification {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "user_id")
     private User user;
+
+    @Column(name = "email", nullable = false, length = 255)
+    private String email;
 
     @Column(name = "token_hash", nullable = false, unique = true, length = 64)
     private String tokenHash;
