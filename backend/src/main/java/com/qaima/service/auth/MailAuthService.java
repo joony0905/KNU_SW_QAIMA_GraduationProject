@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -116,14 +117,28 @@ public class MailAuthService {
     }
 
     @Transactional
-    public void consumeSignupEmailVerification(String email) {
+    public void consumeSignupEmailVerification(String email, String code) {
         String normalizedEmail = normalizeEmail(email);
+        String tokenHash = sha256Hex(normalizeCode(code));
         Instant now = Instant.now();
-        emailVerificationRepository
-                .findFirstByEmailAndUsedAtIsNotNullAndExpiresAtAfterOrderByUsedAtDescCreatedAtDesc(normalizedEmail, now)
+        EmailVerification token = emailVerificationRepository
+                .findByEmailAndTokenHash(normalizedEmail, tokenHash)
                 .orElseThrow(() -> new IllegalArgumentException("회원가입 전에 이메일 인증이 필요합니다."));
 
+        if (token.getUsedAt() == null) {
+            throw new IllegalArgumentException("회원가입 전에 이메일 인증이 필요합니다.");
+        }
+        if (token.getExpiresAt() == null || token.getExpiresAt().isBefore(now)) {
+            throw new IllegalArgumentException("만료된 인증번호입니다.");
+        }
+
         emailVerificationRepository.deleteByEmail(normalizedEmail);
+    }
+
+    @Scheduled(fixedDelayString = "${auth.email-verification.cleanup-interval-ms:3600000}")
+    @Transactional
+    public void cleanupExpiredEmailVerifications() {
+        emailVerificationRepository.deleteByExpiresAtBefore(Instant.now());
     }
 
     @Transactional

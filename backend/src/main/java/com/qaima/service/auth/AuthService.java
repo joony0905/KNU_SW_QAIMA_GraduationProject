@@ -130,7 +130,7 @@ public class AuthService {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         }
 
-        mailAuthService.consumeSignupEmailVerification(email);
+        mailAuthService.consumeSignupEmailVerification(email, requestDto.getVerificationCode());
 
         Instant now = Instant.now();
         User newUser = new User();
