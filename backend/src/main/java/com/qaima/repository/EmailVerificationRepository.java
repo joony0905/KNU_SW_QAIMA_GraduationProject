@@ -15,7 +15,10 @@ public interface EmailVerificationRepository extends JpaRepository<EmailVerifica
     Optional<EmailVerification> findByEmailAndTokenHash(String email, String tokenHash);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<EmailVerification> findFirstByEmailOrderByCreatedAtDesc(String email);
+    Optional<EmailVerification> findFirstByEmailAndUsedAtIsNotNullAndExpiresAtAfterOrderByUsedAtDescCreatedAtDesc(
+            String email,
+            Instant now
+    );
 
     long deleteByUser(User user);
     long deleteByEmail(String email);

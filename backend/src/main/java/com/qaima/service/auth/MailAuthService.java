@@ -118,17 +118,10 @@ public class MailAuthService {
     @Transactional
     public void consumeSignupEmailVerification(String email) {
         String normalizedEmail = normalizeEmail(email);
-        EmailVerification token = emailVerificationRepository
-                .findFirstByEmailOrderByCreatedAtDesc(normalizedEmail)
-                .orElseThrow(() -> new IllegalArgumentException("회원가입 전에 이메일 인증이 필요합니다."));
-
         Instant now = Instant.now();
-        if (token.getUsedAt() == null) {
-            throw new IllegalArgumentException("회원가입 전에 이메일 인증이 필요합니다.");
-        }
-        if (token.getExpiresAt() == null || token.getExpiresAt().isBefore(now)) {
-            throw new IllegalArgumentException("만료된 인증번호입니다.");
-        }
+        emailVerificationRepository
+                .findFirstByEmailAndUsedAtIsNotNullAndExpiresAtAfterOrderByUsedAtDescCreatedAtDesc(normalizedEmail, now)
+                .orElseThrow(() -> new IllegalArgumentException("회원가입 전에 이메일 인증이 필요합니다."));
 
         emailVerificationRepository.deleteByEmail(normalizedEmail);
     }
