@@ -1,0 +1,28 @@
+{
+  "stage": "second",
+  "input": "/content/QAIMA/sentiment_lab/data/processed/real_news_sentiment_train.csv",
+  "base_model": "models/kf_deberta_sentiment_v1",
+  "output_dir": "/content/QAIMA/sentiment_lab/models/kf_deberta_sentiment_v2",
+  "max_length": 256,
+  "epochs": 2.0,
+  "learning_rate": 1e-05,
+  "weight_decay": 0.01,
+  "val_size": 0.1,
+  "oversample": true,
+  "oversample_target": 350,
+  "raw_label_distribution": {
+    "negative": 156,
+    "neutral": 681,
+    "positive": 111
+  },
+  "train_label_distribution": {
+    "negative": 350,
+    "neutral": 613,
+    "positive": 350
+  },
+  "validation_label_distribution": {
+    "negative": 16,
+    "neutral": 68,
+    "positive": 11
+  }
+}
