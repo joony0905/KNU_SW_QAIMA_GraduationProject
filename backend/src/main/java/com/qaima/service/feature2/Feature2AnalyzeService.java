@@ -6,6 +6,7 @@ import com.qaima.dto.feature2.Feature2AnalyzeRequestDto;
 import com.qaima.dto.feature2.Feature2AnalyzeResponseDto;
 import com.qaima.dto.feature2.Feature2MetaDto;
 import com.qaima.dto.feature2.Feature2MetricsDto;
+import com.qaima.dto.news.NewsItemDto;
 import com.qaima.service.feature2.model.Feature2Command;
 import com.qaima.service.feature2.model.Feature2IndustryContext;
 import com.qaima.service.feature2.model.Feature2StockContext;
@@ -19,6 +20,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,10 +49,10 @@ public class Feature2AnalyzeService {
         final Feature2MetricsDto metrics = metricsAssembler.empty();
         final Feature2Command command = requestNormalizer.normalize(req);
 
-        log.info("[Feature2][service-start] incoming req={}, normalized stockCode={}, freq={}, window={}, peerCount={}, maxLag={}, displayLimit={}",
-                req, command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag(), command.displayLimit());
-        log.info("[Feat2] analyze start. stockCode={}, freq={}, window={}, peerCount={}, maxLag={}, displayLimit={}",
-                command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag(), command.displayLimit());
+        log.info("[Feature2][service-start] incoming req={}, normalized stockCode={}, freq={}, window={}, peerCount={}, maxLag={}, displayLimit={}, llmVendor={}",
+                req, command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag(), command.displayLimit(), command.llmVendor());
+        log.info("[Feat2] analyze start. stockCode={}, freq={}, window={}, peerCount={}, maxLag={}, displayLimit={}, llmVendor={}",
+                command.stockCode(), command.freq(), command.window(), command.peerCount(), command.maxLag(), command.displayLimit(), command.llmVendor());
 
         if (command.stockCode() == null || command.stockCode().isBlank()) {
             meta.addWarning(Feat2WarningCode.STOCK_NOT_FOUND);
@@ -179,10 +184,97 @@ public class Feature2AnalyzeService {
                 })
                 .doOnNext(result -> {
                     metricsAssembler.attachNewsList(metrics, result.getNewsList());
+                    metricsAssembler.attachNewsSentimentSummary(metrics, buildNewsSentimentSummary(result.getNewsList()));
                     Optional.ofNullable(result.getWarnings())
                             .orElseGet(List::of)
                             .forEach(meta::addWarning);
                 })
                 .then();
+    }
+
+    private Feature2MetricsDto.NewsSentimentSummary buildNewsSentimentSummary(List<NewsItemDto> newsList) {
+        if (newsList == null || newsList.isEmpty()) {
+            return null;
+        }
+
+        List<NewsItemDto> scoredNews = newsList.stream()
+                .filter(item -> item != null && item.getSentimentScore() != null)
+                .sorted(Comparator.comparing(NewsItemDto::getPublishedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+        if (scoredNews.isEmpty()) {
+            return null;
+        }
+
+        LocalDate summaryDate = scoredNews.stream()
+                .map(NewsItemDto::getPublishedAt)
+                .filter(java.util.Objects::nonNull)
+                .map(publishedAt -> publishedAt.toLocalDate())
+                .findFirst()
+                .orElse(null);
+        List<NewsItemDto> dailyNews = summaryDate == null
+                ? scoredNews
+                : scoredNews.stream()
+                .filter(item -> item.getPublishedAt() != null
+                        && summaryDate.equals(item.getPublishedAt().toLocalDate()))
+                .toList();
+
+        List<NewsItemDto> avgTargets = dailyNews.isEmpty() ? scoredNews : dailyNews;
+        BigDecimal dailyAvgScore = avgTargets.stream()
+                .map(NewsItemDto::getSentimentScore)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(avgTargets.size()), 6, RoundingMode.HALF_UP);
+
+        List<Feature2MetricsDto.RecentNewsSentiment> recentItems = scoredNews.stream()
+                .limit(5)
+                .map(item -> Feature2MetricsDto.RecentNewsSentiment.builder()
+                        .newsId(item.getNewsId())
+                        .title(item.getTitle())
+                        .publisher(item.getPublisher())
+                        .publishedAt(item.getPublishedAt())
+                        .sentimentScore(item.getSentimentScore())
+                        .sentimentLabel(toSentimentLabel(item.getSentimentScore()))
+                        .build())
+                .toList();
+
+        return Feature2MetricsDto.NewsSentimentSummary.builder()
+                .summaryDate(summaryDate)
+                .dailyAvgScore(dailyAvgScore)
+                .dailyNewsCount(avgTargets.size())
+                .scoredNewsCount(scoredNews.size())
+                .positiveCount(countByLabel(scoredNews, "positive"))
+                .neutralCount(countByLabel(scoredNews, "neutral"))
+                .negativeCount(countByLabel(scoredNews, "negative"))
+                .strongestPositiveScore(scoredNews.stream()
+                        .map(NewsItemDto::getSentimentScore)
+                        .max(BigDecimal::compareTo)
+                        .orElse(null))
+                .strongestNegativeScore(scoredNews.stream()
+                        .map(NewsItemDto::getSentimentScore)
+                        .min(BigDecimal::compareTo)
+                        .orElse(null))
+                .recentItems(recentItems)
+                .build();
+    }
+
+    private int countByLabel(List<NewsItemDto> newsList, String label) {
+        if (newsList == null || label == null) {
+            return 0;
+        }
+        return (int) newsList.stream()
+                .filter(item -> label.equals(toSentimentLabel(item.getSentimentScore())))
+                .count();
+    }
+
+    private String toSentimentLabel(BigDecimal sentimentScore) {
+        if (sentimentScore == null) {
+            return "neutral";
+        }
+        if (sentimentScore.compareTo(BigDecimal.valueOf(0.05)) > 0) {
+            return "positive";
+        }
+        if (sentimentScore.compareTo(BigDecimal.valueOf(-0.05)) < 0) {
+            return "negative";
+        }
+        return "neutral";
     }
 }

@@ -31,6 +31,7 @@ public class Feature2MetricsDto {
     private ShortSellingMetrics shortSelling;
     private BaseRateMetrics baseRate;
     private List<NewsItemDto> newsList;
+    private NewsSentimentSummary newsSentimentSummary;
 
     public static Feature2MetricsDto empty() {
         return Feature2MetricsDto.builder().build();
@@ -74,5 +75,39 @@ public class Feature2MetricsDto {
         private LocalDate date;
         private BigDecimal value;
         private String unit;
+    }
+
+    @Getter
+    @Setter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor(access = AccessLevel.PROTECTED)
+    @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
+    public static class NewsSentimentSummary {
+        private LocalDate summaryDate;
+        private BigDecimal dailyAvgScore;
+        private Integer dailyNewsCount;
+        private Integer scoredNewsCount;
+        private Integer positiveCount;
+        private Integer neutralCount;
+        private Integer negativeCount;
+        private BigDecimal strongestPositiveScore;
+        private BigDecimal strongestNegativeScore;
+        private List<RecentNewsSentiment> recentItems;
+    }
+
+    @Getter
+    @Setter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor(access = AccessLevel.PROTECTED)
+    @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
+    public static class RecentNewsSentiment {
+        private Long newsId;
+        private String title;
+        private String publisher;
+        private java.time.OffsetDateTime publishedAt;
+        private BigDecimal sentimentScore;
+        private String sentimentLabel;
     }
 }

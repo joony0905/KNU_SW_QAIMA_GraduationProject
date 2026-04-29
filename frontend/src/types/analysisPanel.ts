@@ -1,4 +1,4 @@
-import type { BaseRateSeriesPoint, PeerCluster, ShortSellingSeriesPoint } from "./feature2";
+import type { BaseRateSeriesPoint, NewsSentimentSummary, PeerCluster, ShortSellingSeriesPoint } from "./feature2";
 
 export interface AnalysisPanelResult {
   explain?: {
@@ -103,6 +103,7 @@ export interface AnalysisPanelResult {
     baseRateSeries?: BaseRateSeriesPoint[] | null;
     shortSellingSeries?: ShortSellingSeriesPoint[] | null;
     peerCluster?: PeerCluster | null;
+    newsSentimentSummary?: NewsSentimentSummary | null;
   } | null;
   summary?: string;
   highlights?: string[];

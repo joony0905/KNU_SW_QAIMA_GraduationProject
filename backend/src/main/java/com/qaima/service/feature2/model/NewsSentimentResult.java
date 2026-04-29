@@ -4,6 +4,12 @@ import java.math.BigDecimal;
 
 public record NewsSentimentResult(
         String url,
-        BigDecimal sentimentScore
+        BigDecimal sentimentScore,
+        String predictedLabel,
+        BigDecimal negativeProb,
+        BigDecimal neutralProb,
+        BigDecimal positiveProb,
+        String modelVersion,
+        String inputFormatVersion
 ) {
 }

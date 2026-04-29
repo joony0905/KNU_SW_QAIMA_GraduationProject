@@ -1,6 +1,11 @@
 analysis:
   base-url: "http://localhost:8000"
 
+feature2:
+  news:
+    sentiment:
+      model: ${FEATURE2_NEWS_SENTIMENT_MODEL:kf-deberta-sentiment-v2}
+
 auth:
   cookie:
     refresh-token-name: qaima_refresh_token

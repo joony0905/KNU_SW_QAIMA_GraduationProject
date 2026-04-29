@@ -18,4 +18,10 @@ import lombok.Setter;
 public class Feature2NewsSentimentExternalResultDto {
     private String url;
     private BigDecimal sentimentScore;
+    private String predictedLabel;
+    private BigDecimal negativeProb;
+    private BigDecimal neutralProb;
+    private BigDecimal positiveProb;
+    private String modelVersion;
+    private String inputFormatVersion;
 }

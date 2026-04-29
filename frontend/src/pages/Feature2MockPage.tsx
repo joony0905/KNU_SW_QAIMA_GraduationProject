@@ -138,6 +138,27 @@ const formatTimeAgo = (isoStr: string): string => {
   return new Date(isoStr).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
 };
 
+const formatNewsSentimentScore = (value?: number | null): string => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
+};
+
+const newsSentimentLabel = (value?: number | null): "긍정" | "중립" | "부정" => {
+  if (value === null || value === undefined || !Number.isFinite(value) || Math.abs(value) < 0.05) {
+    return "중립";
+  }
+  return value > 0 ? "긍정" : "부정";
+};
+
+const newsSentimentClass = (value?: number | null): string => {
+  if (value === null || value === undefined || !Number.isFinite(value) || Math.abs(value) < 0.05) {
+    return "border-zinc-200 bg-zinc-100 text-zinc-600";
+  }
+  return value > 0
+    ? "border-rose-200 bg-rose-50 text-rose-700"
+    : "border-blue-200 bg-blue-50 text-blue-700";
+};
+
 const mapRelatedStocks = (rows: RelatedStockCard[]): RelatedStockDisplay[] =>
   rows.map((row) => ({
     stockCode: row.stockCode,
@@ -650,7 +671,7 @@ export default function Feature2MockPage() {
     try {
       setShowAnalyzeButton(false);
       const [result, shortSellingSeries, baseRateSeries] = await Promise.all([
-        fetchFeature2Analysis(mainStock.symbol, selectedFreq, selectedWindow, 30),
+        fetchFeature2Analysis(mainStock.symbol, selectedFreq, selectedWindow, 30, undefined, llmVendor),
         fetchFeature2ShortSellingSeries(mainStock.symbol, selectedWindow),
         fetchFeature2BaseRateSeries(Math.max(selectedWindow, 365)),
       ]);
@@ -1011,6 +1032,10 @@ export default function Feature2MockPage() {
                             {formatTimeAgo(item.publishedAt)} • {item.publisher}
                           </p>
                         </div>
+                        <div className={`flex min-w-[64px] flex-col items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold ${newsSentimentClass(item.sentimentScore)}`}>
+                          <span>{newsSentimentLabel(item.sentimentScore)}</span>
+                          <span>{formatNewsSentimentScore(item.sentimentScore)}</span>
+                        </div>
                       </a>
                     ))}
 
@@ -1234,6 +1259,7 @@ export default function Feature2MockPage() {
                     shortSellingSeries: shortSellingSeriesResult?.data ?? null,
                     baseRate: analysisData?.metrics?.baseRate ?? null,
                     baseRateSeries: baseRateSeriesResult?.data ?? null,
+                    newsSentimentSummary: analysisData?.metrics?.newsSentimentSummary ?? null,
                   },
                   meta: analysisResult?.meta,
                 }
