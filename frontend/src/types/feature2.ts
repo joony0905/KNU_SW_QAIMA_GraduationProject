@@ -107,6 +107,7 @@ export interface PeerCluster {
   band: BandPoint[];
   peerCentroid?: RelativePoint[];
   peerBand?: BandPoint[];
+  peerCoverage?: RelativePoint[];
   peers: PeerItem[];
   candidates?: PeerItem[];
   asOf: string;
@@ -158,6 +159,38 @@ export interface BaseRateSeriesPoint {
   unit: string;
 }
 
+export type TrendDirection = "UP" | "DOWN" | "FLAT" | "UNKNOWN";
+
+export interface BaseRateTrendSummary {
+  window: number;
+  pointCount: number;
+  startDate: string | null;
+  endDate: string | null;
+  startValue: number | null;
+  endValue: number | null;
+  change: number | null;
+  direction: TrendDirection;
+  unit: string | null;
+}
+
+export interface ShortSellingTrendSummary {
+  window: number;
+  pointCount: number;
+  startDate: string | null;
+  endDate: string | null;
+  startShortVolumeRatio: number | null;
+  endShortVolumeRatio: number | null;
+  shortVolumeRatioChange: number | null;
+  avgShortVolumeRatio: number | null;
+  maxShortVolumeRatio: number | null;
+  startShortAmountRatio: number | null;
+  endShortAmountRatio: number | null;
+  shortAmountRatioChange: number | null;
+  avgShortAmountRatio: number | null;
+  maxShortAmountRatio: number | null;
+  direction: TrendDirection;
+}
+
 export type NewsSentimentLabel = "positive" | "neutral" | "negative";
 
 export interface RecentNewsSentiment {
@@ -200,6 +233,8 @@ export interface Feature2Metrics {
   peerCluster: PeerCluster | null;
   shortSelling: ShortSellingMetrics | null;
   baseRate: BaseRateMetrics | null;
+  baseRateTrendSummary?: BaseRateTrendSummary | null;
+  shortSellingTrendSummary?: ShortSellingTrendSummary | null;
   newsList: NewsItemDto[];
   newsSentimentSummary?: NewsSentimentSummary | null;
 }

@@ -10,7 +10,9 @@ from typing import Optional, Tuple
 import httpx
 
 from app.models.feature1 import Feature1Metrics, Feature1Request, FinancialPointItem
+from app.models.feature2 import Feature2ExplainRequest
 from app.services.llm.base import LLMClient
+from app.services.llm.feature2_prompt import build_feature2_prompt
 
 OPENAI_BASE_URL = "https://api.openai.com/v1/responses"
 DEFAULT_MODEL = "gpt-5-mini"
@@ -193,6 +195,81 @@ class OpenAIClient(LLMClient):
 
         except httpx.TimeoutException:
             log.warning("[feature1][llm] OpenAI timeout model=%s compact=%s timeout=%s", model, compact, self.timeout)
+            return None, "LLM_EXPLAIN_TIMEOUT"
+        except Exception as exc:
+            return None, f"LLM_EXPLAIN_EXCEPTION:{type(exc).__name__}:{str(exc)[:120]}"
+
+    async def generate_feature2_explain(
+        self,
+        req: Feature2ExplainRequest,
+        compact: bool = False,
+    ) -> Tuple[Optional[str], Optional[str]]:
+        if not self.api_key:
+            return None, "LLM_API_KEY_MISSING"
+
+        model = self._resolve_model(req.llm_vendor)
+        payload = {
+            "model": model,
+            "instructions": (
+                "당신은 데이터 기반 투자 분석가입니다. "
+                "제공된 Feature2 외부요인 데이터만 사용해 설명하세요."
+            ),
+            "input": build_feature2_prompt(req, compact=compact),
+            "max_output_tokens": min(self.max_output_tokens, 1200 if compact else 2200),
+            "reasoning": {"effort": "low"},
+        }
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = None
+                max_attempts = max(len(RATE_LIMIT_RETRY_DELAYS), len(SERVER_ERROR_RETRY_DELAYS)) + 1
+                for attempt in range(max_attempts):
+                    resp = await client.post(OPENAI_BASE_URL, headers=headers, json=payload)
+                    if resp.status_code == 429 and attempt < len(RATE_LIMIT_RETRY_DELAYS):
+                        await asyncio.sleep(RATE_LIMIT_RETRY_DELAYS[attempt])
+                        continue
+                    if resp.status_code >= 500 and attempt < len(SERVER_ERROR_RETRY_DELAYS):
+                        await asyncio.sleep(SERVER_ERROR_RETRY_DELAYS[attempt])
+                        continue
+                    break
+
+                if resp is not None and resp.status_code == 429:
+                    return None, "LLM_EXPLAIN_RATE_LIMITED"
+                if resp is None:
+                    return None, "LLM_EXPLAIN_EMPTY"
+                if resp.status_code >= 400:
+                    body = (resp.text or "").strip().replace("\n", " ")[:300]
+                    log.warning("[feature2][llm] OpenAI HTTP %s model=%s compact=%s body=%s",
+                                resp.status_code, model, compact, body)
+                    return None, f"LLM_EXPLAIN_HTTP_{resp.status_code}:{body}"
+
+                data = resp.json()
+                status = data.get("status")
+                if status == "incomplete":
+                    reason = (((data.get("incomplete_details") or {}).get("reason")) or "unknown")
+                    if reason == "max_output_tokens":
+                        return None, "LLM_EXPLAIN_MAX_OUTPUT_TOKENS"
+                    if reason == "content_filter":
+                        return None, "LLM_EXPLAIN_CONTENT_FILTER"
+                    return None, f"LLM_EXPLAIN_INCOMPLETE:{reason}"
+
+                refusal = self._extract_refusal_text(data)
+                if refusal:
+                    log.warning("[feature2][llm] OpenAI refusal model=%s compact=%s refusal=%s",
+                                model, compact, refusal[:500])
+                    return None, "LLM_EXPLAIN_REFUSAL"
+
+                text = self._extract_content_text(data)
+                if not text:
+                    return None, "LLM_EXPLAIN_EMPTY"
+                log.info("[feature2][llm] OpenAI raw explain model=%s compact=%s %s", model, compact, text[:2000])
+                return text, None
+
+        except httpx.TimeoutException:
             return None, "LLM_EXPLAIN_TIMEOUT"
         except Exception as exc:
             return None, f"LLM_EXPLAIN_EXCEPTION:{type(exc).__name__}:{str(exc)[:120]}"

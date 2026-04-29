@@ -93,6 +93,7 @@ public class PeerClusterClient {
         response.setBand(mapBand(inbound.getBand()));
         response.setPeerCentroid(mapCentroid(inbound.getPeerCentroid()));
         response.setPeerBand(mapBand(inbound.getPeerBand()));
+        response.setPeerCoverage(mapCentroid(inbound.getPeerCoverage()));
         response.setPeers(mapPeers(inbound.getPeers()));
         response.setCandidates(mapPeers(inbound.getCandidates()));
         response.setAsOf(inbound.getAsOf());

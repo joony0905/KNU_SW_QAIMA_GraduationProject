@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -160,6 +160,7 @@ class PeerClusterResponse(BaseModel):
     band: List[BandPoint] = Field(default_factory=list)
     peer_centroid: List[RelativePoint] = Field(default_factory=list)
     peer_band: List[BandPoint] = Field(default_factory=list)
+    peer_coverage: List[RelativePoint] = Field(default_factory=list)
     peers: List[PeerItem] = Field(default_factory=list)
     candidates: List[PeerItem] = Field(default_factory=list)
 
@@ -190,10 +191,48 @@ class NewsSentimentResultItem(BaseModel):
 
     url: str
     sentiment_score: float
+    predicted_label: Optional[str] = None
+    negative_prob: Optional[float] = None
+    neutral_prob: Optional[float] = None
+    positive_prob: Optional[float] = None
+    model_version: Optional[str] = None
+    input_format_version: Optional[str] = None
 
 
 class NewsSentimentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     results: List[NewsSentimentResultItem] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
+class Feature2ExplainMetrics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stock: Optional[Dict[str, Any]] = None
+    industry: Optional[Dict[str, Any]] = None
+    base_rate: Optional[Dict[str, Any]] = None
+    short_selling: Optional[Dict[str, Any]] = None
+    base_rate_trend_summary: Optional[Dict[str, Any]] = None
+    short_selling_trend_summary: Optional[Dict[str, Any]] = None
+    industry_index: Optional[Dict[str, Any]] = None
+    peer_cluster_summary: Optional[Dict[str, Any]] = None
+    news_sentiment_summary: Optional[Dict[str, Any]] = None
+    recent_news: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class Feature2ExplainRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stock_code: str
+    freq: Optional[Freq] = None
+    window: Optional[int] = None
+    llm_vendor: Optional[str] = None
+    metrics: Feature2ExplainMetrics = Field(default_factory=Feature2ExplainMetrics)
+
+
+class Feature2ExplainResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    explain: Optional[str] = None
     warnings: List[str] = Field(default_factory=list)

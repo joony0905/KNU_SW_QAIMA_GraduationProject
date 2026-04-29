@@ -9,6 +9,7 @@ import type { Candle } from "../types/candle";
 import TradingViewWidget from "../components/TradingViewWidget";
 
 import AnalysisResultPanel from "../components/AnalysisResultPanel";
+import type { AnalysisPanelResult } from "../types/analysisPanel";
 import {
   fetchFeature2Analysis,
   fetchFeature2BaseRate,
@@ -108,6 +109,40 @@ const MAX_HISTORY_DAYS = 365;
 const LOAD_MORE_LIMIT = 5;
 const INITIAL_RELATED_STOCK_LIMIT = 30;
 
+const clampChartWindow = (window: number) =>
+  Math.max(INITIAL_HISTORY_DAYS, Math.min(window, MAX_HISTORY_DAYS));
+
+const toKstDayKeyFromEpochSec = (sec: number) => {
+  const normalizedSec = sec > 10_000_000_000 ? Math.floor(sec / 1000) : sec;
+  const kstDate = new Date(normalizedSec * 1000 + 9 * 60 * 60 * 1000);
+  const y = kstDate.getUTCFullYear();
+  const m = String(kstDate.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(kstDate.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const kstDayKeyToEpochSec = (dayKey: string) =>
+  Math.floor(new Date(`${dayKey}T00:00:00+09:00`).getTime() / 1000);
+
+const extractSeriesDayKey = (value: string): string | null => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return toKstDayKeyFromEpochSec(Math.floor(parsed.getTime() / 1000));
+};
+
+const collectSeriesDayKeys = (series?: { t?: string | null }[] | null): Set<string> => {
+  const keys = new Set<string>();
+  for (const point of series ?? []) {
+    if (!point?.t) continue;
+    const dayKey = extractSeriesDayKey(point.t);
+    if (dayKey) keys.add(dayKey);
+  }
+  return keys;
+};
+
 interface RelatedStockDisplay {
   stockCode: string;
   companyName: string;
@@ -126,6 +161,62 @@ interface FeaturedStock {
   changeRate: string;
 }
 
+type Feature2PanelExplain = NonNullable<AnalysisPanelResult["explain"]>;
+
+const coerceExplainSection = (value: unknown, title: string) => {
+  if (!value || typeof value !== "object") return null;
+  const section = value as { summary?: unknown; bullets?: unknown };
+  const summary = typeof section.summary === "string" ? section.summary.trim() : "";
+  const bullets = Array.isArray(section.bullets)
+    ? section.bullets.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+
+  if (!summary && bullets.length === 0) return null;
+  return {
+    title,
+    summary: summary || null,
+    bullets: bullets.length > 0 ? bullets : null,
+  };
+};
+
+const parseFeature2Explain = (raw?: string | null): Feature2PanelExplain | null => {
+  if (!raw?.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as {
+      sections?: Record<string, unknown>;
+      overall?: { summary?: unknown; bullets?: unknown; risks?: unknown; conclusion?: unknown };
+    };
+    const sections = parsed.sections ?? {};
+    const overall = parsed.overall ?? {};
+    const overallSummary = typeof overall.summary === "string" ? overall.summary.trim() : "";
+    const conclusion = typeof overall.conclusion === "string" ? overall.conclusion.trim() : "";
+    const bullets = Array.isArray(overall.bullets)
+      ? overall.bullets.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+    const risks = Array.isArray(overall.risks)
+      ? overall.risks.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+
+    return {
+      text: overallSummary || raw,
+      sections: {
+        peerCluster: coerceExplainSection(sections.peer_cluster, "유사종목 반응구조 요약"),
+        newsSentiment: coerceExplainSection(sections.news_sentiment, "뉴스감성 요약"),
+        trendSummary: coerceExplainSection(sections.trend_summary, "기간추이 요약"),
+        baseRate: coerceExplainSection(sections.base_rate, "기준금리 추이 요약"),
+        shortSelling: coerceExplainSection(sections.short_selling, "공매도 추이 요약"),
+      },
+      overall: {
+        summary: overallSummary || null,
+        bullets: bullets.length > 0 ? bullets : null,
+        risks: risks.length > 0 ? risks : null,
+        conclusion: conclusion || null,
+      },
+    };
+  } catch {
+    return { text: raw };
+  }
+};
 
 const formatTimeAgo = (isoStr: string): string => {
   const diff = Date.now() - new Date(isoStr).getTime();
@@ -136,27 +227,6 @@ const formatTimeAgo = (isoStr: string): string => {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}일 전`;
   return new Date(isoStr).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
-};
-
-const formatNewsSentimentScore = (value?: number | null): string => {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
-  return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
-};
-
-const newsSentimentLabel = (value?: number | null): "긍정" | "중립" | "부정" => {
-  if (value === null || value === undefined || !Number.isFinite(value) || Math.abs(value) < 0.05) {
-    return "중립";
-  }
-  return value > 0 ? "긍정" : "부정";
-};
-
-const newsSentimentClass = (value?: number | null): string => {
-  if (value === null || value === undefined || !Number.isFinite(value) || Math.abs(value) < 0.05) {
-    return "border-zinc-200 bg-zinc-100 text-zinc-600";
-  }
-  return value > 0
-    ? "border-rose-200 bg-rose-50 text-rose-700"
-    : "border-blue-200 bg-blue-50 text-blue-700";
 };
 
 const mapRelatedStocks = (rows: RelatedStockCard[]): RelatedStockDisplay[] =>
@@ -185,13 +255,76 @@ export default function Feature2MockPage() {
     absoluteMinFromIso: string;
   } | null>(null);
 
-  const loadCandles = async (stockCode: string) => {
+  const applyCandleResponse = (
+    stockCode: string,
+    data: Candle[],
+    fromIso: string,
+    toIso: string,
+    absoluteMinFromIso: string,
+    allowedDayKeys?: Set<string>,
+  ) => {
+    const displayData = allowedDayKeys
+      ? data
+        .filter((candle) => allowedDayKeys.has(toKstDayKeyFromEpochSec(candle.t)))
+        .map((candle) => ({
+          ...candle,
+          t: kstDayKeyToEpochSec(toKstDayKeyFromEpochSec(candle.t)),
+        }))
+      : data;
+
+    if (displayData.length === 0) {
+      setChartError("차트 데이터가 없습니다.");
+    }
+
+    setCandles(displayData);
+    chartRangeRef.current = {
+      stockCode,
+      freq: "ONE_D",
+      fromIso,
+      toIso,
+      absoluteMinFromIso,
+    };
+    requestedRangesRef.current.clear();
+
+    // 현재가/전일대비/등락률을 candles 기반으로 산출 (기능1과 동일)
+    if (displayData.length > 0) {
+      const last = displayData[displayData.length - 1];
+      const prev = displayData.length > 1 ? displayData[displayData.length - 2] : null;
+      const lastClose = Number((last as any).c);
+      const prevClose = prev ? Number((prev as any).c) : lastClose;
+
+      if (Number.isFinite(lastClose) && Number.isFinite(prevClose)) {
+        const diff = lastClose - prevClose;
+        const rate = prevClose !== 0 ? (diff / prevClose) * 100 : 0;
+
+        setMainStock((prevState) => ({
+          ...prevState,
+          symbol: stockCode,
+          price: lastClose,
+          change: diff,
+          changeRate: rate,
+        }));
+        return;
+      }
+    }
+
+    setMainStock((prevState) => ({
+      ...prevState,
+      symbol: stockCode,
+      price: null,
+      change: null,
+      changeRate: null,
+    }));
+  };
+
+  const loadCandlesForRange = async (
+    stockCode: string,
+    fromIso: string,
+    toIso: string,
+    allowedDayKeys?: Set<string>,
+  ) => {
     setChartLoading(true);
     setChartError(null);
-    const toDate = new Date();
-    const fromDate = shiftKstDays(toDate, -(INITIAL_HISTORY_DAYS - 1));
-    const fromIso = formatKstOffsetDateTime(fromDate);
-    const toIso = formatKstOffsetDateTime(toDate);
 
     try {
       const response = await fetchCandles(
@@ -201,59 +334,14 @@ export default function Feature2MockPage() {
         toIso,
       );
 
-      const data = response.data;
-
-      if (data.length === 0) {
-        setChartError("차트 데이터가 없습니다.");
-      }
-
-      setCandles(data);
-      const absoluteMin = shiftKstDays(toDate, -MAX_HISTORY_DAYS);
-      chartRangeRef.current = {
+      applyCandleResponse(
         stockCode,
-        freq: "ONE_D",
+        response.data,
         fromIso,
         toIso,
-        absoluteMinFromIso: formatKstOffsetDateTime(absoluteMin),
-      };
-      requestedRangesRef.current.clear();
-
-      // 현재가/전일대비/등락률을 candles 기반으로 산출 (기능1과 동일)
-      if (data.length > 0) {
-        const last = data[data.length - 1];
-        const prev = data.length > 1 ? data[data.length - 2] : null;
-        const lastClose = Number((last as any).c);
-        const prevClose = prev ? Number((prev as any).c) : lastClose;
-
-        if (Number.isFinite(lastClose) && Number.isFinite(prevClose)) {
-          const diff = lastClose - prevClose;
-          const rate = prevClose !== 0 ? (diff / prevClose) * 100 : 0;
-
-          setMainStock((prevState) => ({
-            ...prevState,
-            symbol: stockCode,
-            price: lastClose,
-            change: diff,
-            changeRate: rate,
-          }));
-        } else {
-          setMainStock((prevState) => ({
-            ...prevState,
-            symbol: stockCode,
-            price: null,
-            change: null,
-            changeRate: null,
-          }));
-        }
-      } else {
-        setMainStock((prevState) => ({
-          ...prevState,
-          symbol: stockCode,
-          price: null,
-          change: null,
-          changeRate: null,
-        }));
-      }
+        fromIso,
+        allowedDayKeys,
+      );
     } catch (e: any) {
       console.error("차트 데이터 조회 실패:", e);
       setChartError("차트를 불러오지 못했습니다.");
@@ -268,6 +356,32 @@ export default function Feature2MockPage() {
     } finally {
       setChartLoading(false);
     }
+  };
+
+  const loadCandles = async (stockCode: string, historyDays = INITIAL_HISTORY_DAYS) => {
+    const toDate = new Date();
+    const fromDate = shiftKstDays(toDate, -(clampChartWindow(historyDays) - 1));
+    await loadCandlesForRange(
+      stockCode,
+      formatKstOffsetDateTime(fromDate),
+      formatKstOffsetDateTime(toDate),
+    );
+  };
+
+  const loadCandlesForIndustrySeries = async (
+    stockCode: string,
+    dayKeys: Set<string>,
+    fallbackWindow: number,
+  ) => {
+    if (dayKeys.size === 0) {
+      await loadCandles(stockCode, fallbackWindow);
+      return;
+    }
+
+    const sortedDayKeys = Array.from(dayKeys).sort((a, b) => a.localeCompare(b));
+    const fromIso = `${sortedDayKeys[0]}T00:00:00+09:00`;
+    const toIso = `${sortedDayKeys[sortedDayKeys.length - 1]}T23:59:59+09:00`;
+    await loadCandlesForRange(stockCode, fromIso, toIso, new Set(sortedDayKeys));
   };
 
   const handleRequestMoreHistory = async () => {
@@ -386,6 +500,10 @@ export default function Feature2MockPage() {
   const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
   const [selectedFreq, setSelectedFreq] = useState<"ONE_D" | "ONE_W">("ONE_D");
   const [selectedWindow, setSelectedWindow] = useState<60 | 120 | 180 | 252>(120);
+  const feature2Explain = useMemo(
+    () => parseFeature2Explain(analysisData?.explain),
+    [analysisData?.explain],
+  );
 
   const [hasSelectedStock, setHasSelectedStock] = useState(false);
   const [mainStock, setMainStock] = useState<MainStockState>({
@@ -605,12 +723,12 @@ export default function Feature2MockPage() {
   }, []);
 
   useEffect(() => {
-    if (!analysisData?.explain) {
+    const fullText = feature2Explain?.overall?.summary ?? feature2Explain?.text;
+    if (!fullText) {
       setDisplayText("");
       return;
     }
 
-    const fullText = analysisData.explain;
     setDisplayText("");
     let index = 0;
     const speed = 20;
@@ -622,7 +740,7 @@ export default function Feature2MockPage() {
     }, speed);
 
     return () => clearInterval(timer);
-  }, [analysisData]);
+  }, [feature2Explain]);
 
   useEffect(() => {
     if (loading || industryChartLoading) {
@@ -675,6 +793,12 @@ export default function Feature2MockPage() {
         fetchFeature2ShortSellingSeries(mainStock.symbol, selectedWindow),
         fetchFeature2BaseRateSeries(Math.max(selectedWindow, 365)),
       ]);
+      const industryDisplayDayKeys = collectSeriesDayKeys(result?.data?.metrics?.industryIndex?.series);
+      await loadCandlesForIndustrySeries(
+        mainStock.symbol,
+        industryDisplayDayKeys,
+        selectedWindow,
+      );
       setAnalysisResult(result);
       setShortSellingSeriesResult(shortSellingSeries);
       setBaseRateSeriesResult(baseRateSeries);
@@ -935,7 +1059,7 @@ export default function Feature2MockPage() {
 
               {!industryChartLoading && !industryChartError && industrySeries.length > 0 && (
               <RelativeLineWidget
-              data={analysisData?.metrics?.peerCluster?.industryIndexSeries ?? industrySeries}
+              data={industrySeries}
               height={420}
               overlayAnchor={analysisData?.metrics?.peerCluster?.anchorSeries ?? null}
               overlayCentroid={
@@ -948,6 +1072,7 @@ export default function Feature2MockPage() {
                 ?? analysisData?.metrics?.peerCluster?.band
                 ?? null
               }
+              overlayCoverage={analysisData?.metrics?.peerCluster?.peerCoverage ?? null}
               overlayPeers={analysisData?.metrics?.peerCluster?.peers ?? null}
               showPeerOverlay={Boolean(analysisData?.metrics?.peerCluster)}
               hoveredDayKey={hoveredDayKey}
@@ -1031,10 +1156,6 @@ export default function Feature2MockPage() {
                           <p className="text-black text-[11px] sm:text-xs font-medium">
                             {formatTimeAgo(item.publishedAt)} • {item.publisher}
                           </p>
-                        </div>
-                        <div className={`flex min-w-[64px] flex-col items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold ${newsSentimentClass(item.sentimentScore)}`}>
-                          <span>{newsSentimentLabel(item.sentimentScore)}</span>
-                          <span>{formatNewsSentimentScore(item.sentimentScore)}</span>
                         </div>
                       </a>
                     ))}
@@ -1162,7 +1283,7 @@ export default function Feature2MockPage() {
                     <div className="flex flex-col overflow-y-auto">
                       {rows.map((row, idx) => (
                         <div
-                          key={row.label}
+                          key={`short-selling-row-${idx}`}
                           className={`flex items-center justify-between px-2.5 py-2 border-t ${
                             idx === rows.length - 1 ? "border-b" : ""
                           } border-zinc-300`}
@@ -1251,15 +1372,19 @@ export default function Feature2MockPage() {
           result={
             analysisResult
               ? {
-                  explain: { text: analysisData?.explain },
+                  explain: feature2Explain,
                   warnings: analysisResult?.meta?.warnings ?? null,
                   metrics: {
+                    stock: analysisData?.metrics?.stock ?? null,
                     peerCluster: analysisData?.metrics?.peerCluster ?? null,
                     shortSelling: analysisData?.metrics?.shortSelling ?? null,
+                    shortSellingTrendSummary: analysisData?.metrics?.shortSellingTrendSummary ?? null,
                     shortSellingSeries: shortSellingSeriesResult?.data ?? null,
                     baseRate: analysisData?.metrics?.baseRate ?? null,
+                    baseRateTrendSummary: analysisData?.metrics?.baseRateTrendSummary ?? null,
                     baseRateSeries: baseRateSeriesResult?.data ?? null,
                     newsSentimentSummary: analysisData?.metrics?.newsSentimentSummary ?? null,
+                    newsList: analysisData?.metrics?.newsList ?? null,
                   },
                   meta: analysisResult?.meta,
                 }

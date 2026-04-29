@@ -6,4 +6,5 @@ export interface NewsItemDto {
   publishedAt: string;
   summary: string;
   sentimentScore: number | null;
+  sentimentLabel?: "positive" | "neutral" | "negative" | null;
 }

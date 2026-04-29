@@ -43,6 +43,12 @@ public class NewsSentimentObservationAsyncService {
             return;
         }
 
+        if (isDuplicateNewsObservation(command)) {
+            log.debug("[NewsSentimentObservationAsyncService] duplicate news observation ignored. stockCode={}, title={}, publishedAt={}",
+                    command.stockCode(), command.title(), command.publishedAt());
+            return;
+        }
+
         try {
             NewsSentimentObservation observation = new NewsSentimentObservation();
             observation.setNews(news);
@@ -70,5 +76,28 @@ public class NewsSentimentObservationAsyncService {
             log.warn("[NewsSentimentObservationAsyncService] failed to save observation. newsId={}, stockCode={}",
                     command.newsId(), command.stockCode(), ex);
         }
+    }
+
+    private boolean isDuplicateNewsObservation(NewsSentimentObservationCommand command) {
+        if (command.title() == null || command.title().isBlank() || command.inputFormatVersion() == null) {
+            return false;
+        }
+
+        if (command.publishedAt() != null) {
+            return observationRepository.existsByStockCodeAndTitleAndPublishedAtAndModelVersionAndInputFormatVersion(
+                    command.stockCode(),
+                    command.title(),
+                    command.publishedAt(),
+                    command.modelVersion(),
+                    command.inputFormatVersion()
+            );
+        }
+
+        return observationRepository.existsByStockCodeAndTitleAndModelVersionAndInputFormatVersion(
+                command.stockCode(),
+                command.title(),
+                command.modelVersion(),
+                command.inputFormatVersion()
+        );
     }
 }

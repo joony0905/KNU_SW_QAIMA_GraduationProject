@@ -13,6 +13,10 @@ import java.util.List;
 public class Feature2ResponseFactory {
 
     public Feature2AnalyzeResponseDto success(Feature2MetricsDto metrics, Feature2MetaDto meta) {
+        return success(metrics, meta, null);
+    }
+
+    public Feature2AnalyzeResponseDto success(Feature2MetricsDto metrics, Feature2MetaDto meta, String explain) {
         List<String> dedupedWarnings = meta.getWarnings() == null
                 ? List.of()
                 : new ArrayList<>(new LinkedHashSet<>(meta.getWarnings()));
@@ -23,7 +27,7 @@ public class Feature2ResponseFactory {
 
         return Feature2AnalyzeResponseDto.builder()
                 .metrics(metrics)
-                .explain(null)
+                .explain(explain)
                 .warnings(normalizedMeta.getWarnings())
                 .build();
     }

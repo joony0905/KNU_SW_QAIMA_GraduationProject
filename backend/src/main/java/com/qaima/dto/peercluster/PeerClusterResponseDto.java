@@ -38,6 +38,7 @@ public class PeerClusterResponseDto {
     private List<BandPointDto> band;
     private List<RelativePointDto> peerCentroid;
     private List<BandPointDto> peerBand;
+    private List<RelativePointDto> peerCoverage;
     private List<PeerItemDto> peers;
     private List<PeerItemDto> candidates;
     private OffsetDateTime asOf;

@@ -37,11 +37,31 @@ public class Feature2MetricsAssembler {
         metrics.setBaseRate(baseRate);
     }
 
+    public void attachBaseRateTrendSummary(
+            Feature2MetricsDto metrics,
+            Feature2MetricsDto.BaseRateTrendSummary baseRateTrendSummary
+    ) {
+        if (metrics == null) {
+            return;
+        }
+        metrics.setBaseRateTrendSummary(baseRateTrendSummary);
+    }
+
     public void attachShortSelling(Feature2MetricsDto metrics, Feature2MetricsDto.ShortSellingMetrics shortSelling) {
         if (metrics == null || shortSelling == null) {
             return;
         }
         metrics.setShortSelling(shortSelling);
+    }
+
+    public void attachShortSellingTrendSummary(
+            Feature2MetricsDto metrics,
+            Feature2MetricsDto.ShortSellingTrendSummary shortSellingTrendSummary
+    ) {
+        if (metrics == null) {
+            return;
+        }
+        metrics.setShortSellingTrendSummary(shortSellingTrendSummary);
     }
 
     public void attachIndustryIndex(Feature2MetricsDto metrics, IndustryIndexBlockDto industryIndex) {

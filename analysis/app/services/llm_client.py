@@ -16,6 +16,7 @@ from app.models.feature1 import (
     Feature1Request,
     Feature1Response,
 )
+from app.models.feature2 import Feature2ExplainRequest, Feature2ExplainResponse
 
 log = logging.getLogger(__name__)
 
@@ -77,6 +78,41 @@ async def analyze_feature1(req: Feature1Request, metrics: Feature1Metrics) -> Fe
 
     deduped_warnings = list(dict.fromkeys(warnings))
     return Feature1Response(metrics=metrics, explain=explain, warnings=deduped_warnings)
+
+
+async def analyze_feature2_explain(req: Feature2ExplainRequest) -> Feature2ExplainResponse:
+    warnings: List[str] = []
+    compact_retry_warnings = {
+        "LLM_EXPLAIN_TIMEOUT",
+        "LLM_EXPLAIN_MAX_OUTPUT_TOKENS",
+        "LLM_EXPLAIN_RATE_LIMITED",
+    }
+
+    llm = get_llm_client(req.llm_vendor)
+    text, warning = await llm.generate_feature2_explain(req)
+
+    if text and text.strip():
+        explain = text.strip()
+    elif warning in compact_retry_warnings:
+        log.warning("[feature2][llm] explain generation warning=%s, retrying compact", warning)
+        compact_text, compact_warning = await llm.generate_feature2_explain(req, compact=True)
+        explain = compact_text.strip() if compact_text and compact_text.strip() else None
+        if explain is None and not compact_warning:
+            warnings.append("LLM_EXPLAIN_EMPTY")
+        if compact_warning:
+            warnings.append(compact_warning)
+    else:
+        explain = None
+        if not warning:
+            warnings.append("LLM_EXPLAIN_EMPTY")
+
+    if warning:
+        warnings.append(warning)
+
+    return Feature2ExplainResponse(
+        explain=explain,
+        warnings=list(dict.fromkeys(warnings)),
+    )
 
 
 def _parse_explain_json(text: str) -> Optional[Feature1Explain]:

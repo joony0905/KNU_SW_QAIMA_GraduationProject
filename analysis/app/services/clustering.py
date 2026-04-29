@@ -957,6 +957,8 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             f"index_dates={len(index_dates)}, common {before} -> {len(common_dates)}"
         )
 
+    # v3 확장 포인트: 차트 표시 구간은 anchor/industry 기준으로 유지하고,
+    # peer별 결측은 NaN 처리한다. 특정 peer 하나의 과거 적재 종료일이 overlay 전체 기간을 잘라먹지 않게 하기 위함.
     for p in selected:
         ps = price_map.get(p.stock_code)
         if ps is None:
@@ -964,14 +966,13 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             continue
 
         peer_dates = _np_dates(ps.dates)
-        before = len(common_dates)
-        common_dates = np.intersect1d(common_dates, peer_dates)
-        after = len(common_dates)
-
+        covered_count = len(np.intersect1d(common_dates, peer_dates))
         print(
-            f"[DEBUG][chart] intersect with {p.stock_code}: "
-            f"peer_dates={len(peer_dates)}, common {before} -> {after}"
+            f"[DEBUG][chart] peer coverage {p.stock_code}: "
+            f"peer_dates={len(peer_dates)}, covered={covered_count}/{len(common_dates)}"
         )
+        if covered_count < min(len(common_dates), 30):
+            warnings.append(f"PEER_CHART_COVERAGE_LOW:{p.stock_code}")
 
     common_dates = list(common_dates)
     print(f"[DEBUG][chart] common_dates count = {len(common_dates)}")
@@ -1022,17 +1023,21 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
 
     centroid: List[RelativePoint] = []
     band: List[BandPoint] = []
+    peer_coverage: List[RelativePoint] = []
 
     for i, cd in enumerate(common_dates):
         row = rel_mat[i, :] if rel_mat.size else np.array([], dtype=float)
         c_mean = _mean_ignore_nan(row)
         p20 = _quantile_ignore_nan(row, 0.2)
         p80 = _quantile_ignore_nan(row, 0.8)
+        valid_peer_count = int(np.sum(~np.isnan(row))) if row.size else 0
+        coverage = valid_peer_count / len(selected) if selected else 0.0
 
         if not (math.isnan(c_mean) or math.isnan(p20) or math.isnan(p80)):
             dt = datetime.fromtimestamp(cd.astype("datetime64[s]").astype(int), tz=timezone.utc)
             centroid.append(RelativePoint(t=dt, value=float(c_mean)))
             band.append(BandPoint(t=dt, p20=float(p20), p80=float(p80)))
+            peer_coverage.append(RelativePoint(t=dt, value=float(coverage)))
 
     print(f"[DEBUG][chart] centroid count = {len(centroid)}")
     print(f"[DEBUG][chart] band count     = {len(band)}")
@@ -1069,6 +1074,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         band=band,
         peer_centroid=centroid,
         peer_band=band,
+        peer_coverage=peer_coverage,
         peers=selected,
         candidates=displayed_candidates,
         as_of=datetime.now(timezone.utc),

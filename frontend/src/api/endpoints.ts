@@ -50,7 +50,7 @@ export const ENDPOINTS = {
     initials: () => "/dictionary/initials",
   },
   news: {
-    listByStock: (stockCode: string, limit = 10) =>
+    listByStock: (stockCode: string, limit = 15) =>
       `/feature2/news?stockCode=${stockCode}&limit=${limit}`,
     detail: (newsId: number) => `/feature2/news/${newsId}`,
   },

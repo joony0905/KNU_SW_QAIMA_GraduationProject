@@ -1,29 +1,26 @@
-import type { BaseRateSeriesPoint, NewsSentimentSummary, PeerCluster, ShortSellingSeriesPoint } from "./feature2";
+import type { BaseRateSeriesPoint, NewsSentimentSummary, PeerCluster, ShortSellingSeriesPoint, StockMeta } from "./feature2";
+import type { IndicatorBundle } from "./indicator";
+import type { NewsItemDto } from "./news";
+
+export interface AnalysisExplainSection {
+  title?: string | null;
+  summary?: string | null;
+  bullets?: string[] | null;
+}
 
 export interface AnalysisPanelResult {
   explain?: {
     text?: string | null;
     sections?: {
-      priceFlow?: {
-        title?: string | null;
-        summary?: string | null;
-        bullets?: string[] | null;
-      } | null;
-      marketSnapshot?: {
-        title?: string | null;
-        summary?: string | null;
-        bullets?: string[] | null;
-      } | null;
-      indicators?: {
-        title?: string | null;
-        summary?: string | null;
-        bullets?: string[] | null;
-      } | null;
-      financialTimeline?: {
-        title?: string | null;
-        summary?: string | null;
-        bullets?: string[] | null;
-      } | null;
+      priceFlow?: AnalysisExplainSection | null;
+      marketSnapshot?: AnalysisExplainSection | null;
+      indicators?: AnalysisExplainSection | null;
+      financialTimeline?: AnalysisExplainSection | null;
+      peerCluster?: AnalysisExplainSection | null;
+      newsSentiment?: AnalysisExplainSection | null;
+      trendSummary?: AnalysisExplainSection | null;
+      baseRate?: AnalysisExplainSection | null;
+      shortSelling?: AnalysisExplainSection | null;
     } | null;
     overall?: {
       summary?: string | null;
@@ -39,6 +36,7 @@ export interface AnalysisPanelResult {
   } | null;
 
   metrics?: {
+    stock?: StockMeta | null;
     ohlcvSummary?: {
       count: number;
       from?: string;
@@ -83,7 +81,7 @@ export interface AnalysisPanelResult {
         bps?: number;
       };
       };
-    indicators?: unknown;
+    indicators?: IndicatorBundle;
     shortSelling?: {
       stockCode: string;
       companyName: string;
@@ -100,10 +98,13 @@ export interface AnalysisPanelResult {
       value: number;
       unit: string;
     } | null;
+    baseRateTrendSummary?: import("./feature2").BaseRateTrendSummary | null;
+    shortSellingTrendSummary?: import("./feature2").ShortSellingTrendSummary | null;
     baseRateSeries?: BaseRateSeriesPoint[] | null;
     shortSellingSeries?: ShortSellingSeriesPoint[] | null;
     peerCluster?: PeerCluster | null;
     newsSentimentSummary?: NewsSentimentSummary | null;
+    newsList?: NewsItemDto[] | null;
   } | null;
   summary?: string;
   highlights?: string[];

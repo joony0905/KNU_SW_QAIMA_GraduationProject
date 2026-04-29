@@ -2,6 +2,8 @@ package com.qaima.external;
 
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
+import com.qaima.dto.feature2.Feature2ExplainRequestDto;
+import com.qaima.dto.feature2.Feature2ExplainResponseDto;
 import reactor.core.publisher.Mono;
 
 /**
@@ -11,4 +13,6 @@ import reactor.core.publisher.Mono;
 public interface AnalysisApiClient {
 
     Mono<FeatOneAnalysisResponseDto> requestStockAnalysis(FeatOneRequestDto request);
+
+    Mono<Feature2ExplainResponseDto> requestFeature2Explain(Feature2ExplainRequestDto request);
 }

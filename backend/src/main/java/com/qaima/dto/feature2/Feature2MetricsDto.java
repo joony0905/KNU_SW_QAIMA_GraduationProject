@@ -30,6 +30,8 @@ public class Feature2MetricsDto {
     private PeerClusterDto peerCluster;
     private ShortSellingMetrics shortSelling;
     private BaseRateMetrics baseRate;
+    private BaseRateTrendSummary baseRateTrendSummary;
+    private ShortSellingTrendSummary shortSellingTrendSummary;
     private List<NewsItemDto> newsList;
     private NewsSentimentSummary newsSentimentSummary;
 
@@ -75,6 +77,48 @@ public class Feature2MetricsDto {
         private LocalDate date;
         private BigDecimal value;
         private String unit;
+    }
+
+    @Getter
+    @Setter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor(access = AccessLevel.PROTECTED)
+    @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
+    public static class BaseRateTrendSummary {
+        private Integer window;
+        private Integer pointCount;
+        private LocalDate startDate;
+        private LocalDate endDate;
+        private BigDecimal startValue;
+        private BigDecimal endValue;
+        private BigDecimal change;
+        private String direction;
+        private String unit;
+    }
+
+    @Getter
+    @Setter
+    @Builder
+    @AllArgsConstructor
+    @NoArgsConstructor(access = AccessLevel.PROTECTED)
+    @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
+    public static class ShortSellingTrendSummary {
+        private Integer window;
+        private Integer pointCount;
+        private LocalDate startDate;
+        private LocalDate endDate;
+        private BigDecimal startShortVolumeRatio;
+        private BigDecimal endShortVolumeRatio;
+        private BigDecimal shortVolumeRatioChange;
+        private BigDecimal avgShortVolumeRatio;
+        private BigDecimal maxShortVolumeRatio;
+        private BigDecimal startShortAmountRatio;
+        private BigDecimal endShortAmountRatio;
+        private BigDecimal shortAmountRatioChange;
+        private BigDecimal avgShortAmountRatio;
+        private BigDecimal maxShortAmountRatio;
+        private String direction;
     }
 
     @Getter
