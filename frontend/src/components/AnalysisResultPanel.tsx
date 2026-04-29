@@ -58,6 +58,32 @@ const formatNumber = (value?: number | null) => {
   return value.toLocaleString("ko-KR");
 };
 
+const formatSentimentScore = (value?: number | null) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
+};
+
+const sentimentLabelText = (label?: string | null) => {
+  switch (label) {
+    case "positive":
+      return "긍정";
+    case "negative":
+      return "부정";
+    default:
+      return "중립";
+  }
+};
+
+const sentimentBadgeClass = (score?: number | null) => {
+  if (score == null || !Number.isFinite(score) || Math.abs(score) < 0.05) {
+    return "bg-zinc-100 text-zinc-600 border-zinc-200";
+  }
+  if (score > 0) {
+    return "bg-rose-50 text-rose-700 border-rose-200";
+  }
+  return "bg-blue-50 text-blue-700 border-blue-200";
+};
+
 const formatRelationBadge = (relation: PeerItem["relation"]) => {
   switch (relation) {
     case "LEADER":
@@ -349,6 +375,55 @@ export default function AnalysisResultPanel({
                 points={financialTimeline.points}
               />
               {renderExplainSection(explainSections?.financialTimeline)}
+            </div>
+          )}
+
+          {result.metrics?.newsSentimentSummary && (
+            <div>
+              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">뉴스 감성</h3>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-zinc-500">일 평균 점수</p>
+                  <p className={`text-lg font-bold ${result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore < -0.05 ? "text-blue-700" : result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore > 0.05 ? "text-rose-700" : "text-zinc-800"}`}>
+                    {formatSentimentScore(result.metrics.newsSentimentSummary.dailyAvgScore)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-zinc-500">점수 산출 뉴스</p>
+                  <p className="text-lg font-bold text-zinc-900">{result.metrics.newsSentimentSummary.scoredNewsCount}</p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-zinc-500">긍정/중립/부정</p>
+                  <p className="text-sm font-semibold text-zinc-900">
+                    {result.metrics.newsSentimentSummary.positiveCount} / {result.metrics.newsSentimentSummary.neutralCount} / {result.metrics.newsSentimentSummary.negativeCount}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-zinc-500">기준일</p>
+                  <p className="text-sm font-semibold text-zinc-900">{result.metrics.newsSentimentSummary.summaryDate ?? "-"}</p>
+                </div>
+              </div>
+
+              {result.metrics.newsSentimentSummary.recentItems.length > 0 && (
+                <div className="mt-3 overflow-hidden rounded-lg border border-zinc-200">
+                  <div className="bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-500">
+                    최근 뉴스 감성 점수
+                  </div>
+                  <div className="divide-y divide-zinc-200">
+                    {result.metrics.newsSentimentSummary.recentItems.map((item) => (
+                      <div key={item.newsId} className="grid grid-cols-[1fr_auto] gap-3 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-zinc-900">{item.title}</p>
+                          <p className="text-[11px] text-zinc-500">{item.publisher ?? "-"} · {item.publishedAt ? item.publishedAt.slice(0, 10) : "-"}</p>
+                        </div>
+                        <span className={`self-center rounded-md border px-2 py-1 text-xs font-semibold ${sentimentBadgeClass(item.sentimentScore)}`}>
+                          {sentimentLabelText(item.sentimentLabel)} {formatSentimentScore(item.sentimentScore)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

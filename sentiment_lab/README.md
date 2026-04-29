@@ -6,7 +6,7 @@
 ## 출처
 - huggingface에 공유된 카카오뱅크 KF-DeBERTa 모델
 - github에 공개된 finance_sentiment_corpus를 1차 파인튜닝으로 사용
-- 이후 실제 뉴스데이터 300개로 2차 파인튜닝 진행 예정 
+- 이후 QAIMA 실제 뉴스데이터로 2차 파인튜닝 진행 예정
 - https://huggingface.co/kakaobank/kf-deberta-base
 - https://github.com/ukairia777/finance_sentiment_corpus
 
@@ -78,6 +78,54 @@ sentiment-lab/
 - 전처리 스크립트 작성/실행: `python -m scripts.prepare_finance_corpus`
 - 실험용 학습 진입점 확인: `python -m src.train`
 - 단건 추론 확인: `python -m src.inference_test`
+
+## Colab 학습 예시
+
+Colab에는 `sentiment_lab/` 폴더 전체를 업로드한 뒤, 해당 폴더로 이동해서 실행합니다.
+
+```bash
+cd /content/sentiment_lab
+pip install -r requirements.txt
+```
+
+1차 파인튜닝:
+
+```bash
+python -m src.train \
+  --stage first \
+  --input data/processed/finance_sentiment_train.csv \
+  --output-dir models/kf_deberta_sentiment_v1 \
+  --model-name kakaobank/kf-deberta-base \
+  --epochs 3 \
+  --train-batch-size 8 \
+  --eval-batch-size 8 \
+  --learning-rate 2e-5
+```
+
+2차 파인튜닝:
+
+```bash
+python -m src.train \
+  --stage second \
+  --input data/processed/real_news_sentiment_train.csv \
+  --output-dir models/kf_deberta_sentiment_v2 \
+  --model-name models/kf_deberta_sentiment_v1 \
+  --epochs 2 \
+  --train-batch-size 8 \
+  --eval-batch-size 8 \
+  --learning-rate 1e-5 \
+  --oversample \
+  --oversample-target 350
+```
+
+2차 학습에서 oversampling은 train split에만 적용합니다. validation split은 실제 뉴스 분포를 유지하므로, `eval_macro_f1`, `eval_negative_f1`, `eval_positive_f1`을 함께 확인합니다.
+
+학습 결과:
+
+- `models/kf_deberta_sentiment_v1/`: 1차 모델
+- `models/kf_deberta_sentiment_v2/`: 2차 모델
+- `eval_metrics.json`: 평가 지표
+- `training_config.json`: 학습 설정과 라벨 분포
 
 ## 참고
 

@@ -89,7 +89,16 @@ public class Feature2NewsSentimentClient {
                     invalidScoreUrls.add(item.getUrl());
                     return;
                 }
-                results.add(new NewsSentimentResult(item.getUrl(), item.getSentimentScore()));
+                results.add(new NewsSentimentResult(
+                        item.getUrl(),
+                        item.getSentimentScore(),
+                        item.getPredictedLabel(),
+                        item.getNegativeProb(),
+                        item.getNeutralProb(),
+                        item.getPositiveProb(),
+                        item.getModelVersion(),
+                        item.getInputFormatVersion()
+                ));
             });
             return new SentimentBatchResponse(results, dedupe(warnings), List.copyOf(invalidScoreUrls));
         } catch (Exception ex) {

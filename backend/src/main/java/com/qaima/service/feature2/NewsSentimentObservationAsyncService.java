@@ -53,8 +53,13 @@ public class NewsSentimentObservationAsyncService {
             observation.setPublishedAt(command.publishedAt());
             observation.setFocusText(command.focusText());
             observation.setPredictedScore(command.predictedScore());
+            observation.setPredictedLabel(command.predictedLabel());
+            observation.setNegativeProb(command.negativeProb());
+            observation.setNeutralProb(command.neutralProb());
+            observation.setPositiveProb(command.positiveProb());
             observation.setModelVersion(command.modelVersion());
             observation.setPromptVersion(command.promptVersion());
+            observation.setInputFormatVersion(command.inputFormatVersion());
             observation.setFocusTextVersion(command.focusTextVersion());
             observation.setCreatedAt(OffsetDateTime.now());
             observationRepository.save(observation);

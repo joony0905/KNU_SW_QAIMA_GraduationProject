@@ -64,4 +64,14 @@ public class Feature2MetricsAssembler {
         }
         metrics.setNewsList(newsList);
     }
+
+    public void attachNewsSentimentSummary(
+            Feature2MetricsDto metrics,
+            Feature2MetricsDto.NewsSentimentSummary newsSentimentSummary
+    ) {
+        if (metrics == null) {
+            return;
+        }
+        metrics.setNewsSentimentSummary(newsSentimentSummary);
+    }
 }

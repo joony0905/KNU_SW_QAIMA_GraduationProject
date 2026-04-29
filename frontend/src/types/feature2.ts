@@ -158,6 +158,30 @@ export interface BaseRateSeriesPoint {
   unit: string;
 }
 
+export type NewsSentimentLabel = "positive" | "neutral" | "negative";
+
+export interface RecentNewsSentiment {
+  newsId: number;
+  title: string;
+  publisher: string | null;
+  publishedAt: string | null;
+  sentimentScore: number | null;
+  sentimentLabel: NewsSentimentLabel;
+}
+
+export interface NewsSentimentSummary {
+  summaryDate: string | null;
+  dailyAvgScore: number | null;
+  dailyNewsCount: number;
+  scoredNewsCount: number;
+  positiveCount: number;
+  neutralCount: number;
+  negativeCount: number;
+  strongestPositiveScore: number | null;
+  strongestNegativeScore: number | null;
+  recentItems: RecentNewsSentiment[];
+}
+
 export interface ShortSellingSeriesPoint {
   reportDate: string;
   shortVolumeRatio: number | null;
@@ -177,6 +201,7 @@ export interface Feature2Metrics {
   shortSelling: ShortSellingMetrics | null;
   baseRate: BaseRateMetrics | null;
   newsList: NewsItemDto[];
+  newsSentimentSummary?: NewsSentimentSummary | null;
 }
 
 // --- Feature2 분석 응답 ---

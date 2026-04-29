@@ -76,7 +76,10 @@ public class NewsSentimentService {
     private static final int NEWS_FETCH_MAX_START = 51;
     private static final int FOCUS_MAX_LENGTH = 240;
     private static final int DETAIL_MAX_LENGTH = 600;
-    private static final String NEWS_SENTIMENT_PROMPT_VERSION = "feature2-news-sentiment-v2";
+    // v3 확장 지점: 로컬 모델 입력 포맷을 바꿔 실험할 때 이 버전을 함께 올려 관측 로그를 분리한다.
+    private static final String NEWS_SENTIMENT_INPUT_FORMAT_VERSION = "focus_detail_fallback_v1";
+    // 기존 캐시/유니크키 호환을 위해 prompt_version 컬럼명은 유지하되 로컬 입력 포맷 버전을 저장한다.
+    private static final String NEWS_SENTIMENT_PROMPT_VERSION = NEWS_SENTIMENT_INPUT_FORMAT_VERSION;
     private static final List<String> EXTERNAL_FACTOR_KEYWORDS = List.of(
             "주식", "증시", "증권", "투자", "수급", "밸류에이션", "목표주가",
             "실적", "실적발표", "매출", "매출액", "영업이익", "순이익",
@@ -120,8 +123,8 @@ public class NewsSentimentService {
     private final Feature2NewsSentimentClient sentimentClient;
     private final NewsSentimentObservationAsyncService observationAsyncService;
 
-    // TODO: 현재는 서버 기본 모델을 사용하고, 추후 클라이언트가 선택한 LLM 모델을 받아 전달하도록 확장한다.
-    @Value("${feature2.news.sentiment.model:gemini-2.5-flash}")
+    // v3 확장 지점: 운영 검증 후 모델 폴더/버전을 바꿀 때 application.yml 값만 교체한다.
+    @Value("${feature2.news.sentiment.model:kf-deberta-sentiment-v2}")
     private String sentimentModel;
 
     public Mono<NewsLoadResult> loadNews(Stock stock) {
@@ -658,7 +661,7 @@ public class NewsSentimentService {
                 String focusTextVersion = focusPayload == null ? null : focusPayload.getFocusTextVersion();
                 cacheSentiment(matchedNews.getNewsId(), result.sentimentScore(), focusTextVersion, warnings);
                 upsertSentimentResult(matchedNews, result.sentimentScore(), warnings);
-                enqueueObservation(matchedNews, stockCode, focusPayload, result.sentimentScore());
+                enqueueObservation(matchedNews, stockCode, focusPayload, result);
             }
 
             for (Map.Entry<Long, News> entry : pendingNewsById.entrySet()) {
@@ -1319,6 +1322,24 @@ public class NewsSentimentService {
             CachedFocusTextValue focusPayload,
             BigDecimal predictedScore
     ) {
+        enqueueObservation(news, stockCode, focusPayload, new NewsSentimentResult(
+                news == null ? null : news.getUrl(),
+                predictedScore,
+                null,
+                null,
+                null,
+                null,
+                sentimentModel,
+                NEWS_SENTIMENT_INPUT_FORMAT_VERSION
+        ));
+    }
+
+    private void enqueueObservation(
+            News news,
+            String stockCode,
+            CachedFocusTextValue focusPayload,
+            NewsSentimentResult result
+    ) {
         if (news == null
                 || news.getNewsId() == null
                 || stockCode == null
@@ -1328,9 +1349,16 @@ public class NewsSentimentService {
                 || focusPayload.getFocusText().isBlank()
                 || focusPayload.getFocusTextVersion() == null
                 || focusPayload.getFocusTextVersion().isBlank()
-                || predictedScore == null) {
+                || result == null
+                || result.sentimentScore() == null) {
             return;
         }
+        String modelVersion = result.modelVersion() == null || result.modelVersion().isBlank()
+                ? sentimentModel
+                : result.modelVersion();
+        String inputFormatVersion = result.inputFormatVersion() == null || result.inputFormatVersion().isBlank()
+                ? NEWS_SENTIMENT_INPUT_FORMAT_VERSION
+                : result.inputFormatVersion();
         observationAsyncService.saveObservation(new NewsSentimentObservationCommand(
                 news.getNewsId(),
                 stockCode,
@@ -1339,9 +1367,14 @@ public class NewsSentimentService {
                 news.getSource(),
                 news.getPublishedAt(),
                 focusPayload.getFocusText(),
-                predictedScore,
-                sentimentModel,
-                NEWS_SENTIMENT_PROMPT_VERSION,
+                result.sentimentScore(),
+                result.predictedLabel(),
+                result.negativeProb(),
+                result.neutralProb(),
+                result.positiveProb(),
+                modelVersion,
+                inputFormatVersion,
+                inputFormatVersion,
                 focusPayload.getFocusTextVersion()
         ));
     }

@@ -50,6 +50,18 @@ public class NewsSentimentObservation {
     @Column(name = "predicted_score", nullable = false, precision = 10, scale = 6)
     private BigDecimal predictedScore;
 
+    @Column(name = "predicted_label", length = 20)
+    private String predictedLabel;
+
+    @Column(name = "negative_prob", precision = 10, scale = 6)
+    private BigDecimal negativeProb;
+
+    @Column(name = "neutral_prob", precision = 10, scale = 6)
+    private BigDecimal neutralProb;
+
+    @Column(name = "positive_prob", precision = 10, scale = 6)
+    private BigDecimal positiveProb;
+
     @Column(name = "model_version", nullable = false, length = 100)
     private String modelVersion;
 
@@ -58,6 +70,9 @@ public class NewsSentimentObservation {
 
     @Column(name = "focus_text_version", nullable = false, length = 64)
     private String focusTextVersion;
+
+    @Column(name = "input_format_version", length = 100)
+    private String inputFormatVersion;
 
     @Column(name = "created_at", nullable = false)
     @ColumnDefault("CURRENT_TIMESTAMP(6)")

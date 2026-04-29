@@ -12,8 +12,13 @@ public record NewsSentimentObservationCommand(
         OffsetDateTime publishedAt,
         String focusText,
         BigDecimal predictedScore,
+        String predictedLabel,
+        BigDecimal negativeProb,
+        BigDecimal neutralProb,
+        BigDecimal positiveProb,
         String modelVersion,
         String promptVersion,
+        String inputFormatVersion,
         String focusTextVersion
 ) {
 }
