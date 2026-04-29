@@ -25,6 +25,7 @@ interface Props {
   height?: number;
   overlayCentroid?: RelativeLinePoint[] | null;
   overlayBand?: { t: string; p20: number; p80: number }[] | null;
+  overlayCoverage?: RelativeLinePoint[] | null;
   overlayAnchor?: RelativeLinePoint[] | null;
   overlayPeers?: PeerItem[] | null;
   showPeerOverlay?: boolean;
@@ -110,6 +111,7 @@ function RelativeLineWidget({
   height = 320,
   overlayCentroid,
   overlayBand,
+  overlayCoverage,
   overlayAnchor,
   overlayPeers,
   showPeerOverlay = false,
@@ -123,6 +125,8 @@ function RelativeLineWidget({
   const centroidSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bandHighSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
   const bandLowSeriesRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const coverageBandHighSeriesRefs = useRef<ISeriesApi<"Area">[]>([]);
+  const coverageBandLowSeriesRefs = useRef<ISeriesApi<"Area">[]>([]);
   const bandUpperLineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bandLowerLineRef = useRef<ISeriesApi<"Line"> | null>(null);
 
@@ -149,6 +153,15 @@ function RelativeLineWidget({
   const rawIndustryData = useMemo<LineData<Time>[]>(() => toSortedLineData(data, 1), [data]);
   const rawAnchorData = useMemo<LineData<Time>[]>(() => toSortedLineData(overlayAnchor, 100), [overlayAnchor]);
   const rawCentroidData = useMemo<LineData<Time>[]>(() => toSortedLineData(overlayCentroid, 100), [overlayCentroid]);
+  const rawCoverageData = useMemo<LineData<Time>[]>(() => toSortedLineData(overlayCoverage, 1), [overlayCoverage]);
+
+  const coverageByTime = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const point of rawCoverageData) {
+      map.set(Number(point.time), Math.max(0, Math.min(1, Number(point.value))));
+    }
+    return map;
+  }, [rawCoverageData]);
 
   const commonTimes = useMemo(() => {
     if (!showPeerOverlay || rawAnchorData.length === 0) return null;
@@ -177,8 +190,8 @@ function RelativeLineWidget({
   };
 
   const lineData = useMemo<LineData<Time>[]>(() => {
-    return normalizeSeries(rawIndustryData, commonTimes);
-  }, [commonTimes, rawIndustryData]);
+    return normalizeSeries(rawIndustryData, null);
+  }, [rawIndustryData]);
 
   const anchorData = useMemo<LineData<Time>[]>(() => {
     return normalizeSeries(rawAnchorData, commonTimes);
@@ -225,6 +238,27 @@ function RelativeLineWidget({
     const first = mapped[0]?.value ?? 0;
     return mapped.map((p) => ({ ...p, value: Number(p.value) - Number(first) }));
   }, [commonTimes, overlayBand, showPeerOverlay]);
+
+  const bandCoverageBuckets = useMemo(() => {
+    const buckets = {
+      low: { high: [] as AreaData<Time>[], low: [] as AreaData<Time>[] },
+      medium: { high: [] as AreaData<Time>[], low: [] as AreaData<Time>[] },
+      high: { high: [] as AreaData<Time>[], low: [] as AreaData<Time>[] },
+    };
+
+    for (const point of bandHighData) {
+      const coverage = coverageByTime.get(Number(point.time)) ?? 1;
+      const bucket = coverage >= 0.75 ? "high" : coverage >= 0.5 ? "medium" : "low";
+      buckets[bucket].high.push(point);
+    }
+    for (const point of bandLowData) {
+      const coverage = coverageByTime.get(Number(point.time)) ?? 1;
+      const bucket = coverage >= 0.75 ? "high" : coverage >= 0.5 ? "medium" : "low";
+      buckets[bucket].low.push(point);
+    }
+
+    return [buckets.low, buckets.medium, buckets.high];
+  }, [bandHighData, bandLowData, coverageByTime]);
 
   /**
    * KST 날짜 키를 실제 차트 time/value로 변환한다.
@@ -278,10 +312,26 @@ function RelativeLineWidget({
     return map;
   }, [bandHighData, bandLowData]);
 
+  const coverageDayMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const point of rawCoverageData) {
+      map.set(toKstDayKeyFromEpochSec(Number(point.time)), Number(point.value));
+    }
+    return map;
+  }, [rawCoverageData]);
+
   const latestDayKey = useMemo(() => {
     const last = lineData.at(-1);
     return last ? toKstDayKeyFromEpochSec(Number(last.time)) : null;
   }, [lineData]);
+
+  const latestCoveragePoint = useMemo(() => {
+    return rawCoverageData.at(-1) ?? null;
+  }, [rawCoverageData]);
+
+  const latestCoverageDayKey = latestCoveragePoint
+    ? toKstDayKeyFromEpochSec(Number(latestCoveragePoint.time))
+    : null;
 
   const selectableDayKeys = useMemo(() => {
     return Array.from(dayMap.keys()).sort((a, b) => a.localeCompare(b));
@@ -294,6 +344,21 @@ function RelativeLineWidget({
   const activeCentroidValue = activeDetailDayKey ? (centroidDayMap.get(activeDetailDayKey) ?? null) : null;
   const activeBand = activeDetailDayKey ? (bandDayMap.get(activeDetailDayKey) ?? null) : null;
   const tooltipBand = tooltipDayKey ? (bandDayMap.get(tooltipDayKey) ?? null) : null;
+  const activeCoverage = activeDetailDayKey ? (coverageDayMap.get(activeDetailDayKey) ?? null) : null;
+  const tooltipCoverage = tooltipDayKey ? (coverageDayMap.get(tooltipDayKey) ?? null) : null;
+  const latestCoverage = latestCoveragePoint ? Number(latestCoveragePoint.value) : null;
+
+  const coverageLabel = (coverage?: number | null) => {
+    if (coverage == null || !Number.isFinite(coverage)) return "coverage 확인 불가";
+    if (coverage >= 0.75) return "coverage 높음";
+    if (coverage >= 0.5) return "coverage 보통";
+    return "coverage 낮음";
+  };
+
+  const formatCoverage = (coverage?: number | null) => {
+    if (coverage == null || !Number.isFinite(coverage)) return "-";
+    return `${Math.round(coverage * 100)}%`;
+  };
 
   useEffect(() => {
     if (!isInfoOpen) return;
@@ -372,6 +437,34 @@ function RelativeLineWidget({
       crosshairMarkerVisible: false,
     });
 
+    const coverageBandConfigs = [
+      { topColor: "rgba(217, 119, 6, 0.05)", bottomColor: "rgba(217, 119, 6, 0.015)" },
+      { topColor: "rgba(217, 119, 6, 0.10)", bottomColor: "rgba(217, 119, 6, 0.035)" },
+      { topColor: "rgba(217, 119, 6, 0.18)", bottomColor: "rgba(217, 119, 6, 0.07)" },
+    ];
+    const coverageHighSeries = coverageBandConfigs.map((config) =>
+      chart.addSeries(AreaSeries, {
+        lineColor: "rgba(217, 119, 6, 0)",
+        topColor: config.topColor,
+        bottomColor: config.bottomColor,
+        lineWidth: 1,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+    );
+    const coverageLowSeries = coverageBandConfigs.map(() =>
+      chart.addSeries(AreaSeries, {
+        lineColor: "rgba(255,255,255,0)",
+        topColor: "#ffffff",
+        bottomColor: "#ffffff",
+        lineWidth: 1,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+    );
+
     const centroidSeries = chart.addSeries(LineSeries, {
       color: "#d97706",
       lineWidth: 2,
@@ -405,6 +498,8 @@ function RelativeLineWidget({
     centroidSeriesRef.current = centroidSeries;
     bandHighSeriesRef.current = bandHighSeries;
     bandLowSeriesRef.current = bandLowSeries;
+    coverageBandHighSeriesRefs.current = coverageHighSeries;
+    coverageBandLowSeriesRefs.current = coverageLowSeries;
     bandUpperLineRef.current = bandUpperLine;
     bandLowerLineRef.current = bandLowerLine;
 
@@ -442,6 +537,8 @@ function RelativeLineWidget({
       centroidSeriesRef.current = null;
       bandHighSeriesRef.current = null;
       bandLowSeriesRef.current = null;
+      coverageBandHighSeriesRefs.current = [];
+      coverageBandLowSeriesRefs.current = [];
       bandUpperLineRef.current = null;
       bandLowerLineRef.current = null;
     };
@@ -453,6 +550,8 @@ function RelativeLineWidget({
     const centroidSeries = centroidSeriesRef.current;
     const bandHighSeries = bandHighSeriesRef.current;
     const bandLowSeries = bandLowSeriesRef.current;
+    const coverageHighSeries = coverageBandHighSeriesRefs.current;
+    const coverageLowSeries = coverageBandLowSeriesRefs.current;
     const bandUpperLine = bandUpperLineRef.current;
     const bandLowerLine = bandLowerLineRef.current;
     const chart = chartRef.current;
@@ -461,12 +560,18 @@ function RelativeLineWidget({
     lineSeries.setData(lineData);
     anchorSeries.setData(showPeerOverlay ? anchorData : []);
     centroidSeries.setData(showPeerOverlay ? centroidData : []);
-    bandHighSeries.setData(showPeerOverlay ? bandHighData : []);
-    bandLowSeries.setData(showPeerOverlay ? bandLowData : []);
+    bandHighSeries.setData([]);
+    bandLowSeries.setData([]);
+    coverageHighSeries.forEach((series, index) => {
+      series.setData(showPeerOverlay ? (bandCoverageBuckets[index]?.high ?? []) : []);
+    });
+    coverageLowSeries.forEach((series, index) => {
+      series.setData(showPeerOverlay ? (bandCoverageBuckets[index]?.low ?? []) : []);
+    });
     bandUpperLine.setData(showPeerOverlay ? bandHighData : []);
     bandLowerLine.setData(showPeerOverlay ? bandLowData : []);
     chart.timeScale().fitContent();
-  }, [anchorData, lineData, centroidData, bandHighData, bandLowData, showPeerOverlay]);
+  }, [anchorData, lineData, centroidData, bandHighData, bandLowData, bandCoverageBuckets, showPeerOverlay]);
 
   /**
    * 차트에서 hover하면 부모에 KST day key 전달
@@ -562,8 +667,13 @@ function RelativeLineWidget({
         <div className="px-1 pb-3 flex items-start justify-between gap-3 text-[11px] sm:text-xs text-zinc-500">
           <p className="leading-relaxed">
             선택 종목, 관련 산업지수, 유사 종목군 평균을 동일 기준일 0%로 환산해 비교합니다.
-            음영은 유사 종목군의 p20~p80 범위입니다.
+            음영은 유사 종목군의 p20~p80 범위이며, 날짜별 peer coverage가 높을수록 진하게 표시됩니다.
+            낮은 coverage 구간은 표본이 줄어든 구간이라 참고 강도를 낮춰 해석해야 합니다.
           </p>
+          <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+            최근 coverage {formatCoverage(latestCoverage)}
+            {latestCoverageDayKey ? ` · ${latestCoverageDayKey}` : ""}
+          </span>
           <div className="shrink-0">
             <button
               type="button"
@@ -596,6 +706,7 @@ function RelativeLineWidget({
           <p>산업지수 {formatPct(dayMap.get(tooltipDayKey)?.value ?? null)}</p>
           <p>유사 평균 {formatPct(centroidDayMap.get(tooltipDayKey) ?? null)}</p>
           <p>p20 / p80 {formatPct(tooltipBand?.p20 ?? null)} / {formatPct(tooltipBand?.p80 ?? null)}</p>
+          <p>coverage {formatCoverage(tooltipCoverage)} · {coverageLabel(tooltipCoverage)}</p>
         </div>
       )}
       {showPeerOverlay && isInfoOpen && (
@@ -620,10 +731,10 @@ function RelativeLineWidget({
             <div className="px-5 py-4 overflow-y-auto flex-1">
               <p className="text-sm text-zinc-700 leading-relaxed">
                 선택 종목, 관련 산업지수, 유사 종목군 평균을 동일 기준일 0%로 환산해 비교합니다.
-                음영은 유사 종목군의 p20~p80 범위입니다.
+                음영은 유사 종목군의 p20~p80 범위이며, 날짜별 peer coverage가 높을수록 더 진하게 표시됩니다.
               </p>
               <p className="mt-3 text-sm text-zinc-700 leading-relaxed">
-                모든 값은 시작 시점을 0으로 맞춘 상대 변화율 기준이에요.
+                coverage가 낮은 구간은 해당 날짜에 반영된 peer 수가 적다는 뜻이므로, 밴드폭과 중심선을 참고용으로 해석해야 합니다.
               </p>
 
               <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
@@ -667,6 +778,11 @@ function RelativeLineWidget({
                   <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
                     <p className="text-xs text-zinc-500">p80</p>
                     <p className="mt-1 text-sm font-semibold text-zinc-900">{formatPct(activeBand?.p80 ?? null)}</p>
+                  </div>
+                  <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
+                    <p className="text-xs text-zinc-500">Peer coverage</p>
+                    <p className="mt-1 text-sm font-semibold text-zinc-900">{formatCoverage(activeCoverage)}</p>
+                    <p className="mt-0.5 text-[11px] text-zinc-400">{coverageLabel(activeCoverage)}</p>
                   </div>
                 </div>
 

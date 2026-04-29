@@ -8,6 +8,7 @@ public record Feature2Command(
         int window,
         int peerCount,
         int maxLag,
-        int displayLimit
+        int displayLimit,
+        String llmVendor
 ) {
 }

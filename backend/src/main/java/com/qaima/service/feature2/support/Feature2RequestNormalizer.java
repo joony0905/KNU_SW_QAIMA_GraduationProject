@@ -33,7 +33,8 @@ public class Feature2RequestNormalizer {
                 normalizeWindow(req == null ? null : req.getWindow()),
                 normalizePeerCount(req == null ? null : req.getPeerCount()),
                 normalizeMaxLag(req == null ? null : req.getMaxLag()),
-                normalizeDisplayLimit(req == null ? null : req.getDisplayLimit())
+                normalizeDisplayLimit(req == null ? null : req.getDisplayLimit()),
+                normalizeLlmVendor(req == null ? null : req.getLlmVendor())
         );
     }
 
@@ -75,5 +76,13 @@ public class Feature2RequestNormalizer {
             return DEFAULT_DISPLAY_LIMIT;
         }
         return Math.max(MIN_DISPLAY_LIMIT, Math.min(MAX_DISPLAY_LIMIT, displayLimit));
+    }
+
+    private String normalizeLlmVendor(String llmVendor) {
+        if (llmVendor == null) {
+            return null;
+        }
+        String trimmed = llmVendor.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

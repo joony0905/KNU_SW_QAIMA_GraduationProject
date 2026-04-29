@@ -44,6 +44,7 @@ public class PeerClusterDto {
     private List<BandPointDto> band;            // (ts, p20, p80), 선택값
     private List<RelativePointDto> peerCentroid;
     private List<BandPointDto> peerBand;
+    private List<RelativePointDto> peerCoverage;
 
     // peer 목록. 최종 응답 계약이다.
     private List<PeerItemDto> peers;

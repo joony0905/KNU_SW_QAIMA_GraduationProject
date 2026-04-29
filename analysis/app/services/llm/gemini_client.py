@@ -10,6 +10,8 @@ import httpx
 
 from app.services.llm.base import LLMClient
 from app.models.feature1 import Feature1Request, Feature1Metrics, FinancialPointItem
+from app.models.feature2 import Feature2ExplainRequest
+from app.services.llm.feature2_prompt import build_feature2_prompt
 
 
 # v1 사용
@@ -96,6 +98,60 @@ class GeminiClient(LLMClient):
             return None, "LLM_EXPLAIN_TIMEOUT"
         except Exception as e:
             # 예외 종류도 같이 남겨서 원인 확정
+            return None, f"LLM_EXPLAIN_EXCEPTION:{type(e).__name__}:{str(e)[:120]}"
+
+    async def generate_feature2_explain(
+        self,
+        req: Feature2ExplainRequest,
+        compact: bool = False,
+    ) -> Tuple[Optional[str], Optional[str]]:
+        if not self.api_key:
+            return None, "LLM_API_KEY_MISSING"
+
+        url = f"{GEMINI_BASE_URL}/{self.model}:generateContent?key={self.api_key}"
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": build_feature2_prompt(req, compact=compact)}]}],
+            "generationConfig": {
+                "temperature": 0.1,
+                "maxOutputTokens": 900 if compact else 1600,
+            },
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                resp = None
+                for attempt in range(len(RATE_LIMIT_RETRY_DELAYS) + 1):
+                    resp = await client.post(url, json=payload)
+                    if resp.status_code != 429:
+                        break
+                    if attempt < len(RATE_LIMIT_RETRY_DELAYS):
+                        await asyncio.sleep(RATE_LIMIT_RETRY_DELAYS[attempt])
+
+                if resp is not None and resp.status_code == 429:
+                    return None, "LLM_EXPLAIN_RATE_LIMITED"
+                if resp is None:
+                    return None, "LLM_EXPLAIN_EMPTY"
+                if resp.status_code >= 400:
+                    body = (resp.text or "").strip().replace("\n", " ")[:250]
+                    log.warning("[feature2][llm] Gemini HTTP %s compact=%s body=%s", resp.status_code, compact, body)
+                    return None, f"LLM_EXPLAIN_HTTP_{resp.status_code}:{body}"
+
+                data = resp.json()
+                text = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                    .strip()
+                )
+                if not text:
+                    return None, "LLM_EXPLAIN_EMPTY"
+                log.info("[feature2][llm] Gemini raw explain compact=%s %s", compact, text[:2000])
+                return text, None
+
+        except httpx.TimeoutException:
+            return None, "LLM_EXPLAIN_TIMEOUT"
+        except Exception as e:
             return None, f"LLM_EXPLAIN_EXCEPTION:{type(e).__name__}:{str(e)[:120]}"
 
     def _build_prompt(self, req: Feature1Request, metrics: Feature1Metrics, compact: bool = False) -> str:

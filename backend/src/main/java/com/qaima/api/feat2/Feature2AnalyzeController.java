@@ -25,10 +25,11 @@ public class Feature2AnalyzeController {
     public Mono<ApiResponse<Feature2AnalyzeResponseDto>> analyze(
             @Valid @RequestBody Feature2AnalyzeRequestDto req
     ) {
-        log.info("[Feature2AnalyzeController][request] stockCode={}, freq={}, window={}",
+        log.info("[Feature2AnalyzeController][request] stockCode={}, freq={}, window={}, llmVendor={}",
                 req != null ? req.getStockCode() : null,
                 req != null ? req.getFreq() : null,
-                req != null ? req.getWindow() : null);
+                req != null ? req.getWindow() : null,
+                req != null ? req.getLlmVendor() : null);
 
         return feature2AnalyzeService.analyze(req)
                 .map(this::wrapWithWarnings)

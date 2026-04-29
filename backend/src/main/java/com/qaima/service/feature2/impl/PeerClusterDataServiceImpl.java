@@ -127,7 +127,9 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
             // -----------------------
             // 3) Bulk range fetch
             // -----------------------
-            final OffsetDateTime to = OffsetDateTime.now();
+            // v3 확장 포인트: 산업지수 DB 적재 기준일을 peer overlay의 기준일로 사용해 차트 기간을 통일한다.
+            final OffsetDateTime to = resolveIndustryIndexLatestTs(industryId, freq)
+                    .orElseGet(OffsetDateTime::now);
             final OffsetDateTime from = calcFrom(to, freq, window);
 
             List<PriceOhlcv> rows;
@@ -259,6 +261,44 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         if (window <= 0) return ascSeries;
         if (ascSeries.size() <= window) return ascSeries;
         return ascSeries.subList(ascSeries.size() - window, ascSeries.size());
+    }
+
+    private Optional<OffsetDateTime> resolveIndustryIndexLatestTs(Long industryId, Freq freq) {
+        if (industryId == null || freq == null) {
+            return Optional.empty();
+        }
+
+        try {
+            return industryIndexMapRepository.findFirstByIdIndustryId(industryId)
+                    .flatMap(map -> {
+                        Long indexId = map.getIndustryIndex() == null
+                                ? null
+                                : map.getIndustryIndex().getIndexId();
+                        if (indexId == null) {
+                            return Optional.empty();
+                        }
+
+                        List<IndustryIndexOhlcv> rows = industryIndexOhlcvRepository.findRecent(
+                                indexId,
+                                freq,
+                                PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "id.ts"))
+                        );
+
+                        return rows == null
+                                ? Optional.empty()
+                                : rows.stream()
+                                .filter(Objects::nonNull)
+                                .map(IndustryIndexOhlcv::getId)
+                                .filter(Objects::nonNull)
+                                .map(id -> id.getTs())
+                                .filter(Objects::nonNull)
+                                .findFirst();
+                    });
+        } catch (Exception e) {
+            log.warn("[PeerClusterData] industry index latest ts lookup failed. industryId={}, cause={}",
+                    industryId, e.getMessage(), e);
+            return Optional.empty();
+        }
     }
 
     private static List<Stock> capUniverseKeepingAnchor(List<Stock> stocks, String anchor) {

@@ -14,6 +14,8 @@ import com.qaima.dto.featone.FeatOneAnalysisMetricsDto;
 import com.qaima.dto.featone.FeatOneFinancialSeriesDto;
 import com.qaima.dto.featone.FeatOneMarketSnapshotDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
+import com.qaima.dto.feature2.Feature2ExplainRequestDto;
+import com.qaima.dto.feature2.Feature2ExplainResponseDto;
 import com.qaima.dto.indicator.IndicatorBundleDto;
 import com.qaima.dto.indicator.IndicatorSpecDto;
 import com.qaima.dto.ohlcv.OhlcvSummaryDto;
@@ -106,6 +108,43 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                     return Mono.just(dto);
                                 } catch (Exception e) {
                                     log.error("[FastAPI] decode failed. body={}", body, e);
+                                    return Mono.error(e);
+                                }
+                            });
+                });
+    }
+
+    @Override
+    public Mono<Feature2ExplainResponseDto> requestFeature2Explain(Feature2ExplainRequestDto request) {
+        JsonNode snakePayloadNode = toSnakeCaseNode(request);
+        log.info("[FastApiAnalysisClient][feature2-explain][request] body={}", snakePayloadNode);
+
+        return webClient.post()
+                .uri("/feature2/explain")
+                .bodyValue(snakePayloadNode)
+                .exchangeToMono(resp -> {
+                    HttpStatusCode status = resp.statusCode();
+                    return resp.bodyToMono(String.class)
+                            .defaultIfEmpty("")
+                            .flatMap(body -> {
+                                if (status.isError()) {
+                                    log.error("[FastApiAnalysisClient][feature2-explain][error] status={}, body={}",
+                                            status.value(), body);
+                                    return Mono.error(new RuntimeException("FASTAPI_FEATURE2_EXPLAIN_HTTP_" + status.value()));
+                                }
+
+                                try {
+                                    log.info("[FastApiAnalysisClient][feature2-explain] raw response={}", body);
+                                    JsonNode root = objectMapper.readTree(body);
+                                    JsonNode payloadNode = extractPayload(root, "feature2/explain");
+                                    Feature2ExplainResponseDto dto =
+                                            snakeCaseObjectMapper.treeToValue(payloadNode, Feature2ExplainResponseDto.class);
+                                    if (dto.getWarnings() == null) {
+                                        dto.setWarnings(readWarnings(root, payloadNode));
+                                    }
+                                    return Mono.just(dto);
+                                } catch (Exception e) {
+                                    log.error("[FastApiAnalysisClient][feature2-explain] decode failed. body={}", body, e);
                                     return Mono.error(e);
                                 }
                             });

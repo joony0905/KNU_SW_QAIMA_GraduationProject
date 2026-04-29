@@ -1,5 +1,6 @@
 # app/main.py
 import os
+import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -7,9 +8,12 @@ from app.api.feature1 import router as feature1_router
 from app.api.feature2 import router as feature2_router
 from app.services.clustering import set_market_data_provider
 from app.services.market_data_spring import SpringMarketDataProvider, SpringClientConfig
+from app.services.news_sentiment import start_local_model_warmup
 # from api.feature3 import router as feature3_router
 import traceback
 from fastapi.responses import JSONResponse
+
+log = logging.getLogger(__name__)
 
 #앱 시작 시 .env 로드 (로컬 개발용)
 load_dotenv()
@@ -21,10 +25,13 @@ app = FastAPI(
 
 SPRING_BASE_URL = os.getenv("SPRING_BASE_URL")
 set_market_data_provider(SpringMarketDataProvider(SpringClientConfig(base_url=SPRING_BASE_URL)))
-print("GEMINI_API_KEY loaded:", bool(os.getenv("GEMINI_API_KEY")))
-print("LLM_VENDOR:", os.getenv("LLM_VENDOR"))
-print("GEMINI_MODEL:", os.getenv("GEMINI_MODEL"))
 print("SPRING_LOCAL:", os.getenv("SPRING_BASE_URL"))
+
+
+@app.on_event("startup")
+async def warmup_news_sentiment_model() -> None:
+    log.info("starting news sentiment local model warm-up")
+    start_local_model_warmup()
 
 # 개발 단계니 일단 전체 허용함. 나중에 세팅ㄱ
 app.add_middleware(

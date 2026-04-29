@@ -115,7 +115,7 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             int displayLimit
     ) {
         return String.format(
-                "feature2:peercluster:v3:%d:%s:%s:%d:%d:%d:%d",
+                "feature2:peercluster:v5:%d:%s:%s:%d:%d:%d:%d",
                 industryId,
                 anchorStockCode,
                 freq.name(),
@@ -212,6 +212,7 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                 .band(resp.getBand())
                 .peerCentroid(resp.getPeerCentroid())
                 .peerBand(resp.getPeerBand())
+                .peerCoverage(resp.getPeerCoverage())
                 .peers(resp.getPeers())
                 .candidates(resp.getCandidates())
                 .asOf(resp.getAsOf())

@@ -1,4 +1,4 @@
-import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
+import type { AnalysisExplainSection, AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import type { PeerItem } from "../types/feature2";
 import downloadIcon from "../assets/download_button.png";
 import zoomIcon from "../assets/zoom_button.png";
@@ -51,7 +51,7 @@ interface AnalysisResultPanelProps {
   layout?: "full" | "panel";
 }
 
-type ExplainSection = NonNullable<NonNullable<AnalysisPanelResult["explain"]>["sections"]>["priceFlow"];
+type ExplainSection = AnalysisExplainSection;
 
 const formatNumber = (value?: number | null) => {
   if (value === null || value === undefined || !Number.isFinite(value)) return "-";
@@ -63,15 +63,41 @@ const formatSentimentScore = (value?: number | null) => {
   return value > 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
 };
 
-const sentimentLabelText = (label?: string | null) => {
+const formatSignedNumber = (value?: number | null, digits = 2) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return value > 0 ? `+${value.toFixed(digits)}` : value.toFixed(digits);
+};
+
+const formatRatio = (value?: number | null) => {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "-";
+  return `${value.toFixed(2)}%`;
+};
+
+const trendDirectionText = (direction?: string | null) => {
+  switch (direction) {
+    case "UP":
+      return "상승";
+    case "DOWN":
+      return "하락";
+    case "FLAT":
+      return "보합";
+    default:
+      return "확인중";
+  }
+};
+
+const sentimentLabelText = (label?: string | null, score?: number | null) => {
   switch (label) {
     case "positive":
       return "긍정";
     case "negative":
       return "부정";
-    default:
-      return "중립";
   }
+  if (score != null && Number.isFinite(score)) {
+    if (score > 0.05) return "긍정";
+    if (score < -0.05) return "부정";
+  }
+  return "중립";
 };
 
 const sentimentBadgeClass = (score?: number | null) => {
@@ -82,6 +108,27 @@ const sentimentBadgeClass = (score?: number | null) => {
     return "bg-rose-50 text-rose-700 border-rose-200";
   }
   return "bg-blue-50 text-blue-700 border-blue-200";
+};
+
+const formatNewsDate = (value?: string | null) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 10);
+  return date.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
+};
+
+const formatNewsTimeAgo = (value?: string | null): string => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return formatNewsDate(value);
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${Math.max(0, mins)}분 전`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}일 전`;
+  return date.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
 };
 
 const formatRelationBadge = (relation: PeerItem["relation"]) => {
@@ -208,6 +255,15 @@ const WARNING_MESSAGE_MAP: Array<[RegExp, string]> = [
   [/^PEER_CORR_STABILITY_INSUFFICIENT_DATA$/, "구간별 상관 안정성을 판단하기에는 일부 종목의 데이터가 부족할 수 있어요."],
   [/^PEER_FILTER_RELAXED$/, "요청한 유사 종목 수를 평가하기 위해 극단값 필터를 완화했어요."],
   [/^PEER_COUNT_REDUCED_BY_CANDIDATE_SIZE$/, "동일 산업 내 비교 가능한 후보 수가 요청한 종목 수보다 적어 실제 표시 수가 줄었어요."],
+  [/^NEWS_FILTER_(APPLIED|EXPANDED_FETCH)$/, "종목 관련성이 높은 뉴스를 선별하기 위해 뉴스 검색 범위를 조정했어요."],
+  [/^NEWS_FILTER_INSUFFICIENT_RESULT$/, "조건에 맞는 관련 뉴스 수가 충분하지 않아 일부 뉴스 지표가 제한될 수 있어요."],
+  [/^NEWS_BODY_LOW_CONFIDENCE:/, "일부 뉴스는 본문 추출 신뢰도가 낮아 감성 점수 해석에 주의가 필요해요."],
+  [/^NEWS_BODY_FETCH_FAILED:/, "일부 뉴스는 본문을 가져오지 못해 감성 분석 대상에서 제외됐어요."],
+  [/^NEWS_SENTIMENT_LOCAL_/, "뉴스 감성 모델 처리 중 일부 결과가 제한됐어요."],
+  [/^NEWS_SENTIMENT_FAILED:/, "일부 뉴스는 감성 점수를 산출하지 못했어요."],
+  [/^NEWS_LIST_FETCH_FAILED$/, "뉴스 목록을 가져오지 못해 뉴스 기반 분석이 제한될 수 있어요."],
+  [/^NEWS_INVALID_ITEM_SKIPPED$/, "형식이 맞지 않는 뉴스 항목 일부를 제외했어요."],
+  [/^NEWS_PUBDATE_PARSE_FAILED$/, "일부 뉴스 발행시각을 해석하지 못해 현재 시각 기준으로 보정될 수 있어요."],
   [/^LLM_EXPLAIN_TIMEOUT$/, "설명 생성이 지연되어 일부 해설이 생략될 수 있어요."],
   [/^LLM_EXPLAIN_RATE_LIMITED$/, "설명 생성 요청이 많아 해설 생성이 제한될 수 있어요."],
   [/^LLM_EXPLAIN_MAX_OUTPUT_TOKENS$/, "설명 생성 분량 제한으로 일부 해설이 축약될 수 있어요."],
@@ -342,94 +398,23 @@ export default function AnalysisResultPanel({
       {/* 분석 결과 카드 */}
       {result && (
         <div className="w-[90%] max-w-4xl bg-white rounded-2xl shadow-sm border border-zinc-200 p-4 sm:p-6 flex flex-col gap-4">
-          {/* 가격 흐름 요약 */}
-          {priceFlowSummary && (
-            <div>
-              <PriceFlowBars summary={priceFlowSummary} />
-              {renderExplainSection(explainSections?.priceFlow)}
+          {result.metrics?.stock && (
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
+              <p className="text-xs sm:text-sm font-medium text-zinc-500">분석 종목</p>
+              <p className="mt-1 text-lg sm:text-xl font-bold text-zinc-900">
+                {result.metrics.stock.companyName || result.metrics.stock.stockCode}
+              </p>
             </div>
           )}
 
-          {/* 시장 스냅샷 */}
-          {result.metrics?.marketSnapshot && (
-            <div>
-              <MarketSnapshotBars snapshot={result.metrics.marketSnapshot} />
-              {renderExplainSection(explainSections?.marketSnapshot)}
-            </div>
-          )}
-
-          {/* 보조지표 요약 */}
-          {result.metrics?.indicators && (
-            <div>
-              <IndicatorSnapshotCards
-                indicators={result.metrics.indicators}
-              />
-              {renderExplainSection(explainSections?.indicators)}
-            </div>
-          )}
-
-          {financialTimeline && financialTimeline.points.length > 0 && (
-            <div>
-              <FinancialTimelineChart
-                period={financialTimeline.period}
-                points={financialTimeline.points}
-              />
-              {renderExplainSection(explainSections?.financialTimeline)}
-            </div>
-          )}
-
-          {result.metrics?.newsSentimentSummary && (
-            <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">뉴스 감성</h3>
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-zinc-500">일 평균 점수</p>
-                  <p className={`text-lg font-bold ${result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore < -0.05 ? "text-blue-700" : result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore > 0.05 ? "text-rose-700" : "text-zinc-800"}`}>
-                    {formatSentimentScore(result.metrics.newsSentimentSummary.dailyAvgScore)}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-zinc-500">점수 산출 뉴스</p>
-                  <p className="text-lg font-bold text-zinc-900">{result.metrics.newsSentimentSummary.scoredNewsCount}</p>
-                </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-zinc-500">긍정/중립/부정</p>
-                  <p className="text-sm font-semibold text-zinc-900">
-                    {result.metrics.newsSentimentSummary.positiveCount} / {result.metrics.newsSentimentSummary.neutralCount} / {result.metrics.newsSentimentSummary.negativeCount}
-                  </p>
-                </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-zinc-500">기준일</p>
-                  <p className="text-sm font-semibold text-zinc-900">{result.metrics.newsSentimentSummary.summaryDate ?? "-"}</p>
-                </div>
+          {result.metrics?.peerCluster && (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">유사 종목 반응 구조</h3>
+                <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-500">
+                  {result.metrics.peerCluster.peers.length}개 선정
+                </span>
               </div>
-
-              {result.metrics.newsSentimentSummary.recentItems.length > 0 && (
-                <div className="mt-3 overflow-hidden rounded-lg border border-zinc-200">
-                  <div className="bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-500">
-                    최근 뉴스 감성 점수
-                  </div>
-                  <div className="divide-y divide-zinc-200">
-                    {result.metrics.newsSentimentSummary.recentItems.map((item) => (
-                      <div key={item.newsId} className="grid grid-cols-[1fr_auto] gap-3 px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-zinc-900">{item.title}</p>
-                          <p className="text-[11px] text-zinc-500">{item.publisher ?? "-"} · {item.publishedAt ? item.publishedAt.slice(0, 10) : "-"}</p>
-                        </div>
-                        <span className={`self-center rounded-md border px-2 py-1 text-xs font-semibold ${sentimentBadgeClass(item.sentimentScore)}`}>
-                          {sentimentLabelText(item.sentimentLabel)} {formatSentimentScore(item.sentimentScore)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {result.metrics?.peerCluster && ((result.metrics.peerCluster.candidates?.length ?? 0) > 0 || result.metrics.peerCluster.peers.length > 0) && (
-            <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">유사 종목 반응 구조</h3>
               <p className="mt-1 text-xs sm:text-sm text-zinc-500">
                 산업조정 상관은 산업 공통 움직임을 단순 차감한 관측용 지표이며, 정교한 요인 모델이나 가격 방향 신호가 아닙니다.
               </p>
@@ -492,6 +477,252 @@ export default function AnalysisResultPanel({
                   </div>
                 );
               })()}
+              {renderExplainSection(explainSections?.peerCluster)}
+            </div>
+          )}
+
+          {result.metrics?.newsSentimentSummary && (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">뉴스 감성</h3>
+                <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-500">
+                  감성 점수 산출 뉴스 {result.metrics.newsSentimentSummary.scoredNewsCount}건
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-zinc-500">일 평균 점수</p>
+                  <p className={`text-lg font-bold ${result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore < -0.05 ? "text-blue-700" : result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore > 0.05 ? "text-rose-700" : "text-zinc-800"}`}>
+                    {formatSentimentScore(result.metrics.newsSentimentSummary.dailyAvgScore)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-zinc-500">점수 산출 뉴스</p>
+                  <p className="text-lg font-bold text-zinc-900">{result.metrics.newsSentimentSummary.scoredNewsCount}</p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-zinc-500">긍정/중립/부정</p>
+                  <p className="text-sm font-semibold text-zinc-900">
+                    {result.metrics.newsSentimentSummary.positiveCount} / {result.metrics.newsSentimentSummary.neutralCount} / {result.metrics.newsSentimentSummary.negativeCount}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-zinc-500">기준일</p>
+                  <p className="text-sm font-semibold text-zinc-900">{result.metrics.newsSentimentSummary.summaryDate ?? "-"}</p>
+                </div>
+              </div>
+
+              {(result.metrics?.newsList?.length ?? 0) > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-semibold text-zinc-900">감성 점수가 산출된 뉴스</h4>
+                  <div className="mt-2 max-h-[360px] divide-y divide-zinc-200 overflow-y-auto rounded-lg border border-zinc-200 bg-white pr-1">
+                    {result.metrics?.newsList?.map((item, idx) => (
+                      <a
+                        key={item.newsId}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center gap-4 px-3 py-3 hover:bg-zinc-50 transition-colors ${
+                          idx === 0 ? "rounded-t-lg" : ""
+                        } ${idx === (result.metrics?.newsList?.length ?? 0) - 1 ? "rounded-b-lg" : ""}`}
+                      >
+                        <div className="min-w-0 flex-1 flex flex-col gap-2">
+                          <div className="flex flex-col">
+                            <h5 className="truncate text-sm sm:text-base font-semibold text-zinc-900">
+                              {item.title}
+                            </h5>
+                            <p className="line-clamp-2 text-xs sm:text-sm leading-snug text-zinc-700">
+                              {item.summary}
+                            </p>
+                          </div>
+                          <p className="text-[11px] sm:text-xs font-medium text-zinc-500">
+                            {formatNewsTimeAgo(item.publishedAt)} · {item.publisher}
+                          </p>
+                        </div>
+                        <div className={`flex min-w-[64px] flex-col items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold ${sentimentBadgeClass(item.sentimentScore)}`}>
+                          <span>{sentimentLabelText(item.sentimentLabel, item.sentimentScore)}</span>
+                          <span>{formatSentimentScore(item.sentimentScore)}</span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {renderExplainSection(explainSections?.newsSentiment)}
+            </div>
+          )}
+
+          {(result.metrics?.baseRateTrendSummary || result.metrics?.shortSellingTrendSummary) && (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">기간 추이 요약</h3>
+                <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-500">
+                  사용자 설정 기간 기준
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {result.metrics?.baseRateTrendSummary && (
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-zinc-900">기준금리</p>
+                      <span className="text-xs font-medium text-zinc-500">
+                        최근 {result.metrics.baseRateTrendSummary.window}일
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-zinc-700">
+                      {result.metrics.baseRateTrendSummary.startValue ?? "-"}
+                      {result.metrics.baseRateTrendSummary.unit ?? ""} → {result.metrics.baseRateTrendSummary.endValue ?? "-"}
+                      {result.metrics.baseRateTrendSummary.unit ?? ""}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      변동 {formatSignedNumber(result.metrics.baseRateTrendSummary.change)} · {trendDirectionText(result.metrics.baseRateTrendSummary.direction)}
+                    </p>
+                  </div>
+                )}
+                {result.metrics?.shortSellingTrendSummary && (
+                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-zinc-900">공매도</p>
+                      <span className="text-xs font-medium text-zinc-500">
+                        최근 {result.metrics.shortSellingTrendSummary.window}일
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-zinc-700">
+                      거래대금 비율 {formatRatio(result.metrics.shortSellingTrendSummary.startShortAmountRatio)}
+                      {" → "}
+                      {formatRatio(result.metrics.shortSellingTrendSummary.endShortAmountRatio)}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      변동 {formatSignedNumber(result.metrics.shortSellingTrendSummary.shortAmountRatioChange)}% · 평균 {formatRatio(result.metrics.shortSellingTrendSummary.avgShortAmountRatio)} · {trendDirectionText(result.metrics.shortSellingTrendSummary.direction)}
+                    </p>
+                  </div>
+                )}
+              </div>
+              {renderExplainSection(explainSections?.trendSummary)}
+            </div>
+          )}
+
+          {/* 기준금리 */}
+          {result.metrics?.baseRateSeries && result.metrics.baseRateSeries.length > 0 ? (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                  <DictTerm term="기준금리">기준금리</DictTerm> 추이
+                </h3>
+              </div>
+              <BaseRateStepChart points={result.metrics.baseRateSeries} />
+              {renderExplainSection(explainSections?.baseRate)}
+            </div>
+          ) : result.metrics?.baseRate ? (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                  <DictTerm term="기준금리">기준금리</DictTerm>
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
+                <div>기준일: {result.metrics.baseRate.date}</div>
+                <div>금리: {result.metrics.baseRate.value}{result.metrics.baseRate.unit}</div>
+              </div>
+              {renderExplainSection(explainSections?.baseRate)}
+            </div>
+          ) : null}
+
+          {/* 공매도 현황 */}
+          {result.metrics?.shortSellingSeries && result.metrics.shortSellingSeries.length > 0 ? (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                  <DictTerm term="공매도">공매도</DictTerm> 추이
+                </h3>
+              </div>
+              <ShortSellingTrendChart points={result.metrics.shortSellingSeries} />
+              {renderExplainSection(explainSections?.shortSelling)}
+            </div>
+          ) : result.metrics?.shortSelling ? (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                  <DictTerm term="공매도">공매도</DictTerm> 현황
+                </h3>
+              </div>
+              <div className="overflow-x-auto mt-2">
+                <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
+                  <thead className="bg-zinc-100 text-zinc-900">
+                    <tr>
+                      <th className="px-3 py-2 text-left border-b">항목</th>
+                      <th className="px-3 py-2 text-right border-b">값</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="px-3 py-2 border-b">기준일</td>
+                      <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.reportDate}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b">공매도 거래량</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.shortVolumeTotal)}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b"><DictTerm term="거래량">거래량</DictTerm> (총)</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.totalVolume)}</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b">공매도 거래량 비율</td>
+                      <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.shortVolumeRatio.toFixed(2)}%</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b">공매도 거래대금</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.shortAmountTotal)}원</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b"><DictTerm term="거래대금">거래대금</DictTerm> (총)</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.totalAmount)}원</td>
+                    </tr>
+                    <tr>
+                      <td className="px-3 py-2 border-b">공매도 거래대금 비율</td>
+                      <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.shortAmountRatio.toFixed(2)}%</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              {renderExplainSection(explainSections?.shortSelling)}
+            </div>
+          ) : null}
+
+          {/* 가격 흐름 요약 */}
+          {priceFlowSummary && (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <PriceFlowBars summary={priceFlowSummary} />
+              {renderExplainSection(explainSections?.priceFlow)}
+            </div>
+          )}
+
+          {/* 시장 스냅샷 */}
+          {result.metrics?.marketSnapshot && (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <MarketSnapshotBars snapshot={result.metrics.marketSnapshot} />
+              {renderExplainSection(explainSections?.marketSnapshot)}
+            </div>
+          )}
+
+          {/* 보조지표 요약 */}
+          {result.metrics?.indicators && (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <IndicatorSnapshotCards
+                indicators={result.metrics.indicators}
+              />
+              {renderExplainSection(explainSections?.indicators)}
+            </div>
+          )}
+
+          {financialTimeline && financialTimeline.points.length > 0 && (
+            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+              <FinancialTimelineChart
+                period={financialTimeline.period}
+                points={financialTimeline.points}
+              />
+              {renderExplainSection(explainSections?.financialTimeline)}
             </div>
           )}
 
@@ -561,95 +792,6 @@ export default function AnalysisResultPanel({
             </div>
           )}
 
-          {/* 기준금리 */}
-          {result.metrics?.baseRateSeries && result.metrics.baseRateSeries.length > 0 ? (
-            <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                <DictTerm term="기준금리">기준금리</DictTerm> 추이
-              </h3>
-              <BaseRateStepChart points={result.metrics.baseRateSeries} />
-            </div>
-          ) : result.metrics?.baseRate ? (
-            <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                <DictTerm term="기준금리">기준금리</DictTerm>
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
-                <div>기준일: {result.metrics.baseRate.date}</div>
-                <div>금리: {result.metrics.baseRate.value}{result.metrics.baseRate.unit}</div>
-              </div>
-            </div>
-          ) : null}
-
-          {/* 공매도 현황 */}
-          {result.metrics?.shortSellingSeries && result.metrics.shortSellingSeries.length > 0 ? (
-            <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                <DictTerm term="공매도">공매도</DictTerm> 추이
-              </h3>
-              <ShortSellingTrendChart points={result.metrics.shortSellingSeries} />
-            </div>
-          ) : result.metrics?.shortSelling ? (
-            <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                <DictTerm term="공매도">공매도</DictTerm> 현황
-              </h3>
-              <div className="overflow-x-auto mt-2">
-                <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
-                  <thead className="bg-zinc-100 text-zinc-900">
-                    <tr>
-                      <th className="px-3 py-2 text-left border-b">항목</th>
-                      <th className="px-3 py-2 text-right border-b">값</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="px-3 py-2 border-b">기준일</td>
-                      <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.reportDate}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 border-b">공매도 거래량</td>
-                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.shortVolumeTotal)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 border-b"><DictTerm term="거래량">거래량</DictTerm> (총)</td>
-                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.totalVolume)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 border-b">공매도 거래량 비율</td>
-                      <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.shortVolumeRatio.toFixed(2)}%</td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 border-b">공매도 거래대금</td>
-                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.shortAmountTotal)}원</td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 border-b"><DictTerm term="거래대금">거래대금</DictTerm> (총)</td>
-                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.totalAmount)}원</td>
-                    </tr>
-                    <tr>
-                      <td className="px-3 py-2 border-b">공매도 거래대금 비율</td>
-                      <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.shortAmountRatio.toFixed(2)}%</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : null}
-
-          {/* 경고 */}
-          {(result.meta?.warnings ?? []).length > 0 && (
-            <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
-                경고
-              </h3>
-              <ul className="text-sm sm:text-base text-amber-700 mt-2 list-disc list-inside">
-                {result.meta?.warnings?.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       )}
     </div>

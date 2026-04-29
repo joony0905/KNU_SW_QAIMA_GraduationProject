@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 from threading import Lock
@@ -16,11 +17,13 @@ DEFAULT_INPUT_FORMAT_VERSION = "focus_detail_fallback_v1"
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_MAX_LENGTH = 256
 LABELS = ("negative", "neutral", "positive")
+log = logging.getLogger(__name__)
 
 _load_lock = Lock()
 _tokenizer = None
 _model = None
 _torch = None
+_warmup_started = False
 
 
 async def score_news_sentiment_batch(req: NewsSentimentRequest) -> Tuple[List[dict], List[str]]:
@@ -44,10 +47,12 @@ def score_news_sentiment_batch_sync(req: NewsSentimentRequest) -> Tuple[List[dic
 
     try:
         tokenizer, model, torch = load_local_model()
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
+        log.exception("news sentiment local model path not found: %s", exc)
         return [], dedupe_warnings(warnings + ["NEWS_SENTIMENT_LOCAL_MODEL_NOT_FOUND"])
-    except Exception:
-        return [], dedupe_warnings(warnings + ["NEWS_SENTIMENT_LOCAL_LOAD_FAILED"])
+    except Exception as exc:
+        log.exception("news sentiment local model load failed: %s", exc.__class__.__name__)
+        return [], dedupe_warnings(warnings + [f"NEWS_SENTIMENT_LOCAL_LOAD_FAILED:{exc.__class__.__name__}"])
 
     batch_size = read_int_env("NEWS_SENTIMENT_LOCAL_BATCH_SIZE", DEFAULT_BATCH_SIZE)
     max_length = read_int_env("NEWS_SENTIMENT_LOCAL_MAX_LENGTH", DEFAULT_MAX_LENGTH)
@@ -111,8 +116,8 @@ def load_local_model():
         if not model_path.exists():
             raise FileNotFoundError(model_path)
 
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
-        model = AutoModelForSequenceClassification.from_pretrained(model_path)
+        tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+        model = AutoModelForSequenceClassification.from_pretrained(model_path, local_files_only=True)
         model.to(torch.device("cpu"))
         model.eval()
 
@@ -122,7 +127,38 @@ def load_local_model():
         return _tokenizer, _model, _torch
 
 
+def warmup_local_model() -> None:
+    try:
+        tokenizer, model, torch = load_local_model()
+        encoded = tokenizer(
+            ["[FOCUS]\nwarmup\n\n[DETAIL]\nwarmup"],
+            padding=True,
+            truncation=True,
+            max_length=32,
+            return_tensors="pt",
+        )
+        with torch.inference_mode():
+            _ = model(**encoded).logits
+        log.info("news sentiment local model warm-up completed")
+    except Exception as exc:
+        log.exception("news sentiment local model warm-up failed: %s", exc.__class__.__name__)
+
+
+def start_local_model_warmup() -> None:
+    global _warmup_started
+
+    if _warmup_started:
+        return
+    _warmup_started = True
+    # 서버 기동은 막지 않고 백그라운드에서 모델을 메모리에 올린다.
+    asyncio.create_task(asyncio.to_thread(warmup_local_model))
+
+
 def resolve_model_path(raw_path: str) -> Path:
+    if len(raw_path) >= 3 and raw_path[1:3] in {":\\", ":/"}:
+        drive = raw_path[0].lower()
+        converted = raw_path[2:].replace("\\", "/").lstrip("/")
+        return Path("/mnt") / drive / converted
     model_path = Path(raw_path)
     if model_path.is_absolute():
         return model_path
