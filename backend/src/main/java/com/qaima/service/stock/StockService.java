@@ -4,6 +4,7 @@ import com.qaima.domain.Exchange;
 import com.qaima.domain.Industry;
 import com.qaima.domain.Sector;
 import com.qaima.domain.Stock;
+import com.qaima.common.exception.ResourceNotFoundException;
 import com.qaima.dto.stock.StockDto;
 import com.qaima.dto.stock.StockMeta;
 import com.qaima.external.StockClient;
@@ -65,7 +66,7 @@ public class StockService {
      * => 최종 조회 실패 시 insert 안 됨
      */
     public Mono<StockDto> getStockWithRealtimeByCode(String rawStockCode) {
-        String code = extractStockCode(rawStockCode);
+        String code = normalizeStockCode(extractStockCode(rawStockCode));
 
         if (code == null || code.isBlank()) {
             return Mono.error(new IllegalArgumentException("종목코드가 비어있습니다."));
@@ -78,7 +79,7 @@ public class StockService {
                             log.info("[getStockWithRealtimeByCode] existing stock hit: {}", code);
                             return stockClient.fetchStock(existing);
                         })
-                        .orElseGet(() -> fetchAndCreateOnlyAfterRealtimeSuccess(code))
+                        .orElseGet(() -> Mono.error(new ResourceNotFoundException("Unknown stockCode: " + code)))
                 );
     }
 
@@ -92,7 +93,24 @@ public class StockService {
      */
     public Mono<Stock> getOrCreateStockByCode(String rawStockCode) {
         log.info("[StockService][getOrCreateStockByCode] incoming rawStockCode={}", rawStockCode);
-        return loadOrCreateStockMono(rawStockCode);
+        return getStockByCode(rawStockCode);
+    }
+
+    private Mono<Stock> getStockByCode(String rawStockCode) {
+        String code = normalizeStockCode(extractStockCode(rawStockCode));
+
+        if (code == null || code.isBlank()) {
+            return Mono.error(new IllegalArgumentException("stockCode is required"));
+        }
+
+        return Mono.fromCallable(() -> stockRepository.findByStockCodeWithExchangeAndIndustry(code))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(optional -> optional
+                        .map(existing -> {
+                            log.info("[getStockByCode] existing stock hit: {}", code);
+                            return Mono.just(existing);
+                        })
+                        .orElseGet(() -> Mono.error(new ResourceNotFoundException("Unknown stockCode: " + code))));
     }
 
     /* ===========================
@@ -391,6 +409,16 @@ public class StockService {
         if (symbol == null) return null;
         int dotIdx = symbol.indexOf('.');
         return (dotIdx > 0) ? symbol.substring(0, dotIdx) : symbol.trim();
+    }
+
+    private String normalizeStockCode(String stockCode) {
+        if (stockCode == null) return null;
+
+        String trimmed = stockCode.trim().toUpperCase();
+        if (trimmed.matches("\\d{1,5}")) {
+            return String.format("%6s", trimmed).replace(' ', '0');
+        }
+        return trimmed;
     }
 
     private String normalizeExchangeCode(String exchangeCode) {
