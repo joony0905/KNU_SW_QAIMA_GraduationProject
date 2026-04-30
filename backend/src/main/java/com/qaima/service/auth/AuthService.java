@@ -2,6 +2,7 @@ package com.qaima.service.auth;
 
 import com.qaima.common.Blocking;
 import com.qaima.domain.User;
+import com.qaima.domain.UserRole;
 import com.qaima.dto.user.LoginRequestDto;
 import com.qaima.dto.user.LoginResponseDto;
 import com.qaima.dto.user.SignupRequestDto;
@@ -12,7 +13,11 @@ import com.qaima.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
+
+import java.time.Instant;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -24,55 +29,26 @@ public class AuthService {
     private final MailAuthService mailAuthService;
     private final AuthLoginLogService authLoginLogService;
     private final LoginSessionService loginSessionService;
+    private final TransactionTemplate transactionTemplate;
 
     public record LoginResult(LoginResponseDto response, String refreshToken) {}
 
     public record RefreshResult(TokenRefreshResponseDto response, String refreshToken) {}
 
     public Mono<UserResponseDto> signup(SignupRequestDto requestDto, String ip, String ua) {
-        final String email = requestDto.getEmail();
+        final String email = normalizeEmail(requestDto.getEmail());
 
-        return Blocking.call(() -> userRepository.findByEmail(email))
-                .flatMap(optional -> {
-                    if (optional.isPresent()) {
-                        return Mono.error(new IllegalArgumentException("이미 사용 중인 이메일입니다."));
+        return Blocking.call(() -> {
+                    User savedUser = transactionTemplate.execute(status -> createVerifiedUser(requestDto, email));
+                    if (savedUser == null) {
+                        throw new IllegalStateException("사용자 생성에 실패했습니다.");
                     }
-
-                    String encodedPassword = passwordEncoder.encode(requestDto.getPassword());
-
-                    User newUser = new User();
-                    newUser.setEmail(email);
-                    newUser.setPasswordHash(encodedPassword);
-                    newUser.setName(requestDto.getName());
-                    newUser.setPhone(requestDto.getPhone());
-                    newUser.setBirthdate(requestDto.getBirthdate());
-
-                    newUser.setRole(com.qaima.domain.UserRole.user);
-                    newUser.setStatus("active"); // status 정책은 유지(로그인 차단은 emailVerified로)
-                    newUser.setEmailVerified(false);
-                    newUser.setGlossaryHover(false);
-
-                    return Blocking.call(() -> userRepository.save(newUser));
+                    return savedUser;
                 })
                 .flatMap(savedUser ->
                         authLoginLogService.event("SIGNUP_CREATED", true, savedUser.getUserId(), savedUser.getEmail(), ip, ua, null, null)
                                 .onErrorResume(e -> Mono.empty())
-                                .then(
-                                        Blocking.run(() -> mailAuthService.requestEmailVerificationCode(savedUser.getEmail()))
-                                                .then(
-                                                        authLoginLogService.event("EMAIL_VERIFICATION_REQUESTED", true,
-                                                                        savedUser.getUserId(), savedUser.getEmail(), ip, ua, null, null)
-                                                                .onErrorResume(e -> Mono.empty())
-                                                )
-                                                .thenReturn(new UserResponseDto(savedUser))
-                                                .onErrorResume(ex ->
-                                                        authLoginLogService.event("EMAIL_VERIFICATION_REQUESTED", false,
-                                                                        savedUser.getUserId(), savedUser.getEmail(), ip, ua,
-                                                                        "EMAIL_SEND_FAILED", ex.getMessage())
-                                                                .onErrorResume(e -> Mono.empty())
-                                                                .then(Mono.error(ex))
-                                                )
-                                )
+                                .thenReturn(new UserResponseDto(savedUser))
                 )
                 .onErrorResume(ex ->
                         authLoginLogService.event("SIGNUP_CREATED", false, null, email, ip, ua,
@@ -83,7 +59,7 @@ public class AuthService {
     }
 
     public Mono<LoginResult> login(LoginRequestDto requestDto, String ip, String ua) {
-        final String email = requestDto.getEmail();
+        final String email = normalizeEmail(requestDto.getEmail());
 
         return Blocking.call(() -> userRepository.findByEmail(email)
                         .orElseThrow(() -> new IllegalArgumentException("이메일 또는 비밀번호가 일치하지 않습니다.")))
@@ -147,5 +123,35 @@ public class AuthService {
         return loginSessionService.revokeByRefreshToken(refreshToken)
                 .then(authLoginLogService.event("LOGOUT", true, null, null, ip, ua, null, null)
                         .onErrorResume(e -> Mono.empty()));
+    }
+
+    private User createVerifiedUser(SignupRequestDto requestDto, String email) {
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
+        }
+
+        mailAuthService.consumeSignupEmailVerification(email, requestDto.getVerificationCode());
+
+        Instant now = Instant.now();
+        User newUser = new User();
+        newUser.setEmail(email);
+        newUser.setPasswordHash(passwordEncoder.encode(requestDto.getPassword()));
+        newUser.setName(requestDto.getName());
+        newUser.setPhone(requestDto.getPhone());
+        newUser.setBirthdate(requestDto.getBirthdate());
+        newUser.setRole(UserRole.user);
+        newUser.setStatus("active");
+        newUser.setEmailVerified(true);
+        newUser.setEmailVerifiedAt(now);
+        newUser.setGlossaryHover(false);
+
+        return userRepository.save(newUser);
+    }
+
+    private static String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("이메일은 필수입니다.");
+        }
+        return email.trim().toLowerCase(Locale.ROOT);
     }
 }

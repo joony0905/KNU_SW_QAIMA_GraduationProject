@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,7 +32,7 @@ public class MailAuthService {
 
     private final UserRepository userRepository;
     private final EmailVerificationRepository emailVerificationRepository;
-    private final PwdResetRepository PwdResetRepository;
+    private final PwdResetRepository pwdResetRepository;
 
     private final JavaMailSender mailSender;
     private final PasswordEncoder passwordEncoder;
@@ -45,94 +46,114 @@ public class MailAuthService {
     @Value("${qaima.mail.dry-run:false}")
     private boolean mailDryRun;
 
-    // 이메일 인증 코드는 짧게(보통 5~15분)
     private static final Duration VERIFY_TTL = Duration.ofMinutes(10);
     private static final Duration RESET_TTL  = Duration.ofMinutes(30);
     private static final Duration RATE_LIMIT = Duration.ofSeconds(60);
 
-    /**
-     * 회원가입 이메일 인증번호 발송 (6자리)
-     * - 메일에는 "인증번호"만 포함 (링크 X)
-     */
     @Transactional
     public void requestEmailVerificationCode(String email) {
-        User user = userRepository.findByEmail(email).orElse(null);
+        String normalizedEmail = normalizeEmail(email);
+        User user = userRepository.findByEmail(normalizedEmail).orElse(null);
 
-        // 존재 여부 노출 방지: 없으면 성공처럼 종료
-        if (user == null) return;
-        if (user.isEmailVerified()) return;
-
-        Instant now = Instant.now();
-        if (emailVerificationRepository.existsByUserAndCreatedAtAfter(user, now.minus(RATE_LIMIT))) {
+        if (user != null && user.isEmailVerified()) {
             return;
         }
 
-        // 재발송 시 기존 토큰 폐기
-        emailVerificationRepository.deleteByUser(user);
+        Instant now = Instant.now();
+        if (emailVerificationRepository.existsByEmailAndCreatedAtAfter(normalizedEmail, now.minus(RATE_LIMIT))) {
+            return;
+        }
+
+        emailVerificationRepository.deleteByEmailAndUsedAtIsNull(normalizedEmail);
 
         String code = generate6DigitCode();
         String tokenHash = sha256Hex(code);
 
         EmailVerification token = new EmailVerification();
         token.setUser(user);
+        token.setEmail(normalizedEmail);
         token.setTokenHash(tokenHash);
         token.setExpiresAt(now.plus(VERIFY_TTL));
         emailVerificationRepository.save(token);
 
-        String subject = "[QAIMA] 회원가입 이메일 인증번호";
+        String subject = "[QAIMA] 이메일 인증번호";
         String body = ""
-                + "QAIMA 회원가입 이메일 인증번호입니다.\n\n"
+                + "QAIMA 이메일 인증번호입니다.\n\n"
                 + "인증번호: " + code + "\n\n"
                 + "만료 시간: " + VERIFY_TTL.toMinutes() + "분\n"
                 + "본인이 요청하지 않았다면 이 메일을 무시하셔도 됩니다.\n";
 
-        sendTextMail(user.getEmail(), subject, body);
+        sendTextMail(normalizedEmail, subject, body);
     }
-
-
-    /**
-     * 최초 인증번호 발송
-     */
 
     @Transactional
     public void confirmEmailVerificationCode(String email, String code) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 요청입니다."));
+        String normalizedEmail = normalizeEmail(email);
+        User user = userRepository.findByEmail(normalizedEmail).orElse(null);
 
-        if (user.isEmailVerified()) return;
+        if (user != null && user.isEmailVerified()) {
+            return;
+        }
 
-        String tokenHash = sha256Hex(code);
+        String tokenHash = sha256Hex(normalizeCode(code));
         EmailVerification token = emailVerificationRepository
-                .findByUserAndTokenHash(user, tokenHash)
+                .findByEmailAndTokenHash(normalizedEmail, tokenHash)
                 .orElseThrow(() -> new IllegalArgumentException("인증번호가 올바르지 않습니다."));
 
         Instant now = Instant.now();
-        if (token.getUsedAt() != null) throw new IllegalArgumentException("이미 사용된 인증번호입니다.");
+        if (token.getUsedAt() != null) {
+            throw new IllegalArgumentException("이미 사용된 인증번호입니다.");
+        }
         if (token.getExpiresAt() == null || token.getExpiresAt().isBefore(now)) {
             throw new IllegalArgumentException("만료된 인증번호입니다.");
         }
 
-        user.setEmailVerified(true);
-        user.setEmailVerifiedAt(now);
+        if (user != null) {
+            user.setEmailVerified(true);
+            user.setEmailVerifiedAt(now);
+            token.setUser(user);
+        }
         token.setUsedAt(now);
-
-        emailVerificationRepository.deleteByUser(user);
     }
 
-    /**
-     * 비밀번호 재설정 링크 발송
-     */
+    @Transactional
+    public void consumeSignupEmailVerification(String email, String code) {
+        String normalizedEmail = normalizeEmail(email);
+        String tokenHash = sha256Hex(normalizeCode(code));
+        Instant now = Instant.now();
+        EmailVerification token = emailVerificationRepository
+                .findByEmailAndTokenHash(normalizedEmail, tokenHash)
+                .orElseThrow(() -> new IllegalArgumentException("회원가입 전에 이메일 인증이 필요합니다."));
+
+        if (token.getUsedAt() == null) {
+            throw new IllegalArgumentException("회원가입 전에 이메일 인증이 필요합니다.");
+        }
+        if (token.getExpiresAt() == null || token.getExpiresAt().isBefore(now)) {
+            throw new IllegalArgumentException("만료된 인증번호입니다.");
+        }
+
+        emailVerificationRepository.deleteByEmail(normalizedEmail);
+    }
+
+    @Scheduled(fixedDelayString = "${auth.email-verification.cleanup-interval-ms:3600000}")
+    @Transactional
+    public void cleanupExpiredEmailVerifications() {
+        emailVerificationRepository.deleteByExpiresAtBefore(Instant.now());
+    }
+
     @Transactional
     public void requestPasswordResetLink(String email) {
-        User user = userRepository.findByEmail(email).orElse(null);
-        if (user == null) return;
-
-        Instant now = Instant.now();
-        if (PwdResetRepository.existsByUserAndCreatedAtAfter(user, now.minus(RATE_LIMIT))) {
+        User user = userRepository.findByEmail(normalizeEmail(email)).orElse(null);
+        if (user == null) {
             return;
         }
 
-        PwdResetRepository.deleteByUser(user);
+        Instant now = Instant.now();
+        if (pwdResetRepository.existsByUserAndCreatedAtAfter(user, now.minus(RATE_LIMIT))) {
+            return;
+        }
+
+        pwdResetRepository.deleteByUser(user);
 
         String rawToken = generateUrlSafeToken();
         String tokenHash = sha256Hex(rawToken);
@@ -141,7 +162,7 @@ public class MailAuthService {
         token.setUser(user);
         token.setTokenHash(tokenHash);
         token.setExpiresAt(now.plus(RESET_TTL));
-        PwdResetRepository.save(token);
+        pwdResetRepository.save(token);
 
         String link = baseUrl + "/api/v1/email/pwdreset/form?token=" + rawToken;
 
@@ -155,10 +176,6 @@ public class MailAuthService {
         sendTextMail(user.getEmail(), subject, body);
     }
 
-    /**
-     * 비밀번호 재설정
-     */
-
     @Transactional
     public void confirmPasswordReset(String rawToken, String newPassword) {
         if (newPassword == null || newPassword.isBlank()) {
@@ -171,10 +188,12 @@ public class MailAuthService {
         Instant now = Instant.now();
         String tokenHash = sha256Hex(rawToken);
 
-        PwdReset token = PwdResetRepository.findByTokenHash(tokenHash)
+        PwdReset token = pwdResetRepository.findByTokenHash(tokenHash)
                 .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 토큰입니다."));
 
-        if (token.getUsedAt() != null) throw new IllegalArgumentException("이미 사용된 토큰입니다.");
+        if (token.getUsedAt() != null) {
+            throw new IllegalArgumentException("이미 사용된 토큰입니다.");
+        }
         if (token.getExpiresAt() == null || token.getExpiresAt().isBefore(now)) {
             throw new IllegalArgumentException("만료된 토큰입니다.");
         }
@@ -182,10 +201,7 @@ public class MailAuthService {
         User user = token.getUser();
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         token.setUsedAt(now);
-
-        // 강추: Refresh Token/세션이 있으면 여기서 전부 폐기
     }
-
 
     private void sendTextMail(String to, String subject, String text) {
         try {
@@ -217,8 +233,21 @@ public class MailAuthService {
         return normalized.endsWith("@example.com");
     }
 
+    private static String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("이메일은 필수입니다.");
+        }
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String normalizeCode(String code) {
+        if (code == null || code.isBlank()) {
+            throw new IllegalArgumentException("인증번호는 필수입니다.");
+        }
+        return code.trim();
+    }
+
     private static String generate6DigitCode() {
-        // 000000~999999 방지 위해 100000~999999
         int n = 100000 + new SecureRandom().nextInt(900000);
         return Integer.toString(n);
     }
@@ -234,7 +263,9 @@ public class MailAuthService {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] digest = md.digest(raw.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder(64);
-            for (byte b : digest) sb.append(String.format("%02x", b));
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
             return sb.toString();
         } catch (Exception e) {
             throw new IllegalStateException("해시 생성 실패");
