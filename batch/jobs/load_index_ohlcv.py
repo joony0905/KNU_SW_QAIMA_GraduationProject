@@ -1,3 +1,11 @@
+#국내 산업 지수 일봉 데이터 적재 스크립트
+
+#python jobs\load_index_ohlcv.py --index-code 00001 --sleep-ms 100
+
+#spring내 resources.indexcode 참고
+
+##jobs/load_index_ohlcv.py --help
+
 from __future__ import annotations
 
 import argparse
@@ -535,7 +543,7 @@ def bootstrap_index_ohlcv(
                 index_code=code,
                 from_date=fetch_from,
                 to_date=fetch_to,
-                sleep_ms_between_pages=0,
+                sleep_ms_between_pages=max(sleep_ms, DEFAULT_MIN_INTERVAL_MS),
             )
             last_request_ts = time.time()
 
