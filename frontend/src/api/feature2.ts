@@ -3,6 +3,8 @@ import type {
   BaseRateSeriesPoint,
   BaseRateMetrics,
   Feature2AnalyzeResponse,
+  Feature2MacroRates,
+  Feature2MacroRatesSeries,
   IndustryIndexBlock,
   RelatedStockCard,
   ShortSellingSeriesPoint,
@@ -50,6 +52,20 @@ export const fetchFeature2BaseRateSeries = async (
   limit = 365,
 ): Promise<ApiResponse<BaseRateSeriesPoint[]>> => {
   const res = await api.get<ApiResponse<BaseRateSeriesPoint[]>>("/feature2/cards/base-rate-series", {
+    params: { limit },
+  });
+  return res.data;
+};
+
+export const fetchFeature2MacroRates = async (): Promise<ApiResponse<Feature2MacroRates | null>> => {
+  const res = await api.get<ApiResponse<Feature2MacroRates | null>>("/feature2/cards/macro-rates");
+  return res.data;
+};
+
+export const fetchFeature2MacroRatesSeries = async (
+  limit = 120,
+): Promise<ApiResponse<Feature2MacroRatesSeries | null>> => {
+  const res = await api.get<ApiResponse<Feature2MacroRatesSeries | null>>("/feature2/cards/macro-rates-series", {
     params: { limit },
   });
   return res.data;

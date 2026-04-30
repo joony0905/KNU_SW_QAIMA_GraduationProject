@@ -1,0 +1,20 @@
+CREATE TABLE market_investor_flow (
+    market_investor_flow_id BIGINT NOT NULL AUTO_INCREMENT,
+    market_code VARCHAR(16) NOT NULL,
+    industry_code VARCHAR(32) NOT NULL,
+    trade_date DATE NOT NULL,
+    foreign_net_buy_qty DECIMAL(24,0) NULL,
+    foreign_net_buy_value_million DECIMAL(24,0) NULL,
+    individual_net_buy_qty DECIMAL(24,0) NULL,
+    individual_net_buy_value_million DECIMAL(24,0) NULL,
+    institution_net_buy_qty DECIMAL(24,0) NULL,
+    institution_net_buy_value_million DECIMAL(24,0) NULL,
+    source VARCHAR(50) NOT NULL DEFAULT 'KIS',
+    source_tr_id VARCHAR(20) NOT NULL DEFAULT 'FHPTJ04040000',
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (market_investor_flow_id),
+    UNIQUE KEY uk_market_investor_flow_market_industry_date_source (market_code, industry_code, trade_date, source),
+    KEY idx_market_investor_flow_market_date (market_code, trade_date),
+    KEY idx_market_investor_flow_trade_date (trade_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

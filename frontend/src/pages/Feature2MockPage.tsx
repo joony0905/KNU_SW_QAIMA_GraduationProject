@@ -7,6 +7,7 @@ import StockCard from "../components/StockCard";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import TradingViewWidget from "../components/TradingViewWidget";
+import Feature2ExternalFactorPanel from "../components/Feature2ExternalFactorPanel";
 
 import AnalysisResultPanel from "../components/AnalysisResultPanel";
 import type { AnalysisPanelResult } from "../types/analysisPanel";
@@ -15,6 +16,8 @@ import {
   fetchFeature2BaseRate,
   fetchFeature2BaseRateSeries,
   fetchFeature2IndustryIndex,
+  fetchFeature2MacroRates,
+  fetchFeature2MacroRatesSeries,
   fetchFeature2RelatedStocks,
   fetchFeature2ShortSellingSeries,
   fetchFeature2ShortSelling,
@@ -24,6 +27,8 @@ import type {
   BaseRateSeriesPoint,
   BaseRateMetrics,
   Feature2AnalyzeResponse,
+  Feature2MacroRates,
+  Feature2MacroRatesSeries,
   IndustryIndexBlock,
   RelatedStockCard,
   ShortSellingSeriesPoint,
@@ -218,17 +223,6 @@ const parseFeature2Explain = (raw?: string | null): Feature2PanelExplain | null 
   }
 };
 
-const formatTimeAgo = (isoStr: string): string => {
-  const diff = Date.now() - new Date(isoStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}분 전`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}일 전`;
-  return new Date(isoStr).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
-};
-
 const mapRelatedStocks = (rows: RelatedStockCard[]): RelatedStockDisplay[] =>
   rows.map((row) => ({
     stockCode: row.stockCode,
@@ -238,6 +232,12 @@ const mapRelatedStocks = (rows: RelatedStockCard[]): RelatedStockDisplay[] =>
     changeRate: row.changeRate ?? 0,
     volume: row.volume ?? 0,
   }));
+
+const isMacroRatesEmpty = (data: Feature2MacroRates | null | undefined) =>
+  !data?.usdKrw &&
+  !data?.krBaseRate &&
+  !data?.usFedFundsRate &&
+  (!data?.bondYields || data.bondYields.length === 0);
 
 export default function Feature2MockPage() {
   const navigate = useNavigate();
@@ -290,8 +290,8 @@ export default function Feature2MockPage() {
     if (displayData.length > 0) {
       const last = displayData[displayData.length - 1];
       const prev = displayData.length > 1 ? displayData[displayData.length - 2] : null;
-      const lastClose = Number((last as any).c);
-      const prevClose = prev ? Number((prev as any).c) : lastClose;
+      const lastClose = Number(last.c);
+      const prevClose = prev ? Number(prev.c) : lastClose;
 
       if (Number.isFinite(lastClose) && Number.isFinite(prevClose)) {
         const diff = lastClose - prevClose;
@@ -342,7 +342,7 @@ export default function Feature2MockPage() {
         fromIso,
         allowedDayKeys,
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("차트 데이터 조회 실패:", e);
       setChartError("차트를 불러오지 못했습니다.");
       setCandles([]);
@@ -489,6 +489,10 @@ export default function Feature2MockPage() {
   const [analysisResult, setAnalysisResult] = useState<ApiResponse<Feature2AnalyzeResponse> | null>(null);
   const analysisData = analysisResult?.data ?? null;
   const [baseRateResult, setBaseRateResult] = useState<ApiResponse<BaseRateMetrics | null> | null>(null);
+  const [macroRatesResult, setMacroRatesResult] = useState<ApiResponse<Feature2MacroRates | null> | null>(null);
+  const [macroRatesSeriesResult, setMacroRatesSeriesResult] = useState<ApiResponse<Feature2MacroRatesSeries | null> | null>(null);
+  const [macroRatesLoading, setMacroRatesLoading] = useState(false);
+  const [macroRatesError, setMacroRatesError] = useState<string | null>(null);
   const [shortSellingResult, setShortSellingResult] = useState<ApiResponse<ShortSellingMetrics | null> | null>(null);
   const [shortSellingSeriesResult, setShortSellingSeriesResult] = useState<ApiResponse<ShortSellingSeriesPoint[]> | null>(null);
   const [baseRateSeriesResult, setBaseRateSeriesResult] = useState<ApiResponse<BaseRateSeriesPoint[]> | null>(null);
@@ -522,6 +526,33 @@ export default function Feature2MockPage() {
     visible: false,
   });
 
+  const loadMacroRates = async (requestId?: number) => {
+    setMacroRatesLoading(true);
+    setMacroRatesError(null);
+    try {
+      const [result, seriesResult] = await Promise.all([
+        fetchFeature2MacroRates(),
+        fetchFeature2MacroRatesSeries(120),
+      ]);
+      if (requestId != null && searchRequestIdRef.current !== requestId) return;
+      setMacroRatesResult(result);
+      setMacroRatesSeriesResult(seriesResult);
+      if (isMacroRatesEmpty(result.data)) {
+        setMacroRatesError("환율/국채 데이터를 찾지 못했습니다.");
+      }
+    } catch (error) {
+      if (requestId != null && searchRequestIdRef.current !== requestId) return;
+      console.error("매크로 금리/환율 조회 실패:", error);
+      setMacroRatesResult(null);
+      setMacroRatesSeriesResult(null);
+      setMacroRatesError("환율/국채 데이터를 불러오지 못했습니다.");
+    } finally {
+      if (requestId == null || searchRequestIdRef.current === requestId) {
+        setMacroRatesLoading(false);
+      }
+    }
+  };
+
   useEffect(() => {
     if (!toast.visible) return;
     const t = setTimeout(() => {
@@ -549,12 +580,12 @@ export default function Feature2MockPage() {
 
   const mapped = raw
     .filter(
-      (p: any) =>
+      (p: { t?: unknown; value?: unknown }): p is { t: string; value: unknown } =>
         p &&
         typeof p.t === "string" &&
         Number.isFinite(Number(p.value)),
     )
-    .map((p: any) => ({
+    .map((p) => ({
       t: p.t,
       value: Number(p.value),
     }));
@@ -572,7 +603,11 @@ export default function Feature2MockPage() {
     setHasSelectedStock(true);
     setShowAnalyzeButton(true);
     setAnalysisResult(null);
+    setMacroRatesResult(null);
+    setMacroRatesSeriesResult(null);
+    setMacroRatesError(null);
     setShortSellingResult(null);
+    setShortSellingSeriesResult(null);
     setShortSellingSeriesResult(null);
     setBaseRateSeriesResult(null);
     setIndustryIndexResult(null);
@@ -621,6 +656,8 @@ export default function Feature2MockPage() {
       }
     })();
 
+    const macroRatesTask = loadMacroRates(requestId);
+
     const newsTask = (async () => {
       try {
         const news = await fetchNewsByStock(resolvedStockCode);
@@ -630,17 +667,25 @@ export default function Feature2MockPage() {
         if (searchRequestIdRef.current !== requestId) return;
         setNewsError("뉴스를 불러오지 못했습니다.");
       } finally {
-        if (searchRequestIdRef.current !== requestId) return;
-        setNewsLoading(false);
+        if (searchRequestIdRef.current === requestId) {
+          setNewsLoading(false);
+        }
       }
     })();
 
     const shortSellingTask = (async () => {
       try {
-        const result = await fetchFeature2ShortSelling(resolvedStockCode);
+        const [result, seriesResult] = await Promise.all([
+          fetchFeature2ShortSelling(resolvedStockCode),
+          fetchFeature2ShortSellingSeries(resolvedStockCode, 120),
+        ]);
+        if (searchRequestIdRef.current !== requestId) return;
         setShortSellingResult(result);
+        setShortSellingSeriesResult(seriesResult);
       } catch {
+        if (searchRequestIdRef.current !== requestId) return;
         setShortSellingResult(null);
+        setShortSellingSeriesResult(null);
       }
     })();
 
@@ -678,6 +723,7 @@ export default function Feature2MockPage() {
       loadCandles(resolvedStockCode),
       newsTask,
       baseRateTask,
+      macroRatesTask,
       shortSellingTask,
       industryIndexTask,
       relatedStocksTask,
@@ -693,6 +739,8 @@ export default function Feature2MockPage() {
   const [relatedLoading, setRelatedLoading] = useState(false);
   const [relatedError, setRelatedError] = useState<string | null>(null);
   const baseRateMetrics = analysisData?.metrics?.baseRate ?? baseRateResult?.data ?? null;
+  const macroRates = macroRatesResult?.data ?? null;
+  const macroTrendSeries = macroRatesSeriesResult?.data?.series ?? [];
   const shortSellingMetrics = analysisData?.metrics?.shortSelling ?? shortSellingResult?.data ?? null;
   const displayIndustryIndex = analysisData?.metrics?.industryIndex ?? industryIndexResult?.data ?? null;
 
@@ -1089,214 +1137,24 @@ export default function Feature2MockPage() {
             </section>
           </div>
 
-          <div className="w-full xl:w-[380px] 2xl:w-[420px] flex flex-col items-stretch gap-5">
-            <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-black text-base sm:text-lg font-medium"><DictTerm term="기준금리">기준금리</DictTerm></h3>
-                {(() => {
-                  const br = baseRateMetrics;
-                  if (!br) {
-                    return (
-                      <span className="text-sm text-gray-400">데이터 없음</span>
-                    );
-                  }
-                  return (
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-lg sm:text-xl font-bold text-black">
-                        {br.value}{br.unit}
-                      </span>
-                      <span className="text-xs sm:text-sm text-gray-500">
-                        {br.date} 기준
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-            </section>
-
-            <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
-              <div className="flex flex-col gap-3">
-                <h3 className="text-black text-base sm:text-lg font-medium">
-                  {mainStock.name} 관련 뉴스
-                </h3>
-
-                {newsLoading && (
-                  <div className="h-24 flex items-center justify-center text-sm text-gray-500">
-                    뉴스를 불러오는 중입니다…
-                  </div>
-                )}
-
-                {newsError && !newsLoading && (
-                  <div className="h-24 flex items-center justify-center text-sm text-red-500">
-                    {newsError ?? "뉴스를 불러오지 못했습니다."}
-                  </div>
-                )}
-
-                {!newsLoading && !newsError && (
-                  <div className="flex flex-col min-h-[230px] max-h-[250px] overflow-y-auto">
-                    {newsItems.map((item, idx) => (
-                      <a
-                        key={item.newsId}
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`flex items-center gap-4 px-2.5 py-2 bg-white border-t ${
-                          idx === newsItems.length - 1 ? "border-b" : ""
-                        } border-zinc-300 hover:bg-zinc-50 transition-colors`}
-                      >
-                        <div className="flex-1 flex flex-col gap-2">
-                          <div className="flex flex-col">
-                            <h4 className="text-black text-sm sm:text-base font-semibold line-clamp-1">
-                              {item.title}
-                            </h4>
-                            <p className="text-black text-xs sm:text-sm leading-snug line-clamp-2">
-                              {item.summary}
-                            </p>
-                          </div>
-                          <p className="text-black text-[11px] sm:text-xs font-medium">
-                            {formatTimeAgo(item.publishedAt)} • {item.publisher}
-                          </p>
-                        </div>
-                      </a>
-                    ))}
-
-                    {newsItems.length === 0 && (
-                      <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-                        표시할 뉴스가 없습니다.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
-              <div className="flex flex-col gap-3">
-                <h3 className="text-black text-base sm:text-lg font-medium">
-                  {mainStock.name} 관련 산업 유사 종목
-                </h3>
-
-                {relatedLoading && (
-                  <div className="h-24 flex items-center justify-center text-sm text-gray-500">
-                    유사 종목을 불러오는 중입니다…
-                  </div>
-                )}
-
-                {relatedError && !relatedLoading && (
-                  <div className="h-24 flex items-center justify-center text-sm text-red-500">
-                    {relatedError ?? "유사 종목을 불러오지 못했습니다."}
-                  </div>
-                )}
-
-                {!relatedLoading && !relatedError && (
-                  <div className="flex flex-col min-h-[230px] max-h-[250px] overflow-y-auto">
-                    {relatedStocks.map((row, idx) => {
-                      const colorClass = row.change > 0 ? "text-red-600" : row.change < 0 ? "text-blue-600" : "text-black";
-                      const fmtPrice = row.price.toLocaleString("ko-KR");
-                      const fmtVolume = row.volume.toLocaleString("ko-KR");
-                      const fmtChange = row.change > 0 ? `+${row.change.toLocaleString("ko-KR")}` : row.change.toLocaleString("ko-KR");
-                      const fmtRate = row.change > 0 ? `+${row.changeRate.toFixed(2)}%` : row.change < 0 ? `${row.changeRate.toFixed(2)}%` : "0.00%";
-
-                      return (
-                        <button
-                          key={row.stockCode}
-                          onClick={() => handleSearch(row.stockCode)}
-                          className={`flex items-center gap-2 px-2.5 py-2 bg-white border-t ${
-                            idx === relatedStocks.length - 1 ? "border-b" : ""
-                          } border-zinc-300 hover:bg-zinc-50 transition-colors cursor-pointer w-full text-left`}
-                        >
-                          {/* 종목명 */}
-                          <div className="min-w-0 w-[90px] flex-shrink-0">
-                            <p className="text-xs sm:text-sm font-semibold text-black truncate">{row.companyName}</p>
-                            <p className="text-[10px] text-gray-400">{row.stockCode}</p>
-                          </div>
-
-                          {/* 현재가 + 거래량 */}
-                          <div className="flex flex-col items-end flex-1 min-w-0">
-                            <span className={`text-xs sm:text-sm font-semibold ${colorClass}`}>{fmtPrice}</span>
-                            <span className="text-[10px] sm:text-xs text-gray-500">{fmtVolume}</span>
-                          </div>
-
-                          {/* 방향 삼각형 */}
-                          <div className="flex-shrink-0 w-3 flex items-center justify-center">
-                            {row.change > 0 && (
-                              <div className={`${colorClass} w-0 h-0 border-l-[5px] border-r-[5px] border-b-[7px] border-transparent border-b-current`} />
-                            )}
-                            {row.change < 0 && (
-                              <div className={`${colorClass} w-0 h-0 border-l-[5px] border-r-[5px] border-t-[7px] border-transparent border-t-current`} />
-                            )}
-                            {row.change === 0 && (
-                              <span className="text-black text-lg font-extrabold leading-none">-</span>
-                            )}
-                          </div>
-
-                          {/* 등락금액 + 등락률 */}
-                          <div className="flex flex-col items-end flex-shrink-0 min-w-[60px]">
-                            <span className={`text-xs sm:text-sm font-semibold ${colorClass}`}>{fmtChange}</span>
-                            <span className={`text-[10px] sm:text-xs font-medium ${colorClass}`}>{fmtRate}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-
-                    {relatedStocks.length === 0 && (
-                      <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
-                        표시할 유사 종목이 없습니다.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* [우측 최하단] 공매도 카드 */}
-            <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-3 py-3">
-              <div className="flex flex-col gap-3">
-                <h3 className="text-black text-base sm:text-lg font-medium">
-                  {mainStock.name} <DictTerm term="공매도">공매도</DictTerm> 현황
-                </h3>
-
-                {(() => {
-                  const ss = shortSellingMetrics;
-                  if (!ss) {
-                    return (
-                      <div className="min-h-[230px] flex items-center justify-center text-sm text-gray-500">
-                        공매도 데이터가 없습니다.
-                      </div>
-                    );
-                  }
-
-                  const fmt = (v: number) => v.toLocaleString("ko-KR");
-                  const pct = (v: number) => `${v.toFixed(2)}%`;
-
-                  const rows: { label: React.ReactNode; value: string }[] = [
-                    { label: "기준일", value: ss.reportDate },
-                    { label: "공매도 거래량", value: fmt(ss.shortVolumeTotal) },
-                    { label: <><DictTerm term="거래량">거래량</DictTerm> (총)</>, value: fmt(ss.totalVolume) },
-                    { label: "공매도 거래량 비율", value: pct(ss.shortVolumeRatio) },
-                    { label: "공매도 거래대금", value: `${fmt(ss.shortAmountTotal)}원` },
-                    { label: <><DictTerm term="거래대금">거래대금</DictTerm> (총)</>, value: `${fmt(ss.totalAmount)}원` },
-                    { label: "공매도 거래대금 비율", value: pct(ss.shortAmountRatio) },
-                  ];
-
-                  return (
-                    <div className="flex flex-col overflow-y-auto">
-                      {rows.map((row, idx) => (
-                        <div
-                          key={`short-selling-row-${idx}`}
-                          className={`flex items-center justify-between px-2.5 py-2 border-t ${
-                            idx === rows.length - 1 ? "border-b" : ""
-                          } border-zinc-300`}
-                        >
-                          <span className="text-xs sm:text-sm text-gray-600">{row.label}</span>
-                          <span className="text-xs sm:text-sm font-semibold text-black">{row.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            </section>
+          <div className="w-full xl:w-[440px] 2xl:w-[480px] flex flex-col items-stretch">
+            <Feature2ExternalFactorPanel
+              stockName={mainStock.name}
+              baseRateMetrics={baseRateMetrics}
+              macroRates={macroRates}
+              macroRatesLoading={macroRatesLoading}
+              macroRatesError={macroRatesError}
+              macroTrendSeries={macroTrendSeries}
+              shortSellingSeries={shortSellingSeriesResult?.data ?? []}
+              newsItems={newsItems}
+              newsLoading={newsLoading}
+              newsError={newsError}
+              relatedStocks={relatedStocks}
+              relatedLoading={relatedLoading}
+              relatedError={relatedError}
+              shortSellingMetrics={shortSellingMetrics}
+              onSelectRelatedStock={handleSearch}
+            />
           </div>
         </main>
           );

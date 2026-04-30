@@ -159,6 +159,58 @@ export interface BaseRateSeriesPoint {
   unit: string;
 }
 
+export interface Feature2MacroRatePoint {
+  date: string;
+  value: number;
+  unit: string;
+  source: string;
+}
+
+export interface Feature2ExchangeRatePoint {
+  date: string;
+  pairCode: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  value: number;
+  unit: string;
+  source: string;
+}
+
+export interface Feature2BondYieldPoint {
+  date: string;
+  countryCode: string;
+  instrumentCode: string;
+  instrumentName: string;
+  maturityMonths: number | null;
+  value: number;
+  unit: string;
+  source: string;
+}
+
+export interface Feature2MacroRates {
+  krBaseRate: Feature2MacroRatePoint | null;
+  usFedFundsRate: Feature2MacroRatePoint | null;
+  usdKrw: Feature2ExchangeRatePoint | null;
+  bondYields: Feature2BondYieldPoint[];
+}
+
+export interface Feature2TrendPoint {
+  date: string;
+  value: number;
+}
+
+export interface Feature2TrendSeries {
+  key: string;
+  label: string;
+  group: string;
+  unit: string;
+  points: Feature2TrendPoint[];
+}
+
+export interface Feature2MacroRatesSeries {
+  series: Feature2TrendSeries[];
+}
+
 export type TrendDirection = "UP" | "DOWN" | "FLAT" | "UNKNOWN";
 
 export interface BaseRateTrendSummary {

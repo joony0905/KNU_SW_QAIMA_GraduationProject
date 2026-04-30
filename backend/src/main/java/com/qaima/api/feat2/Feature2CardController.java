@@ -3,6 +3,8 @@ package com.qaima.api.feat2;
 import com.qaima.common.ApiResponse;
 import com.qaima.domain.Freq;
 import com.qaima.dto.feature2.Feature2BaseRateSeriesPointDto;
+import com.qaima.dto.feature2.Feature2MacroRatesDto;
+import com.qaima.dto.feature2.Feature2MacroRatesSeriesDto;
 import com.qaima.dto.feature2.Feature2MetricsDto;
 import com.qaima.dto.feature2.Feature2RelatedStockCardDto;
 import com.qaima.dto.feature2.Feature2ShortSellingSeriesPointDto;
@@ -51,6 +53,33 @@ public class Feature2CardController {
                                 : result.meta().getWarnings()
                 ))
                 .doOnError(ex -> log.error("[Feature2CardController] base-rate-series failed. cause={}", ex.getMessage(), ex));
+    }
+
+    @GetMapping("/macro-rates")
+    public Mono<ApiResponse<Feature2MacroRatesDto>> getMacroRates() {
+        return feature2CardService.loadMacroRates()
+                .map(result -> ApiResponse.successWithWarnings(
+                        result.data(),
+                        result.meta() == null || result.meta().getWarnings() == null
+                                ? List.of()
+                                : result.meta().getWarnings()
+                ))
+                .doOnError(ex -> log.error("[Feature2CardController] macro-rates failed. cause={}", ex.getMessage(), ex));
+    }
+
+    @GetMapping("/macro-rates-series")
+    public Mono<ApiResponse<Feature2MacroRatesSeriesDto>> getMacroRatesSeries(
+            @RequestParam(defaultValue = "120") Integer limit
+    ) {
+        int safeLimit = limit == null ? 120 : limit;
+        return feature2CardService.loadMacroRatesSeries(safeLimit)
+                .map(result -> ApiResponse.successWithWarnings(
+                        result.data(),
+                        result.meta() == null || result.meta().getWarnings() == null
+                                ? List.of()
+                                : result.meta().getWarnings()
+                ))
+                .doOnError(ex -> log.error("[Feature2CardController] macro-rates-series failed. cause={}", ex.getMessage(), ex));
     }
 
     @GetMapping("/industry-index")

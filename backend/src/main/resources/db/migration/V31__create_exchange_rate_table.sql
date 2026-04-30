@@ -1,0 +1,22 @@
+CREATE TABLE exchange_rate (
+    exchange_rate_id BIGINT NOT NULL AUTO_INCREMENT,
+    rate_date DATE NOT NULL,
+    raw_time VARCHAR(16) NOT NULL,
+    cycle VARCHAR(1) NOT NULL,
+    pair_code VARCHAR(20) NOT NULL,
+    base_currency VARCHAR(3) NOT NULL,
+    quote_currency VARCHAR(3) NOT NULL,
+    rate_value DECIMAL(20,6) NOT NULL,
+    unit_name VARCHAR(20) NOT NULL,
+    stat_code VARCHAR(20) NOT NULL,
+    stat_name VARCHAR(255) NOT NULL,
+    item_code VARCHAR(20) NOT NULL,
+    item_name VARCHAR(100) NOT NULL,
+    source VARCHAR(50) NOT NULL DEFAULT 'BOK_ECOS',
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (exchange_rate_id),
+    UNIQUE KEY uk_exchange_rate_pair_cycle_time_source (pair_code, cycle, raw_time, source),
+    KEY idx_exchange_rate_rate_date (rate_date),
+    KEY idx_exchange_rate_pair_date (pair_code, rate_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
