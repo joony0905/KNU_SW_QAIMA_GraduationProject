@@ -65,6 +65,9 @@ public class User {
     @ColumnDefault("false")
     private boolean glossaryHover;
 
+    @Column(nullable = false)
+    @ColumnDefault("0")
+    private Long creditBalance = 0L;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
