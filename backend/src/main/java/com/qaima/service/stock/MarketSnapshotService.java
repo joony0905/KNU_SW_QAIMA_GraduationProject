@@ -65,6 +65,7 @@ public class MarketSnapshotService {
                     SnapshotMetricView calculated = snapshotCalculator.calculate(new MarketSnapshotInput(
                             tuple.getT1(),
                             shareBasis.sharesOutstanding(),
+                            shareBasis.valuationShares(),
                             shareBasis.floatingShares(),
                             shareBasis.treasuryShares(),
                             baseDate,
@@ -232,10 +233,8 @@ public class MarketSnapshotService {
         TtmGrowthWindow ttmWindow = resolveTtmGrowthWindow(quarters);
         if (ttmWindow != null) {
             BigDecimal revenueGrowth = ratioGrowthPercent(ttmWindow.currentRevenue(), ttmWindow.previousRevenue());
-            BigDecimal currentShares = currentSharesOutstanding != null
-                    ? currentSharesOutstanding
-                    : resolveSharesOutstanding(stock, asOfDate);
-            BigDecimal previousShares = resolveSharesOutstanding(stock, resolveFinancialDate(ttmWindow.previousAnchor(), asOfDate));
+            BigDecimal currentShares = firstNonNull(resolveValuationShares(stock, asOfDate), currentSharesOutstanding);
+            BigDecimal previousShares = resolveValuationShares(stock, resolveFinancialDate(ttmWindow.previousAnchor(), asOfDate));
             BigDecimal currentEps = MetricMath.divide(ttmWindow.currentNetIncome(), currentShares);
             BigDecimal previousEps = MetricMath.divide(ttmWindow.previousNetIncome(), previousShares);
             return new GrowthMetrics(
@@ -254,8 +253,8 @@ public class MarketSnapshotService {
 
         com.qaima.domain.Financial current = annuals.get(0);
         com.qaima.domain.Financial previous = annuals.get(1);
-        BigDecimal previousShares = resolveSharesOutstanding(stock, resolveFinancialDate(previous, asOfDate));
-        BigDecimal currentShares = resolveSharesOutstanding(stock, resolveFinancialDate(current, asOfDate));
+        BigDecimal previousShares = resolveValuationShares(stock, resolveFinancialDate(previous, asOfDate));
+        BigDecimal currentShares = resolveValuationShares(stock, resolveFinancialDate(current, asOfDate));
         BigDecimal currentEps = MetricMath.divide(current.getNetIncome(), currentShares);
         BigDecimal previousEps = MetricMath.divide(previous.getNetIncome(), previousShares);
 
@@ -265,10 +264,8 @@ public class MarketSnapshotService {
         );
     }
 
-    private BigDecimal resolveSharesOutstanding(Stock stock, LocalDate effectiveDate) {
-        return shareBasisResolver.fromIssuedShares(
-                shareBasisResolver.findPrimaryIssuedShares(stock, effectiveDate)
-        ).sharesOutstanding();
+    private BigDecimal resolveValuationShares(Stock stock, LocalDate effectiveDate) {
+        return shareBasisResolver.resolveFromIssuedShares(stock, effectiveDate).valuationShares();
     }
 
     private LocalDate resolveFinancialDate(com.qaima.domain.Financial financial, LocalDate fallback) {
@@ -384,6 +381,10 @@ public class MarketSnapshotService {
             return null;
         }
         return operatingCashFlow.subtract(capex);
+    }
+
+    private BigDecimal firstNonNull(BigDecimal primary, BigDecimal fallback) {
+        return primary != null ? primary : fallback;
     }
 
     private BigDecimal derivePsr(BigDecimal marketCap, BigDecimal sps, BigDecimal sharesOutstanding) {

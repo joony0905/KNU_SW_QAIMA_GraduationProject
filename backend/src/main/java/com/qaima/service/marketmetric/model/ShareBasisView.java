@@ -8,6 +8,7 @@ public record ShareBasisView(
         BigDecimal issuedSharesTotal,
         BigDecimal treasuryShares,
         BigDecimal floatingShares,
+        BigDecimal valuationShares,
         List<String> warnings,
         String source
 ) {

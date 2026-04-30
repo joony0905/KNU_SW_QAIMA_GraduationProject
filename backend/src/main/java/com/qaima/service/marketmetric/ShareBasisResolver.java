@@ -31,9 +31,8 @@ public class ShareBasisResolver {
     private final KrStockClient krStockClient;
 
     public Mono<ShareBasisView> resolve(Stock stock, LocalDate asOfDate, boolean allowKisFallback) {
-        return Blocking.call(() -> Optional.ofNullable(findPrimaryIssuedShares(stock, asOfDate)))
-                .flatMap(issuedShares -> {
-                    ShareBasisView fromIssuedShares = fromIssuedShares(issuedShares.orElse(null));
+        return Blocking.call(() -> resolveFromIssuedShares(stock, asOfDate))
+                .flatMap(fromIssuedShares -> {
                     if (fromIssuedShares.sharesOutstanding() != null || !allowKisFallback) {
                         return Mono.just(fromIssuedShares);
                     }
@@ -56,18 +55,36 @@ public class ShareBasisResolver {
     }
 
     public ShareBasisView fromIssuedShares(IssuedShares issuedShares) {
+        return fromIssuedShares(issuedShares, null);
+    }
+
+    public ShareBasisView resolveFromIssuedShares(Stock stock, LocalDate asOfDate) {
+        if (stock == null || asOfDate == null) {
+            return fromIssuedShares(null);
+        }
+        IssuedShares primaryIssuedShares = findPrimaryIssuedShares(stock, asOfDate);
+        IssuedShares totalIssuedShares = findIssuedShares(stock, SHARE_TYPE_TOTAL, asOfDate);
+        return fromIssuedShares(primaryIssuedShares, totalIssuedShares);
+    }
+
+    private ShareBasisView fromIssuedShares(IssuedShares issuedShares, IssuedShares totalIssuedShares) {
         if (issuedShares == null) {
-            return new ShareBasisView(null, null, null, null, List.of(), "ISSUED_SHARES_MISSING");
+            return new ShareBasisView(null, null, null, null, null, List.of(), "ISSUED_SHARES_MISSING");
         }
 
         BigDecimal issuedSharesTotal = ShareBasisSupport.toBigDecimal(issuedShares.getIssuedSharesTotal());
         BigDecimal treasuryShares = ShareBasisSupport.toBigDecimal(issuedShares.getTreasuryShares());
         BigDecimal floatingShares = ShareBasisSupport.toBigDecimal(issuedShares.getFloatingShares());
+        BigDecimal valuationShares = Optional.ofNullable(totalIssuedShares)
+                .map(IssuedShares::getIssuedSharesTotal)
+                .map(ShareBasisSupport::toBigDecimal)
+                .orElse(issuedSharesTotal);
         return new ShareBasisView(
                 ShareBasisSupport.sharesOutstanding(issuedSharesTotal, treasuryShares),
                 issuedSharesTotal,
                 treasuryShares,
                 floatingShares,
+                valuationShares,
                 List.of(),
                 "ISSUED_SHARES"
         );
@@ -94,6 +111,7 @@ public class ShareBasisResolver {
                             issuedSharesTotal,
                             null,
                             null,
+                            issuedSharesTotal,
                             List.of(),
                             "KIS_SHARES_FALLBACK"
                     ));

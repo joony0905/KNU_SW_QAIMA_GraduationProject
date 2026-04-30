@@ -64,11 +64,11 @@ public class MarketMetricService {
         return Mono.zip(
                 Blocking.call(() -> financialRepository.findByStockOrderByReportDateDescVersionDesc(
                         stock,
-                        org.springframework.data.domain.PageRequest.of(0, 8)
+                        org.springframework.data.domain.PageRequest.of(0, 12)
                 )),
                 shareBasisResolver.resolve(stock, asOfDate, true)
         ).map(tuple -> mergeWarnings(
-                financialFallbackCalculator.calculate(tuple.getT1(), tuple.getT2().sharesOutstanding(), asOfDate),
+                financialFallbackCalculator.calculate(tuple.getT1(), tuple.getT2(), asOfDate),
                 inheritedWarnings,
                 tuple.getT2().warnings()
         ));
