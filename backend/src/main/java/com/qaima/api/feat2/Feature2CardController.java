@@ -3,6 +3,7 @@ package com.qaima.api.feat2;
 import com.qaima.common.ApiResponse;
 import com.qaima.domain.Freq;
 import com.qaima.dto.feature2.Feature2BaseRateSeriesPointDto;
+import com.qaima.dto.feature2.Feature2InvestorFlowDto;
 import com.qaima.dto.feature2.Feature2MacroRatesDto;
 import com.qaima.dto.feature2.Feature2MacroRatesSeriesDto;
 import com.qaima.dto.feature2.Feature2MetricsDto;
@@ -145,6 +146,23 @@ public class Feature2CardController {
                                 : result.meta().getWarnings()
                 ))
                 .doOnError(ex -> log.error("[Feature2CardController] related-stocks failed. stockCode={}, cause={}",
+                        stockCode, ex.getMessage(), ex));
+    }
+
+    @GetMapping("/investor-flow")
+    public Mono<ApiResponse<Feature2InvestorFlowDto>> getInvestorFlow(
+            @RequestParam String stockCode,
+            @RequestParam(defaultValue = "60") Integer limit
+    ) {
+        int safeLimit = limit == null ? 60 : limit;
+        return feature2CardService.loadInvestorFlow(stockCode, safeLimit)
+                .map(result -> ApiResponse.successWithWarnings(
+                        result.data(),
+                        result.meta() == null || result.meta().getWarnings() == null
+                                ? List.of()
+                                : result.meta().getWarnings()
+                ))
+                .doOnError(ex -> log.error("[Feature2CardController] investor-flow failed. stockCode={}, cause={}",
                         stockCode, ex.getMessage(), ex));
     }
 }

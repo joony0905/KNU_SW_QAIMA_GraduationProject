@@ -277,6 +277,47 @@ export interface ShortSellingSeriesPoint {
   totalAmount: number | null;
 }
 
+export type InvestorFlowDirection =
+  | "BOTH_NET_BUY"
+  | "BOTH_NET_SELL"
+  | "FOREIGN_BUY_INSTITUTION_SELL"
+  | "FOREIGN_SELL_INSTITUTION_BUY"
+  | "MIXED_OR_FLAT";
+
+export interface InvestorFlowSummary {
+  window: number;
+  pointCount: number;
+  startDate: string | null;
+  endDate: string | null;
+  foreignNetBuyValueMillionSum: number | null;
+  institutionNetBuyValueMillionSum: number | null;
+  combinedNetBuyValueMillionSum: number | null;
+  foreignNetBuyQtySum: number | null;
+  institutionNetBuyQtySum: number | null;
+  combinedNetBuyQtySum: number | null;
+  direction: InvestorFlowDirection | string | null;
+}
+
+export interface InvestorFlowPoint {
+  tradeDate: string;
+  closePrice?: number | null;
+  foreignNetBuyQty: number | null;
+  foreignNetBuyValueMillion: number | null;
+  institutionNetBuyQty: number | null;
+  institutionNetBuyValueMillion: number | null;
+  individualNetBuyQty: number | null;
+  individualNetBuyValueMillion: number | null;
+}
+
+export interface Feature2InvestorFlow {
+  stockCode: string;
+  marketCode: string | null;
+  stockSummary: InvestorFlowSummary | null;
+  marketSummary: InvestorFlowSummary | null;
+  stockSeries: InvestorFlowPoint[];
+  marketSeries: InvestorFlowPoint[];
+}
+
 // --- Feature2 전체 메트릭스 ---
 export interface Feature2Metrics {
   stock: StockMeta | null;

@@ -1,10 +1,12 @@
 import { useMemo, useState, type ReactNode } from "react";
 import DictTerm from "./DictTerm";
+import InvestorFlowTrendChart from "./InvestorFlowTrendChart";
 import ShortSellingTrendChart from "./ShortSellingTrendChart";
 import { MiniTrendRow, MultiLineTrendChart } from "./Feature2TrendCharts";
 import type {
   BaseRateMetrics,
   Feature2MacroRates,
+  Feature2InvestorFlow,
   Feature2TrendSeries,
   ShortSellingSeriesPoint,
   ShortSellingMetrics,
@@ -37,6 +39,9 @@ interface Props {
   relatedLoading: boolean;
   relatedError: string | null;
   shortSellingMetrics: ShortSellingMetrics | null;
+  investorFlow: Feature2InvestorFlow | null;
+  investorFlowLoading: boolean;
+  investorFlowError: string | null;
   onSelectRelatedStock: (stockCode: string) => void;
 }
 
@@ -77,6 +82,30 @@ const formatDate = (value?: string | null) => {
   return value.slice(0, 10);
 };
 
+const formatFlowAmount = (value?: number | null) => {
+  if (value == null || !Number.isFinite(value)) return "-";
+  const abs = Math.abs(value);
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(1)}조원`;
+  if (abs >= 10_000) return `${sign}${(abs / 10_000).toFixed(1)}억원`;
+  return `${sign}${Math.round(abs).toLocaleString("ko-KR")}백만원`;
+};
+
+const investorFlowDirectionText = (direction?: string | null) => {
+  switch (direction) {
+    case "BOTH_NET_BUY":
+      return "동반 순매수";
+    case "BOTH_NET_SELL":
+      return "동반 순매도";
+    case "FOREIGN_BUY_INSTITUTION_SELL":
+      return "외국인 매수·기관 매도";
+    case "FOREIGN_SELL_INSTITUTION_BUY":
+      return "외국인 매도·기관 매수";
+    default:
+      return "혼재";
+  }
+};
+
 function MetricTile({
   label,
   value,
@@ -110,6 +139,9 @@ export default function Feature2ExternalFactorPanel({
   relatedLoading,
   relatedError,
   shortSellingMetrics,
+  investorFlow,
+  investorFlowLoading,
+  investorFlowError,
   onSelectRelatedStock,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ExternalFactorTab>("summary");
@@ -164,8 +196,18 @@ export default function Feature2ExternalFactorPanel({
         />
         <MetricTile
           label="외국인/기관"
-          value="준비중"
-          sub="수급 적재 후 연결"
+          value={
+            investorFlowLoading
+              ? "조회중"
+              : investorFlow?.stockSummary
+                ? investorFlowDirectionText(investorFlow.stockSummary.direction)
+                : "-"
+          }
+          sub={
+            investorFlow?.stockSummary
+              ? formatFlowAmount(investorFlow.stockSummary.combinedNetBuyValueMillionSum)
+              : "데이터 없음"
+          }
         />
         <MetricTile
           label={<DictTerm term="공매도">공매도</DictTerm>}
@@ -256,11 +298,62 @@ export default function Feature2ExternalFactorPanel({
   );
 
   const renderFlow = () => (
-    <div className="min-h-[360px] rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-8 flex flex-col items-center justify-center text-center">
-      <p className="text-sm font-semibold text-zinc-800">수급 데이터 준비중</p>
-      <p className="mt-2 text-xs leading-5 text-zinc-500">
-        종목 외국인/기관 수급과 시장 전체 수급은 적재 후 이 탭에 연결합니다.
-      </p>
+    <div className="flex flex-col gap-3">
+      {investorFlowLoading && (
+        <div className="h-40 flex items-center justify-center text-sm text-gray-500">
+          수급 데이터를 불러오는 중입니다…
+        </div>
+      )}
+      {investorFlowError && !investorFlowLoading && (
+        <div className="h-40 flex items-center justify-center text-sm text-red-500">
+          {investorFlowError}
+        </div>
+      )}
+      {!investorFlowLoading && !investorFlowError && !investorFlow?.stockSummary && (
+        <div className="min-h-[360px] flex items-center justify-center text-sm text-gray-500 rounded-lg border border-zinc-200 bg-zinc-50">
+          수급 데이터가 없습니다.
+        </div>
+      )}
+      {!investorFlowLoading && !investorFlowError && investorFlow?.stockSummary && (
+        <>
+          <div className="grid grid-cols-2 gap-2">
+            <MetricTile
+              label="외국인 누적"
+              value={formatFlowAmount(investorFlow.stockSummary.foreignNetBuyValueMillionSum)}
+              sub={`${investorFlow.stockSummary.pointCount}거래일`}
+            />
+            <MetricTile
+              label="기관 누적"
+              value={formatFlowAmount(investorFlow.stockSummary.institutionNetBuyValueMillionSum)}
+              sub={investorFlowDirectionText(investorFlow.stockSummary.direction)}
+            />
+            <MetricTile
+              label="외국인+기관"
+              value={formatFlowAmount(investorFlow.stockSummary.combinedNetBuyValueMillionSum)}
+              sub={`${formatDate(investorFlow.stockSummary.startDate)} ~ ${formatDate(investorFlow.stockSummary.endDate)}`}
+            />
+            <MetricTile
+              label="시장 수급"
+              value={
+                investorFlow.marketSummary
+                  ? formatFlowAmount(investorFlow.marketSummary.combinedNetBuyValueMillionSum)
+                  : "-"
+              }
+              sub={investorFlow.marketCode ?? "시장 매핑 없음"}
+            />
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-zinc-900">종목 외국인/기관 순매수</p>
+            <InvestorFlowTrendChart points={investorFlow.stockSeries ?? []} height={210} />
+          </div>
+          {investorFlow.marketSeries?.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-semibold text-zinc-900">시장 외국인/기관 순매수</p>
+              <InvestorFlowTrendChart points={investorFlow.marketSeries} height={190} />
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 

@@ -16,6 +16,7 @@ import {
   fetchFeature2BaseRate,
   fetchFeature2BaseRateSeries,
   fetchFeature2IndustryIndex,
+  fetchFeature2InvestorFlow,
   fetchFeature2MacroRates,
   fetchFeature2MacroRatesSeries,
   fetchFeature2RelatedStocks,
@@ -27,6 +28,7 @@ import type {
   BaseRateSeriesPoint,
   BaseRateMetrics,
   Feature2AnalyzeResponse,
+  Feature2InvestorFlow,
   Feature2MacroRates,
   Feature2MacroRatesSeries,
   IndustryIndexBlock,
@@ -497,6 +499,9 @@ export default function Feature2MockPage() {
   const [shortSellingSeriesResult, setShortSellingSeriesResult] = useState<ApiResponse<ShortSellingSeriesPoint[]> | null>(null);
   const [baseRateSeriesResult, setBaseRateSeriesResult] = useState<ApiResponse<BaseRateSeriesPoint[]> | null>(null);
   const [industryIndexResult, setIndustryIndexResult] = useState<ApiResponse<IndustryIndexBlock | null> | null>(null);
+  const [investorFlowResult, setInvestorFlowResult] = useState<ApiResponse<Feature2InvestorFlow | null> | null>(null);
+  const [investorFlowLoading, setInvestorFlowLoading] = useState(false);
+  const [investorFlowError, setInvestorFlowError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
@@ -611,6 +616,8 @@ export default function Feature2MockPage() {
     setShortSellingSeriesResult(null);
     setBaseRateSeriesResult(null);
     setIndustryIndexResult(null);
+    setInvestorFlowResult(null);
+    setInvestorFlowError(null);
     setDisplayText("");
     setErr("");
 
@@ -646,6 +653,7 @@ export default function Feature2MockPage() {
     setRelatedLoading(true);
     setRelatedError(null);
     setRelatedStocks([]);
+    setInvestorFlowLoading(true);
 
     const baseRateTask = (async () => {
       try {
@@ -719,6 +727,22 @@ export default function Feature2MockPage() {
       }
     })();
 
+    const investorFlowTask = (async () => {
+      try {
+        const result = await fetchFeature2InvestorFlow(resolvedStockCode, 60);
+        if (searchRequestIdRef.current !== requestId) return;
+        setInvestorFlowResult(result);
+      } catch {
+        if (searchRequestIdRef.current !== requestId) return;
+        setInvestorFlowResult(null);
+        setInvestorFlowError("수급 데이터를 불러오지 못했습니다.");
+      } finally {
+        if (searchRequestIdRef.current === requestId) {
+          setInvestorFlowLoading(false);
+        }
+      }
+    })();
+
     await Promise.all([
       loadCandles(resolvedStockCode),
       newsTask,
@@ -727,6 +751,7 @@ export default function Feature2MockPage() {
       shortSellingTask,
       industryIndexTask,
       relatedStocksTask,
+      investorFlowTask,
     ]);
   };
 
@@ -743,6 +768,7 @@ export default function Feature2MockPage() {
   const macroTrendSeries = macroRatesSeriesResult?.data?.series ?? [];
   const shortSellingMetrics = analysisData?.metrics?.shortSelling ?? shortSellingResult?.data ?? null;
   const displayIndustryIndex = analysisData?.metrics?.industryIndex ?? industryIndexResult?.data ?? null;
+  const investorFlow = investorFlowResult?.data ?? null;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1153,6 +1179,9 @@ export default function Feature2MockPage() {
               relatedLoading={relatedLoading}
               relatedError={relatedError}
               shortSellingMetrics={shortSellingMetrics}
+              investorFlow={investorFlow}
+              investorFlowLoading={investorFlowLoading}
+              investorFlowError={investorFlowError}
               onSelectRelatedStock={handleSearch}
             />
           </div>

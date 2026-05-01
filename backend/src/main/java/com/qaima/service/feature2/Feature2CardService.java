@@ -5,6 +5,9 @@ import com.qaima.domain.Freq;
 import com.qaima.domain.PriceOhlcv;
 import com.qaima.domain.ShortSelling;
 import com.qaima.domain.Stock;
+import com.qaima.domain.StockInvestorFlow;
+import com.qaima.domain.MarketInvestorFlow;
+import com.qaima.dto.feature2.Feature2InvestorFlowDto;
 import com.qaima.dto.feature2.Feature2MacroRatesDto;
 import com.qaima.dto.feature2.Feature2MacroRatesSeriesDto;
 import com.qaima.dto.feature2.Feature2BaseRateSeriesPointDto;
@@ -14,9 +17,11 @@ import com.qaima.dto.feature2.Feature2RelatedStockCardDto;
 import com.qaima.dto.feature2.Feature2ShortSellingSeriesPointDto;
 import com.qaima.dto.industry.IndustryIndexBlockDto;
 import com.qaima.repository.BaseRateRepository;
+import com.qaima.repository.MarketInvestorFlowRepository;
 import com.qaima.repository.PriceOhlcvRepository;
 import com.qaima.repository.ShortSellingRepository;
 import com.qaima.repository.StockRepository;
+import com.qaima.repository.StockInvestorFlowRepository;
 import com.qaima.service.baserate.BaseRateSyncService;
 import com.qaima.service.baserate.FredBaseRateSyncService;
 import com.qaima.service.bondyield.BondYieldInstrument;
@@ -62,6 +67,8 @@ public class Feature2CardService {
     private final IndustryIndexService industryIndexService;
     private final StockRepository stockRepository;
     private final PriceOhlcvRepository priceOhlcvRepository;
+    private final StockInvestorFlowRepository stockInvestorFlowRepository;
+    private final MarketInvestorFlowRepository marketInvestorFlowRepository;
     private final PriceSnapshotReader priceSnapshotReader;
     private final BaseRateSyncService baseRateSyncService;
     private final FredBaseRateSyncService fredBaseRateSyncService;
@@ -471,16 +478,16 @@ public class Feature2CardService {
         int safeLimit = Math.max(1, Math.min(limit, 30));
 
         return stockResolver.resolve(stockCode, meta)
-                .flatMap(stockContextOpt -> {
+                .<CardResult<List<Feature2RelatedStockCardDto>>>flatMap(stockContextOpt -> {
                     if (stockContextOpt.isEmpty()) {
-                        return Mono.just(CardResult.<List<Feature2RelatedStockCardDto>>of(List.of(), meta));
+                        return emptyRelatedStocks(meta);
                     }
 
                     Feature2StockContext stockContext = stockContextOpt.get();
                     return feature2IndustryReader.resolve(stockContext.stock(), meta)
-                            .flatMap(industryContextOpt -> {
+                            .<CardResult<List<Feature2RelatedStockCardDto>>>flatMap(industryContextOpt -> {
                                 if (industryContextOpt.isEmpty()) {
-                                    return Mono.just(CardResult.<List<Feature2RelatedStockCardDto>>of(List.of(), meta));
+                                    return emptyRelatedStocks(meta);
                                 }
 
                                 Long industryId = industryContextOpt.get().industry().getIndustryId();
@@ -490,14 +497,43 @@ public class Feature2CardService {
                                                 safeLimit
                                         ))
                                         .subscribeOn(Schedulers.boundedElastic())
-                                        .map(data -> CardResult.of(data, meta));
+                                        .map(data -> CardResult.<List<Feature2RelatedStockCardDto>>of(data, meta));
                             });
                 })
-                .switchIfEmpty(Mono.fromSupplier(() -> CardResult.<List<Feature2RelatedStockCardDto>>of(List.of(), meta)))
+                .switchIfEmpty(Mono.<CardResult<List<Feature2RelatedStockCardDto>>>fromSupplier(
+                        () -> CardResult.<List<Feature2RelatedStockCardDto>>of(List.of(), meta)
+                ))
                 .onErrorResume(ex -> {
                     log.warn("[Feature2CardService] relatedStocks card load failed. stockCode={}, cause={}",
                             stockCode, ex.getMessage(), ex);
-                    return Mono.just(CardResult.<List<Feature2RelatedStockCardDto>>of(List.of(), meta));
+                    return emptyRelatedStocks(meta);
+                });
+    }
+
+    public Mono<CardResult<Feature2InvestorFlowDto>> loadInvestorFlow(
+            String stockCode,
+            int limit
+    ) {
+        Feature2MetaDto meta = Feature2MetaDto.empty();
+        if (stockCode == null || stockCode.isBlank()) {
+            return Mono.just(CardResult.of(null, meta));
+        }
+
+        int safeLimit = Math.max(1, Math.min(limit, 252));
+        return stockResolver.resolve(stockCode, meta)
+                .flatMap(stockContextOpt -> {
+                    if (stockContextOpt.isEmpty()) {
+                        return Mono.just(CardResult.<Feature2InvestorFlowDto>of(null, meta));
+                    }
+                    return Mono.fromCallable(() -> buildInvestorFlow(stockContextOpt.get().stock(), safeLimit))
+                            .subscribeOn(Schedulers.boundedElastic())
+                            .map(data -> CardResult.of(data, meta));
+                })
+                .switchIfEmpty(Mono.fromSupplier(() -> CardResult.<Feature2InvestorFlowDto>of(null, meta)))
+                .onErrorResume(ex -> {
+                    log.warn("[Feature2CardService] investorFlow card load failed. stockCode={}, cause={}",
+                            stockCode, ex.getMessage(), ex);
+                    return Mono.just(CardResult.<Feature2InvestorFlowDto>of(null, meta));
                 });
     }
 
@@ -532,6 +568,10 @@ public class Feature2CardService {
 
     private Mono<CardResult<List<Feature2ShortSellingSeriesPointDto>>> emptyShortSellingSeries(Feature2MetaDto meta) {
         return Mono.just(CardResult.<List<Feature2ShortSellingSeriesPointDto>>of(List.of(), meta));
+    }
+
+    private Mono<CardResult<List<Feature2RelatedStockCardDto>>> emptyRelatedStocks(Feature2MetaDto meta) {
+        return Mono.just(CardResult.<List<Feature2RelatedStockCardDto>>of(List.of(), meta));
     }
 
     private List<Feature2ShortSellingSeriesPointDto> toShortSellingSeriesPoints(List<ShortSelling> rows) {
@@ -758,6 +798,198 @@ public class Feature2CardService {
         double turnoverGap = ratioGap(candidate.avgTurnover(), anchor.avgTurnover());
         double volatilityGap = ratioGap(candidate.volatility(), anchor.volatility());
         return turnoverGap * 0.65 + volatilityGap * 0.35;
+    }
+
+    private Feature2InvestorFlowDto buildInvestorFlow(Stock stock, int limit) {
+        if (stock == null) {
+            return null;
+        }
+
+        List<StockInvestorFlow> stockRows = stockInvestorFlowRepository.findByStockOrderByTradeDateDesc(
+                        stock,
+                        PageRequest.of(0, limit)
+                )
+                .stream()
+                .sorted(Comparator.comparing(StockInvestorFlow::getTradeDate))
+                .toList();
+
+        String marketCode = toInvestorMarketCode(stock);
+        List<MarketInvestorFlow> marketRows = marketCode == null
+                ? List.of()
+                : marketInvestorFlowRepository.findByMarketCodeAndIndustryCodeOrderByTradeDateDesc(
+                                marketCode,
+                                "0000",
+                                PageRequest.of(0, limit)
+                        )
+                        .stream()
+                        .sorted(Comparator.comparing(MarketInvestorFlow::getTradeDate))
+                        .toList();
+
+        return Feature2InvestorFlowDto.builder()
+                .stockCode(stock.getStockCode())
+                .marketCode(marketCode)
+                .stockSummary(buildStockInvestorFlowSummary(limit, stockRows))
+                .marketSummary(buildMarketInvestorFlowSummary(limit, marketRows))
+                .stockSeries(stockRows.stream().map(this::toStockInvestorFlowPoint).toList())
+                .marketSeries(marketRows.stream().map(this::toMarketInvestorFlowPoint).toList())
+                .build();
+    }
+
+    private String toInvestorMarketCode(Stock stock) {
+        if (stock == null || stock.getExchange() == null || stock.getExchange().getCode() == null) {
+            return null;
+        }
+        return switch (stock.getExchange().getCode().toUpperCase()) {
+            case "KOSPI", "KSP" -> "KSP";
+            case "KOSDAQ", "KSQ" -> "KSQ";
+            default -> null;
+        };
+    }
+
+    private Feature2InvestorFlowDto.InvestorFlowSummary buildStockInvestorFlowSummary(
+            int window,
+            List<StockInvestorFlow> rows
+    ) {
+        if (rows == null || rows.isEmpty()) {
+            return null;
+        }
+
+        BigDecimal foreignValue = rows.stream()
+                .map(StockInvestorFlow::getForeignNetBuyValueMillion)
+                .reduce(BigDecimal.ZERO, this::addNullable);
+        BigDecimal institutionValue = rows.stream()
+                .map(StockInvestorFlow::getInstitutionNetBuyValueMillion)
+                .reduce(BigDecimal.ZERO, this::addNullable);
+        BigDecimal foreignQty = rows.stream()
+                .map(StockInvestorFlow::getForeignNetBuyQty)
+                .reduce(BigDecimal.ZERO, this::addNullable);
+        BigDecimal institutionQty = rows.stream()
+                .map(StockInvestorFlow::getInstitutionNetBuyQty)
+                .reduce(BigDecimal.ZERO, this::addNullable);
+
+        return buildInvestorFlowSummary(
+                window,
+                rows.size(),
+                rows.get(0).getTradeDate(),
+                rows.get(rows.size() - 1).getTradeDate(),
+                foreignValue,
+                institutionValue,
+                foreignQty,
+                institutionQty
+        );
+    }
+
+    private Feature2InvestorFlowDto.InvestorFlowSummary buildMarketInvestorFlowSummary(
+            int window,
+            List<MarketInvestorFlow> rows
+    ) {
+        if (rows == null || rows.isEmpty()) {
+            return null;
+        }
+
+        BigDecimal foreignValue = rows.stream()
+                .map(MarketInvestorFlow::getForeignNetBuyValueMillion)
+                .reduce(BigDecimal.ZERO, this::addNullable);
+        BigDecimal institutionValue = rows.stream()
+                .map(MarketInvestorFlow::getInstitutionNetBuyValueMillion)
+                .reduce(BigDecimal.ZERO, this::addNullable);
+        BigDecimal foreignQty = rows.stream()
+                .map(MarketInvestorFlow::getForeignNetBuyQty)
+                .reduce(BigDecimal.ZERO, this::addNullable);
+        BigDecimal institutionQty = rows.stream()
+                .map(MarketInvestorFlow::getInstitutionNetBuyQty)
+                .reduce(BigDecimal.ZERO, this::addNullable);
+
+        return buildInvestorFlowSummary(
+                window,
+                rows.size(),
+                rows.get(0).getTradeDate(),
+                rows.get(rows.size() - 1).getTradeDate(),
+                foreignValue,
+                institutionValue,
+                foreignQty,
+                institutionQty
+        );
+    }
+
+    private Feature2InvestorFlowDto.InvestorFlowSummary buildInvestorFlowSummary(
+            int window,
+            int pointCount,
+            java.time.LocalDate startDate,
+            java.time.LocalDate endDate,
+            BigDecimal foreignValue,
+            BigDecimal institutionValue,
+            BigDecimal foreignQty,
+            BigDecimal institutionQty
+    ) {
+        BigDecimal combinedValue = addNullable(foreignValue, institutionValue);
+        BigDecimal combinedQty = addNullable(foreignQty, institutionQty);
+        return Feature2InvestorFlowDto.InvestorFlowSummary.builder()
+                .window(window)
+                .pointCount(pointCount)
+                .startDate(startDate)
+                .endDate(endDate)
+                .foreignNetBuyValueMillionSum(foreignValue)
+                .institutionNetBuyValueMillionSum(institutionValue)
+                .combinedNetBuyValueMillionSum(combinedValue)
+                .foreignNetBuyQtySum(foreignQty)
+                .institutionNetBuyQtySum(institutionQty)
+                .combinedNetBuyQtySum(combinedQty)
+                .direction(toInvestorFlowDirection(foreignValue, institutionValue))
+                .build();
+    }
+
+    private BigDecimal addNullable(BigDecimal left, BigDecimal right) {
+        BigDecimal safeLeft = left == null ? BigDecimal.ZERO : left;
+        BigDecimal safeRight = right == null ? BigDecimal.ZERO : right;
+        return safeLeft.add(safeRight);
+    }
+
+    private String toInvestorFlowDirection(BigDecimal foreignValue, BigDecimal institutionValue) {
+        int foreignSign = compareZero(foreignValue);
+        int institutionSign = compareZero(institutionValue);
+        if (foreignSign > 0 && institutionSign > 0) {
+            return "BOTH_NET_BUY";
+        }
+        if (foreignSign < 0 && institutionSign < 0) {
+            return "BOTH_NET_SELL";
+        }
+        if (foreignSign > 0 && institutionSign < 0) {
+            return "FOREIGN_BUY_INSTITUTION_SELL";
+        }
+        if (foreignSign < 0 && institutionSign > 0) {
+            return "FOREIGN_SELL_INSTITUTION_BUY";
+        }
+        return "MIXED_OR_FLAT";
+    }
+
+    private int compareZero(BigDecimal value) {
+        return value == null ? 0 : value.compareTo(BigDecimal.ZERO);
+    }
+
+    private Feature2InvestorFlowDto.InvestorFlowPoint toStockInvestorFlowPoint(StockInvestorFlow row) {
+        return Feature2InvestorFlowDto.InvestorFlowPoint.builder()
+                .tradeDate(row.getTradeDate())
+                .closePrice(row.getClosePrice())
+                .foreignNetBuyQty(row.getForeignNetBuyQty())
+                .foreignNetBuyValueMillion(row.getForeignNetBuyValueMillion())
+                .institutionNetBuyQty(row.getInstitutionNetBuyQty())
+                .institutionNetBuyValueMillion(row.getInstitutionNetBuyValueMillion())
+                .individualNetBuyQty(row.getIndividualNetBuyQty())
+                .individualNetBuyValueMillion(row.getIndividualNetBuyValueMillion())
+                .build();
+    }
+
+    private Feature2InvestorFlowDto.InvestorFlowPoint toMarketInvestorFlowPoint(MarketInvestorFlow row) {
+        return Feature2InvestorFlowDto.InvestorFlowPoint.builder()
+                .tradeDate(row.getTradeDate())
+                .foreignNetBuyQty(row.getForeignNetBuyQty())
+                .foreignNetBuyValueMillion(row.getForeignNetBuyValueMillion())
+                .institutionNetBuyQty(row.getInstitutionNetBuyQty())
+                .institutionNetBuyValueMillion(row.getInstitutionNetBuyValueMillion())
+                .individualNetBuyQty(row.getIndividualNetBuyQty())
+                .individualNetBuyValueMillion(row.getIndividualNetBuyValueMillion())
+                .build();
     }
 
     private double ratioGap(BigDecimal value, BigDecimal anchor) {

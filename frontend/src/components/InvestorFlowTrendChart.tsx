@@ -1,0 +1,187 @@
+import { useMemo, useState } from "react";
+import type { InvestorFlowPoint } from "../types/feature2";
+
+const formatValue = (value?: number | null) => {
+  if (value == null || !Number.isFinite(value)) return "-";
+  const abs = Math.abs(value);
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(1)}조`;
+  if (abs >= 10_000) return `${sign}${(abs / 10_000).toFixed(1)}억`;
+  return `${sign}${Math.round(abs).toLocaleString("ko-KR")}백만`;
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "-";
+  return value.slice(5, 10).replace("-", ".");
+};
+
+const toNum = (value?: number | null) => (value == null || !Number.isFinite(value) ? 0 : value);
+
+export default function InvestorFlowTrendChart({
+  points,
+  height = 220,
+}: {
+  points: InvestorFlowPoint[];
+  height?: number;
+}) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const chart = useMemo(() => {
+    const rows = (points ?? []).filter((point) => point?.tradeDate);
+    if (rows.length === 0) return null;
+
+    const width = 760;
+    const paddingX = 42;
+    const paddingTop = 18;
+    const paddingBottom = 34;
+    const innerWidth = width - paddingX * 2;
+    const innerHeight = height - paddingTop - paddingBottom;
+    const maxAbs = Math.max(
+      1,
+      ...rows.flatMap((point) => [
+        Math.abs(toNum(point.foreignNetBuyValueMillion)),
+        Math.abs(toNum(point.institutionNetBuyValueMillion)),
+      ]),
+    );
+    const zeroY = paddingTop + innerHeight / 2;
+    const scale = (innerHeight / 2) / maxAbs;
+    const step = innerWidth / Math.max(rows.length, 1);
+    const barWidth = Math.max(4, Math.min(16, step * 0.28));
+    const toX = (index: number) => paddingX + step * index + step / 2;
+    const toY = (value: number) => zeroY - value * scale;
+    return {
+      rows,
+      width,
+      paddingX,
+      paddingTop,
+      paddingBottom,
+      innerHeight,
+      zeroY,
+      maxAbs,
+      barWidth,
+      toX,
+      toY,
+    };
+  }, [height, points]);
+
+  if (!chart) {
+    return (
+      <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-center text-sm text-zinc-500">
+        수급 시계열 데이터가 없습니다.
+      </div>
+    );
+  }
+
+  const labels = [0, Math.floor((chart.rows.length - 1) / 2), chart.rows.length - 1]
+    .filter((index, position, arr) => index >= 0 && arr.indexOf(index) === position);
+  const hovered = hoveredIndex == null ? null : chart.rows[hoveredIndex] ?? null;
+
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-3 text-[11px] font-medium text-zinc-600">
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-rose-500" />
+            외국인
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-sky-600" />
+            기관
+          </span>
+        </div>
+        {hovered && (
+          <span className="text-[11px] font-semibold text-zinc-700">
+            {formatDate(hovered.tradeDate)} · 외국인 {formatValue(hovered.foreignNetBuyValueMillion)} · 기관 {formatValue(hovered.institutionNetBuyValueMillion)}
+          </span>
+        )}
+      </div>
+      <div className="overflow-x-auto">
+        <svg
+          viewBox={`0 0 ${chart.width} ${height}`}
+          className="min-w-[620px] w-full"
+          onMouseLeave={() => setHoveredIndex(null)}
+        >
+          <line
+            x1={chart.paddingX}
+            x2={chart.width - chart.paddingX}
+            y1={chart.zeroY}
+            y2={chart.zeroY}
+            stroke="#a1a1aa"
+            strokeWidth="1"
+          />
+          {[-chart.maxAbs, chart.maxAbs].map((tick) => (
+            <g key={tick}>
+              <line
+                x1={chart.paddingX}
+                x2={chart.width - chart.paddingX}
+                y1={chart.toY(tick)}
+                y2={chart.toY(tick)}
+                stroke="#e4e4e7"
+                strokeDasharray="4 4"
+              />
+              <text x={2} y={chart.toY(tick) + 4} fontSize="11" fill="#71717a">
+                {formatValue(tick)}
+              </text>
+            </g>
+          ))}
+          {chart.rows.map((point, index) => {
+            const x = chart.toX(index);
+            const foreign = toNum(point.foreignNetBuyValueMillion);
+            const institution = toNum(point.institutionNetBuyValueMillion);
+            const foreignY = chart.toY(foreign);
+            const institutionY = chart.toY(institution);
+            return (
+              <g key={`${point.tradeDate}-${index}`}>
+                <rect
+                  x={x - chart.barWidth - 1}
+                  y={Math.min(chart.zeroY, foreignY)}
+                  width={chart.barWidth}
+                  height={Math.max(1, Math.abs(chart.zeroY - foreignY))}
+                  fill={foreign >= 0 ? "#f43f5e" : "#60a5fa"}
+                  opacity="0.9"
+                />
+                <rect
+                  x={x + 1}
+                  y={Math.min(chart.zeroY, institutionY)}
+                  width={chart.barWidth}
+                  height={Math.max(1, Math.abs(chart.zeroY - institutionY))}
+                  fill={institution >= 0 ? "#0284c7" : "#93c5fd"}
+                  opacity="0.9"
+                />
+                <rect
+                  x={x - chart.barWidth - 3}
+                  y={chart.paddingTop}
+                  width={chart.barWidth * 2 + 6}
+                  height={chart.innerHeight}
+                  fill="transparent"
+                  onMouseEnter={() => setHoveredIndex(index)}
+                />
+              </g>
+            );
+          })}
+          {hoveredIndex != null && (
+            <line
+              x1={chart.toX(hoveredIndex)}
+              x2={chart.toX(hoveredIndex)}
+              y1={chart.paddingTop}
+              y2={height - chart.paddingBottom}
+              stroke="#18181b"
+              strokeDasharray="6 6"
+            />
+          )}
+          {labels.map((index) => (
+            <text
+              key={`label-${index}`}
+              x={chart.toX(index)}
+              y={height - 10}
+              fontSize="11"
+              fill="#71717a"
+              textAnchor="middle"
+            >
+              {formatDate(chart.rows[index]?.tradeDate)}
+            </text>
+          ))}
+        </svg>
+      </div>
+    </div>
+  );
+}

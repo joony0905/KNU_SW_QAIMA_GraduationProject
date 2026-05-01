@@ -3,6 +3,7 @@ import type {
   BaseRateSeriesPoint,
   BaseRateMetrics,
   Feature2AnalyzeResponse,
+  Feature2InvestorFlow,
   Feature2MacroRates,
   Feature2MacroRatesSeries,
   IndustryIndexBlock,
@@ -106,6 +107,16 @@ export const fetchFeature2RelatedStocks = async (
   limit = 30,
 ): Promise<ApiResponse<RelatedStockCard[]>> => {
   const res = await api.get<ApiResponse<RelatedStockCard[]>>("/feature2/cards/related-stocks", {
+    params: { stockCode, limit },
+  });
+  return res.data;
+};
+
+export const fetchFeature2InvestorFlow = async (
+  stockCode: string,
+  limit = 60,
+): Promise<ApiResponse<Feature2InvestorFlow | null>> => {
+  const res = await api.get<ApiResponse<Feature2InvestorFlow | null>>("/feature2/cards/investor-flow", {
     params: { stockCode, limit },
   });
   return res.data;
