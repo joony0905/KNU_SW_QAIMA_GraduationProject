@@ -1,24 +1,22 @@
 // src/layout/MainLayout.tsx
+import type { ReactNode } from "react";
 import Sidebar from "./Sidebar";
 import { BillingProvider } from "../contexts/BillingContext";
+import { ThemeProvider } from "../hooks/useTheme";
 
 type Props = {
-  children: React.ReactNode;
+  children: ReactNode;
 };
 
 export default function MainLayout({ children }: Props) {
   return (
-    <BillingProvider>
-      <div
-        style={{
-          display: "flex",
-          minHeight: "100vh",
-          background: "#f4f5f6",
-        }}
-      >
-        <Sidebar />
-        <main style={{ flex: 1, padding: "16px" }}>{children}</main>
-      </div>
-    </BillingProvider>
+    <ThemeProvider>
+      <BillingProvider>
+        <div className="flex min-h-screen bg-bg text-ink">
+          <Sidebar />
+          <main className="flex-1">{children}</main>
+        </div>
+      </BillingProvider>
+    </ThemeProvider>
   );
 }
