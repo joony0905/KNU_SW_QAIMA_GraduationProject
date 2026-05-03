@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2, Plus, Info, ClipboardList } from "lucide-react";
+import { Trash2, Plus, Info, ClipboardList, Sun, Moon } from "lucide-react";
+import { useTheme } from "../hooks/useTheme";
 import StockSearchCell from "../components/StockSearchCell";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { fetchPortfolioAnalysis } from "../api/portfolio";
@@ -82,9 +83,11 @@ import type { PortfolioAnalyzeResponse } from "../api/portfolio";
 
 export default function PortfolioMockPage() {
   const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<"국내" | "해외">("국내");
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const rowsContainerRef = useRef<HTMLDivElement | null>(null);
 
   // 투자 성향 지수 (0.00 ~ 1.00, null 이면 미입력 상태)
   const [riskGamma, setRiskGamma] = useState<number | null>(null);
@@ -268,6 +271,11 @@ export default function PortfolioMockPage() {
       ...prev,
       { id: nextId, name: "", quantity: 0, avgPrice: 0 },
     ]);
+    setTimeout(() => {
+      if (rowsContainerRef.current) {
+        rowsContainerRef.current.scrollTop = rowsContainerRef.current.scrollHeight;
+      }
+    }, 0);
   };
 
   const handleStockSelect = (id: number, name: string, stockCode?: string) => {
@@ -303,183 +311,175 @@ export default function PortfolioMockPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
+    <div className="min-h-screen bg-bg ml-[84px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         {/* 헤더 */}
-        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
-          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
-            포트폴리오
-          </h1>
-          <TokenBalanceBadge />
+        <header className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-medium text-ink-3 tracking-tight">
+              Portfolio · Analysis
+            </div>
+            <h1 className="mt-1 text-3xl font-bold text-ink tracking-tighter">
+              포트폴리오
+            </h1>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={toggle}
+              aria-label={theme === "dark" ? "라이트 모드" : "다크 모드"}
+              className="w-9 h-9 grid place-items-center rounded-xl bg-surface
+                         border border-line text-ink-2 shadow-card
+                         hover:bg-bg-sunk transition-colors"
+            >
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <TokenBalanceBadge />
+          </div>
         </header>
 
-        {/* 메인 2열 레이아웃 */}
-        <main className="w-full flex flex-col lg:flex-row gap-6 items-start">
-          {/* 왼쪽 영역 */}
-          <section className="w-full lg:flex-1 flex flex-col gap-6 pt-4">
-            {/* 1. 드롭다운 */}
-            <div ref={dropdownRef} className="relative inline-block">
-              <button
-                type="button"
-                onClick={toggleOpen}
-                className="inline-flex items-center justify-between
-                           px-3 h-9
-                           bg-white border border-black rounded-md
-                           text-sm"
-              >
-                <span className="font-medium text-black">{selectedMarket}</span>
-                <span
-                  className={`ml-2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent ${
-                    isOpen
-                      ? "border-t-0 border-b-[7px] border-b-neutral-700"
-                      : "border-b-0 border-t-[7px] border-t-neutral-700"
-                  }`}
-                />
-              </button>
+        {/* 메인 레이아웃 */}
+        <main className="w-full flex flex-col gap-6">
+          {/* 첫째 행: 투자 자산 비율(좌) + Portfolio Manager(우) */}
+          <div className="w-full flex flex-col lg:flex-row gap-6 items-stretch pt-4">
 
-              {isOpen && (
-                <div
-                  className="absolute left-0 top-[40px]
-                             bg-white border border-neutral-300 rounded-md shadow-sm
-                             z-10 w-[70px]"
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleSelect("국내")}
-                    className="w-full px-2 py-1.5 text-center text-sm hover:bg-neutral-100"
-                  >
-                    국내
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSelect("해외")}
-                    className="w-full px-2 py-1.5 text-center text-sm hover:bg-neutral-100"
-                  >
-                    해외
-                  </button>
+            {/* 왼쪽: 투자 자산 비율 */}
+            <section className="w-full lg:flex-1 flex flex-col">
+              <div className="flex-1 flex flex-col rounded-2xl bg-surface border border-line shadow-card">
+                {/* 카드 헤더: 드롭다운(좌) + 타이틀(중앙) + 총금액(우) */}
+                <div className="px-6 pt-5 pb-3 flex items-center justify-between gap-4">
+                  {/* 드롭다운 */}
+                  <div ref={dropdownRef} className="relative flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={toggleOpen}
+                      className="inline-flex items-center justify-between px-3 h-9 rounded-lg text-sm bg-bg-sunk border border-line text-ink"
+                    >
+                      <span className="font-semibold text-ink tracking-tight">{selectedMarket}</span>
+                      <span
+                        className={`ml-2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent ${
+                          isOpen
+                            ? "border-t-0 border-b-[7px] border-b-ink-3"
+                            : "border-b-0 border-t-[7px] border-t-ink-3"
+                        }`}
+                      />
+                    </button>
+                    {isOpen && (
+                      <div className="absolute left-0 top-[40px] rounded-lg z-10 w-[70px] bg-surface border border-line shadow-pop">
+                        <button
+                          type="button"
+                          onClick={() => handleSelect("국내")}
+                          className="w-full px-2 py-1.5 text-center text-sm rounded-t-lg text-ink hover:bg-bg-sunk"
+                        >
+                          국내
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleSelect("해외")}
+                          className="w-full px-2 py-1.5 text-center text-sm rounded-b-lg text-ink hover:bg-bg-sunk"
+                        >
+                          해외
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 타이틀 */}
+                  <p className="text-lg font-bold text-ink tracking-tight flex-1 text-center">
+                    {selectedMarket} 투자 자산 비율
+                  </p>
+
+                  {/* 총 금액 / 환율 */}
+                  <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
+                    <p className="font-medium text-sm font-mono tabular tracking-tight text-ink">
+                      {totalKRW.toLocaleString()}원
+                    </p>
+                    <p className="text-xs text-ink-3 font-mono tabular">
+                      {totalUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}달러
+                    </p>
+                    <p className="text-[11px] text-ink-4">
+                      환율 {EXCHANGE_RATE.toLocaleString()}
+                    </p>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* 2. 타이틀 */}
-            <div className="w-full flex justify-center">
-              <p className="text-xl font-medium text-black">
-                {selectedMarket} 투자 자산 비율
-              </p>
-            </div>
-
-            {/* 3. 총 금액 / 환율 */}
-            <div className="w-full flex justify-end">
-              <div className="flex flex-col items-end gap-1 text-black">
-                <p className="font-medium text-base">
-                  총 금액: {totalKRW.toLocaleString()}(원)
-                </p>
-                <p className="text-right leading-tight text-sm">
-                  <span>
-                    {totalUSD.toLocaleString(undefined, {
-                      maximumFractionDigits: 2,
-                    })}
-                    (달러)
-                  </span>
-                  <br />
-                  <span className="text-xs">
-                    적용환율:{EXCHANGE_RATE.toLocaleString()}
-                  </span>
-                </p>
+                {/* 파이차트 예정 영역 */}
+                <div className="px-4 pb-4 flex-1 flex flex-col">
+                  <div className="flex-1 rounded-xl bg-bg-sunk border border-line" />
+                </div>
               </div>
-            </div>
+            </section>
 
-            {/* 4. 파이차트 예정 영역 */}
-            <div className="w-full h-52 bg-neutral-50 border border-stone-300 rounded-xl" />
-
-            {/* 5. 포트폴리오 매니저 카드 */}
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-full max-w-4xl bg-white rounded-xl shadow-sm">
-                {/* 카드 타이틀 */}
-                <div className="px-6 pt-5 pb-3">
-                  <h2 className="text-lg font-bold text-gray-800">Portfolio Manager</h2>
-                  <p className="text-sm text-gray-400 mt-0.5">보유 종목을 추가하거나 수정하세요</p>
+            {/* 오른쪽: Portfolio Manager */}
+            <section className="w-full lg:flex-1 flex flex-col gap-4">
+              <div className="w-full rounded-2xl bg-surface border border-line shadow-card">
+                <div className="px-6 pt-5 pb-3 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-ink tracking-tight">Portfolio Manager</h2>
+                    <p className="text-sm mt-0.5 text-ink-3">보유 종목을 추가하거나 수정하세요</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddRow}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-ink text-bg hover:opacity-90"
+                  >
+                    <Plus size={14} />
+                    종목 추가
+                  </button>
                 </div>
 
-                {/* 테이블 */}
                 <div className="px-4 pb-4">
                   {/* 헤더 행 */}
-                  <div className="grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] bg-gray-50/80 rounded-xl">
+                  <div className="grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] rounded-xl bg-bg-sunk">
                     <div className="px-4 py-3 flex items-center justify-center">
-                      <span className="text-xs uppercase font-bold tracking-wider text-gray-400">
-                        종목 이름
-                      </span>
+                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">종목 이름</span>
                     </div>
                     <div className="px-4 py-3 flex items-center justify-center">
-                      <span className="text-xs uppercase font-bold tracking-wider text-gray-400">
-                        보유 주식 수
-                      </span>
+                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">보유 주식 수</span>
                     </div>
                     <div className="px-4 py-3 flex items-center justify-center">
-                      <span className="text-xs uppercase font-bold tracking-wider text-gray-400">
-                        매수 평균단가
-                      </span>
+                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">매수 평균단가</span>
                     </div>
                     <div className="px-4 py-3 flex items-center justify-center">
-                      <span className="text-xs uppercase font-bold tracking-wider text-gray-400">
-                        삭제
-                      </span>
+                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">삭제</span>
                     </div>
                   </div>
 
                   {/* 데이터 행들 */}
-                  <div>
+                  <div ref={rowsContainerRef} className="h-52 overflow-y-auto">
                     {rows.map((row) => (
                       <div
                         key={row.id}
-                        className="grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] border-b border-gray-100 last:border-b-0 transition-colors hover:bg-blue-50/30"
+                        className="grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] last:border-b-0 transition-colors border-b border-line hover:bg-bg-sunk"
                       >
-                        {/* 종목 이름 */}
                         <div className="px-4 py-3 flex items-center justify-center">
                           <StockSearchCell
                             value={row.name}
-                            onSelect={(name, stockCode) =>
-                              handleStockSelect(row.id, name, stockCode)
-                            }
+                            onSelect={(name, stockCode) => handleStockSelect(row.id, name, stockCode)}
                           />
                         </div>
-
-                        {/* 보유 주식 수 */}
                         <div className="px-4 py-3 flex items-center justify-center">
                           <input
-                            className="w-full text-center text-sm text-gray-700 bg-transparent border-none rounded-lg px-2 py-1 focus:outline-none focus:bg-[#3F51B5]/5 transition-colors"
-                            value={
-                              row.quantity ? row.quantity.toLocaleString() : ""
-                            }
-                            onChange={(e) =>
-                              handleChangeRow(row.id, "quantity", e.target.value)
-                            }
+                            className="w-full text-center text-sm bg-transparent border-none rounded-lg px-2 py-1 focus:outline-none transition-colors text-ink font-mono tabular focus:bg-accent-soft"
+                            value={row.quantity ? row.quantity.toLocaleString() : ""}
+                            onChange={(e) => handleChangeRow(row.id, "quantity", e.target.value)}
                             inputMode="numeric"
                             placeholder="0"
                           />
                         </div>
-
-                        {/* 매수 평균단가 */}
                         <div className="px-4 py-3 flex items-center justify-center">
                           <input
-                            className="w-full text-center text-sm text-gray-700 bg-transparent border-none rounded-lg px-2 py-1 focus:outline-none focus:bg-[#3F51B5]/5 transition-colors"
-                            value={
-                              row.avgPrice ? row.avgPrice.toLocaleString() : ""
-                            }
-                            onChange={(e) =>
-                              handleChangeRow(row.id, "avgPrice", e.target.value)
-                            }
+                            className="w-full text-center text-sm bg-transparent border-none rounded-lg px-2 py-1 focus:outline-none transition-colors text-ink font-mono tabular focus:bg-accent-soft"
+                            value={row.avgPrice ? row.avgPrice.toLocaleString() : ""}
+                            onChange={(e) => handleChangeRow(row.id, "avgPrice", e.target.value)}
                             inputMode="numeric"
                             placeholder="0"
                           />
                         </div>
-
-                        {/* 삭제 버튼 */}
                         <div className="px-4 py-3 flex items-center justify-center">
                           <button
                             type="button"
                             onClick={() => handleRemoveRow(row.id)}
-                            className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-all duration-200"
+                            className="p-1.5 rounded-lg transition-all duration-200 text-ink-4 hover:text-danger hover:bg-danger/10"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -490,247 +490,250 @@ export default function PortfolioMockPage() {
                 </div>
               </div>
 
-              {/* 행 추가 플로팅 버튼 */}
-              <button
-                type="button"
-                onClick={handleAddRow}
-                className="w-11 h-11 rounded-full bg-[#3F51B5] flex items-center justify-center shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-200"
-              >
-                <Plus size={20} className="text-white" />
-              </button>
-            </div>
+            </section>
+          </div>
 
-          </section>
+          {/* 둘째 행: 분석 옵션 (전체 너비, 가로 배치) */}
+          <div className="w-full rounded-2xl p-5 bg-surface border border-line shadow-card">
+            <h2 className="text-base font-bold text-ink tracking-tight mb-4">분석 옵션</h2>
 
-          {/* 오른쪽: 분석 옵션 + 결과 영역 */}
-          <section className="w-full lg:flex-1 mt-10 lg:mt-0 flex flex-col gap-6">
-            {/* 2.2 분석 옵션 영역 */}
-            <div className="w-full bg-white rounded-xl shadow-sm p-5 flex flex-col gap-4">
-              <h2 className="text-base font-bold text-gray-800">분석 옵션</h2>
+            <div className="flex flex-col lg:flex-row gap-5">
+              {/* 왼쪽: 기본 분석 + 추가 옵션 체크박스 */}
+              <div className="flex-[3] flex flex-col gap-3">
+                {/* 기본 분석 */}
+                <div className="flex items-start gap-3 px-3 py-3 rounded-lg bg-accent-soft border border-accent/20">
+                  <input
+                    type="checkbox"
+                    checked
+                    disabled
+                    className="mt-0.5 w-4 h-4 cursor-not-allowed accent-accent"
+                  />
+                  <div className="flex-1">
+                    <span className="text-sm font-semibold text-accent">포트폴리오 기본 분석</span>
+                    <span className="ml-2 text-xs text-ink-4">(변경 불가)</span>
+                    <div className="mt-1 text-xs leading-relaxed text-ink-3">
+                      <p>포트폴리오의 변동성, 분산, 효율성을 기본적으로 분석합니다.</p>
+                      <p>모든 분석의 기준이 되는 핵심 계산이 포함됩니다.</p>
+                    </div>
+                  </div>
+                </div>
 
-              {/* 기본 분석 (항상 체크, 비활성화) */}
-              <div className="flex items-start gap-3 px-3 py-3 bg-[#3F51B5]/5 rounded-lg border border-[#3F51B5]/20">
-                <input
-                  type="checkbox"
-                  checked
-                  disabled
-                  className="mt-0.5 w-4 h-4 accent-[#3F51B5] cursor-not-allowed"
-                />
-                <div className="flex-1">
-                  <span className="text-sm font-semibold text-[#3F51B5]">
-                    포트폴리오 기본 분석
-                  </span>
-                  <span className="ml-2 text-xs text-gray-400">(변경 불가)</span>
-                  <div className="mt-1 text-xs text-gray-500 leading-relaxed">
-                    <p>포트폴리오의 변동성, 분산, 효율성을 기본적으로 분석합니다.</p>
-                    <p>모든 분석의 기준이 되는 핵심 계산이 포함됩니다.</p>
+                {/* 추가 분석 옵션 (2열 그리드) */}
+                <div>
+                  <p className="text-xs mb-2 text-ink-4">추가 분석 (선택사항)</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+                    {EXTRA_OPTIONS.map((opt) => (
+                      <label
+                        key={opt.key}
+                        className="group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors hover:bg-bg-sunk"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={extraOptions[opt.key]}
+                          onChange={() => toggleExtraOption(opt.key)}
+                          className="w-4 h-4 cursor-pointer accent-accent flex-shrink-0"
+                        />
+                        <span className="text-sm font-medium text-ink-2">{opt.label}</span>
+                        <div className="relative flex-shrink-0">
+                          <Info size={14} className="transition-colors text-ink-4 group-hover:text-ink-3" />
+                          <div className="absolute left-5 top-0 w-64 p-2.5 text-xs rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-30 leading-relaxed bg-ink text-bg">
+                            {opt.descriptions.map((d, i) => (
+                              <p key={i} className={i > 0 ? "mt-1" : ""}>{d}</p>
+                            ))}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              {/* 추가 분석 옵션들 */}
-              <div className="flex flex-col gap-1">
-                <p className="text-xs text-gray-400 mb-1">추가 분석 (선택사항)</p>
-                {EXTRA_OPTIONS.map((opt) => (
-                  <label
-                    key={opt.key}
-                    className="group flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={extraOptions[opt.key]}
-                      onChange={() => toggleExtraOption(opt.key)}
-                      className="mt-0.5 w-4 h-4 accent-[#3F51B5] cursor-pointer"
-                    />
-                    <div className="flex-1 flex items-start gap-1.5">
-                      <span className="text-sm font-medium text-gray-700">
-                        {opt.label}
-                      </span>
-                      {/* 툴팁 아이콘 + hover 설명 */}
-                      <div className="relative">
-                        <Info size={14} className="text-gray-300 group-hover:text-gray-400 mt-0.5 transition-colors" />
-                        <div className="absolute left-5 top-0 w-64 p-2.5 bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-30 leading-relaxed">
-                          {opt.descriptions.map((d, i) => (
-                            <p key={i} className={i > 0 ? "mt-1" : ""}>{d}</p>
-                          ))}
-                        </div>
+              {/* 구분선 */}
+              <div className="hidden lg:block w-px bg-line" />
+
+              {/* 오른쪽: 투자 성향 지수 + 실행 버튼 */}
+              <div className="flex-[2] flex flex-col gap-4">
+                {/* 투자 성향 지수 */}
+                <div className="flex flex-col gap-3 px-3 py-3 rounded-lg bg-accent-soft border border-accent/20">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-accent">투자 성향 지수</span>
+                      <span className="text-xs text-ink-4">(필수)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleGoSurvey}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-accent bg-surface border border-accent/30 hover:bg-accent/10"
+                    >
+                      <ClipboardList size={14} />
+                      설문으로 확인하기
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 flex flex-col gap-1">
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={riskGamma ?? 0.5}
+                        onChange={(e) => commitRiskGamma(Number(e.target.value))}
+                        className="w-full cursor-pointer accent-accent"
+                      />
+                      <div className="flex justify-between text-[11px] text-ink-3">
+                        <span>0.00 · 보수적</span>
+                        <span>공격적 · 1.00</span>
                       </div>
                     </div>
-                  </label>
-                ))}
-              </div>
-
-              {/* 투자 성향 지수 섹션 */}
-              <div className="flex flex-col gap-3 px-3 py-3 rounded-lg border border-[#3F51B5]/20 bg-[#3F51B5]/5">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold text-[#3F51B5]">
-                      투자 성향 지수
-                    </span>
-                    <span className="text-xs text-gray-400">(필수)</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleGoSurvey}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#3F51B5] bg-white border border-[#3F51B5]/30 hover:bg-[#3F51B5]/10 transition-colors"
-                  >
-                    <ClipboardList size={14} />
-                    설문으로 확인하기
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 flex flex-col gap-1">
                     <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={riskGamma ?? 0.5}
-                      onChange={(e) => commitRiskGamma(Number(e.target.value))}
-                      className="w-full accent-[#3F51B5] cursor-pointer"
+                      type="text"
+                      inputMode="decimal"
+                      value={riskGammaInput}
+                      onChange={(e) => handleRiskGammaInputChange(e.target.value)}
+                      onBlur={handleRiskGammaInputBlur}
+                      placeholder="0.00"
+                      className="w-20 text-center text-sm font-semibold rounded-lg py-1.5 focus:outline-none transition-colors text-ink bg-surface border border-line focus:border-accent font-mono tabular"
                     />
-                    <div className="flex justify-between text-[11px] text-gray-500">
-                      <span>0.00 · 보수적</span>
-                      <span>공격적 · 1.00</span>
-                    </div>
                   </div>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={riskGammaInput}
-                    onChange={(e) => handleRiskGammaInputChange(e.target.value)}
-                    onBlur={handleRiskGammaInputBlur}
-                    placeholder="0.00"
-                    className="w-20 text-center text-sm font-semibold text-gray-800 bg-white border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:border-[#3F51B5] transition-colors"
-                  />
-                </div>
 
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  0에 가까울수록 안정적인 자산 배분을, 1에 가까울수록 공격적인
-                  자산 배분을 기준으로 분석합니다. 잘 모르시겠다면 우측 상단의
-                  설문을 이용해보세요.
-                </p>
-              </div>
-
-              {/* 2.3 실행 버튼 */}
-              <div className="w-full flex flex-col items-center gap-1 pt-2">
-                <button
-                  type="button"
-                  onClick={handleAnalyzeClick}
-                  disabled={loading || riskGamma === null}
-                  className="px-10 py-3 bg-[#3F51B5] text-white font-semibold text-base rounded-xl shadow-md hover:bg-[#354499] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  {loading ? "분석 중..." : "분석결과보기"}
-                </button>
-                {!loading && riskGamma === null && (
-                  <p className="text-xs text-gray-400 text-center">
-                    투자 성향 지수를 입력한 후 분석을 실행할 수 있습니다.
+                  <p className="text-xs leading-relaxed text-ink-3">
+                    0에 가까울수록 안정적인 자산 배분을, 1에 가까울수록 공격적인
+                    자산 배분을 기준으로 분석합니다.
                   </p>
-                )}
-              </div>
+                </div>
 
-              {err && (
-                <p className="text-sm text-red-500 text-center">{err}</p>
-              )}
+              </div>
             </div>
-            {/* 결과가 없을 때 안내 */}
-            {!analysisResult && !loading && (
-              <div className="w-full bg-neutral-50 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center py-40 text-gray-400">
-                <p className="text-base font-medium">분석 결과가 여기에 표시됩니다</p>
-                <p className="text-sm mt-1">좌측에서 포트폴리오를 입력한 뒤 분석을 실행하세요</p>
+          </div>
+
+          {/* 분석 실행 배너 */}
+          <section className="rounded-2xl border border-line shadow-card p-5 sm:p-6
+                              bg-gradient-to-br from-accent-soft to-surface
+                              flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-semibold text-accent tracking-tight mb-1">
+                ✨ AI 포트폴리오 분석
               </div>
-            )}
+              <h3 className="text-lg font-bold text-ink tracking-tight">
+                포트폴리오를 한 번에 분석해 드릴게요
+              </h3>
+              <p className="text-sm text-ink-3 mt-1">
+                변동성 · 분산 구조 · 효율성을 종합한 리포트
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleAnalyzeClick}
+                disabled={loading || riskGamma === null}
+                className="px-5 py-2.5 rounded-xl bg-ink text-bg font-semibold text-sm
+                           hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity tracking-tight"
+              >
+                {loading ? "분석 중..." : "분석결과보기 →"}
+              </button>
+              {!loading && riskGamma === null && (
+                <p className="text-xs text-ink-4">투자 성향 지수를 먼저 입력해주세요.</p>
+              )}
+              {err && <p className="text-xs text-danger">{err}</p>}
+            </div>
+          </section>
 
-            {/* 로딩 */}
-            {loading && (
-              <div className="w-full bg-neutral-50 rounded-2xl border-2 border-gray-200 flex items-center justify-center py-40">
-                <p className="text-base text-gray-500 animate-pulse">분석 중입니다...</p>
-              </div>
-            )}
+          {/* 하단 전체 너비: 분석 결과 영역 */}
+          {!analysisResult && !loading && (
+            <div className="w-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-24 bg-bg-sunk border-line text-ink-4">
+              <p className="text-base font-medium">분석 결과가 여기에 표시됩니다</p>
+              <p className="text-sm mt-1">포트폴리오를 입력한 뒤 분석을 실행하세요</p>
+            </div>
+          )}
 
-            {/* 3.1 핵심 요약 카드 */}
-            {analysisResult && (
-              <div className="flex flex-col gap-5">
-                <h2 className="text-lg font-bold text-gray-800">핵심 요약</h2>
+          {loading && (
+            <div className="w-full rounded-2xl border-2 flex items-center justify-center py-24 bg-bg-sunk border-line">
+              <p className="text-base animate-pulse text-ink-3">분석 중입니다...</p>
+            </div>
+          )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* 카드 1: 위험 수준 */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3">
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                      위험 수준
-                    </p>
-                    <div className="flex items-end gap-2">
-                      <span className="text-3xl font-bold text-gray-800">
-                        {analysisResult.volatility.toFixed(1)}
-                        <span className="text-base font-normal text-gray-400 ml-0.5">%</span>
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500">포트폴리오 변동성</p>
-                    <span
-                      className={`self-start px-3 py-1 rounded-full text-xs font-bold ${
-                        analysisResult.riskLevel === "Low"
-                          ? "bg-emerald-50 text-emerald-600"
-                          : analysisResult.riskLevel === "Mid"
-                            ? "bg-amber-50 text-amber-600"
-                            : "bg-red-50 text-red-600"
-                      }`}
-                    >
-                      {analysisResult.riskLevel}
+          {/* 3.1 핵심 요약 카드 */}
+          {analysisResult && (
+            <section className="w-full flex flex-col gap-5">
+              <h2 className="text-lg font-bold text-ink tracking-tight">핵심 요약</h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* 카드 1: 위험 수준 */}
+                <div className="rounded-2xl p-5 flex flex-col gap-3 bg-surface border border-line shadow-card">
+                  <p className="text-xs font-bold uppercase tracking-wider text-ink-4">
+                    위험 수준
+                  </p>
+                  <div className="flex items-end gap-2">
+                    <span className="text-3xl font-bold text-ink font-mono tabular tracking-tighter">
+                      {analysisResult.volatility.toFixed(1)}
+                      <span className="text-base font-normal ml-0.5 text-ink-4">%</span>
                     </span>
                   </div>
+                  <p className="text-sm text-ink-3">포트폴리오 변동성</p>
+                  <span
+                    className={`self-start px-3 py-1 rounded-full text-xs font-bold ${
+                      analysisResult.riskLevel === "Low"
+                        ? "bg-success/10 text-success"
+                        : analysisResult.riskLevel === "Mid"
+                          ? "bg-warn/10 text-warn"
+                          : "bg-danger/10 text-danger"
+                    }`}
+                  >
+                    {analysisResult.riskLevel}
+                  </span>
+                </div>
 
-                  {/* 카드 2: 분산 수준 */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3">
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                      변동성 기반 분산 수준
-                    </p>
-                    <div className="flex items-end gap-2">
-                      <span className="text-3xl font-bold text-gray-800">
-                        {analysisResult.covarianceScore.toFixed(2)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      공분산 기준으로 포트폴리오가 얼마나 분산되어 있는지 나타냅니다
-                    </p>
-                    <span
-                      className={`self-start px-3 py-1 rounded-full text-xs font-bold ${
-                        analysisResult.diversification === "분산됨"
-                          ? "bg-emerald-50 text-emerald-600"
-                          : analysisResult.diversification === "보통"
-                            ? "bg-amber-50 text-amber-600"
-                            : "bg-red-50 text-red-600"
-                      }`}
-                    >
-                      {analysisResult.diversification}
+                {/* 카드 2: 분산 수준 */}
+                <div className="rounded-2xl p-5 flex flex-col gap-3 bg-surface border border-line shadow-card">
+                  <p className="text-xs font-bold uppercase tracking-wider text-ink-4">
+                    변동성 기반 분산 수준
+                  </p>
+                  <div className="flex items-end gap-2">
+                    <span className="text-3xl font-bold text-ink font-mono tabular tracking-tighter">
+                      {analysisResult.covarianceScore.toFixed(2)}
                     </span>
                   </div>
+                  <p className="text-sm text-ink-3">
+                    공분산 기준으로 포트폴리오가 얼마나 분산되어 있는지 나타냅니다
+                  </p>
+                  <span
+                    className={`self-start px-3 py-1 rounded-full text-xs font-bold ${
+                      analysisResult.diversification === "분산됨"
+                        ? "bg-success/10 text-success"
+                        : analysisResult.diversification === "보통"
+                          ? "bg-warn/10 text-warn"
+                          : "bg-danger/10 text-danger"
+                    }`}
+                  >
+                    {analysisResult.diversification}
+                  </span>
+                </div>
 
-                  {/* 카드 3: 효율성 */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col gap-3">
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-400">
-                      효율성
-                    </p>
-                    <div className="flex items-end gap-2">
-                      <span className="text-3xl font-bold text-gray-800">
-                        {analysisResult.gamma.toFixed(3)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500">감마 기준 효율 상태</p>
-                    <span
-                      className={`self-start px-3 py-1 rounded-full text-xs font-bold ${
-                        analysisResult.efficiency === "Efficient"
-                          ? "bg-emerald-50 text-emerald-600"
-                          : "bg-red-50 text-red-600"
-                      }`}
-                    >
-                      {analysisResult.efficiency}
+                {/* 카드 3: 효율성 */}
+                <div className="rounded-2xl p-5 flex flex-col gap-3 bg-surface border border-line shadow-card">
+                  <p className="text-xs font-bold uppercase tracking-wider text-ink-4">
+                    효율성
+                  </p>
+                  <div className="flex items-end gap-2">
+                    <span className="text-3xl font-bold text-ink font-mono tabular tracking-tighter">
+                      {analysisResult.gamma.toFixed(3)}
                     </span>
                   </div>
+                  <p className="text-sm text-ink-3">감마 기준 효율 상태</p>
+                  <span
+                    className={`self-start px-3 py-1 rounded-full text-xs font-bold ${
+                      analysisResult.efficiency === "Efficient"
+                        ? "bg-success/10 text-success"
+                        : "bg-danger/10 text-danger"
+                    }`}
+                  >
+                    {analysisResult.efficiency}
+                  </span>
                 </div>
               </div>
-            )}
-          </section>
+            </section>
+          )}
         </main>
       </div>
     </div>

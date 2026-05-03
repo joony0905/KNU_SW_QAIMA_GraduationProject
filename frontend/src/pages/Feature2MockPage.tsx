@@ -1,15 +1,15 @@
 // Feature2MockPage.tsx
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Star } from "lucide-react";
-import StockInputBox from "../components/StockInputBox";
-import StockCard from "../components/StockCard";
+import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
+import { useTheme } from "../hooks/useTheme";
+import StockSearchBar from "../components/StockSearchBar";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import TradingViewWidget from "../components/TradingViewWidget";
 import Feature2ExternalFactorPanel from "../components/Feature2ExternalFactorPanel";
 
-import AnalysisResultPanel from "../components/AnalysisResultPanel";
+import AnalysisResultPanel, { LLM_VENDOR_OPTIONS } from "../components/AnalysisResultPanel";
 import type { AnalysisPanelResult } from "../types/analysisPanel";
 import {
   fetchFeature2Analysis,
@@ -45,17 +45,11 @@ import DictTerm from "../components/DictTerm";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { formatKstOffsetDateTime, shiftKstDays } from "../utils/kst";
 
-const getColorClass = (rate: string) => {
-  if (rate.startsWith("+")) return "text-red-600";
-  if (rate.startsWith("-")) return "text-blue-600";
-  return "text-black";
-};
-
 const getColorClassByNumber = (n: number | null) => {
-  if (n === null || !Number.isFinite(n)) return "text-black";
-  if (n > 0) return "text-red-600";
-  if (n < 0) return "text-blue-600";
-  return "text-black";
+  if (n === null || !Number.isFinite(n)) return "text-flat";
+  if (n > 0) return "text-rise";
+  if (n < 0) return "text-fall";
+  return "text-flat";
 };
 
 const formatPrice = (n: number) => {
@@ -159,14 +153,15 @@ interface RelatedStockDisplay {
   volume: number;
 }
 
-interface FeaturedStock {
-  name: string;
-  symbol: string;
-  price: string;
-  volume: string;
-  change: string;
-  changeRate: string;
-}
+// 미사용 - 팀원이 추가했으나 현재 코드에서 참조되지 않아 주석 처리
+// interface FeaturedStock {
+//   name: string;
+//   symbol: string;
+//   price: string;
+//   volume: string;
+//   change: string;
+//   changeRate: string;
+// }
 
 type Feature2PanelExplain = NonNullable<AnalysisPanelResult["explain"]>;
 
@@ -243,6 +238,7 @@ const isMacroRatesEmpty = (data: Feature2MacroRates | null | undefined) =>
 
 export default function Feature2MockPage() {
   const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
   const searchRequestIdRef = useRef(0);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
@@ -441,53 +437,6 @@ export default function Feature2MockPage() {
   const [industryChartLoading, setIndustryChartLoading] = useState(false);
   const [industryChartError, setIndustryChartError] = useState<string | null>(null);
 
-  const [featuredStocks] = useState<FeaturedStock[]>([
-    {
-      name: "삼성전자",
-      symbol: "005930",
-      price: "70,000",
-      volume: "12,345,678",
-      change: "500",
-      changeRate: "+0.72%",
-    },
-    {
-      name: "LG에너지솔루션",
-      symbol: "373220",
-      price: "400,000",
-      volume: "3,210,987",
-      change: "-2,000",
-      changeRate: "-0.50%",
-    },
-    {
-      name: "카카오",
-      symbol: "035720",
-      price: "55,000",
-      volume: "8,765,432",
-      change: "0",
-      changeRate: "0%",
-    },
-  ]);
-
-  const featuredListWrapperRef = useRef<HTMLDivElement | null>(null);
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-
-  const [isOpen, setIsOpen] = useState(false);
-  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
-
-  const [topic, setTopic] = useState<
-    | "상승종목"
-    | "상한가 임박종목"
-    | "하락종목"
-    | "상한가 이탈종목"
-    | "거래량 상위종목"
-    | "거래대금 상위종목"
-    | "거래량 급등종목"
-  >("상승종목");
-
-  const [isTopicOpen, setIsTopicOpen] = useState(false);
-  const topicRef = useRef<HTMLDivElement | null>(null);
-
   const [analysisResult, setAnalysisResult] = useState<ApiResponse<Feature2AnalyzeResponse> | null>(null);
   const analysisData = analysisResult?.data ?? null;
   const [baseRateResult, setBaseRateResult] = useState<ApiResponse<BaseRateMetrics | null> | null>(null);
@@ -526,6 +475,8 @@ export default function Feature2MockPage() {
   const currentTime = useKSTTime();
 
   const [isInterested, setIsInterested] = useState(false);
+  const [isModelOpen, setIsModelOpen] = useState(false);
+  const modelRef = useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
     message: "",
     visible: false,
@@ -565,6 +516,16 @@ export default function Feature2MockPage() {
     }, 1800);
     return () => clearTimeout(t);
   }, [toast.visible]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (!modelRef.current) return;
+      if (modelRef.current.contains(e.target as Node)) return;
+      setIsModelOpen(false);
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
 
   const toggleInterest = () => {
     setIsInterested((prev) => !prev);
@@ -770,6 +731,7 @@ export default function Feature2MockPage() {
   const displayIndustryIndex = analysisData?.metrics?.industryIndex ?? industryIndexResult?.data ?? null;
   const investorFlow = investorFlowResult?.data ?? null;
 
+  /* 미사용 — 팀원이 추가했으나 참조하는 ref(featuredListWrapperRef/dropdownRef/topicRef)와 상태(setIsOpen/setIsTopicOpen)가 정의되지 않은 잔재
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -795,6 +757,7 @@ export default function Feature2MockPage() {
     document.addEventListener("click", handleClickOutsideTopic);
     return () => document.removeEventListener("click", handleClickOutsideTopic);
   }, []);
+  */
 
   useEffect(() => {
     const fullText = feature2Explain?.overall?.summary ?? feature2Explain?.text;
@@ -898,103 +861,35 @@ export default function Feature2MockPage() {
   }, [mainStock.symbol]);
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
+    <div className="min-h-screen bg-bg ml-[84px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
-        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
-          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
-            외부요인
-          </h1>
-          <TokenBalanceBadge />
+        <header className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-medium text-ink-3 tracking-tight">
+              Equities · External Factors
+            </div>
+            <h1 className="mt-1 text-3xl font-bold text-ink tracking-tighter">
+              외부요인
+            </h1>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={toggle}
+              aria-label={theme === "dark" ? "라이트 모드" : "다크 모드"}
+              className="w-9 h-9 grid place-items-center rounded-xl bg-surface
+                         border border-line text-ink-2 shadow-card
+                         hover:bg-bg-sunk transition-colors"
+            >
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <TokenBalanceBadge />
+          </div>
         </header>
 
-        <section className="w-full flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="w-full lg:max-w-md bg-white rounded-[10px] outline outline-1 outline-stone-300 px-2 py-1 sm:px-2 sm:py-1 flex flex-col gap-2">
-            <StockInputBox
-              placeholder="종목을 입력해주세요"
-              onSearch={handleSearch}
-            />
-          </div>
-
-          <div
-            ref={featuredListWrapperRef}
-            className="w-full lg:flex-1 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end"
-          >
-            <div ref={topicRef} className="relative w-40">
-              <button
-                onClick={() => setIsTopicOpen((prev) => !prev)}
-                className="w-full h-9 sm:h-10 border border-black rounded-md bg-white flex items-center px-3 font-medium relative"
-              >
-                <span className="flex-1 text-center truncate whitespace-nowrap text-xs sm:text-sm">
-                  {topic}
-                </span>
-                <span className="absolute right-1 sm:right-2 text-[10px] sm:text-xs">
-                  {isTopicOpen ? "▲" : "▼"}
-                </span>
-              </button>
-
-              {isTopicOpen && (
-                <div className="absolute mt-1 w-full bg-white border border-stone-300 rounded-md shadow-md z-50">
-                  {[
-                    "상승종목",
-                    "상한가 임박종목",
-                    "하락종목",
-                    "상한가 이탈종목",
-                    "거래량 상위종목",
-                    "거래대금 상위종목",
-                    "거래량 급등종목",
-                  ].map((item) => (
-                    <button
-                      key={item}
-                      onClick={() => {
-                        setTopic(item as typeof topic);
-                        setIsTopicOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 text-sm sm:text-base hover:bg-zinc-100 ${
-                        topic === item ? "bg-zinc-100 font-semibold" : ""
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 relative">
-              <div
-                ref={cardRef}
-                className="inline-block w-[260px] sm:w-[280px] lg:w-[380px]"
-              >
-                {featuredStocks[0] && (
-                  <StockCard
-                    name={featuredStocks[0].name}
-                    price={featuredStocks[0].price}
-                    volume={featuredStocks[0].volume}
-                    change={featuredStocks[0].change}
-                    changeRate={featuredStocks[0].changeRate}
-                    getColorClass={getColorClass}
-                  />
-                )}
-              </div>
-
-              <button
-                onClick={() => {
-                  setIsOpen((prev) => !prev);
-                  if (!cardRef.current) return;
-                  const rect = cardRef.current.getBoundingClientRect();
-                  setPanelPos({ top: rect.top, left: rect.left });
-                }}
-                className="w-6 h-6 bg-zinc-300 rounded-full flex items-center justify-center transition-colors hover:bg-zinc-400 flex-shrink-0"
-              >
-                <span className="text-lg font-bold leading-none">
-                  {isOpen ? "-" : "+"}
-                </span>
-              </button>
-            </div>
-          </div>
-        </section>
+        <StockSearchBar onSearch={handleSearch} />
 
         {hasSelectedStock && (<>
+          <div className="border-t border-line-strong" />
         {(() => {
           const mainNumericChange =
             mainStock.change !== null && Number.isFinite(mainStock.change)
@@ -1014,77 +909,72 @@ export default function Feature2MockPage() {
               : "0.00%";
           const mainColorClass = getColorClassByNumber(mainNumericChange);
           return (
-        <main className="w-full mt-6 flex flex-col xl:flex-row justify-center items-start gap-6">
+        <main className="w-full flex flex-col xl:flex-row justify-center items-start gap-6">
           <div className="flex-1 flex flex-col gap-5">
-            <section className="w-full bg-zinc-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <div className="flex flex-wrap items-end gap-1.5">
-                  <h2 className="text-lg sm:text-xl md:text-2xl font-medium text-black">
-                    {mainStock.name}
-                  </h2>
-                  <span className="text-sm sm:text-base md:text-lg text-black">
-                    ({mainStock.symbol})
+            <section className="w-full flex flex-col gap-3 sm:gap-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-ink tracking-tight">
+                      {mainStock.name}
+                    </h2>
+                    <span className="text-sm sm:text-base md:text-lg text-ink-3 font-mono">
+                      {mainStock.symbol}
+                    </span>
+                    <button
+                      onClick={toggleInterest}
+                      className="ml-1 inline-block"
+                    >
+                      <Star
+                        size={20}
+                        className={`transition-colors text-warn`}
+                        fill={isInterested ? "currentColor" : "none"}
+                      />
+                    </button>
+                  </div>
+                  <span className="text-[10px] sm:text-xs font-medium text-ink-3">
+                    {currentTime} KST
                   </span>
-                  <button
-                    onClick={toggleInterest}
-                    className="ml-2 inline-block"
-                  >
-                    <Star
-                      size={22}
-                      className="relative -top-1 transition-colors text-yellow-400"
-                      fill={isInterested ? "currentColor" : "none"}
-                    />
-                  </button>
                 </div>
 
-                <span className="text-[10px] sm:text-xs font-medium text-black">
-                  {currentTime} KST
-                </span>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-2xl md:text-3xl font-medium text-black">
-                    {displayPrice}
-                  </span>
-
-                  <div className="flex items-center gap-1.5 text-sm md:text-base font-medium">
+                <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl md:text-3xl font-bold text-ink font-mono tabular tracking-tighter">
+                      {displayPrice}
+                    </span>
+                    <span className="text-sm text-ink-3">원</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-sm font-medium font-mono tabular">
+                    <span className="text-ink-3 text-xs">전일대비</span>
                     <span className={mainColorClass}>{displayChange}</span>
                     <span className={mainColorClass}>({displayRate})</span>
                     {mainNumericChange > 0 && (
                       <div
                         className={`${mainColorClass} w-0 h-0
-                        border-l-[6px] border-r-[6px]
-                        border-b-[9px] border-transparent
+                        border-l-[5px] border-r-[5px]
+                        border-b-[8px] border-transparent
                         border-b-current`}
                       />
                     )}
                     {mainNumericChange < 0 && (
                       <div
                         className={`${mainColorClass} w-0 h-0
-                        border-l-[6px] border-r-[6px]
-                        border-t-[9px] border-transparent
+                        border-l-[5px] border-r-[5px]
+                        border-t-[8px] border-transparent
                         border-t-current`}
                       />
                     )}
                     {mainNumericChange === 0 && (
-                      <span
-                        className={`
-                        ${mainColorClass}
-                        text-xl sm:text-2xl
-                        font-extrabold
-                        leading-none
-                      `}
-                      >
-                        -
-                      </span>
+                      <span className={`${mainColorClass} text-lg font-extrabold leading-none`}>-</span>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="w-full h-80 sm:h-[420px] bg-white rounded-xl overflow-hidden">
+              <div className="w-full h-96 sm:h-[480px] bg-surface border border-line shadow-card overflow-hidden">
                 {chartLoading && (
                   <div className="h-full flex items-center justify-center">
-                    <p className="text-md text-gray-500">
+                    <p className="text-md text-ink-3">
                       차트를 불러오는 중입니다…
                     </p>
                   </div>
@@ -1092,7 +982,7 @@ export default function Feature2MockPage() {
 
                 {chartError && !chartLoading && (
                   <div className="h-full flex items-center justify-center">
-                    <p className="text-md text-red-500">
+                    <p className="text-md text-danger">
                       {chartError ?? "차트를 불러오지 못했습니다."}
                     </p>
                   </div>
@@ -1111,21 +1001,21 @@ export default function Feature2MockPage() {
             </section>
 
             {/* [좌측 하단] 산업 지수 차트 카드 */}
-            <section className="w-full bg-zinc-100 rounded-2xl p-4 sm:p-5 flex flex-col gap-2.5 overflow-hidden">
-              <h2 className="text-black text-lg sm:text-2xl font-medium">
+            <section className="w-full flex flex-col gap-2.5 sm:gap-4">
+              <h2 className="text-ink text-lg sm:text-2xl font-semibold tracking-tight">
                 {mainStock.name}({mainStock.symbol}) 관련 <DictTerm term="산업 지수">산업 지수</DictTerm>
               </h2>
 
-              <div className="w-full h-80 sm:h-[420px] bg-white rounded-xl overflow-hidden">
+              <div className="w-full h-80 sm:h-[420px] bg-surface border border-line shadow-card overflow-hidden">
               {industryChartLoading && (
                 <div className="h-full flex items-center justify-center">
-                  <p className="text-md text-gray-500">차트를 불러오는 중입니다…</p>
+                  <p className="text-md text-ink-3">차트를 불러오는 중입니다…</p>
                 </div>
               )}
 
               {industryChartError && !industryChartLoading && (
                 <div className="h-full flex items-center justify-center">
-                  <p className="text-md text-red-500">
+                  <p className="text-md text-danger">
                     {industryChartError ?? "차트를 불러오지 못했습니다."}
                   </p>
                 </div>
@@ -1156,7 +1046,7 @@ export default function Feature2MockPage() {
 
             {!industryChartLoading && !industryChartError && industrySeries.length === 0 && (
               <div className="h-full flex items-center justify-center">
-                <p className="text-md text-gray-500">산업 지수 데이터가 없습니다.</p>
+                <p className="text-md text-ink-3">산업 지수 데이터가 없습니다.</p>
               </div>
             )}
             </div>
@@ -1189,71 +1079,106 @@ export default function Feature2MockPage() {
           );
         })()}
 
-        {/* 분석 옵션 라디오버튼 */}
-        <div className="w-full bg-white rounded-2xl border border-stone-300 px-4 sm:px-6 py-4 flex flex-col gap-4">
-          <h3 className="text-sm sm:text-base font-semibold text-zinc-800">분석 옵션</h3>
+        {/* 분석 기간 */}
+        <div className="w-full bg-surface rounded-2xl border border-line px-4 sm:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-3 shadow-card">
+          <h3 className="text-sm sm:text-base font-semibold text-ink shrink-0">분석 기간</h3>
 
-          <div className="flex flex-col sm:flex-row gap-4 sm:gap-8">
-            {/* 주기 선택 */}
-            <div className="flex flex-col gap-2">
-              <span className="text-xs sm:text-sm font-medium text-zinc-500">데이터 주기</span>
-              <div className="flex gap-3">
-                {([["ONE_D", "1일"], ["ONE_W", "1주"]] as const).map(([value, label]) => (
-                  <label
-                    key={value}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-sm ${
-                      selectedFreq === value
-                        ? "border-sky-500 bg-sky-50 text-sky-700 font-medium"
-                        : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="freq"
-                      value={value}
-                      checked={selectedFreq === value}
-                      onChange={() => setSelectedFreq(value)}
-                      className="accent-sky-600 w-3.5 h-3.5"
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </div>
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              ["3개월", 60],
+              ["6개월", 120],
+              ["9개월", 180],
+              ["1년", 252],
+            ] as const).map(([label, window]) => (
+              <button
+                key={label}
+                onClick={() => setSelectedWindow(window)}
+                className={`px-3.5 py-1.5 rounded-full text-sm transition-colors ${
+                  selectedWindow === window
+                    ? "bg-accent text-white font-semibold"
+                    : "bg-bg-sunk text-ink-3 hover:bg-surface-2 font-medium"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-            {/* 기간 선택 */}
-            <div className="flex flex-col gap-2">
-              <span className="text-xs sm:text-sm font-medium text-zinc-500">분석 기간</span>
-              <div className="flex gap-2 flex-wrap">
-                {([
-                  [60, "3개월"],
-                  [120, "6개월"],
-                  [180, "9개월"],
-                  [252, "1년"],
-                ] as const).map(([value, label]) => (
-                  <label
-                    key={value}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors text-sm ${
-                      selectedWindow === value
-                        ? "border-sky-500 bg-sky-50 text-sky-700 font-medium"
-                        : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="window"
-                      value={value}
-                      checked={selectedWindow === value}
-                      onChange={() => setSelectedWindow(value)}
-                      className="accent-sky-600 w-3.5 h-3.5"
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </div>
+          <div className="flex items-center gap-2 text-sm ml-auto">
+            <span className="text-xs text-ink-3 shrink-0">주기</span>
+            {([["ONE_D", "1일"], ["ONE_W", "1주"]] as const).map(([value, label]) => (
+              <button
+                key={value}
+                onClick={() => setSelectedFreq(value)}
+                className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                  selectedFreq === value
+                    ? "bg-accent text-white font-semibold"
+                    : "bg-bg-sunk text-ink-3 hover:bg-surface-2 font-medium"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
+
+        {/* 분석 결과 보기 카드 */}
+        {showAnalyzeButton && (
+          <section className="rounded-2xl border border-line shadow-card p-5 sm:p-6
+                              bg-gradient-to-br from-accent-soft to-surface
+                              flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-semibold text-accent tracking-tight mb-1">
+                ✨ AI 외부요인 분석
+              </div>
+              <h3 className="text-lg font-bold text-ink tracking-tight">
+                선택한 기간을 한 번에 분석해 드릴게요
+              </h3>
+              <p className="text-sm text-ink-3 mt-1">
+                기준금리 · 산업지수 · 공매도 · 유사종목을 종합한 리포트
+              </p>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div ref={modelRef} className="relative">
+                <button
+                  onClick={() => setIsModelOpen((prev) => !prev)}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-line text-sm"
+                >
+                  <span className="text-ink-3 text-[11px]">모델</span>
+                  <span className="font-semibold text-ink">{llmVendor}</span>
+                  {isModelOpen
+                    ? <ChevronUp size={14} className="text-ink-3 pointer-events-none" />
+                    : <ChevronDown size={14} className="text-ink-3 pointer-events-none" />}
+                </button>
+                {isModelOpen && (
+                  <div className="absolute right-0 bottom-full mb-1 w-full bg-surface border border-line rounded-xl shadow-pop z-50 max-h-60 overflow-y-auto">
+                    {LLM_VENDOR_OPTIONS.map((vendor) => (
+                      <button
+                        key={vendor}
+                        onClick={() => { setLlmVendor(vendor); setIsModelOpen(false); }}
+                        className={`w-full text-left px-3.5 py-2.5 text-sm first:rounded-t-xl last:rounded-b-xl ${
+                          vendor === llmVendor
+                            ? "bg-accent-soft text-accent font-semibold"
+                            : "text-ink hover:bg-bg-sunk"
+                        }`}
+                      >
+                        {vendor}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleAnalyzeClick}
+                disabled={loading}
+                className="px-5 py-2.5 rounded-xl bg-ink text-bg font-semibold text-sm
+                           hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight"
+              >
+                분석 결과 보기 →
+              </button>
+            </div>
+          </section>
+        )}
 
         <AnalysisResultPanel
           result={
@@ -1279,7 +1204,7 @@ export default function Feature2MockPage() {
           }
           loading={loading}
           err={err}
-          showAnalyzeButton={showAnalyzeButton}
+          showAnalyzeButton={false}
           onAnalyze={handleAnalyzeClick}
           onDownload={() => {}}
           onZoom={() => {}}
@@ -1290,44 +1215,9 @@ export default function Feature2MockPage() {
         />
         </>)}
 
-        {isOpen && panelPos && (
-          <div
-            ref={dropdownRef}
-            className="fixed w-[260px] sm:w-[280px] lg:w-[380px] max-h-[400px] bg-white border border-stone-300 rounded-sm shadow-md overflow-y-auto overflow-x-hidden z-50"
-            style={{ top: panelPos.top, left: panelPos.left }}
-          >
-            <div className="pr-3">
-              {featuredStocks.map((stock, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    setIsOpen(false);
-                    handleSearch(stock.symbol);
-                  }}
-                  className="w-full text-left"
-                >
-                  <StockCard
-                    name={stock.name}
-                    price={stock.price}
-                    volume={stock.volume}
-                    change={stock.change}
-                    changeRate={stock.changeRate}
-                    getColorClass={getColorClass}
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {toast.visible && (
           <div
-            className="
-              fixed bottom-8 left-1/2 -translate-x-1/2
-              bg-black/70 text-white
-              px-4 py-2 rounded-md
-              text-sm sm:text-base
-            "
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-ink/80 text-bg px-4 py-2 rounded-lg text-sm sm:text-base"
           >
             {toast.message}
           </div>
