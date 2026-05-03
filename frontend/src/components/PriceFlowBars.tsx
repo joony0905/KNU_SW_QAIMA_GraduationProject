@@ -105,8 +105,8 @@ export default function PriceFlowBars({ summary }: Props) {
   return (
     <div ref={rootRef}>
       <div className="flex flex-col gap-1">
-        <h3 className="text-base sm:text-lg font-semibold text-zinc-900">가격 흐름 요약</h3>
-        <p className="text-sm text-zinc-500">분석 기간 내 종가 변화 · 가격 범위 · 평균 거래량</p>
+        <h3 className="text-base sm:text-lg font-semibold text-ink">가격 흐름 요약</h3>
+        <p className="text-sm text-ink-3">분석 기간 내 종가 변화 · 가격 범위 · 평균 거래량</p>
         <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-zinc-700">
           <div>시작일: {formatKstDateTimeDisplay(summary.from) || "-"}</div>
           <div>종료일: {formatKstDateTimeDisplay(summary.to) || "-"}</div>
@@ -115,7 +115,7 @@ export default function PriceFlowBars({ summary }: Props) {
 
       <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div
-          className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4"
+          className="rounded-2xl border border-line bg-bg-sunk px-4 py-4"
           style={{
             opacity: animated ? 1 : 0,
             transform: animated ? "translateY(0)" : "translateY(18px)",
@@ -124,26 +124,26 @@ export default function PriceFlowBars({ summary }: Props) {
         >
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: returnFillColor }} />
-            <h4 className="text-sm font-semibold text-zinc-900">수익률 흐름</h4>
+            <h4 className="text-sm font-semibold text-ink">수익률 흐름</h4>
           </div>
           <div className="mt-3 flex items-end justify-between gap-3">
             <div>
-              <p className="text-xs text-zinc-500">시작 종가</p>
-              <p className="text-sm font-medium text-zinc-900">{fmtNumber(summary.startClose)}</p>
+              <p className="text-xs text-ink-3">시작 종가</p>
+              <p className="text-sm font-medium text-ink">{fmtNumber(summary.startClose)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-zinc-500">마지막 종가</p>
-              <p className="text-sm font-medium text-zinc-900">{fmtNumber(summary.endClose)}</p>
+              <p className="text-xs text-ink-3">마지막 종가</p>
+              <p className="text-sm font-medium text-ink">{fmtNumber(summary.endClose)}</p>
             </div>
           </div>
           <div className="mt-4">
-            <div className="flex items-center justify-between text-xs text-zinc-500">
+            <div className="flex items-center justify-between text-xs text-ink-3">
               <span>하락</span>
               <span>중립</span>
               <span>상승</span>
             </div>
-            <div className="relative mt-1 h-3 rounded-full bg-zinc-200 overflow-hidden">
-              <div className="absolute inset-y-0 left-1/2 w-px bg-zinc-400" />
+            <div className="relative mt-1 h-3 rounded-full bg-line overflow-hidden">
+              <div className="absolute inset-y-0 left-1/2 w-px bg-line-strong" />
               <div
                 className="absolute top-0 h-full rounded-full"
                 style={{
@@ -166,7 +166,7 @@ export default function PriceFlowBars({ summary }: Props) {
         </div>
 
         <div
-          className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4"
+          className="rounded-2xl border border-line bg-bg-sunk px-4 py-4"
           style={{
             opacity: animated ? 1 : 0,
             transform: animated ? "translateY(0)" : "translateY(18px)",
@@ -176,21 +176,21 @@ export default function PriceFlowBars({ summary }: Props) {
         >
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: RANGE_COLOR }} />
-            <h4 className="text-sm font-semibold text-zinc-900">가격 범위</h4>
+            <h4 className="text-sm font-semibold text-ink">가격 범위</h4>
           </div>
           <div className="mt-3 flex items-end justify-between gap-3">
             <div>
-              <p className="text-xs text-zinc-500">최저가</p>
-              <p className="text-sm font-medium text-zinc-900">{fmtNumber(summary.low)}</p>
+              <p className="text-xs text-ink-3">최저가</p>
+              <p className="text-sm font-medium text-ink">{fmtNumber(summary.low)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-zinc-500">최고가</p>
-              <p className="text-sm font-medium text-zinc-900">{fmtNumber(summary.high)}</p>
+              <p className="text-xs text-ink-3">최고가</p>
+              <p className="text-sm font-medium text-ink">{fmtNumber(summary.high)}</p>
             </div>
           </div>
           <div className="mt-4">
             <div className="relative px-2 py-1">
-              <div className="relative h-3 rounded-full bg-zinc-200 overflow-visible">
+              <div className="relative h-3 rounded-full bg-line overflow-visible">
                 <div
                   className="absolute top-0 h-full rounded-full bg-emerald-300/60"
                   style={{
@@ -200,7 +200,7 @@ export default function PriceFlowBars({ summary }: Props) {
                 />
                 {startMarker != null && (
                   <div
-                    className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-zinc-900 shadow-sm"
+                    className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-ink shadow-sm"
                     style={{
                       left: `${animated ? startMarker : 0}%`,
                       transition: "left 950ms cubic-bezier(0.22, 1, 0.36, 1)",
@@ -210,7 +210,7 @@ export default function PriceFlowBars({ summary }: Props) {
                 )}
                 {endMarker != null && (
                   <div
-                    className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-emerald-700 shadow-sm"
+                    className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-emerald-700 shadow-sm"
                     style={{
                       left: `${animated ? endMarker : 0}%`,
                       transition: "left 1000ms cubic-bezier(0.22, 1, 0.36, 1)",
@@ -220,7 +220,7 @@ export default function PriceFlowBars({ summary }: Props) {
                 )}
               </div>
             </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+            <div className="mt-2 flex items-center justify-between text-xs text-ink-3">
               <span>시작 종가</span>
               <span>마지막 종가</span>
             </div>
@@ -231,7 +231,7 @@ export default function PriceFlowBars({ summary }: Props) {
         </div>
 
         <div
-          className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4"
+          className="rounded-2xl border border-line bg-bg-sunk px-4 py-4"
           style={{
             opacity: animated ? 1 : 0,
             transform: animated ? "translateY(0)" : "translateY(18px)",
@@ -241,14 +241,14 @@ export default function PriceFlowBars({ summary }: Props) {
         >
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: VOLUME_COLOR }} />
-            <h4 className="text-sm font-semibold text-zinc-900">거래량 강도</h4>
+            <h4 className="text-sm font-semibold text-ink">거래량 강도</h4>
           </div>
           <div className="mt-3">
-            <p className="text-xs text-zinc-500">평균 거래량</p>
-            <p className="text-sm font-medium text-zinc-900">{fmtVolume(summary.avgVolume)}</p>
+            <p className="text-xs text-ink-3">평균 거래량</p>
+            <p className="text-sm font-medium text-ink">{fmtVolume(summary.avgVolume)}</p>
           </div>
           <div className="mt-4">
-            <div className="h-3 rounded-full bg-zinc-200 overflow-hidden">
+            <div className="h-3 rounded-full bg-line overflow-hidden">
               <div
                 className="h-full rounded-full"
                 style={{
@@ -258,7 +258,7 @@ export default function PriceFlowBars({ summary }: Props) {
                 }}
               />
             </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+            <div className="mt-2 flex items-center justify-between text-xs text-ink-3">
               <span>낮음</span>
               <span>활발</span>
             </div>

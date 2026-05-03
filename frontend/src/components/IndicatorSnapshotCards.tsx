@@ -108,28 +108,32 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
   const stochGap =
     stochLatest?.k != null && stochLatest?.d != null ? stochLatest.k - stochLatest.d : null;
 
+  const accentColor = "rgb(var(--color-accent))";
+  const successColor = "rgb(var(--color-success))";
+  const warnColor = "rgb(var(--color-warn))";
+
   const cards = [
     {
       title: "이동평균선 (EMA)",
-      color: "#2563eb",
+      color: accentColor,
       body: (
         <>
-          <div className="grid grid-cols-3 gap-2 text-sm text-zinc-700">
+          <div className="grid grid-cols-3 gap-2 text-sm text-ink-2">
             <div>EMA20: {fmt(ema20, 1)}</div>
             <div>EMA60: {fmt(ema60, 1)}</div>
             <div>EMA120: {fmt(ema120, 1)}</div>
           </div>
           <div className="mt-3">
             <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="text-zinc-700">정렬 상태</span>
-              <span className="font-medium text-zinc-900">{emaAlignment}</span>
+              <span className="text-ink-2">정렬 상태</span>
+              <span className="font-medium text-ink">{emaAlignment}</span>
             </div>
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-200">
+            <div className="h-2.5 w-full overflow-hidden rounded-full bg-line">
               <div
                 className="h-full rounded-full"
                 style={{
                   width: `${animated ? (emaAlignment === "상승 정렬" ? 92 : emaAlignment === "하락 정렬" ? 28 : 58) : 0}%`,
-                  backgroundColor: "#2563eb",
+                  backgroundColor: accentColor,
                   transition: "width 850ms cubic-bezier(0.22, 1, 0.36, 1)",
                 }}
               />
@@ -140,10 +144,10 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
     },
     {
       title: "볼린저 밴드 (Bollinger Band)",
-      color: "#16a34a",
+      color: successColor,
       body: (
         <>
-          <div className="grid grid-cols-2 gap-2 text-sm text-zinc-700">
+          <div className="grid grid-cols-2 gap-2 text-sm text-ink-2">
             <div>중심선: {fmt(bbLatest?.mid, 1)}</div>
             <div>밴드폭: {fmt(bbWidth, 1)}</div>
             <div>상단선: {fmt(bbLatest?.upper, 1)}</div>
@@ -151,16 +155,17 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
           </div>
           <div className="mt-3">
             <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="text-zinc-700">밴드 내 위치</span>
-              <span className="font-medium text-zinc-900">{fmtPct(percentB, 1)}</span>
+              <span className="text-ink-2">밴드 내 위치</span>
+              <span className="font-medium text-ink">{fmtPct(percentB, 1)}</span>
             </div>
-            <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-zinc-200">
-              <div className="absolute inset-y-0 left-1/2 w-px bg-white/70" />
+            <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-line">
+              <div className="absolute inset-y-0 left-1/2 w-px bg-line/70" />
               <div
-                className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-white bg-[#16a34a] shadow-sm"
+                className="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-surface shadow-sm"
                 style={{
                   left: `calc(${animated ? percentB ?? 0 : 0}% - 8px)`,
                   transition: "left 900ms cubic-bezier(0.22, 1, 0.36, 1)",
+                  backgroundColor: successColor,
                 }}
               />
             </div>
@@ -170,10 +175,10 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
     },
     {
       title: "스토캐스틱 (Stochastic)",
-      color: "#d97706",
+      color: warnColor,
       body: (
         <>
-          <div className="grid grid-cols-2 gap-2 text-sm text-zinc-700">
+          <div className="grid grid-cols-2 gap-2 text-sm text-ink-2">
             <div>%K: {fmt(stochLatest?.k, 1)}</div>
             <div>%D: {fmt(stochLatest?.d, 1)}</div>
             <div>구간: {stochZone}</div>
@@ -181,17 +186,17 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
           </div>
           <div className="mt-3">
             <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="text-zinc-700">오실레이터 위치</span>
-              <span className="font-medium text-zinc-900">{fmtPct(stochLatest?.k, 1)}</span>
+              <span className="text-ink-2">오실레이터 위치</span>
+              <span className="font-medium text-ink">{fmtPct(stochLatest?.k, 1)}</span>
             </div>
-            <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-zinc-200">
-              <div className="absolute inset-y-0 left-[20%] w-px bg-white/70" />
-              <div className="absolute inset-y-0 left-[80%] w-px bg-white/70" />
+            <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-line">
+              <div className="absolute inset-y-0 left-[20%] w-px bg-line/70" />
+              <div className="absolute inset-y-0 left-[80%] w-px bg-line/70" />
               <div
                 className="h-full rounded-full"
                 style={{
                   width: `${animated ? normalizeGauge(stochLatest?.k, 100) : 0}%`,
-                  backgroundColor: "#d97706",
+                  backgroundColor: warnColor,
                   transition: "width 850ms cubic-bezier(0.22, 1, 0.36, 1)",
                 }}
               />
@@ -205,15 +210,15 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
   return (
     <div ref={rootRef}>
       <div className="flex flex-col gap-1">
-        <h3 className="text-base sm:text-lg font-semibold text-zinc-900">투자 보조지표 요약 (Indicator)</h3>
-        <p className="text-sm text-zinc-500">EMA · 볼린저 밴드 · 스토캐스틱</p>
+        <h3 className="text-base sm:text-lg font-semibold text-ink">투자 보조지표 요약 (Indicator)</h3>
+        <p className="text-sm text-ink-3">EMA · 볼린저 밴드 · 스토캐스틱</p>
       </div>
 
       <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-4">
         {cards.map((card, index) => (
           <div
             key={card.title}
-            className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4"
+            className="rounded-2xl border border-line bg-bg-sunk px-4 py-4"
             style={{
               opacity: animated ? 1 : 0,
               transform: animated ? "translateY(0)" : "translateY(18px)",
@@ -228,7 +233,7 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
                 className="inline-block h-3 w-3 rounded-full"
                 style={{ backgroundColor: card.color }}
               />
-              <h4 className="text-sm font-semibold text-zinc-900">{card.title}</h4>
+              <h4 className="text-sm font-semibold text-ink">{card.title}</h4>
             </div>
             <div className="mt-3">{card.body}</div>
           </div>

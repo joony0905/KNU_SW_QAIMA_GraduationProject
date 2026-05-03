@@ -71,7 +71,7 @@ export default function BaseRateStepChart({ points }: Props) {
 
   if (!chart) {
     return (
-      <div className="mt-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-8 text-sm text-zinc-500">
+      <div className="mt-2 rounded-2xl border border-line bg-bg-sunk px-4 py-8 text-sm text-ink-3">
         기준금리 추이 데이터가 없습니다.
       </div>
     );
@@ -85,23 +85,23 @@ export default function BaseRateStepChart({ points }: Props) {
     .filter((index, position, arr) => arr.indexOf(index) === position);
 
   return (
-    <div className="mt-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+    <div className="mt-2 rounded-2xl border border-line bg-bg-sunk px-4 py-4">
       <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4 sm:text-sm">
         <div>
-          <p className="text-zinc-500">최신 금리</p>
+          <p className="text-ink-3">최신 금리</p>
           <p className="font-semibold" style={{ color: LINE_COLOR }}>{fmtRate(latest.value, latest.unit)}</p>
         </div>
         <div>
-          <p className="text-zinc-500">변화 폭</p>
-          <p className="font-medium text-zinc-800">{hasRange ? fmtRate(latest.value - first.value, latest.unit) : "-"}</p>
+          <p className="text-ink-3">변화 폭</p>
+          <p className="font-medium text-ink-2">{hasRange ? fmtRate(latest.value - first.value, latest.unit) : "-"}</p>
         </div>
         <div>
-          <p className="text-zinc-500">{hasRange ? "시작일" : "관측일"}</p>
-          <p className="font-medium text-zinc-800">{first.date}</p>
+          <p className="text-ink-3">{hasRange ? "시작일" : "관측일"}</p>
+          <p className="font-medium text-ink-2">{first.date}</p>
         </div>
         <div>
-          <p className="text-zinc-500">기준일</p>
-          <p className="font-medium text-zinc-800">{hasRange ? latest.date : "-"}</p>
+          <p className="text-ink-3">기준일</p>
+          <p className="font-medium text-ink-2">{hasRange ? latest.date : "-"}</p>
         </div>
       </div>
 
@@ -118,10 +118,10 @@ export default function BaseRateStepChart({ points }: Props) {
                 x2={WIDTH - PADDING_X}
                 y1={chart.toY(tick)}
                 y2={chart.toY(tick)}
-                stroke="#e4e4e7"
+                style={{ stroke: "rgb(var(--color-line))" }}
                 strokeDasharray="4 4"
               />
-              <text x={2} y={chart.toY(tick) + 4} fontSize="11" fill="#71717a">
+              <text x={2} y={chart.toY(tick) + 4} fontSize="11" style={{ fill: "rgb(var(--color-ink-3))" }}>
                 {fmtRate(tick, latest.unit)}
               </text>
             </g>
@@ -134,7 +134,7 @@ export default function BaseRateStepChart({ points }: Props) {
                 x2={chart.toX(hoveredIndex!)}
                 y1={PADDING_TOP}
                 y2={HEIGHT - PADDING_BOTTOM}
-                stroke="#111827"
+                style={{ stroke: "rgb(var(--color-ink))" }}
                 strokeDasharray="6 6"
               />
               <text
@@ -142,7 +142,7 @@ export default function BaseRateStepChart({ points }: Props) {
                 y={HEIGHT - 10}
                 textAnchor="middle"
                 fontSize="11"
-                fill="#111827"
+                style={{ fill: "rgb(var(--color-ink))" }}
                 fontWeight="600"
               >
                 {hoveredPoint.date}
@@ -160,7 +160,7 @@ export default function BaseRateStepChart({ points }: Props) {
               y={HEIGHT - 10}
               textAnchor="middle"
               fontSize="11"
-              fill="#71717a"
+              style={{ fill: "rgb(var(--color-ink-3))" }}
             >
               {validPoints[index]?.date}
             </text>

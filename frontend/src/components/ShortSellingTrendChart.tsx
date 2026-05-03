@@ -102,7 +102,7 @@ export default function ShortSellingTrendChart({ points }: Props) {
 
   if (!chart) {
     return (
-      <div className="mt-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-8 text-sm text-zinc-500">
+      <div className="mt-2 rounded-2xl border border-line bg-bg-sunk px-4 py-8 text-sm text-ink-3">
         공매도 추이 데이터가 없습니다.
       </div>
     );
@@ -115,23 +115,23 @@ export default function ShortSellingTrendChart({ points }: Props) {
     .filter((index, position, arr) => arr.indexOf(index) === position);
 
   return (
-    <div className="mt-2 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
+    <div className="mt-2 rounded-2xl border border-line bg-bg-sunk px-4 py-4">
       <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4 sm:text-sm">
         <div>
-          <p className="text-zinc-500">최신 거래량 비율</p>
+          <p className="text-ink-3">최신 거래량 비율</p>
           <p className="font-semibold" style={{ color: VOLUME_COLOR }}>{fmtPct(latest.shortVolumeRatio)}</p>
         </div>
         <div>
-          <p className="text-zinc-500">최신 거래대금 비율</p>
+          <p className="text-ink-3">최신 거래대금 비율</p>
           <p className="font-semibold" style={{ color: AMOUNT_COLOR }}>{fmtPct(latest.shortAmountRatio)}</p>
         </div>
         <div>
-          <p className="text-zinc-500">시작일</p>
-          <p className="font-medium text-zinc-800">{first.reportDate}</p>
+          <p className="text-ink-3">시작일</p>
+          <p className="font-medium text-ink-2">{first.reportDate}</p>
         </div>
         <div>
-          <p className="text-zinc-500">기준일</p>
-          <p className="font-medium text-zinc-800">{latest.reportDate}</p>
+          <p className="text-ink-3">기준일</p>
+          <p className="font-medium text-ink-2">{latest.reportDate}</p>
         </div>
       </div>
 
@@ -148,14 +148,14 @@ export default function ShortSellingTrendChart({ points }: Props) {
                 x2={WIDTH - PADDING_X}
                 y1={chart.toY(tick)}
                 y2={chart.toY(tick)}
-                stroke="#e4e4e7"
+                style={{ stroke: "rgb(var(--color-line))" }}
                 strokeDasharray="4 4"
               />
               <text
                 x={2}
                 y={chart.toY(tick) + 4}
                 fontSize="11"
-                fill="#71717a"
+                style={{ fill: "rgb(var(--color-ink-3))" }}
               >
                 {fmtPct(tick)}
               </text>
@@ -169,7 +169,7 @@ export default function ShortSellingTrendChart({ points }: Props) {
                 x2={chart.toX(hoveredIndex!)}
                 y1={PADDING_TOP}
                 y2={HEIGHT - PADDING_BOTTOM}
-                stroke="#111827"
+                style={{ stroke: "rgb(var(--color-ink))" }}
                 strokeDasharray="6 6"
               />
               <text
@@ -177,7 +177,7 @@ export default function ShortSellingTrendChart({ points }: Props) {
                 y={HEIGHT - 10}
                 textAnchor="middle"
                 fontSize="11"
-                fill="#111827"
+                style={{ fill: "rgb(var(--color-ink))" }}
                 fontWeight="600"
               >
                 {hoveredPoint.reportDate}
@@ -233,7 +233,7 @@ export default function ShortSellingTrendChart({ points }: Props) {
               y={HEIGHT - 10}
               textAnchor="middle"
               fontSize="11"
-              fill="#71717a"
+              style={{ fill: "rgb(var(--color-ink-3))" }}
             >
               {validPoints[index]?.reportDate}
             </text>
@@ -262,11 +262,11 @@ export default function ShortSellingTrendChart({ points }: Props) {
       <div className="mt-3 flex flex-wrap gap-4 text-xs sm:text-sm">
         <div className="flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: VOLUME_COLOR }} />
-          <span className="text-zinc-600">공매도 거래량 비율 선</span>
+          <span className="text-ink-2">공매도 거래량 비율 선</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: AMOUNT_COLOR }} />
-          <span className="text-zinc-600">공매도 거래대금 비율 레이어</span>
+          <span className="text-ink-2">공매도 거래대금 비율 레이어</span>
         </div>
       </div>
     </div>
