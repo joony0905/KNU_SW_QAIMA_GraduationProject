@@ -23,6 +23,8 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class AuthService {
 
+    private static final long SIGNUP_INITIAL_CREDIT_BALANCE = 5L;
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
@@ -144,6 +146,7 @@ public class AuthService {
         newUser.setEmailVerified(true);
         newUser.setEmailVerifiedAt(now);
         newUser.setGlossaryHover(false);
+        newUser.setCreditBalance(SIGNUP_INITIAL_CREDIT_BALANCE);
 
         return userRepository.save(newUser);
     }

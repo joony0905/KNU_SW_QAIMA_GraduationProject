@@ -41,6 +41,7 @@ import { fetchNewsByStock } from "../api/news";
 import type { NewsItemDto } from "../types/news";
 import { getStockByCode } from "../api/stock";
 import { isLoggedIn } from "../utils/auth";
+import { getApiErrorMessage } from "../utils/errorMessage";
 import DictTerm from "../components/DictTerm";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { formatKstOffsetDateTime, shiftKstDays } from "../utils/kst";
@@ -846,8 +847,8 @@ export default function Feature2MockPage() {
         setNewsItems(analyzeNews);
       }
 
-    } catch {
-      setErr("분석 결과를 불러오지 못했습니다.");
+    } catch (e) {
+      setErr(getApiErrorMessage(e, "분석 결과를 불러오지 못했습니다."));
     } finally {
       setLoading(false);
     }

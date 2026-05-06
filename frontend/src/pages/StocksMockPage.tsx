@@ -33,6 +33,7 @@ import {
   shiftKstDays,
   shiftKstYears,
 } from "../utils/kst";
+import { getApiErrorMessage } from "../utils/errorMessage";
 
 /* =========================
    Zoom-out Loading Policy
@@ -652,7 +653,7 @@ export default function StocksMockPage() {
         warnings: ind?.warnings ?? [],
       });
     } catch (e) {
-      setErr("분석 결과를 불러오지 못했습니다.");
+      setErr(getApiErrorMessage(e, "분석 결과를 불러오지 못했습니다."));
     } finally {
       setAnalysisLoadingStage("");
       setLoading(false);

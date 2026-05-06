@@ -96,7 +96,10 @@ api.interceptors.response.use(
       }
     }
 
-    const errorCode = (error.response?.data as { errorCode?: string } | undefined)?.errorCode;
+    const errorData = error.response?.data as
+      | { errorCode?: string; errors?: Array<{ code?: string }> }
+      | undefined;
+    const errorCode = errorData?.errorCode ?? errorData?.errors?.[0]?.code;
     const message = getErrorMessage(status, errorCode);
     console.error("API Error:", status, errorCode, message);
 

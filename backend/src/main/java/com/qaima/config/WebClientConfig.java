@@ -55,6 +55,16 @@ public class WebClientConfig {
                 .build();
     }
 
+    // FRED
+    @Bean(name = "fredWebClient")
+    public WebClient fredWebClient(
+            @Value("${fred.base-url:https://api.stlouisfed.org}") String baseUrl
+    ) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .build();
+    }
+
 
     // opendart(금융감독원)
     @Bean(name = "opendartWebClient")

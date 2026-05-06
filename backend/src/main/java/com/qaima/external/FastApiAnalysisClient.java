@@ -16,6 +16,8 @@ import com.qaima.dto.featone.FeatOneMarketSnapshotDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
 import com.qaima.dto.feature2.Feature2ExplainRequestDto;
 import com.qaima.dto.feature2.Feature2ExplainResponseDto;
+import com.qaima.dto.feature3.PortfolioAnalyzeRequestDto;
+import com.qaima.dto.feature3.PortfolioAnalyzeResponseDto;
 import com.qaima.dto.indicator.IndicatorBundleDto;
 import com.qaima.dto.indicator.IndicatorSpecDto;
 import com.qaima.dto.ohlcv.OhlcvSummaryDto;
@@ -145,6 +147,40 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                     return Mono.just(dto);
                                 } catch (Exception e) {
                                     log.error("[FastApiAnalysisClient][feature2-explain] decode failed. body={}", body, e);
+                                    return Mono.error(e);
+                                }
+                            });
+                });
+    }
+
+    @Override
+    public Mono<PortfolioAnalyzeResponseDto> requestPortfolioAnalysis(PortfolioAnalyzeRequestDto request) {
+        JsonNode snakePayloadNode = toSnakeCaseNode(request);
+        log.info("[FastApiAnalysisClient][feature3-analysis][request] body={}", snakePayloadNode);
+
+        return webClient.post()
+                .uri("/feature3/analysis")
+                .bodyValue(snakePayloadNode)
+                .exchangeToMono(resp -> {
+                    HttpStatusCode status = resp.statusCode();
+                    return resp.bodyToMono(String.class)
+                            .defaultIfEmpty("")
+                            .flatMap(body -> {
+                                if (status.isError()) {
+                                    log.error("[FastApiAnalysisClient][feature3-analysis][error] status={}, body={}",
+                                            status.value(), body);
+                                    return Mono.error(new RuntimeException("FASTAPI_FEATURE3_ANALYSIS_HTTP_" + status.value()));
+                                }
+
+                                try {
+                                    log.info("[FastApiAnalysisClient][feature3-analysis] raw response={}", body);
+                                    JsonNode root = objectMapper.readTree(body);
+                                    JsonNode payloadNode = extractPayload(root, "feature3/analysis");
+                                    PortfolioAnalyzeResponseDto dto =
+                                            snakeCaseObjectMapper.treeToValue(payloadNode, PortfolioAnalyzeResponseDto.class);
+                                    return Mono.just(dto);
+                                } catch (Exception e) {
+                                    log.error("[FastApiAnalysisClient][feature3-analysis] decode failed. body={}", body, e);
                                     return Mono.error(e);
                                 }
                             });

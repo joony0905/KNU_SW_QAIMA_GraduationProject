@@ -4,6 +4,8 @@ import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
 import com.qaima.dto.feature2.Feature2ExplainRequestDto;
 import com.qaima.dto.feature2.Feature2ExplainResponseDto;
+import com.qaima.dto.feature3.PortfolioAnalyzeRequestDto;
+import com.qaima.dto.feature3.PortfolioAnalyzeResponseDto;
 import reactor.core.publisher.Mono;
 
 /**
@@ -15,4 +17,6 @@ public interface AnalysisApiClient {
     Mono<FeatOneAnalysisResponseDto> requestStockAnalysis(FeatOneRequestDto request);
 
     Mono<Feature2ExplainResponseDto> requestFeature2Explain(Feature2ExplainRequestDto request);
+
+    Mono<PortfolioAnalyzeResponseDto> requestPortfolioAnalysis(PortfolioAnalyzeRequestDto request);
 }

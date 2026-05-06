@@ -21,6 +21,8 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class OAuth2SocialLoginService {
 
+    private static final long SOCIAL_SIGNUP_INITIAL_CREDIT_BALANCE = 5L;
+
     private final UserRepository userRepository;
     private final SocialAccountRepository socialAccountRepository;
     private final LoginSessionService loginSessionService;
@@ -142,6 +144,7 @@ public class OAuth2SocialLoginService {
             user.setEmailVerified(true);
             user.setEmailVerifiedAt(Instant.now());
             user.setGlossaryHover(false);
+            user.setCreditBalance(SOCIAL_SIGNUP_INITIAL_CREDIT_BALANCE);
 
             User savedUser = userRepository.saveAndFlush(user);
 
