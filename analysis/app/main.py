@@ -6,10 +6,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from app.api.feature1 import router as feature1_router
 from app.api.feature2 import router as feature2_router
+from app.api.feature3 import router as feature3_router
 from app.services.clustering import set_market_data_provider
 from app.services.market_data_spring import SpringMarketDataProvider, SpringClientConfig
 from app.services.news_sentiment import start_local_model_warmup
-# from api.feature3 import router as feature3_router
 import traceback
 from fastapi.responses import JSONResponse
 
@@ -55,7 +55,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # 라우터 등록
 app.include_router(feature1_router)
 app.include_router(feature2_router)
-# app.include_router(feature3_router)
+app.include_router(feature3_router)
 
 
 @app.get("/health")

@@ -7,6 +7,7 @@ import { useTheme } from "../hooks/useTheme";
 import StockSearchCell from "../components/StockSearchCell";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { fetchPortfolioAnalysis } from "../api/portfolio";
+import { getApiErrorMessage } from "../utils/errorMessage";
 
 const RISK_GAMMA_STORAGE_KEY = "qaima_risk_gamma";
 const SURVEY_RESULT_STORAGE_KEY = "qaima_survey_result";
@@ -209,33 +210,22 @@ export default function PortfolioMockPage() {
     setErr("");
     setAnalysisResult(null);
     try {
-      // TODO: 백엔드 연결 후 아래 목업을 실제 API 호출로 교체
-      // const selectedOptions = Object.entries(extraOptions)
-      //   .filter(([, v]) => v)
-      //   .map(([k]) => k);
-      // const result = await fetchPortfolioAnalysis({
-      //   holdings: validRows.map((r) => ({
-      //     stockCode: r.stockCode ?? "",
-      //     quantity: r.quantity,
-      //     avgPrice: r.avgPrice,
-      //   })),
-      //   options: selectedOptions,
-      // });
-
-      // 목업 데이터 (로딩 시뮬레이션)
-      await new Promise((r) => setTimeout(r, 1000));
-      const result: PortfolioAnalyzeResponse = {
-        riskLevel: "Mid",
-        volatility: 18.7,
-        diversification: "보통",
-        covarianceScore: 0.42,
-        efficiency: "Efficient",
-        gamma: 0.815,
-      };
+      const selectedOptions = Object.entries(extraOptions)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+      const result = await fetchPortfolioAnalysis({
+        holdings: validRows.map((r) => ({
+          stockCode: r.stockCode ?? r.name.trim(),
+          quantity: r.quantity,
+          avgPrice: r.avgPrice,
+        })),
+        options: selectedOptions,
+        riskGamma,
+      });
 
       setAnalysisResult(result);
-    } catch {
-      setErr("분석에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    } catch (e) {
+      setErr(getApiErrorMessage(e, "분석에 실패했습니다. 잠시 후 다시 시도해주세요."));
     } finally {
       setLoading(false);
     }

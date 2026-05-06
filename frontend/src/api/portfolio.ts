@@ -12,6 +12,7 @@ export type PortfolioHoldingRequest = {
 export type PortfolioAnalyzeRequest = {
   holdings: PortfolioHoldingRequest[];
   options: string[];
+  riskGamma: number;
 };
 
 export type PortfolioAnalyzeResponse = {
