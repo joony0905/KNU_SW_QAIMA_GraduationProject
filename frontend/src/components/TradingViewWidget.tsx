@@ -19,6 +19,7 @@ import {
 } from "lightweight-charts";
 
 import type { Candle } from "../types/candle";
+import { useTheme } from "../hooks/useTheme";
 
 /**
  * indicators는 "result.metrics.indicators"를 page에서 분리해 내려주는 형태 (indicatorData)
@@ -105,15 +106,16 @@ const mapCandles = (candles: Candle[]): CandlestickData<Time>[] =>
       close: Number((c as any).c),
     }));
 
-const mapVolumes = (candles: Candle[]): HistogramData<Time>[] =>
+const mapVolumes = (
+  candles: Candle[],
+  colors: { up: string; down: string },
+): HistogramData<Time>[] =>
   normalizeCandles(candles)
     .map((c) => ({
       time: toEpochSeconds(Number(c.t)) as UTCTimestamp,
       value: Number((c as any).v),
       color:
-        Number((c as any).c) >= Number((c as any).o)
-          ? "rgba(239, 68, 68, 0.6)"
-          : "rgba(59, 130, 246, 0.6)",
+        Number((c as any).c) >= Number((c as any).o) ? colors.up : colors.down,
     }));
 
 /* =========================
@@ -341,6 +343,25 @@ function TradingViewWidget({
   // pane ready tick
   const [subPaneReadyTick, setSubPaneReadyTick] = useState(0);
 
+  // theme-aware candle/volume colors (시세 토큰 --color-rise / --color-fall과 매칭)
+  const { theme } = useTheme();
+  const candleColors = useMemo(() => {
+    if (theme === "dark") {
+      return {
+        up: "#f87171",
+        down: "#60a5fa",
+        upVolume: "rgba(248, 113, 113, 0.55)",
+        downVolume: "rgba(96, 165, 250, 0.55)",
+      };
+    }
+    return {
+      up: "#dc2626",
+      down: "#2563eb",
+      upVolume: "rgba(220, 38, 38, 0.55)",
+      downVolume: "rgba(37, 99, 235, 0.55)",
+    };
+  }, [theme]);
+
   // candle time list (sorted epoch seconds)
   const candleTimeList = useMemo(() => {
     return Array.from(
@@ -431,11 +452,11 @@ function TradingViewWidget({
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#ef4444",
-      downColor: "#3b82f6",
+      upColor: candleColors.up,
+      downColor: candleColors.down,
       borderVisible: false,
-      wickUpColor: "#ef4444",
-      wickDownColor: "#3b82f6",
+      wickUpColor: candleColors.up,
+      wickDownColor: candleColors.down,
       priceFormat: { type: "price", precision: 0, minMove: 1 },
     });
 
@@ -717,6 +738,20 @@ function TradingViewWidget({
   }, [candles, showSubPanes]);
 
   /* =========================
+     Theme-aware candle colors sync
+  ========================= */
+  useEffect(() => {
+    const cs = candleSeriesRef.current;
+    if (!cs) return;
+    cs.applyOptions({
+      upColor: candleColors.up,
+      downColor: candleColors.down,
+      wickUpColor: candleColors.up,
+      wickDownColor: candleColors.down,
+    });
+  }, [candleColors]);
+
+  /* =========================
      Volume data
   ========================= */
   useEffect(() => {
@@ -725,12 +760,17 @@ function TradingViewWidget({
     if (!vs) return;
     if (!candles || candles.length === 0) return;
 
-    vs.setData(mapVolumes(candles));
+    vs.setData(
+      mapVolumes(candles, {
+        up: candleColors.upVolume,
+        down: candleColors.downVolume,
+      }),
+    );
     volumeReadyRef.current = true;
 
     volumeChartRef.current?.timeScale().fitContent();
     syncTimeRangeFromPrice();
-  }, [showSubPanes, subPaneReadyTick, candles]);
+  }, [showSubPanes, subPaneReadyTick, candles, candleColors]);
 
   /* =========================
      EMA

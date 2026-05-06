@@ -167,11 +167,11 @@ export default function MarketSnapshotBars({ snapshot }: Props) {
   return (
     <div ref={rootRef}>
       <div className="flex flex-col gap-1">
-        <h3 className="text-base sm:text-lg font-semibold text-zinc-900">투자지표 개요</h3>
-        <p className="text-sm text-zinc-500">
+        <h3 className="text-base sm:text-lg font-semibold text-ink">투자지표 개요</h3>
+        <p className="text-sm text-ink-3">
           밸류에이션 · 수익성 · 안정성 · 성장성 · 주당 지표
         </p>
-        <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-zinc-700">
+        <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-ink-2">
           <div>기준일: {formatKstDateTimeDisplay(snapshot.asOf) || "-"}</div>
           <div>통화: {snapshot.currency ?? "-"}</div>
         </div>
@@ -181,7 +181,7 @@ export default function MarketSnapshotBars({ snapshot }: Props) {
         {sections.map((section, sectionIndex) => (
           <div
             key={section.title}
-            className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4"
+            className="rounded-2xl border border-line bg-bg-sunk px-4 py-4"
             style={{
               opacity: animated ? 1 : 0,
               transform: animated ? "translateY(0)" : "translateY(18px)",
@@ -196,7 +196,7 @@ export default function MarketSnapshotBars({ snapshot }: Props) {
                 className="inline-block h-3 w-3 rounded-full"
                 style={{ backgroundColor: section.color }}
               />
-              <h4 className="text-sm font-semibold text-zinc-900">
+              <h4 className="text-sm font-semibold text-ink">
                 {section.title}
                 {section.englishTitle ? ` (${section.englishTitle})` : ""}
               </h4>
@@ -222,15 +222,15 @@ export default function MarketSnapshotBars({ snapshot }: Props) {
                 return (
                   <div key={`${section.title}-${item.label}`}>
                     <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-                      <span className="text-zinc-700">
+                      <span className="text-ink-2">
                         {item.label}
                         {item.englishLabel ? ` (${item.englishLabel})` : ""}
                       </span>
-                      <span className="font-medium text-zinc-900">
+                      <span className="font-medium text-ink">
                         {fmtValue(item.value, item.kind)}
                       </span>
                     </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-zinc-200">
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-line">
                       <div
                         className="h-full rounded-full"
                         style={{

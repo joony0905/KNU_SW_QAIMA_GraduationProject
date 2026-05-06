@@ -116,20 +116,20 @@ export default function BillingModal({ isOpen, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+        className="bg-surface rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-zinc-200">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-line">
           <div className="flex items-center gap-2">
-            <Sparkles size={20} className="text-sky-500" />
-            <h2 className="text-base sm:text-lg font-semibold text-zinc-900">
+            <Sparkles size={20} className="text-accent" />
+            <h2 className="text-base sm:text-lg font-semibold text-ink">
               요금제 / 토큰 충전
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-bg-sunk text-ink-3 hover:text-zinc-800 transition-colors"
             aria-label="닫기"
           >
             <X size={18} />
@@ -137,15 +137,15 @@ export default function BillingModal({ isOpen, onClose }: Props) {
         </div>
 
         {/* 잔량 / 탭 */}
-        <div className="px-5 sm:px-6 pt-4 pb-3 flex flex-col gap-3 border-b border-zinc-100">
-          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-sky-50 to-indigo-50 border border-sky-100">
+        <div className="px-5 sm:px-6 pt-4 pb-3 flex flex-col gap-3 border-b border-line">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-accent-soft to-surface border border-accent/20">
             <div className="flex items-center gap-2">
-              <Coins size={18} className="text-sky-600" />
-              <span className="text-sm text-zinc-600">현재 보유 토큰</span>
+              <Coins size={18} className="text-accent" />
+              <span className="text-sm text-ink-2">현재 보유 토큰</span>
             </div>
             <span className="text-lg sm:text-xl font-bold text-sky-700">
               {balance.toLocaleString()}
-              <span className="ml-1 text-sm font-medium text-zinc-500">토큰</span>
+              <span className="ml-1 text-sm font-medium text-ink-3">토큰</span>
             </span>
           </div>
 
@@ -154,8 +154,8 @@ export default function BillingModal({ isOpen, onClose }: Props) {
               onClick={() => setTab("SUBSCRIPTION")}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 tab === "SUBSCRIPTION"
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-700"
+                  ? "bg-surface text-ink shadow-sm"
+                  : "text-ink-3 hover:text-ink-2"
               }`}
             >
               구독제
@@ -164,8 +164,8 @@ export default function BillingModal({ isOpen, onClose }: Props) {
               onClick={() => setTab("BULK")}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 tab === "BULK"
-                  ? "bg-white text-zinc-900 shadow-sm"
-                  : "text-zinc-500 hover:text-zinc-700"
+                  ? "bg-surface text-ink shadow-sm"
+                  : "text-ink-3 hover:text-ink-2"
               }`}
             >
               토큰 충전
@@ -189,13 +189,13 @@ export default function BillingModal({ isOpen, onClose }: Props) {
                       className={`flex-1 px-4 py-3 rounded-xl border text-left transition-colors ${
                         isActive
                           ? "border-sky-500 bg-sky-50"
-                          : "border-zinc-200 bg-white hover:border-zinc-300"
+                          : "border-line bg-surface hover:border-zinc-300"
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span
                           className={`text-sm font-semibold ${
-                            isActive ? "text-sky-700" : "text-zinc-700"
+                            isActive ? "text-sky-700" : "text-ink-2"
                           }`}
                         >
                           {item.label}
@@ -206,7 +206,7 @@ export default function BillingModal({ isOpen, onClose }: Props) {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-zinc-500 mt-1">
+                      <p className="text-xs text-ink-3 mt-1">
                         {item.perMonthLabel}
                       </p>
                     </button>
@@ -215,12 +215,12 @@ export default function BillingModal({ isOpen, onClose }: Props) {
               </div>
 
               {/* 선택 카드 */}
-              <div className="border border-zinc-200 rounded-2xl p-5 sm:p-6 flex flex-col gap-4 bg-white">
+              <div className="border border-line rounded-2xl p-5 sm:p-6 flex flex-col gap-4 bg-surface">
                 <div className="flex items-end gap-2">
-                  <span className="text-3xl sm:text-4xl font-bold text-zinc-900">
+                  <span className="text-3xl sm:text-4xl font-bold text-ink">
                     {selectedPlan.priceLabel}
                   </span>
-                  <span className="text-sm text-zinc-500 mb-1">
+                  <span className="text-sm text-ink-3 mb-1">
                     {selectedPlan.unit}
                   </span>
                 </div>
@@ -230,9 +230,9 @@ export default function BillingModal({ isOpen, onClose }: Props) {
                     <div key={line} className="flex items-start gap-2">
                       <Check
                         size={16}
-                        className="text-sky-500 flex-shrink-0 mt-0.5"
+                        className="text-accent flex-shrink-0 mt-0.5"
                       />
-                      <span className="text-sm text-zinc-700">{line}</span>
+                      <span className="text-sm text-ink-2">{line}</span>
                     </div>
                   ))}
                 </div>
@@ -252,7 +252,7 @@ export default function BillingModal({ isOpen, onClose }: Props) {
 
           {tab === "BULK" && (
             <div className="flex flex-col gap-3">
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-ink-3">
                 많이 충전할수록 토큰당 단가가 저렴해집니다.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -269,7 +269,7 @@ export default function BillingModal({ isOpen, onClose }: Props) {
                     className={`relative text-left rounded-xl border p-4 transition-all ${
                       tier.highlight
                         ? "border-sky-400 bg-sky-50 hover:bg-sky-100"
-                        : "border-zinc-200 bg-white hover:border-sky-300 hover:bg-sky-50/40"
+                        : "border-line bg-surface hover:border-sky-300 hover:bg-sky-50/40"
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {tier.highlight && (
@@ -278,19 +278,19 @@ export default function BillingModal({ isOpen, onClose }: Props) {
                       </span>
                     )}
                     <div className="flex items-center gap-1.5">
-                      <Coins size={16} className="text-sky-500" />
-                      <span className="text-base font-bold text-zinc-900">
+                      <Coins size={16} className="text-accent" />
+                      <span className="text-base font-bold text-ink">
                         {tier.tokens.toLocaleString()} 토큰
                       </span>
                     </div>
                     <div className="mt-2 flex items-baseline gap-1">
-                      <span className="text-xl font-bold text-zinc-900">
+                      <span className="text-xl font-bold text-ink">
                         {tier.price.toLocaleString()}
                       </span>
-                      <span className="text-xs text-zinc-500">원</span>
+                      <span className="text-xs text-ink-3">원</span>
                     </div>
                     <div className="mt-1 flex items-center justify-between text-[11px]">
-                      <span className="text-zinc-500">
+                      <span className="text-ink-3">
                         토큰당 {tier.pricePerToken}원
                       </span>
                       {tier.discountLabel && (
@@ -303,7 +303,7 @@ export default function BillingModal({ isOpen, onClose }: Props) {
                 ))}
               </div>
               {!loggedIn && (
-                <p className="text-xs text-zinc-400 text-center pt-1">
+                <p className="text-xs text-ink-4 text-center pt-1">
                   결제는 로그인 후 이용할 수 있습니다.
                 </p>
               )}

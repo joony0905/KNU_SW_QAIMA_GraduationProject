@@ -2,12 +2,11 @@
 import { isLoggedIn } from "../utils/auth";
 import { useNavigate } from "react-router-dom";
 import TradingViewWidget from "../components/TradingViewWidget";
-import AnalysisResultPanel from "../components/AnalysisResultPanel";
+import AnalysisResultPanel, { LLM_VENDOR_OPTIONS } from "../components/AnalysisResultPanel";
 import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import { useRef, useEffect, useState } from "react";
-import StockCard from "../components/StockCard";
-import StockInputBox from "../components/StockInputBox";
-import { Star } from "lucide-react";
+import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
+import StockSearchBar from "../components/StockSearchBar";
 import { type IndicatorSection } from "../mocks/financialIndicators";
 import type { FinancialDto } from "../types/financial";
 import { buildSectionsFromDto } from "../mappers/financialMapper";
@@ -26,6 +25,7 @@ import type { AnalysisResponse } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
 import DictTerm from "../components/DictTerm";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
+import { useTheme } from "../hooks/useTheme";
 import {
   formatKstDate,
   formatKstDateTimeDisplay,
@@ -244,8 +244,6 @@ export default function StocksMockPage() {
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
   const [analysisZoom, setAnalysisZoom] = useState(1); // 1 = 100%
 
-  const [isOpen, setIsOpen] = useState(false);
-
   const [isFinModalOpen, setIsFinModalOpen] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number>(2024);
   const [selectedPeriodType, setSelectedPeriodType] = useState<"A" | "Q" | "H">("A");
@@ -265,17 +263,11 @@ export default function StocksMockPage() {
     mode: LoadMode;
   } | null>(null);
 
-  const getColorClass = (rate: string) => {
-    if (rate.startsWith("+")) return "text-red-600";
-    if (rate.startsWith("-")) return "text-blue-600";
-    return "text-black";
-  };
-
   const getColorClassByNumber = (n: number | null) => {
-    if (n === null || !Number.isFinite(n)) return "text-black";
-    if (n > 0) return "text-red-600";
-    if (n < 0) return "text-blue-600";
-    return "text-black";
+    if (n === null || !Number.isFinite(n)) return "text-flat";
+    if (n > 0) return "text-rise";
+    if (n < 0) return "text-fall";
+    return "text-flat";
   };
 
   // 초기값은 종목정보만, 가격/등락은 candles로만
@@ -751,42 +743,8 @@ export default function StocksMockPage() {
     return formatKstDateTimeDisplay(value);
   };
 
-  const featuredListWrapperRef = useRef<HTMLDivElement | null>(null);
-  const cardRef = useRef<HTMLDivElement | null>(null);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-
-  const featuredStocks = [
-    {
-      name: "삼성전자",
-      symbol: "005930",
-      price: "72,800",
-      volume: "14,293,826",
-      change: "+800",
-      changeRate: "+1.11%",
-    },
-  ];
-
   const [isInterested, setIsInterested] = useState(false);
 
-  const [panelPos, setPanelPos] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (
-        featuredListWrapperRef.current?.contains(e.target as Node) ||
-        dropdownRef.current?.contains(e.target as Node)
-      ) {
-        return;
-      }
-      setIsOpen(false);
-    };
-
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  }, []);
 
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
     message: "",
@@ -816,28 +774,18 @@ export default function StocksMockPage() {
     }
   };
 
-  const [topic, setTopic] = useState<
-    | "상승종목"
-    | "상한가 임박종목"
-    | "하락종목"
-    | "상한가 이탈종목"
-    | "거래량 상위종목"
-    | "거래대금 상위종목"
-    | "거래량 급등종목"
-  >("상승종목");
-
-  const [isTopicOpen, setIsTopicOpen] = useState(false);
-  const topicRef = useRef<HTMLDivElement | null>(null);
+  const [isModelOpen, setIsModelOpen] = useState(false);
+  const modelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const handleClickOutsideTopic = (e: MouseEvent) => {
-      if (!topicRef.current) return;
-      if (topicRef.current.contains(e.target as Node)) return;
-      setIsTopicOpen(false);
+    const handleClickOutsideModel = (e: MouseEvent) => {
+      if (!modelRef.current) return;
+      if (modelRef.current.contains(e.target as Node)) return;
+      setIsModelOpen(false);
     };
 
-    document.addEventListener("click", handleClickOutsideTopic);
-    return () => document.removeEventListener("click", handleClickOutsideTopic);
+    document.addEventListener("click", handleClickOutsideModel);
+    return () => document.removeEventListener("click", handleClickOutsideModel);
   }, []);
 
   // 2) mainStock 표시/색상 계산은 친구 코드 기반으로 개선
@@ -863,280 +811,151 @@ export default function StocksMockPage() {
 
   const mainColorClass = getColorClassByNumber(mainNumericChange);
 
+  const { theme, toggle } = useTheme();
+
   return (
-    <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
+    <div className="min-h-screen bg-bg ml-[84px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
-        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
-          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
-            심층분석
-          </h1>
-          <TokenBalanceBadge />
+        <header className="flex items-end justify-between">
+          <div>
+            <div className="text-xs font-medium text-ink-3 tracking-tight">
+              Equities · Deep Analysis
+            </div>
+            <h1 className="mt-1 text-3xl font-bold text-ink tracking-tighter">
+              심층분석
+            </h1>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={toggle}
+              aria-label={theme === "dark" ? "라이트 모드" : "다크 모드"}
+              className="w-9 h-9 grid place-items-center rounded-xl bg-surface
+                         border border-line text-ink-2 shadow-card
+                         hover:bg-bg-sunk transition-colors"
+            >
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <TokenBalanceBadge />
+          </div>
         </header>
 
-        <section className="w-full flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="w-full lg:max-w-md bg-white rounded-[10px] outline outline-1 outline-stone-300 px-2 py-1 sm:px-2 sm:py-1 flex flex-col gap-2">
-            <StockInputBox
-              placeholder="종목을 입력해주세요"
-              onSearch={handleSearch}
-            />
-          </div>
-
-          <div
-            ref={featuredListWrapperRef}
-            className="w-full lg:flex-1 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end"
-          >
-            <div ref={topicRef} className="relative w-40">
-              <button
-                onClick={() => setIsTopicOpen((prev) => !prev)}
-                className="
-                  w-full h-9 sm:h-10
-                  border border-black rounded-md
-                  bg-white
-                  flex items-center
-                  px-3
-                  font-medium
-                  relative
-                "
-              >
-                <span
-                  className="
-                    flex-1 text-center truncate whitespace-nowrap
-                    text-xs sm:text-sm
-                  "
-                >
-                  {topic}
-                </span>
-
-                <span className="absolute right-1 sm:right-2 text-[10px] sm:text-xs">
-                  {isTopicOpen ? "▲" : "▼"}
-                </span>
-              </button>
-
-              {isTopicOpen && (
-                <div
-                  className="
-                    absolute mt-1 w-full
-                    bg-white border border-stone-300 rounded-md shadow-md
-                    z-50
-                  "
-                >
-                  {[
-                    "상승종목",
-                    "상한가 임박종목",
-                    "하락종목",
-                    "상한가 이탈종목",
-                    "거래량 상위종목",
-                    "거래대금 상위종목",
-                    "거래량 급등종목",
-                  ].map((item) => (
-                    <button
-                      key={item}
-                      onClick={() => {
-                        setTopic(item as typeof topic);
-                        setIsTopicOpen(false);
-                      }}
-                      className="
-                        w-full text-left px-3 py-2 text-sm sm:text-base
-                        hover:bg-zinc-100
-                      "
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 relative">
-              <div
-                ref={cardRef}
-                className="inline-block w-[260px] sm:w-[280px] lg:w-[380px]"
-              >
-                <StockCard
-                  name={featuredStocks[0].name}
-                  price={featuredStocks[0].price}
-                  volume={featuredStocks[0].volume}
-                  change={featuredStocks[0].change}
-                  changeRate={featuredStocks[0].changeRate}
-                  getColorClass={getColorClass}
-                />
-              </div>
-
-              <button
-                onClick={() => {
-                  setIsOpen((prev) => !prev);
-
-                  if (!cardRef.current) return;
-                  const rect = cardRef.current.getBoundingClientRect();
-
-                  setPanelPos({
-                    top: rect.top,
-                    left: rect.left,
-                  });
-                }}
-                className="
-                  w-6 h-6
-                  bg-zinc-300
-                  rounded-full
-                  flex items-center justify-center
-                  transition-colors hover:bg-zinc-400
-                  flex-shrink-0
-                "
-              >
-                <span className="text-lg font-bold leading-none">
-                  {isOpen ? "-" : "+"}
-                </span>
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {isOpen && panelPos && (
-          <div
-            ref={dropdownRef}
-            className="
-              fixed
-              w-[260px] sm:w-[280px] lg:w-[380px]
-              max-h-[400px]
-              bg-white border border-stone-300 rounded-sm shadow-md
-              overflow-y-auto
-              overflow-x-hidden
-              z-50
-            "
-            style={{
-              top: panelPos.top,
-              left: panelPos.left,
-            }}
-          >
-            <div className="pr-3">
-              <div className="px-3 py-3 text-sm text-zinc-600">
-                목업데이터 지운 상태임 이름, 종목코드 매핑후 순위 정렬해야함
-              </div>
-            </div>
-          </div>
-        )}
+        <StockSearchBar onSearch={handleSearch} />
 
         {hasSelectedStock && (
+          <>
+            <div className="border-t border-line-strong" />
           <main className="w-full flex flex-col gap-4 sm:gap-5">
-            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)] gap-4 lg:gap-6 items-start">
-              <div className="flex flex-col gap-3 sm:gap-4">
-                <section className="w-full bg-zinc-100 rounded-2xl p-3 sm:p-4 md:p-5 flex flex-col gap-3 xl:h-[520px] min-h-0">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex flex-wrap items-end gap-1.5">
-                      <h2 className="text-lg sm:text-xl md:text-2xl font-medium text-black">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)] gap-4 lg:gap-6 items-start">
+              <div className="flex flex-col gap-3 sm:gap-4 xl:h-[580px]">
+                {/* 종목 헤더 — 카드 밖, 페이지 위에 직접 표시 */}
+                <div className="flex items-start justify-between gap-4 px-1">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-ink tracking-tight">
                         {mainStock.name}
                       </h2>
-                      <span className="text-sm sm:text-base md:text-lg text-black">
-                        ({mainStock.symbol})
+                      <span className="text-sm sm:text-base md:text-lg text-ink-3 font-mono">
+                        {mainStock.symbol}
                       </span>
                       <button
                         onClick={toggleInterest}
-                        className="ml-2 inline-block"
+                        className="ml-1 inline-block"
                       >
                         <Star
-                          size={22}
-                          className="relative -top-1 transition-colors text-yellow-400"
+                          size={20}
+                          className="transition-colors text-warn"
                           fill={isInterested ? "currentColor" : "none"}
                         />
                       </button>
                     </div>
-
-                    <span className="text-[10px] sm:text-xs font-medium text-black">
+                    <span className="text-[10px] sm:text-xs font-medium text-ink-3">
                       {currentTime} KST
                     </span>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-2xl md:text-3xl font-medium text-black">
-                        {displayPrice}
-                      </span>
-
-                      <div className="flex items-center gap-1.5 text-sm md:text-base font-medium">
-                        <span className={mainColorClass}>{displayChange}</span>
-                        <span className={mainColorClass}>({displayRate})</span>
-                        {mainNumericChange > 0 && (
-                          <div
-                            className={`${mainColorClass} w-0 h-0 
-                            border-l-[6px] border-r-[6px] 
-                            border-b-[9px] border-transparent 
-                            border-b-current`}
-                          />
-                        )}
-                        {mainNumericChange < 0 && (
-                          <div
-                            className={`${mainColorClass} w-0 h-0 
-                            border-l-[6px] border-r-[6px] 
-                            border-t-[9px] border-transparent 
-                            border-t-current`}
-                          />
-                        )}
-                        {mainNumericChange === 0 && (
-                          <span
-                            className={`
-                            ${mainColorClass}
-                            text-xl sm:text-2xl
-                            font-extrabold
-                            leading-none
-                          `}
-                          >
-                            -
-                          </span>
-                        )}
-                      </div>
-                    </div>
                   </div>
 
-                  <div className="w-full flex-1 bg-white rounded-xl overflow-hidden min-h-0 flex flex-col">
-                    {/* 차트영역은 stretch + min-h-0 */}
-                    <div className="flex-1 min-h-0 w-full flex items-stretch">
-                      {chartLoading && (
-                        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
-                          <p className="text-sm sm:text-base text-gray-600">
-                            차트를 불러오는 중입니다...
-                          </p>
-                        </div>
+                  <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl md:text-3xl font-bold text-ink font-mono tabular tracking-tighter">
+                        {displayPrice}
+                      </span>
+                      <span className="text-sm text-ink-3">원</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm font-medium font-mono tabular">
+                      <span className="text-ink-3 text-xs">전일대비</span>
+                      <span className={mainColorClass}>{displayChange}</span>
+                      <span className={mainColorClass}>({displayRate})</span>
+                      {mainNumericChange > 0 && (
+                        <div
+                          className={`${mainColorClass} w-0 h-0
+                          border-l-[5px] border-r-[5px]
+                          border-b-[8px] border-transparent
+                          border-b-current`}
+                        />
                       )}
-
-                      {chartError && !chartLoading && (
-                        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
-                          <p className="text-sm sm:text-base text-red-600">
-                            {chartError}
-                          </p>
-                        </div>
+                      {mainNumericChange < 0 && (
+                        <div
+                          className={`${mainColorClass} w-0 h-0
+                          border-l-[5px] border-r-[5px]
+                          border-t-[8px] border-transparent
+                          border-t-current`}
+                        />
                       )}
-
-                      {!chartLoading && !chartError && (
-                        <div className="flex-1 min-h-0 w-full">
-                          {/* TradingViewWidget 부모 높이를 100% 사용 */}
-                          <TradingViewWidget
-                            candles={candles}
-                            indicators={indicatorData}
-                            showSubPanes={Boolean(indicatorData)}
-                            markerMode="triple" // "sto_ema" | "bb_sto" | "both"
-                            onRequestMoreHistory={handleRequestMoreHistory}
-                          />
-                        </div>
+                      {mainNumericChange === 0 && (
+                        <span className={`${mainColorClass} text-lg font-extrabold leading-none`}>-</span>
                       )}
                     </div>
+                  </div>
+                </div>
+
+                {/* 차트만 흰 카드로 감쌈 */}
+                <section className="w-full flex-1 bg-surface border border-line shadow-card overflow-hidden min-h-0 flex flex-col">
+                  <div className="flex-1 min-h-0 w-full flex items-stretch">
+                    {chartLoading && (
+                      <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                        <p className="text-sm sm:text-base text-ink-3">
+                          차트를 불러오는 중입니다...
+                        </p>
+                      </div>
+                    )}
+
+                    {chartError && !chartLoading && (
+                      <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                        <p className="text-sm sm:text-base text-danger">
+                          {chartError}
+                        </p>
+                      </div>
+                    )}
+
+                    {!chartLoading && !chartError && (
+                      <div className="flex-1 min-h-0 w-full">
+                        {/* TradingViewWidget 부모 높이를 100% 사용 */}
+                        <TradingViewWidget
+                          candles={candles}
+                          indicators={indicatorData}
+                          showSubPanes={Boolean(indicatorData)}
+                          markerMode="triple" // "sto_ema" | "bb_sto" | "both"
+                          onRequestMoreHistory={handleRequestMoreHistory}
+                        />
+                      </div>
+                    )}
                   </div>
                 </section>
               </div>
 
-              <div className="w-full h-[520px] px-4 sm:px-6 py-5 bg-zinc-100 rounded-2xl flex flex-col">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-[20px] font-semibold">
+              <div className="w-full xl:h-[580px] flex flex-col gap-3 sm:gap-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-ink tracking-tight">
                     투자지표
                   </h2>
                   <button
                     onClick={() => setIsFinModalOpen(true)}
-                    className="px-4 py-1.5 rounded-lg text-sm font-medium bg-zinc-800 text-white hover:bg-zinc-700 transition-colors"
+                    className="px-4 py-1.5 rounded-lg text-sm font-medium bg-accent-soft text-accent border border-accent/30 hover:bg-accent/15 hover:border-accent/50 transition-colors"
                   >
                     재무제표
                   </button>
                 </div>
 
-                <div className="flex flex-col flex-1 min-h-0">
-
-                  <div className="flex-1 overflow-y-auto flex flex-col gap-5 pr-2 pt-2">
+                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-5">
                     {sections.length > 0 ? (
                       sections.map((section) => (
                         <IndicatorSectionBlock
@@ -1154,77 +973,133 @@ export default function StocksMockPage() {
                         />
                       ))
                     ) : (
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-ink-3">
                         해당 조건의 재무제표 데이터가 없습니다.
                       </p>
                     )}
-                  </div>
                 </div>
               </div>
             </div>
             {/* ========== 분석 기간 선택 ========== */}
-            <div className="w-full bg-white rounded-2xl border border-stone-300 px-4 sm:px-6 py-4 flex flex-col gap-3">
-              <h3 className="text-sm sm:text-base font-semibold text-zinc-800">분석 기간</h3>
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
-                {/* 프리셋 버튼 */}
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    ["3개월", 90],
-                    ["6개월", 180],
-                    ["1년", 365],
-                    ["3년", 1095],
-                    ["5년", 1825],
-                  ] as const).map(([label, days]) => {
-                    const to = new Date();
-                    const from = shiftKstDays(to, -days);
-                    const fromStr = formatKstDate(from);
-                    const toStr = formatKstDate(to);
-                    const isActive = analysisFrom === fromStr && analysisTo === toStr;
+            <div className="w-full bg-surface rounded-xl border border-line px-4 sm:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-3 shadow-card">
+              <h3 className="text-sm sm:text-base font-semibold text-ink shrink-0">분석 기간</h3>
 
-                    return (
-                      <button
-                        key={label}
-                        onClick={() => {
-                          setAnalysisFrom(fromStr);
-                          setAnalysisTo(toStr);
-                        }}
-                        className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-                          isActive
-                            ? "border-sky-500 bg-sky-50 text-sky-700 font-medium"
-                            : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
+              {/* 프리셋 칩 */}
+              <div className="flex flex-wrap gap-1.5">
+                {([
+                  ["3개월", 90],
+                  ["6개월", 180],
+                  ["1년", 365],
+                  ["3년", 1095],
+                  ["5년", 1825],
+                ] as const).map(([label, days]) => {
+                  const to = new Date();
+                  const from = shiftKstDays(to, -days);
+                  const fromStr = formatKstDate(from);
+                  const toStr = formatKstDate(to);
+                  const isActive = analysisFrom === fromStr && analysisTo === toStr;
 
-                {/* 직접 날짜 입력 */}
-                <div className="flex items-center gap-2 text-sm">
-                  <input
-                    type="date"
-                    value={analysisFrom}
-                    min={formatKstDate(shiftKstYears(new Date(), -5))}
-                    max={analysisTo || formatKstDate(new Date())}
-                    onChange={(e) => setAnalysisFrom(e.target.value)}
-                    className="px-2 py-1.5 border border-zinc-300 rounded-lg text-zinc-700 focus:outline-none focus:ring-1 focus:ring-sky-400"
-                  />
-                  <span className="text-zinc-400">~</span>
-                  <input
-                    type="date"
-                    value={analysisTo}
-                    min={analysisFrom || formatKstDate(shiftKstYears(new Date(), -5))}
-                    max={formatKstDate(new Date())}
-                    onChange={(e) => setAnalysisTo(e.target.value)}
-                    className="px-2 py-1.5 border border-zinc-300 rounded-lg text-zinc-700 focus:outline-none focus:ring-1 focus:ring-sky-400"
-                  />
-                </div>
+                  return (
+                    <button
+                      key={label}
+                      onClick={() => {
+                        setAnalysisFrom(fromStr);
+                        setAnalysisTo(toStr);
+                      }}
+                      className={`px-3.5 py-1.5 rounded-full text-sm transition-colors ${
+                        isActive
+                          ? "bg-accent text-white font-semibold"
+                          : "bg-bg-sunk text-ink-3 hover:bg-surface-2 font-medium"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 직접 날짜 입력 — 오른쪽 끝 정렬 */}
+              <div className="flex items-center gap-2 text-sm ml-auto">
+                <input
+                  type="date"
+                  value={analysisFrom}
+                  min={formatKstDate(shiftKstYears(new Date(), -5))}
+                  max={analysisTo || formatKstDate(new Date())}
+                  onChange={(e) => setAnalysisFrom(e.target.value)}
+                  className="px-2 py-1.5 border border-line rounded-lg text-ink bg-surface focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                />
+                <span className="text-ink-4">~</span>
+                <input
+                  type="date"
+                  value={analysisTo}
+                  min={analysisFrom || formatKstDate(shiftKstYears(new Date(), -5))}
+                  max={formatKstDate(new Date())}
+                  onChange={(e) => setAnalysisTo(e.target.value)}
+                  className="px-2 py-1.5 border border-line rounded-lg text-ink bg-surface focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
+                />
               </div>
             </div>
 
+            {/* ========== 분석 실행 그라디언트 카드 ========== */}
+            {showAnalyzeButton && (
+              <section className="rounded-xl border border-line shadow-card p-5 sm:p-6
+                                  bg-gradient-to-br from-accent-soft to-surface
+                                  flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <div className="text-[11px] font-semibold text-accent tracking-tight mb-1">
+                    ✨ AI 심층분석
+                  </div>
+                  <h3 className="text-lg font-bold text-ink tracking-tight">
+                    선택한 기간을 한 번에 분석해 드릴게요
+                  </h3>
+                  <p className="text-sm text-ink-3 mt-1">
+                    가격 흐름 · 재무 시계열 · 보조지표를 종합한 리포트
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <div ref={modelRef} className="relative">
+                    <button
+                      onClick={() => setIsModelOpen((prev) => !prev)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-line text-sm"
+                    >
+                      <span className="text-ink-3 text-[11px]">모델</span>
+                      <span className="font-semibold text-ink">{llmVendor}</span>
+                      {isModelOpen
+                        ? <ChevronUp size={14} className="text-ink-3 pointer-events-none" />
+                        : <ChevronDown size={14} className="text-ink-3 pointer-events-none" />}
+                    </button>
+                    {isModelOpen && (
+                      <div className="absolute right-0 bottom-full mb-1 w-full bg-surface border border-line rounded-lg shadow-pop z-50 max-h-60 overflow-y-auto">
+                        {LLM_VENDOR_OPTIONS.map((vendor) => (
+                          <button
+                            key={vendor}
+                            onClick={() => { setLlmVendor(vendor); setIsModelOpen(false); }}
+                            className={`w-full text-left px-3.5 py-2.5 text-sm first:rounded-t-lg last:rounded-b-lg ${
+                              vendor === llmVendor
+                                ? "bg-accent-soft text-accent font-semibold"
+                                : "text-ink hover:bg-bg-sunk"
+                            }`}
+                          >
+                            {vendor}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleAnalyzeClick}
+                    disabled={loading}
+                    className="px-5 py-2.5 rounded-lg bg-ink text-bg font-semibold text-sm
+                               hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight"
+                  >
+                    분석 결과 보기 →
+                  </button>
+                </div>
+              </section>
+            )}
+
             {/* ========== 하단 분석 결과 영역 ========== */}
-            <div ref={pdfRef}>
+            {(loading || !!err || !!analysisData) && <div ref={pdfRef}>
               <AnalysisResultPanel
                 result={analysisData ? {
                   ...analysisData,
@@ -1232,7 +1107,7 @@ export default function StocksMockPage() {
                 loading={loading}
                 loadingStage={analysisLoadingStage}
                 err={err}
-                showAnalyzeButton={showAnalyzeButton}
+                showAnalyzeButton={false}
                 onAnalyze={handleAnalyzeClick}
                 onDownload={handleDownloadClick}
                 onZoom={() => {
@@ -1246,27 +1121,28 @@ export default function StocksMockPage() {
                 priceFlowSummary={priceFlowSummary}
                 layout="full"
               />
-            </div>
+            </div>}
           </main>
+          </>
         )}
 
         {isAnalysisModalOpen && analysisResult && (
           <div
-            className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[100] bg-ink/50 flex items-center justify-center p-4"
             onClick={() => setIsAnalysisModalOpen(false)}
           >
             <div
-              className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl"
+              className="bg-surface rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-pop"
               onClick={(e) => e.stopPropagation()}
             >
               {/* 상단 헤더 */}
-              <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-200">
-                <h2 className="text-base sm:text-lg font-semibold text-zinc-900">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-line">
+                <h2 className="text-base sm:text-lg font-semibold text-ink">
                   {mainStock.name} ({mainStock.symbol}) 분석 결과
                 </h2>
                 <button
                   onClick={() => setIsAnalysisModalOpen(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 text-xl transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-bg-sunk text-ink-3 hover:text-ink text-xl transition-colors"
                 >
                   ✕
                 </button>
@@ -1307,12 +1183,9 @@ export default function StocksMockPage() {
         {/* 토스트 메시지 */}
         {toast.visible && (
           <div
-            className="
-              fixed bottom-8 left-1/2 -translate-x-1/2
-              bg-black/70 text-white
-              px-4 py-2 rounded-md
-              text-sm sm:text-base
-            "
+            className="fixed bottom-8 left-1/2 -translate-x-1/2
+                       bg-ink/80 text-bg px-4 py-2 rounded-lg
+                       text-sm sm:text-base"
           >
             {toast.message}
           </div>
@@ -1334,20 +1207,25 @@ function Cell({
   value: string;
   className?: string;
 }) {
+  const isEmpty = value === "-" || value === "" || value == null;
   return (
-    <div className={`px-3 py-2 bg-white flex flex-col ${className}`}>
-      <div className="flex justify-between items-center">
-        <span className="text-black text-sm sm:text-base font-semibold">
+    <div className={`px-3 py-2 bg-surface flex flex-col ${className}`}>
+      <div className="flex justify-between items-center gap-2">
+        <span className="text-ink text-sm sm:text-base font-semibold whitespace-nowrap">
           <DictTerm term={title}>{title}</DictTerm>
         </span>
-        <span className="text-black text-sm sm:text-base font-semibold whitespace-nowrap">
-          {value}
+        <span
+          className={`text-sm sm:text-base whitespace-nowrap flex-shrink-0 font-mono tabular ${
+            isEmpty ? "text-ink-4 font-normal" : "text-ink font-semibold"
+          }`}
+        >
+          {isEmpty ? "—" : value}
         </span>
       </div>
 
       <div className="h-[3px] sm:h-[4px]" />
 
-      <span className="text-black text-[11px] sm:text-xs font-normal leading-tight">
+      <span className="text-ink-3 text-[11px] sm:text-xs font-normal leading-tight truncate">
         <DictTerm term={subtitle}>{subtitle}</DictTerm>
       </span>
 
@@ -1372,19 +1250,18 @@ function IndicatorSectionBlock({
 
     return (
       <div className="flex flex-col gap-2.5">
-        <div className="text-black text-base sm:text-lg md:text-xl font-normal">
+        <div className="text-ink text-base sm:text-lg font-semibold">
           <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
         </div>
-        <div className="border border-stone-300 rounded-2xl overflow-hidden">
+        <div className="border-2 border-line-strong rounded-xl overflow-hidden divide-y divide-line-strong">
           {chunks.map((chunk, rowIdx) => (
-            <div key={rowIdx} className="grid grid-cols-2">
+            <div key={rowIdx} className="grid grid-cols-2 divide-x divide-line-strong">
               {chunk.map((cell, idx) => (
                 <Cell
                   key={`${cell.title}-${idx}`}
                   title={cell.title}
                   subtitle={cell.subtitle}
                   value={cell.value}
-                  className={`${rowIdx < chunks.length - 1 ? "border-b" : ""} ${idx === 0 ? "border-r" : ""}`}
                 />
               ))}
             </div>
@@ -1401,29 +1278,27 @@ function IndicatorSectionBlock({
 
     return (
       <div className="flex flex-col gap-2.5">
-        <div className="text-black text-base sm:text-lg md:text-xl font-normal">
+        <div className="text-ink text-base sm:text-lg font-semibold">
           <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
         </div>
-        <div className="border border-stone-300 rounded-2xl overflow-hidden">
-          <div className="grid grid-cols-2">
+        <div className="border-2 border-line-strong rounded-xl overflow-hidden divide-y divide-line-strong">
+          <div className="grid grid-cols-2 divide-x divide-line-strong">
             {row1.map((cell, idx) => (
               <Cell
                 key={`${cell.title}-${idx}`}
                 title={cell.title}
                 subtitle={cell.subtitle}
                 value={cell.value}
-                className={`border-b ${idx === 0 ? "border-r" : ""}`}
               />
             ))}
           </div>
-          <div className="grid grid-cols-2">
+          <div className="grid grid-cols-2 divide-x divide-line-strong">
             {row2.map((cell, idx) => (
               <Cell
                 key={`${cell.title}-${idx}`}
                 title={cell.title}
                 subtitle={cell.subtitle}
                 value={cell.value}
-                className={`border-b ${idx === 0 ? "border-r" : ""}`}
               />
             ))}
           </div>
@@ -1433,7 +1308,6 @@ function IndicatorSectionBlock({
                 title={last.title}
                 subtitle={last.subtitle}
                 value={last.value}
-                className=""
               />
             </div>
           )}
@@ -1445,18 +1319,18 @@ function IndicatorSectionBlock({
   if (layout === "2-2") {
     return (
       <div className="flex flex-col gap-2.5">
-        <div className="text-black text-base sm:text-lg md:text-xl font-normal">
+        <div className="text-ink text-base sm:text-lg font-semibold">
           <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 border border-stone-300 rounded-2xl overflow-hidden">
+        <div className="grid grid-cols-1 sm:grid-cols-2 border-2 border-line-strong rounded-xl overflow-hidden">
           {rows.map((cell, idx) => (
             <Cell
               key={`${cell.title}-${idx}`}
               title={cell.title}
               subtitle={cell.subtitle}
               value={cell.value}
-              className={`${idx < 2 ? "border-b" : ""} ${
-                idx % 2 === 0 ? "border-r" : ""
+              className={`${idx < 2 ? "border-b border-line-strong" : ""} ${
+                idx % 2 === 0 ? "sm:border-r sm:border-line-strong" : ""
               }`}
             />
           ))}
@@ -1467,17 +1341,17 @@ function IndicatorSectionBlock({
 
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="text-black text-base sm:text-lg md:text-xl font-normal">
+      <div className="text-ink text-base sm:text-lg font-semibold">
         {section.sectionTitle}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 border border-stone-300 rounded-2xl overflow-hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-2 border-2 border-line-strong rounded-xl overflow-hidden">
         {rows.map((cell, idx) => (
           <Cell
             key={`${cell.title}-${idx}`}
             title={cell.title}
             subtitle={cell.subtitle}
             value={cell.value}
-            className={idx % 2 === 0 ? "border-r" : ""}
+            className={idx % 2 === 0 ? "sm:border-r sm:border-line-strong" : ""}
           />
         ))}
       </div>

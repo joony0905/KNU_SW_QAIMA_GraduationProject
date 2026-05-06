@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import searchIcon from "../assets/search.png";
+import { Search } from "lucide-react";
 import type { WatchlistItem } from "../types/watchlist";
 import type { StockDto } from "../types/stock";
 import { searchStocks, getStockByCode } from "../api/stock";
@@ -20,7 +20,6 @@ export default function StockInputBox({
   const [isSearching, setIsSearching] = useState(false);
   const [showRecentSearches, setShowRecentSearches] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-
   const [guideMessage, setGuideMessage] = useState("");
   const [isInterestListOpen, setIsInterestListOpen] = useState(false);
   const [interests, setInterests] = useState<WatchlistItem[]>([]);
@@ -33,6 +32,8 @@ export default function StockInputBox({
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setShowSuggestions(false);
         setShowRecentSearches(false);
+        setIsInterestListOpen(false);
+        setGuideMessage("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -42,27 +43,9 @@ export default function StockInputBox({
   useEffect(() => {
     // TODO: 나중에 실제 watchlist API로 교체
     const dummy: WatchlistItem[] = [
-      {
-        watchlistItemId: 1,
-        stockId: 1,
-        stockName: "삼성전자",
-        note: null,
-        industryName: "전자",
-      },
-      {
-        watchlistItemId: 2,
-        stockId: 2,
-        stockName: "LG에너지솔루션",
-        note: null,
-        industryName: "2차전지",
-      },
-      {
-        watchlistItemId: 3,
-        stockId: 3,
-        stockName: "카카오",
-        note: null,
-        industryName: "인터넷",
-      },
+      { watchlistItemId: 1, stockId: 1, stockName: "삼성전자",      note: null, industryName: "전자" },
+      { watchlistItemId: 2, stockId: 2, stockName: "LG에너지솔루션", note: null, industryName: "2차전지" },
+      { watchlistItemId: 3, stockId: 3, stockName: "카카오",         note: null, industryName: "인터넷" },
     ];
     setInterests(dummy);
   }, []);
@@ -101,7 +84,6 @@ export default function StockInputBox({
       setShowSuggestions(false);
       setIsSearching(false);
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      // 입력 비우면 최근 검색어 표시
       const stored = localStorage.getItem("recentSearches");
       const recent: string[] = stored ? JSON.parse(stored) : [];
       if (recent.length > 0) {
@@ -119,15 +101,13 @@ export default function StockInputBox({
       try {
         if (/^\d{6}$/.test(q)) {
           const stock = await getStockByCode(q);
-          const asResult = [stock] as StockDto[];
-          setStockResults(asResult);
+          setStockResults([stock] as StockDto[]);
           setSuggestions([`${stock.companyName} (${stock.stockCode})`]);
         } else {
           const results = await searchStocks(q);
           const filtered = results.filter((s) => /^\d{6}$/.test(s.stockCode));
           setStockResults(filtered);
-          const labels = filtered.map((s) => `${s.companyName} (${s.stockCode})`);
-          setSuggestions(labels);
+          setSuggestions(filtered.map((s) => `${s.companyName} (${s.stockCode})`));
         }
       } catch {
         setStockResults([]);
@@ -145,9 +125,7 @@ export default function StockInputBox({
     setGuideMessage("");
 
     if (stockCode) {
-      const matched = stockResults.find(
-        (s) => s.stockCode === stockCode
-      );
+      const matched = stockResults.find((s) => s.stockCode === stockCode);
       const name = matched?.companyName ?? value.replace(/ \(.*\)$/, "");
       setInputValue(name);
       saveRecentSearch(name);
@@ -185,18 +163,13 @@ export default function StockInputBox({
     setShowRecentSearches(false);
     setIsInterestListOpen(false);
 
-    // 현재 stockResults에서 매칭되는 항목이 있으면 stockCode 전달 + 최근 검색어 저장
     const match = stockResults.find(
-      (s) =>
-        s.companyName === q ||
-        `${s.companyName} (${s.stockCode})` === q
+      (s) => s.companyName === q || `${s.companyName} (${s.stockCode})` === q
     );
     if (match) {
-      const matchName = match.companyName;
-      const matchCode = match.stockCode;
-      saveRecentSearch(matchName);
+      saveRecentSearch(match.companyName);
       setGuideMessage("");
-      onSearch?.(matchCode);
+      onSearch?.(match.stockCode);
     } else if (/^\d{6}$/.test(q)) {
       setGuideMessage("");
       onSearch?.(q);
@@ -206,129 +179,78 @@ export default function StockInputBox({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      submitSearch();
-    }
+    if (e.key === "Enter") submitSearch();
   };
 
-  const showDropdown =
-    showSuggestions || showRecentSearches || isInterestListOpen;
+  const showDropdown = showSuggestions || showRecentSearches || isInterestListOpen || !!guideMessage;
 
   return (
-    <div
-      ref={wrapperRef}
-      className="
-        w-full max-w-[702px]
-        px-2 sm:px-3
-        py-1 sm:py-1.5
-        bg-white rounded-[8px]
-        flex flex-col gap-1
-        relative
-      "
-    >
-      <div className="flex flex-col sm:flex-row justify-start items-center gap-2 sm:gap-3 w-full">
-        {/* 관심 버튼 */}
-        <div className="w-full sm:w-28 flex justify-start items-center">
-          <button
-            onClick={() => {
-              setIsInterestListOpen((prev) => !prev);
-              setShowSuggestions(false);
-              setShowRecentSearches(false);
-            }}
-            type="button"
-            className="
-              inline-flex items-center gap-2 px-3 py-1.5 rounded-full
-              bg-gray-200 text-gray-800
-            "
-          >
-            <span className="font-medium text-sm sm:text-base">관심</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              fill="currentColor"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              className="text-yellow-400"
-            >
-              <path d="M12 17.75l-6.16 3.73 1.18-6.88L2 9.77l6.92-1L12 2.5l3.08 6.27 6.92 1-5.02 4.83 1.18 6.88z" />
-            </svg>
-          </button>
-        </div>
+    <div ref={wrapperRef} className={`w-full relative flex items-center gap-2 px-3 py-[9px] bg-surface border border-line shadow-card ${showDropdown ? "rounded-t-2xl border-b-surface" : "rounded-2xl"}`}>
+      {/* 관심 버튼 */}
+      <button
+        onClick={() => {
+          setIsInterestListOpen((prev) => !prev);
+          setShowSuggestions(false);
+          setShowRecentSearches(false);
+          setGuideMessage("");
+        }}
+        type="button"
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
+                   bg-bg-sunk text-ink-2 font-semibold text-sm flex-shrink-0"
+      >
+        관심
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+             fill="currentColor" viewBox="0 0 24 24" className="text-warn">
+          <path d="M12 17.75l-6.16 3.73 1.18-6.88L2 9.77l6.92-1L12 2.5l3.08 6.27 6.92 1-5.02 4.83 1.18 6.88z" />
+        </svg>
+      </button>
 
-        {/* 입력 필드 + 검색 아이콘 */}
-        <div className="flex-1 flex items-center gap-1.5 w-full">
-          <input
-            type="text"
-            value={inputValue}
-            onChange={handleChange}
-            onFocus={handleFocus}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            className="
-              flex-1
-              px-2 sm:px-2.5
-              py-0.5 sm:py-1
-              text-xs sm:text-sm md:text-base
-              font-medium font-['Inter']
-              text-black
-              focus:outline-none focus:ring-1 focus:ring-blue-400
-            "
-          />
-          <button
-            type="button"
-            onClick={submitSearch}
-            className="
-              shrink-0
-              w-8 h-8 sm:w-9 sm:h-9
-              flex items-center justify-center
-              bg-white rounded-md
-              hover:bg-zinc-100
-              transition-colors
-            "
-          >
-            <img
-              src={searchIcon}
-              alt="검색 아이콘"
-              className="block w-7 h-7 sm:w-7 sm:h-7"
-            />
-          </button>
-        </div>
-      </div>
+      {/* 입력 필드 */}
+      <input
+        type="text"
+        value={inputValue}
+        onChange={handleChange}
+        onFocus={handleFocus}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="flex-1 py-1 text-base font-medium text-ink bg-transparent
+                   placeholder:text-ink-4 focus:outline-none"
+      />
 
-      {/* 자동완성 / 최근 검색어 / 관심 리스트 */}
-      {showDropdown ? (
-        <div className="absolute top-full left-0 mt-1 w-full z-50">
-          {/* 실시간 자동완성 */}
+      {/* 검색 버튼 — accent 색 */}
+      <button
+        type="button"
+        onClick={submitSearch}
+        className="w-9 h-9 grid place-items-center rounded-xl bg-accent text-white
+                   hover:opacity-90 transition-opacity flex-shrink-0"
+      >
+        <Search size={16} strokeWidth={2.5} />
+      </button>
+
+      {/* 드롭다운 */}
+      {showDropdown && (
+        <div className="absolute top-full left-0 w-full z-50">
           {showSuggestions ? (
-            <ul className="max-h-40 overflow-y-auto bg-white border border-stone-300 rounded-md shadow-md">
+            <ul className="max-h-40 overflow-y-auto bg-surface border border-line border-t-0 rounded-b-2xl shadow-pop">
               {isSearching ? (
-                <li className="px-3 py-1.5 text-sm sm:text-base text-gray-500 font-['Inter']">
-                  검색 중...
-                </li>
+                <li className="px-3 py-2 text-sm text-ink-3">검색 중...</li>
               ) : suggestions.length > 0 ? (
                 suggestions.map((s, idx) => (
                   <li
                     key={idx}
-                    onClick={() =>
-                      handleSelect(s, stockResults[idx]?.stockCode)
-                    }
-                    className="px-3 py-1.5 cursor-pointer hover:bg-zinc-100 text-sm sm:text-base md:text-lg font-['Inter']"
+                    onClick={() => handleSelect(s, stockResults[idx]?.stockCode)}
+                    className="px-3 py-2 cursor-pointer hover:bg-bg-sunk text-sm text-ink last:rounded-b-2xl"
                   >
                     {s}
                   </li>
                 ))
               ) : (
-                <li className="px-3 py-1.5 text-sm sm:text-base text-gray-500 font-['Inter']">
-                  검색 결과 없음
-                </li>
+                <li className="px-3 py-2 text-sm text-ink-3 rounded-b-2xl">검색 결과 없음</li>
               )}
             </ul>
           ) : showRecentSearches ? (
-            /* 최근 검색어 */
-            <div className="bg-white border border-stone-300 rounded-md shadow-md">
-              <div className="px-3 py-1.5 text-xs text-gray-500 font-medium border-b border-stone-200">
+            <div className="bg-surface border border-line border-t-0 rounded-b-2xl shadow-pop">
+              <div className="px-3 py-2 text-xs text-ink-3 font-medium border-b border-line">
                 최근 검색어
               </div>
               <ul className="max-h-40 overflow-y-auto">
@@ -336,42 +258,37 @@ export default function StockInputBox({
                   <li
                     key={idx}
                     onClick={() => handleRecentSelect(item)}
-                    className="px-3 py-1.5 cursor-pointer hover:bg-zinc-100 text-sm sm:text-base md:text-lg font-['Inter']"
+                    className="px-3 py-2 cursor-pointer hover:bg-bg-sunk text-sm text-ink last:rounded-b-2xl"
                   >
                     {item}
                   </li>
                 ))}
               </ul>
             </div>
-          ) : (
-            // 관심 리스트
-            isInterestListOpen && (
-              <div className="bg-white border border-stone-300 rounded-md shadow-md">
-                <ul className="max-h-40 overflow-y-auto">
-                  {interests.map((item) => (
-                    <li
-                      key={item.watchlistItemId}
-                      onClick={() => {
-                        if (item.stockName) {
-                          handleSelect(item.stockName);
-                        } else {
-                          setIsInterestListOpen(false);
-                        }
-                      }}
-                      className="px-3 py-1.5 cursor-pointer hover:bg-zinc-100 text-sm sm:text-base md:text-lg font-['Inter']"
-                    >
-                      {item.stockName ?? "(이름 없음)"}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )
+          ) : isInterestListOpen && (
+            <div className="bg-surface border border-line border-t-0 rounded-b-2xl shadow-pop">
+              <ul className="max-h-40 overflow-y-auto">
+                {interests.map((item) => (
+                  <li
+                    key={item.watchlistItemId}
+                    onClick={() => {
+                      if (item.stockName) handleRecentSelect(item.stockName);
+                      else setIsInterestListOpen(false);
+                    }}
+                    className="px-3 py-2 cursor-pointer hover:bg-bg-sunk text-sm text-ink last:rounded-b-2xl"
+                  >
+                    {item.stockName ?? "(이름 없음)"}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
-      ) : null}
+      )}
 
       {guideMessage && (
-        <p className="absolute top-full left-0 mt-1 w-full px-3 py-1.5 text-sm text-red-500 bg-white border border-stone-300 rounded-md shadow-md z-50">
+        <p className="absolute top-full left-0 w-full px-3 py-2 text-sm text-danger
+                      bg-surface border border-line border-t-0 rounded-b-2xl shadow-pop z-50">
           {guideMessage}
         </p>
       )}

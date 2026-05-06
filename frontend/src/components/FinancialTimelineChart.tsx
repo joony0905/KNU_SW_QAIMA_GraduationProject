@@ -87,9 +87,9 @@ export default function FinancialTimelineChart({
   if (!points.length) {
     return (
       <div>
-        <h3 className="text-base sm:text-lg font-semibold text-zinc-900">{title}</h3>
-        <p className="text-sm text-zinc-500 mt-1">{subtitle}</p>
-        <p className="text-sm text-zinc-500 mt-3">표시할 재무 시계열 데이터가 없습니다.</p>
+        <h3 className="text-base sm:text-lg font-semibold text-ink">{title}</h3>
+        <p className="text-sm text-ink-3 mt-1">{subtitle}</p>
+        <p className="text-sm text-ink-3 mt-3">표시할 재무 시계열 데이터가 없습니다.</p>
       </div>
     );
   }
@@ -178,13 +178,13 @@ export default function FinancialTimelineChart({
       }}
     >
       <div className="flex flex-col gap-1">
-        <h3 className="text-base sm:text-lg font-semibold text-zinc-900">{title}</h3>
-        <p className="text-sm text-zinc-500">
+        <h3 className="text-base sm:text-lg font-semibold text-ink">{title}</h3>
+        <p className="text-sm text-ink-3">
           {subtitle} · {periodLabel(period)}
         </p>
       </div>
 
-      <div className="mt-3 overflow-x-auto rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-4">
+      <div className="mt-3 overflow-x-auto rounded-2xl border border-line bg-bg-sunk px-3 py-4">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="min-w-[720px] w-full"
@@ -197,7 +197,7 @@ export default function FinancialTimelineChart({
             y1={zeroY}
             x2={width - rightPad}
             y2={zeroY}
-            stroke="#a1a1aa"
+            style={{ stroke: "rgb(var(--color-line-strong))" }}
             strokeDasharray="4 4"
           />
 
@@ -211,14 +211,14 @@ export default function FinancialTimelineChart({
                   y1={y}
                   x2={width - rightPad}
                   y2={y}
-                  stroke="#e4e4e7"
+                  style={{ stroke: "rgb(var(--color-line))" }}
                 />
                 <text
                   x={leftPad - 8}
                   y={y + 4}
                   textAnchor="end"
                   fontSize="10"
-                  fill="#71717a"
+                  style={{ fill: "rgb(var(--color-ink-3))" }}
                 >
                   {fmtAmount(value)}
                 </text>
@@ -235,7 +235,7 @@ export default function FinancialTimelineChart({
                 x={width - rightPad + 8}
                 y={y + 4}
                 fontSize="10"
-                fill="#a16207"
+                style={{ fill: "rgb(var(--color-warn))" }}
               >
                 {fmtPercent(value)}
               </text>
@@ -249,7 +249,7 @@ export default function FinancialTimelineChart({
                 x2={leftPad + hoveredIndex! * groupWidth + groupCenterOffset}
                 y1={topPad}
                 y2={height - bottomPad}
-                stroke="#111827"
+                style={{ stroke: "rgb(var(--color-ink))" }}
                 strokeDasharray="6 6"
               />
               <text
@@ -257,7 +257,7 @@ export default function FinancialTimelineChart({
                 y={height - 16}
                 textAnchor="middle"
                 fontSize="11"
-                fill="#111827"
+                style={{ fill: "rgb(var(--color-ink))" }}
                 fontWeight="600"
               >
                 {hoveredPoint.label}
@@ -307,7 +307,7 @@ export default function FinancialTimelineChart({
                     cy={marginToY(point.operatingMargin)}
                     r="4"
                     fill={COLORS.operatingMargin}
-                    stroke="#fff"
+                    stroke="rgb(var(--color-surface))"
                     strokeWidth="1.5"
                     style={{
                       opacity: animated ? 1 : 0,
@@ -326,7 +326,7 @@ export default function FinancialTimelineChart({
                   y={height - 16}
                   textAnchor="middle"
                   fontSize="10"
-                  fill="#52525b"
+                  style={{ fill: "rgb(var(--color-ink-3))" }}
                 >
                   {point.label}
                 </text>
@@ -364,7 +364,7 @@ export default function FinancialTimelineChart({
         </svg>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-zinc-700">
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-2">
         {legendItems.map((item) => (
           <div key={item.label} className="flex items-center gap-2">
             <span

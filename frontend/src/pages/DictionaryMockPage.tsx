@@ -1,8 +1,10 @@
 // src/pages/DictionaryMockPage.tsx
 import { useState, useMemo, useEffect } from "react";
+import { Sun, Moon } from "lucide-react";
 import type { DictionaryTermDto } from "../types/dictionary";
 import { fetchDictionaryTerms, fetchDictionaryTerm } from "../api/dictionary";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
+import { useTheme } from "../hooks/useTheme";
 
 const HANGUL_LETTERS = [
   "ㄱ",
@@ -56,6 +58,7 @@ const ALPHABET_ROW2 = [
 // ---- 컴포넌트 ----
 
 export default function DictionaryMockPage() {
+  const { theme, toggle } = useTheme();
   // 검색/필터 상태
   const [searchQuery, setSearchQuery] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -119,62 +122,78 @@ export default function DictionaryMockPage() {
   const searchPlaceholder = searchError ?? "키워드를 입력해주세요";
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
+    <div className="min-h-screen bg-bg ml-[84px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         {/* 헤더 */}
-        <header className="w-full bg-white border-b border-neutral-200 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-3">
-          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
-            용어사전
-          </h1>
-          <TokenBalanceBadge />
+        <header className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-medium text-ink-3 tracking-tight">
+              Finance · Dictionary
+            </div>
+            <h1 className="mt-1 text-3xl font-bold text-ink tracking-tighter">
+              용어사전
+            </h1>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={toggle}
+              aria-label={theme === "dark" ? "라이트 모드" : "다크 모드"}
+              className="w-9 h-9 grid place-items-center rounded-xl bg-surface
+                         border border-line text-ink-2 shadow-card
+                         hover:bg-bg-sunk transition-colors"
+            >
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <TokenBalanceBadge />
+          </div>
         </header>
 
         {/* 메인 영역 */}
         <main className="w-full flex flex-col lg:flex-row items-start justify-between gap-4 sm:gap-6">
           {/* 좌측: 선택된 용어 설명 카드 (고정 높이) */}
-          <section className="w-full lg:flex-[0.9] bg-zinc-100 rounded-2xl px-3.5 sm:px-4 md:px-5 py-4 sm:py-5 flex flex-col gap-2 h-[510px]">
+          <section className="w-full lg:flex-[0.9] rounded-2xl px-3.5 sm:px-4 md:px-5 py-4 sm:py-5 flex flex-col gap-2 h-[510px] bg-bg-sunk">
             {selectedTerm ? (
               <>
-                <h2 className="text-sky-500 text-base sm:text-lg md:text-xl font-medium leading-snug">
+                <h2 className="text-base sm:text-lg md:text-xl font-semibold leading-snug text-accent tracking-tight">
                   {selectedTerm.term}
                 </h2>
                 <div className="mt-1 flex-1 overflow-y-auto">
-                  <p className="text-black text-[11px] sm:text-xs md:text-sm font-medium leading-relaxed">
+                  <p className="text-[11px] sm:text-xs md:text-sm leading-relaxed text-ink-2 font-normal">
                     {selectedTerm.description}
                   </p>
                 </div>
               </>
             ) : (
-              <p className="text-zinc-500 text-sm">용어를 선택해주세요.</p>
+              <p className="text-sm text-ink-3">용어를 선택해주세요.</p>
             )}
           </section>
 
           {/* 우측: 검색/필터 + 결과 리스트 */}
           <section className="w-full lg:flex-[1.1] flex flex-col gap-3">
             {/* 검색 + 한글/알파벳 필터 카드 */}
-            <div className="w-full bg-zinc-100 rounded-2xl px-4 py-3 flex flex-col gap-3">
+            <div className="w-full rounded-2xl px-4 py-3 flex flex-col gap-3 bg-bg-sunk">
               {/* 상단: 말머리 + 제목 + 검색창 (한 줄) */}
               <div className="flex items-center gap-3">
-                <span className="text-black text-base sm:text-lg md:text-xl">
+                <span className="text-base sm:text-lg md:text-xl text-ink">
                   •
                 </span>
 
-                <span className="text-black text-sm sm:text-base md:text-lg font-medium whitespace-nowrap">
+                <span className="text-sm sm:text-base md:text-lg font-semibold whitespace-nowrap text-ink tracking-tight">
                   경제용어
                 </span>
 
                 {/* 검색창: 한 줄 안에서만, 고정 폭 */}
                 <div className="w-full max-w-sm">
                   <div
-                    className={`h-9 sm:h-10 px-3 py-1.5 bg-white rounded-[10px] flex items-center justify-between border ${
-                      searchError ? "border-red-400" : "border-transparent"
+                    className={`h-9 sm:h-10 px-3 py-1.5 rounded-[10px] flex items-center justify-between border bg-surface ${
+                      searchError ? "border-danger" : "border-line"
                     }`}
                   >
                     <input
                       className={`flex-1 bg-transparent outline-none text-[11px] sm:text-xs md:text-sm ${
                         searchError
-                          ? "text-red-500 placeholder:text-red-400"
-                          : "text-black placeholder:text-zinc-500"
+                          ? "text-danger placeholder:text-danger/70"
+                          : "text-ink placeholder:text-ink-3"
                       }`}
                       placeholder={searchPlaceholder}
                       value={searchQuery}
@@ -186,7 +205,7 @@ export default function DictionaryMockPage() {
                     <button
                       type="button"
                       onClick={handleSearchClick}
-                      className="ml-2 w-6 h-6 sm:w-7 sm:h-7 bg-zinc-200 rounded-full flex items-center justify-center hover:bg-zinc-300 transition-colors"
+                      className="ml-2 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center transition-colors bg-bg-sunk hover:bg-surface-2"
                     >
                       <img
                         src="/src/assets/search.png"
@@ -202,7 +221,7 @@ export default function DictionaryMockPage() {
               <div className="mt-1 flex flex-col gap-2.5 pl-6">
                 {/* 한글순 */}
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-black text-xs sm:text-sm md:text-base font-medium">
+                  <p className="text-xs sm:text-sm md:text-base font-medium text-ink-2">
                     한글순
                   </p>
                   <div className="flex flex-wrap gap-1">
@@ -221,11 +240,13 @@ export default function DictionaryMockPage() {
                               .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
                               .finally(() => setLoading(false));
                           }}
-                          className={`w-6 h-6 rounded-md outline outline-[0.5px] outline-stone-300 flex items-center justify-center transition-colors ${
-                            isActive ? "bg-zinc-900/10" : "bg-white"
+                          className={`w-6 h-6 rounded-md outline outline-[0.5px] flex items-center justify-center transition-colors outline-line ${
+                            isActive ? "bg-accent-soft" : "bg-surface"
                           }`}
                         >
-                          <span className="text-sm sm:text-base font-semibold leading-none text-black">
+                          <span className={`text-sm sm:text-base font-semibold leading-none ${
+                            isActive ? "text-accent" : "text-ink"
+                          }`}>
                             {ch}
                           </span>
                         </button>
@@ -236,7 +257,7 @@ export default function DictionaryMockPage() {
 
                 {/* 알파벳순 */}
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-black text-xs sm:text-sm md:text-base font-medium">
+                  <p className="text-xs sm:text-sm md:text-base font-medium text-ink-2">
                     알파벳순
                   </p>
 
@@ -257,11 +278,13 @@ export default function DictionaryMockPage() {
                               .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
                               .finally(() => setLoading(false));
                           }}
-                          className={`w-6 h-6 rounded-md outline outline-[0.5px] outline-stone-300 flex items-center justify-center transition-colors ${
-                            isActive ? "bg-zinc-900/10" : "bg-white"
+                          className={`w-6 h-6 rounded-md outline outline-[0.5px] flex items-center justify-center transition-colors outline-line ${
+                            isActive ? "bg-accent-soft" : "bg-surface"
                           }`}
                         >
-                          <span className="text-sm sm:text-base font-semibold leading-none text-black">
+                          <span className={`text-sm sm:text-base font-semibold leading-none ${
+                            isActive ? "text-accent" : "text-ink"
+                          }`}>
                             {ch}
                           </span>
                         </button>
@@ -286,11 +309,13 @@ export default function DictionaryMockPage() {
                               .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
                               .finally(() => setLoading(false));
                           }}
-                          className={`w-6 h-6 rounded-md outline outline-[0.5px] outline-stone-300 flex items-center justify-center transition-colors ${
-                            isActive ? "bg-zinc-900/10" : "bg-white"
+                          className={`w-6 h-6 rounded-md outline outline-[0.5px] flex items-center justify-center transition-colors outline-line ${
+                            isActive ? "bg-accent-soft" : "bg-surface"
                           }`}
                         >
-                          <span className="text-sm sm:text-base font-semibold leading-none text-black">
+                          <span className={`text-sm sm:text-base font-semibold leading-none ${
+                            isActive ? "text-accent" : "text-ink"
+                          }`}>
                             {ch}
                           </span>
                         </button>
@@ -302,24 +327,24 @@ export default function DictionaryMockPage() {
             </div>
 
             {/* 검색 결과 요약 라인 */}
-            <div className="w-full border-b border-black pb-1">
-              <p className="text-zinc-500 text-[11px] sm:text-xs md:text-sm font-medium">
+            <div className="w-full border-b pb-1 border-line">
+              <p className="text-[11px] sm:text-xs md:text-sm font-medium text-ink-3">
                 {selectedHangul
                   ? `'${selectedHangul}' 검색 결과 `
                   : "검색 결과 "}
-                <span className="text-red-400 font-medium">{resultCount}</span>
+                <span className="font-semibold text-accent">{resultCount}</span>
                 건의 정보가 검색되었습니다.
               </p>
             </div>
 
             {/* 검색 결과 리스트 카드 */}
-            <div className="w-full bg-zinc-100 rounded-2xl px-3 sm:px-4 py-3 flex items-stretch">
+            <div className="w-full rounded-2xl px-3 sm:px-4 py-3 flex items-stretch bg-bg-sunk">
               {/* 좌측: 결과 목록 (고정 높이 + 내부 스크롤) */}
               <div className="flex-1 min-w-0 text-[11px] sm:text-xs md:text-sm leading-relaxed h-40 sm:h-48 md:h-52 overflow-y-auto">
                 {loading ? (
-                  <p className="text-[11px] text-gray-500 py-2">불러오는 중...</p>
+                  <p className="text-[11px] py-2 text-ink-3">불러오는 중...</p>
                 ) : fetchError ? (
-                  <p className="text-[11px] text-red-500 py-2">{fetchError}</p>
+                  <p className="text-[11px] py-2 text-danger">{fetchError}</p>
                 ) : (
                   <>
                     {filteredTerms.map((term) => (
@@ -330,10 +355,10 @@ export default function DictionaryMockPage() {
                             .then((data) => setSelectedTerm(data))
                             .catch(() => setFetchError("상세 정보를 불러오지 못했습니다."));
                         }}
-                        className={`block w-full text-left py-0.5 ${
+                        className={`block w-full text-left py-0.5 transition-colors ${
                           term.term === selectedTerm?.term
-                            ? "font-bold underline"
-                            : "font-medium"
+                            ? "font-bold text-accent underline"
+                            : "font-medium text-ink hover:text-accent"
                         }`}
                       >
                         {term.term}
@@ -341,7 +366,7 @@ export default function DictionaryMockPage() {
                     ))}
 
                     {filteredTerms.length === 0 && (
-                      <p className="text-[11px] text-gray-500 py-2">
+                      <p className="text-[11px] py-2 text-ink-3">
                         검색 결과가 없습니다.
                       </p>
                     )}

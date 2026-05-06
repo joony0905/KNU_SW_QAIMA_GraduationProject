@@ -10,7 +10,7 @@ import PriceFlowBars from "./PriceFlowBars";
 import ShortSellingTrendChart from "./ShortSellingTrendChart";
 import BaseRateStepChart from "./BaseRateStepChart";
 
-const LLM_VENDOR_OPTIONS = [
+export const LLM_VENDOR_OPTIONS = [
   "GPT-5.4",
   "GPT-5.2",
   "GPT-5 mini",
@@ -145,12 +145,12 @@ const formatRelationBadge = (relation: PeerItem["relation"]) => {
 };
 
 const correlationColorClass = (corr?: number | null): string => {
-  if (corr == null || !Number.isFinite(corr)) return "text-zinc-500";
+  if (corr == null || !Number.isFinite(corr)) return "text-ink-3";
   const abs = Math.abs(corr);
   if (abs >= 0.7) return "text-red-600";
   if (abs >= 0.5) return "text-orange-500";
   if (abs >= 0.3) return "text-amber-500";
-  return "text-zinc-500";
+  return "text-ink-3";
 };
 
 const displayPeerCorr = (peer: PeerItem): number | null => {
@@ -195,14 +195,14 @@ const peerCardClass = (peer: PeerItem): string => {
     case "SELECTED":
       return "border-sky-300 bg-sky-50/70";
     case "LOW_CORR":
-      return "border-zinc-200 bg-zinc-50 opacity-75";
+      return "border-line bg-bg-sunk opacity-75";
     case "DISPLAY_ONLY":
     case "RAW_ONLY":
     case "ADJUSTED_ONLY":
     case "FALLBACK_RAW":
-      return "border-zinc-200 bg-white";
+      return "border-line bg-surface";
     default:
-      return "border-zinc-200 bg-white";
+      return "border-line bg-surface";
   }
 };
 
@@ -213,9 +213,9 @@ const relationColorClass = (relation: PeerItem["relation"]): string => {
     case "FOLLOWER":
       return "text-purple-600";
     case "COINCIDENT":
-      return "text-zinc-900";
+      return "text-ink";
     default:
-      return "text-zinc-400";
+      return "text-ink-3";
   }
 };
 
@@ -225,15 +225,15 @@ const renderExplainSection = (section?: ExplainSection | null) => {
   }
 
   return (
-    <div className="mt-3 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
-      <h4 className="text-sm font-semibold text-zinc-900">
+    <div className="mt-3 rounded-2xl border border-line bg-bg-sunk px-4 py-4">
+      <h4 className="text-sm font-semibold text-ink">
         {section.title ?? "설명"}
       </h4>
       {section.summary ? (
-        <p className="mt-2 text-sm sm:text-base text-zinc-700">{section.summary}</p>
+        <p className="mt-2 text-sm sm:text-base text-ink-2">{section.summary}</p>
       ) : null}
       {section.bullets && section.bullets.length > 0 ? (
-        <ul className="mt-2 list-disc list-inside text-sm sm:text-base text-zinc-700 flex flex-col gap-1">
+        <ul className="mt-2 list-disc list-inside text-sm sm:text-base text-ink-2 flex flex-col gap-1">
           {section.bullets.map((item, idx) => (
             <li key={`${section.title ?? "section"}-${idx}`}>{item}</li>
           ))}
@@ -321,9 +321,9 @@ export default function AnalysisResultPanel({
   // --- 래퍼 클래스 ---
   const wrapperClass = isPanel
     ? result
-      ? "w-full bg-neutral-50 rounded-2xl border-2 border-stone-300 flex flex-col items-center py-6 sm:py-8 gap-4"
-      : "w-full bg-neutral-50 rounded-2xl border-2 border-stone-300 flex flex-col items-center justify-center py-[15rem] sm:py-[16rem] md:py-[17rem]"
-    : "w-full bg-zinc-100 rounded-2xl py-8 sm:py-10 flex flex-col items-center gap-4 mt-2";
+      ? "w-full bg-bg-sunk rounded-2xl border-2 border-line flex flex-col items-center py-6 sm:py-8 gap-4"
+      : "w-full bg-bg-sunk rounded-2xl border-2 border-line flex flex-col items-center justify-center py-[15rem] sm:py-[16rem] md:py-[17rem]"
+    : "w-full bg-bg-sunk rounded-2xl py-8 sm:py-10 flex flex-col items-center gap-4 mt-2";
 
   return (
     <div className={wrapperClass}>
@@ -354,13 +354,13 @@ export default function AnalysisResultPanel({
         <div className="flex flex-col items-center gap-3">
           {/* LLM 모델 선택 드롭다운 */}
           <div className="flex items-center gap-2">
-            <label className="text-sm text-zinc-600 font-medium whitespace-nowrap">
+            <label className="text-sm text-ink-3 font-medium whitespace-nowrap">
               분석 모델
             </label>
             <select
               value={llmVendor}
               onChange={(e) => onLlmVendorChange(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-zinc-300 rounded-lg bg-white text-zinc-800 focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+              className="px-3 py-1.5 text-sm border border-line rounded-lg bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent cursor-pointer"
             >
               {LLM_VENDOR_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -374,7 +374,7 @@ export default function AnalysisResultPanel({
           <button
             onClick={onAnalyze}
             disabled={loading}
-            className="px-6 sm:px-8 py-2.5 bg-sky-800 rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium"
+            className="px-6 sm:px-8 py-2.5 bg-accent rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium"
           >
             분석 결과 보기
           </button>
@@ -383,39 +383,39 @@ export default function AnalysisResultPanel({
 
       {/* 로딩 문구 */}
       {loading && (
-        <div className="flex flex-col items-center gap-3 text-gray-600">
-          <div className="h-10 w-10 rounded-full border-4 border-sky-200 border-t-sky-700 animate-spin" />
+        <div className="flex flex-col items-center gap-3 text-ink-3">
+          <div className="h-10 w-10 rounded-full border-4 border-accent-soft border-t-accent animate-spin" />
           <p className="text-sm sm:text-base font-medium">분석 중입니다...</p>
-          <p className="text-xs sm:text-sm text-zinc-500">
+          <p className="text-xs sm:text-sm text-ink-3">
             {loadingStage ?? "분석 데이터를 준비하고 있습니다."}
           </p>
         </div>
       )}
 
       {/* 에러 문구 */}
-      {err && <p className="text-sm sm:text-base text-red-600">{err}</p>}
+      {err && <p className="text-sm sm:text-base text-danger">{err}</p>}
 
       {/* 분석 결과 카드 */}
       {result && (
-        <div className="w-[90%] max-w-4xl bg-white rounded-2xl shadow-sm border border-zinc-200 p-4 sm:p-6 flex flex-col gap-4">
+        <div className="w-[90%] max-w-4xl bg-surface rounded-2xl shadow-sm border border-line p-4 sm:p-6 flex flex-col gap-4">
           {result.metrics?.stock && (
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
-              <p className="text-xs sm:text-sm font-medium text-zinc-500">분석 종목</p>
-              <p className="mt-1 text-lg sm:text-xl font-bold text-zinc-900">
+            <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
+              <p className="text-xs sm:text-sm font-medium text-ink-3">분석 종목</p>
+              <p className="mt-1 text-lg sm:text-xl font-bold text-ink">
                 {result.metrics.stock.companyName || result.metrics.stock.stockCode}
               </p>
             </div>
           )}
 
           {result.metrics?.peerCluster && (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">유사 종목 반응 구조</h3>
-                <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-500">
+                <h3 className="text-base sm:text-lg font-semibold text-ink">유사 종목 반응 구조</h3>
+                <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
                   {result.metrics.peerCluster.peers.length}개 선정
                 </span>
               </div>
-              <p className="mt-1 text-xs sm:text-sm text-zinc-500">
+              <p className="mt-1 text-xs sm:text-sm text-ink-3">
                 산업조정 상관은 산업 공통 움직임을 단순 차감한 관측용 지표이며, 정교한 요인 모델이나 가격 방향 신호가 아닙니다.
               </p>
               {(() => {
@@ -431,28 +431,28 @@ export default function AnalysisResultPanel({
                       <div key={peer.stockCode} className={`rounded-lg border px-4 py-3 ${peerCardClass(peer)}`}>
                         <div className="flex flex-wrap items-center gap-3">
                           <div className="min-w-0 w-[120px] sm:w-[170px] flex-shrink-0">
-                            <p className="text-sm sm:text-base font-semibold text-zinc-900 truncate">{peer.companyName ?? "-"}</p>
-                            <p className="text-[11px] sm:text-xs text-zinc-400">{peer.stockCode}</p>
+                            <p className="text-sm sm:text-base font-semibold text-ink truncate">{peer.companyName ?? "-"}</p>
+                            <p className="text-[11px] sm:text-xs text-ink-4">{peer.stockCode}</p>
                           </div>
                           <div className="flex flex-col items-start sm:items-end flex-1 min-w-[80px]">
-                            <span className="text-[11px] sm:text-xs text-zinc-400">{displayPeerCorrLabel(peer)}</span>
+                            <span className="text-[11px] sm:text-xs text-ink-4">{displayPeerCorrLabel(peer)}</span>
                             <span className={`text-sm sm:text-base font-bold ${correlationColorClass(displayPeerCorr(peer))}`}>
                               {displayPeerCorr(peer) == null ? "-" : displayPeerCorr(peer)?.toFixed(2)}
                             </span>
                           </div>
                           <div className="flex flex-col items-start sm:items-end flex-1 min-w-[70px]">
-                            <span className="text-[11px] sm:text-xs text-zinc-400">관계</span>
+                            <span className="text-[11px] sm:text-xs text-ink-4">관계</span>
                             <span className={`text-sm sm:text-base font-semibold ${relationColorClass(peer.relation)}`}>
                               {formatRelationBadge(peer.relation)}
                             </span>
                           </div>
                           <div className="flex flex-col items-start sm:items-end flex-1 min-w-[70px]">
-                            <span className="text-[11px] sm:text-xs text-zinc-400">점수</span>
-                            <span className="text-sm sm:text-base font-bold text-zinc-900">{formatPeerScore(peer)}</span>
+                            <span className="text-[11px] sm:text-xs text-ink-4">점수</span>
+                            <span className="text-sm sm:text-base font-bold text-ink">{formatPeerScore(peer)}</span>
                           </div>
                           <div className="flex flex-col items-start sm:items-end flex-1 min-w-[92px]">
-                            <span className="text-[11px] sm:text-xs text-zinc-400">상태</span>
-                            <span className="text-xs sm:text-sm font-medium text-zinc-700">{formatDisplayStatus(peer)}</span>
+                            <span className="text-[11px] sm:text-xs text-ink-4">상태</span>
+                            <span className="text-xs sm:text-sm font-medium text-ink-2">{formatDisplayStatus(peer)}</span>
                           </div>
                         </div>
                       </div>
@@ -461,15 +461,15 @@ export default function AnalysisResultPanel({
                 );
 
                 return (
-                  <div className="mt-3 max-h-[420px] overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50/60 p-3 pr-2">
+                  <div className="mt-3 max-h-[420px] overflow-y-auto rounded-lg border border-line bg-bg-sunk/60 p-3 pr-2">
                     <div className="flex flex-col gap-4">
                       <div>
-                        <h4 className="text-sm font-semibold text-zinc-900">핵심 유사 종목</h4>
-                        <div className="mt-2">{selected.length > 0 ? renderRows(selected) : <p className="text-sm text-zinc-500">선정된 유사 종목이 없습니다.</p>}</div>
+                        <h4 className="text-sm font-semibold text-ink">핵심 유사 종목</h4>
+                        <div className="mt-2">{selected.length > 0 ? renderRows(selected) : <p className="text-sm text-ink-3">선정된 유사 종목이 없습니다.</p>}</div>
                       </div>
                       {extra.length > 0 && (
                         <div>
-                          <h4 className="text-sm font-semibold text-zinc-900">추가 후보</h4>
+                          <h4 className="text-sm font-semibold text-ink">추가 후보</h4>
                           <div className="mt-2">{renderRows(extra)}</div>
                         </div>
                       )}
@@ -482,60 +482,60 @@ export default function AnalysisResultPanel({
           )}
 
           {result.metrics?.newsSentimentSummary && (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">뉴스 감성</h3>
-                <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-500">
+                <h3 className="text-base sm:text-lg font-semibold text-ink">뉴스 감성</h3>
+                <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
                   감성 점수 산출 뉴스 {result.metrics.newsSentimentSummary.scoredNewsCount}건
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-zinc-500">일 평균 점수</p>
-                  <p className={`text-lg font-bold ${result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore < -0.05 ? "text-blue-700" : result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore > 0.05 ? "text-rose-700" : "text-zinc-800"}`}>
+                <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-ink-3">일 평균 점수</p>
+                  <p className={`text-lg font-bold ${result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore < -0.05 ? "text-blue-700" : result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore > 0.05 ? "text-rose-700" : "text-ink"}`}>
                     {formatSentimentScore(result.metrics.newsSentimentSummary.dailyAvgScore)}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-zinc-500">점수 산출 뉴스</p>
-                  <p className="text-lg font-bold text-zinc-900">{result.metrics.newsSentimentSummary.scoredNewsCount}</p>
+                <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-ink-3">점수 산출 뉴스</p>
+                  <p className="text-lg font-bold text-ink">{result.metrics.newsSentimentSummary.scoredNewsCount}</p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-zinc-500">긍정/중립/부정</p>
-                  <p className="text-sm font-semibold text-zinc-900">
+                <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-ink-3">긍정/중립/부정</p>
+                  <p className="text-sm font-semibold text-ink">
                     {result.metrics.newsSentimentSummary.positiveCount} / {result.metrics.newsSentimentSummary.neutralCount} / {result.metrics.newsSentimentSummary.negativeCount}
                   </p>
                 </div>
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-zinc-500">기준일</p>
-                  <p className="text-sm font-semibold text-zinc-900">{result.metrics.newsSentimentSummary.summaryDate ?? "-"}</p>
+                <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-ink-3">기준일</p>
+                  <p className="text-sm font-semibold text-ink">{result.metrics.newsSentimentSummary.summaryDate ?? "-"}</p>
                 </div>
               </div>
 
               {(result.metrics?.newsList?.length ?? 0) > 0 && (
                 <div className="mt-4">
-                  <h4 className="text-sm font-semibold text-zinc-900">감성 점수가 산출된 뉴스</h4>
-                  <div className="mt-2 max-h-[360px] divide-y divide-zinc-200 overflow-y-auto rounded-lg border border-zinc-200 bg-white pr-1">
+                  <h4 className="text-sm font-semibold text-ink">감성 점수가 산출된 뉴스</h4>
+                  <div className="mt-2 max-h-[360px] divide-y divide-line overflow-y-auto rounded-lg border border-line bg-surface pr-1">
                     {result.metrics?.newsList?.map((item, idx) => (
                       <a
                         key={item.newsId}
                         href={item.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`flex items-center gap-4 px-3 py-3 hover:bg-zinc-50 transition-colors ${
+                        className={`flex items-center gap-4 px-3 py-3 hover:bg-bg-sunk transition-colors ${
                           idx === 0 ? "rounded-t-lg" : ""
                         } ${idx === (result.metrics?.newsList?.length ?? 0) - 1 ? "rounded-b-lg" : ""}`}
                       >
                         <div className="min-w-0 flex-1 flex flex-col gap-2">
                           <div className="flex flex-col">
-                            <h5 className="truncate text-sm sm:text-base font-semibold text-zinc-900">
+                            <h5 className="truncate text-sm sm:text-base font-semibold text-ink">
                               {item.title}
                             </h5>
-                            <p className="line-clamp-2 text-xs sm:text-sm leading-snug text-zinc-700">
+                            <p className="line-clamp-2 text-xs sm:text-sm leading-snug text-ink-2">
                               {item.summary}
                             </p>
                           </div>
-                          <p className="text-[11px] sm:text-xs font-medium text-zinc-500">
+                          <p className="text-[11px] sm:text-xs font-medium text-ink-3">
                             {formatNewsTimeAgo(item.publishedAt)} · {item.publisher}
                           </p>
                         </div>
@@ -553,46 +553,46 @@ export default function AnalysisResultPanel({
           )}
 
           {(result.metrics?.baseRateTrendSummary || result.metrics?.shortSellingTrendSummary) && (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">기간 추이 요약</h3>
-                <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-500">
+                <h3 className="text-base sm:text-lg font-semibold text-ink">기간 추이 요약</h3>
+                <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
                   사용자 설정 기간 기준
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {result.metrics?.baseRateTrendSummary && (
-                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
+                  <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-zinc-900">기준금리</p>
-                      <span className="text-xs font-medium text-zinc-500">
+                      <p className="text-sm font-semibold text-ink">기준금리</p>
+                      <span className="text-xs font-medium text-ink-3">
                         최근 {result.metrics.baseRateTrendSummary.window}일
                       </span>
                     </div>
-                    <p className="mt-2 text-sm text-zinc-700">
+                    <p className="mt-2 text-sm text-ink-2">
                       {result.metrics.baseRateTrendSummary.startValue ?? "-"}
                       {result.metrics.baseRateTrendSummary.unit ?? ""} → {result.metrics.baseRateTrendSummary.endValue ?? "-"}
                       {result.metrics.baseRateTrendSummary.unit ?? ""}
                     </p>
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-ink-3">
                       변동 {formatSignedNumber(result.metrics.baseRateTrendSummary.change)} · {trendDirectionText(result.metrics.baseRateTrendSummary.direction)}
                     </p>
                   </div>
                 )}
                 {result.metrics?.shortSellingTrendSummary && (
-                  <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
+                  <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-zinc-900">공매도</p>
-                      <span className="text-xs font-medium text-zinc-500">
+                      <p className="text-sm font-semibold text-ink">공매도</p>
+                      <span className="text-xs font-medium text-ink-3">
                         최근 {result.metrics.shortSellingTrendSummary.window}일
                       </span>
                     </div>
-                    <p className="mt-2 text-sm text-zinc-700">
+                    <p className="mt-2 text-sm text-ink-2">
                       거래대금 비율 {formatRatio(result.metrics.shortSellingTrendSummary.startShortAmountRatio)}
                       {" → "}
                       {formatRatio(result.metrics.shortSellingTrendSummary.endShortAmountRatio)}
                     </p>
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-ink-3">
                       변동 {formatSignedNumber(result.metrics.shortSellingTrendSummary.shortAmountRatioChange)}% · 평균 {formatRatio(result.metrics.shortSellingTrendSummary.avgShortAmountRatio)} · {trendDirectionText(result.metrics.shortSellingTrendSummary.direction)}
                     </p>
                   </div>
@@ -604,9 +604,9 @@ export default function AnalysisResultPanel({
 
           {/* 기준금리 */}
           {result.metrics?.baseRateSeries && result.metrics.baseRateSeries.length > 0 ? (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                <h3 className="text-base sm:text-lg font-semibold text-ink">
                   <DictTerm term="기준금리">기준금리</DictTerm> 추이
                 </h3>
               </div>
@@ -614,13 +614,13 @@ export default function AnalysisResultPanel({
               {renderExplainSection(explainSections?.baseRate)}
             </div>
           ) : result.metrics?.baseRate ? (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                <h3 className="text-base sm:text-lg font-semibold text-ink">
                   <DictTerm term="기준금리">기준금리</DictTerm>
                 </h3>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm sm:text-base text-zinc-700 mt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm sm:text-base text-ink-2 mt-2">
                 <div>기준일: {result.metrics.baseRate.date}</div>
                 <div>금리: {result.metrics.baseRate.value}{result.metrics.baseRate.unit}</div>
               </div>
@@ -630,9 +630,9 @@ export default function AnalysisResultPanel({
 
           {/* 공매도 현황 */}
           {result.metrics?.shortSellingSeries && result.metrics.shortSellingSeries.length > 0 ? (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                <h3 className="text-base sm:text-lg font-semibold text-ink">
                   <DictTerm term="공매도">공매도</DictTerm> 추이
                 </h3>
               </div>
@@ -640,15 +640,15 @@ export default function AnalysisResultPanel({
               {renderExplainSection(explainSections?.shortSelling)}
             </div>
           ) : result.metrics?.shortSelling ? (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+                <h3 className="text-base sm:text-lg font-semibold text-ink">
                   <DictTerm term="공매도">공매도</DictTerm> 현황
                 </h3>
               </div>
               <div className="overflow-x-auto mt-2">
-                <table className="min-w-full text-xs sm:text-sm text-zinc-700 border border-zinc-200">
-                  <thead className="bg-zinc-100 text-zinc-900">
+                <table className="min-w-full text-xs sm:text-sm text-ink-2 border border-line">
+                  <thead className="bg-bg-sunk text-ink">
                     <tr>
                       <th className="px-3 py-2 text-left border-b">항목</th>
                       <th className="px-3 py-2 text-right border-b">값</th>
@@ -692,7 +692,7 @@ export default function AnalysisResultPanel({
 
           {/* 가격 흐름 요약 */}
           {priceFlowSummary && (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <PriceFlowBars summary={priceFlowSummary} />
               {renderExplainSection(explainSections?.priceFlow)}
             </div>
@@ -700,7 +700,7 @@ export default function AnalysisResultPanel({
 
           {/* 시장 스냅샷 */}
           {result.metrics?.marketSnapshot && (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <MarketSnapshotBars snapshot={result.metrics.marketSnapshot} />
               {renderExplainSection(explainSections?.marketSnapshot)}
             </div>
@@ -708,7 +708,7 @@ export default function AnalysisResultPanel({
 
           {/* 보조지표 요약 */}
           {result.metrics?.indicators && (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <IndicatorSnapshotCards
                 indicators={result.metrics.indicators}
               />
@@ -717,7 +717,7 @@ export default function AnalysisResultPanel({
           )}
 
           {financialTimeline && financialTimeline.points.length > 0 && (
-            <div className="border-t border-zinc-200 pt-4 first:border-t-0 first:pt-0">
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <FinancialTimelineChart
                 period={financialTimeline.period}
                 points={financialTimeline.points}
@@ -732,21 +732,21 @@ export default function AnalysisResultPanel({
             || overallExplain?.conclusion
             || result.explain?.text?.trim()) && (
             <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+              <h3 className="text-base sm:text-lg font-semibold text-ink">
                 종합 요약
               </h3>
 
               {overallExplain ? (
-                <div className="mt-2 text-sm sm:text-base text-zinc-700 flex flex-col gap-3">
+                <div className="mt-2 text-sm sm:text-base text-ink-2 flex flex-col gap-3">
                   {overallExplain.summary ? (
                     <div>
-                      <p className="font-medium text-zinc-900">요약</p>
+                      <p className="font-medium text-ink">요약</p>
                       <p>{overallExplain.summary}</p>
                     </div>
                   ) : null}
                   {overallExplain.bullets && overallExplain.bullets.length > 0 ? (
                     <div>
-                      <p className="font-medium text-zinc-900">핵심 포인트</p>
+                      <p className="font-medium text-ink">핵심 포인트</p>
                       <ul className="list-disc list-inside">
                         {overallExplain.bullets.map((item, idx) => (
                           <li key={`overall-bullet-${idx}`}>{item}</li>
@@ -756,7 +756,7 @@ export default function AnalysisResultPanel({
                   ) : null}
                   {overallExplain.risks && overallExplain.risks.length > 0 ? (
                     <div>
-                      <p className="font-medium text-zinc-900">리스크</p>
+                      <p className="font-medium text-ink">리스크</p>
                       <ul className="list-disc list-inside">
                         {overallExplain.risks.map((item, idx) => (
                           <li key={`overall-risk-${idx}`}>{item}</li>
@@ -766,13 +766,13 @@ export default function AnalysisResultPanel({
                   ) : null}
                   {overallExplain.conclusion ? (
                     <div>
-                      <p className="font-medium text-zinc-900">결론</p>
+                      <p className="font-medium text-ink">결론</p>
                       <p>{overallExplain.conclusion}</p>
                     </div>
                   ) : null}
                 </div>
               ) : result.explain?.text?.trim() ? (
-                <p className="text-sm sm:text-base text-zinc-700 whitespace-pre-wrap mt-2">
+                <p className="text-sm sm:text-base text-ink-2 whitespace-pre-wrap mt-2">
                   {displayText}
                 </p>
               ) : null}
@@ -781,10 +781,10 @@ export default function AnalysisResultPanel({
 
           {warningNotes.length > 0 && (
             <div>
-              <h3 className="text-base sm:text-lg font-semibold text-zinc-900">
+              <h3 className="text-base sm:text-lg font-semibold text-ink">
                 참고
               </h3>
-              <ul className="mt-2 list-disc list-inside text-sm sm:text-base text-zinc-700 flex flex-col gap-1">
+              <ul className="mt-2 list-disc list-inside text-sm sm:text-base text-ink-2 flex flex-col gap-1">
                 {warningNotes.map((item, idx) => (
                   <li key={`warning-note-${idx}`}>{item}</li>
                 ))}

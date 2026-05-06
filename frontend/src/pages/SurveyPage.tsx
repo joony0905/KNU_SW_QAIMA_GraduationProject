@@ -342,7 +342,7 @@ export default function SurveyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] ml-[60px]">
+    <div className="min-h-screen bg-[#FDFDFD] ml-[84px]">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
         <header className="w-full bg-white border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
