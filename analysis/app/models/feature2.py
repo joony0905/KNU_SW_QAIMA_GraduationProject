@@ -23,7 +23,7 @@ class RelativePoint(BaseModel):
 
 class BandPoint(BaseModel):
     """Distribution band at time t (p20/p80)."""
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     t: datetime
     p20: float
@@ -107,6 +107,8 @@ class PeerClusterRequest(BaseModel):
 
     freq: Freq = Field(default="ONE_D")
     window: int = Field(default=90, ge=30, le=365)
+    from_: Optional[datetime] = Field(default=None, alias="from")
+    to: Optional[datetime] = Field(default=None)
     peer_count: int = Field(default=8, ge=3, le=30)
 
     # 유동성 필터(v1 범위)
@@ -212,6 +214,10 @@ class Feature2ExplainMetrics(BaseModel):
     stock: Optional[Dict[str, Any]] = None
     industry: Optional[Dict[str, Any]] = None
     base_rate: Optional[Dict[str, Any]] = None
+    macro_rates: Optional[Dict[str, Any]] = None
+    macro_trend_summaries: List[Dict[str, Any]] = Field(default_factory=list)
+    stock_investor_flow_summary: Optional[Dict[str, Any]] = None
+    market_investor_flow_summary: Optional[Dict[str, Any]] = None
     short_selling: Optional[Dict[str, Any]] = None
     base_rate_trend_summary: Optional[Dict[str, Any]] = None
     short_selling_trend_summary: Optional[Dict[str, Any]] = None

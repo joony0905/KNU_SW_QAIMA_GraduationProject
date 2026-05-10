@@ -31,6 +31,8 @@ public class Feature2RequestNormalizer {
                 normalizeStockCode(req == null ? null : req.getStockCode()),
                 normalizeFreq(req == null ? null : req.getFreq()),
                 normalizeWindow(req == null ? null : req.getWindow()),
+                req == null ? null : req.getFrom(),
+                req == null ? null : req.getTo(),
                 normalizePeerCount(req == null ? null : req.getPeerCount()),
                 normalizeMaxLag(req == null ? null : req.getMaxLag()),
                 normalizeDisplayLimit(req == null ? null : req.getDisplayLimit()),

@@ -39,6 +39,8 @@ class SpringMarketDataProvider(MarketDataProvider):
         anchor_stock_code: str,
         freq: Freq,
         window: int,
+        from_: Optional[datetime] = None,
+        to: Optional[datetime] = None,
     ) -> dict:
         url = f"{self.cfg.base_url}/api/v1/feature2/peercluster/data"
 
@@ -49,6 +51,10 @@ class SpringMarketDataProvider(MarketDataProvider):
             "freq": freq,
             "window": window,
         }
+        if from_ is not None:
+            payload["from"] = from_.isoformat()
+        if to is not None:
+            payload["to"] = to.isoformat()
         self._last_payload = payload
         print(f"[DEBUG][spring-pack] payload={payload}")
 
@@ -77,6 +83,8 @@ class SpringMarketDataProvider(MarketDataProvider):
         anchor_stock_code: str,
         freq: Freq,
         window: int,
+        from_: Optional[datetime] = None,
+        to: Optional[datetime] = None,
     ) -> tuple[
         List[str],
         Dict[str, StockMeta],
@@ -86,7 +94,7 @@ class SpringMarketDataProvider(MarketDataProvider):
         Optional[PriceSeries],
         Optional[str],
     ]:
-        data = self._post_peercluster_data(industry_id, anchor_stock_code, freq, window)
+        data = self._post_peercluster_data(industry_id, anchor_stock_code, freq, window, from_, to)
 
         warnings = data.get("warnings", []) or []
         members = data.get("members", []) or []

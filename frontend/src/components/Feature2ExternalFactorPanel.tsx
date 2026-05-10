@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { Lock } from "lucide-react";
 import DictTerm from "./DictTerm";
 import InvestorFlowTrendChart from "./InvestorFlowTrendChart";
 import ShortSellingTrendChart from "./ShortSellingTrendChart";
@@ -8,6 +9,8 @@ import type {
   Feature2MacroRates,
   Feature2InvestorFlow,
   Feature2TrendSeries,
+  PeerCluster,
+  RelativePoint,
   ShortSellingSeriesPoint,
   ShortSellingMetrics,
 } from "../types/feature2";
@@ -42,6 +45,7 @@ interface Props {
   investorFlow: Feature2InvestorFlow | null;
   investorFlowLoading: boolean;
   investorFlowError: string | null;
+  peerCluster: PeerCluster | null;
   onSelectRelatedStock: (stockCode: string) => void;
 }
 
@@ -106,6 +110,32 @@ const investorFlowDirectionText = (direction?: string | null) => {
   }
 };
 
+const formatSignedPct = (value?: number | null) => {
+  if (value == null || !Number.isFinite(value)) return "-";
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${(value * 100).toFixed(1)}%`;
+};
+
+const flowStatusText = (delta?: number | null) => {
+  if (delta == null || !Number.isFinite(delta)) return "잠금";
+  if (delta > 0.02) return "상승";
+  if (delta < -0.02) return "하락";
+  return "혼재";
+};
+
+const flowStatusClass = (status: string) => {
+  if (status === "상승") return "text-rose-700 bg-rose-50 border-rose-200";
+  if (status === "하락") return "text-blue-700 bg-blue-50 border-blue-200";
+  if (status === "혼재") return "text-zinc-700 bg-zinc-100 border-zinc-200";
+  return "text-zinc-500 bg-zinc-50 border-zinc-200";
+};
+
+const seriesDelta = (series?: RelativePoint[] | null) => {
+  const points = (series ?? []).filter((point) => Number.isFinite(point.value));
+  if (points.length < 2) return null;
+  return points[points.length - 1].value - points[0].value;
+};
+
 function MetricTile({
   label,
   value,
@@ -142,6 +172,7 @@ export default function Feature2ExternalFactorPanel({
   investorFlow,
   investorFlowLoading,
   investorFlowError,
+  peerCluster,
   onSelectRelatedStock,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ExternalFactorTab>("summary");
@@ -175,6 +206,17 @@ export default function Feature2ExternalFactorPanel({
   const exchangeSeries = ["USD_KRW"]
     .map((key) => trendByKey.get(key))
     .filter((series): series is Feature2TrendSeries => Boolean(series));
+  const peerCentroidSeries = peerCluster?.peerCentroid?.length
+    ? peerCluster.peerCentroid
+    : peerCluster?.centroid ?? null;
+  const peerDelta = seriesDelta(peerCentroidSeries);
+  const anchorDelta = seriesDelta(peerCluster?.anchorSeries);
+  const peerStatus = flowStatusText(peerDelta);
+  const anchorVsPeer =
+    anchorDelta == null || peerDelta == null
+      ? null
+      : anchorDelta - peerDelta;
+  const peerFlowLocked = !peerCluster;
 
   const renderSummary = () => (
     <div className="flex flex-col gap-3">
@@ -207,6 +249,26 @@ export default function Feature2ExternalFactorPanel({
             investorFlow?.stockSummary
               ? formatFlowAmount(investorFlow.stockSummary.combinedNetBuyValueMillionSum)
               : "데이터 없음"
+          }
+        />
+        <MetricTile
+          label="유사종목 흐름"
+          value={
+            peerFlowLocked ? (
+              <span className="inline-flex items-center gap-1 text-zinc-500">
+                <Lock size={14} aria-hidden="true" />
+                잠금
+              </span>
+            ) : (
+              <span className={`inline-flex rounded-full border px-2 py-0.5 text-sm ${flowStatusClass(peerStatus)}`}>
+                {peerStatus}
+              </span>
+            )
+          }
+          sub={
+            peerFlowLocked
+              ? "분석 결과 보기 후 활성화"
+              : `피어 평균 ${formatSignedPct(peerDelta)}`
           }
         />
         <MetricTile
@@ -411,6 +473,14 @@ export default function Feature2ExternalFactorPanel({
 
   const renderPeer = () => (
     <div className="flex flex-col gap-3">
+      <PeerFlowSummaryCard
+        locked={peerFlowLocked}
+        peerStatus={peerStatus}
+        peerDelta={peerDelta}
+        anchorDelta={anchorDelta}
+        anchorVsPeer={anchorVsPeer}
+        peerCount={peerCluster?.peers?.length ?? 0}
+      />
       {relatedLoading && (
         <div className="h-40 flex items-center justify-center text-sm text-gray-500">
           유사 종목을 불러오는 중입니다…
@@ -551,6 +621,76 @@ export default function Feature2ExternalFactorPanel({
         {content()}
       </div>
     </section>
+  );
+}
+
+function PeerFlowSummaryCard({
+  locked,
+  peerStatus,
+  peerDelta,
+  anchorDelta,
+  anchorVsPeer,
+  peerCount,
+}: {
+  locked: boolean;
+  peerStatus: string;
+  peerDelta: number | null;
+  anchorDelta: number | null;
+  anchorVsPeer: number | null;
+  peerCount: number;
+}) {
+  if (locked) {
+    return (
+      <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-zinc-800">유사종목 흐름</p>
+            <p className="mt-1 text-xs text-zinc-500">분석 결과 보기 후 피어 평균 흐름이 활성화됩니다.</p>
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-500">
+            <Lock size={13} aria-hidden="true" />
+            잠금
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  const relativeText =
+    anchorVsPeer == null
+      ? "종목 대비 데이터 없음"
+      : anchorVsPeer > 0.01
+        ? `분석 종목이 피어 평균보다 ${formatSignedPct(anchorVsPeer)} 강함`
+        : anchorVsPeer < -0.01
+          ? `분석 종목이 피어 평균보다 ${formatSignedPct(Math.abs(anchorVsPeer))} 약함`
+          : "분석 종목과 피어 평균 흐름이 유사";
+
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-zinc-900">유사종목 흐름</p>
+          <p className="mt-1 text-xs text-zinc-500">{relativeText}</p>
+        </div>
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${flowStatusClass(peerStatus)}`}>
+          {peerStatus}
+        </span>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-md bg-zinc-50 px-2 py-2">
+          <p className="text-zinc-500">피어 평균</p>
+          <p className="mt-0.5 font-bold text-zinc-900">{formatSignedPct(peerDelta)}</p>
+        </div>
+        <div className="rounded-md bg-zinc-50 px-2 py-2">
+          <p className="text-zinc-500">분석 종목</p>
+          <p className="mt-0.5 font-bold text-zinc-900">{formatSignedPct(anchorDelta)}</p>
+        </div>
+        <div className="rounded-md bg-zinc-50 px-2 py-2">
+          <p className="text-zinc-500">피어 수</p>
+          <p className="mt-0.5 font-bold text-zinc-900">{peerCount}개</p>
+        </div>
+      </div>
+    </div>
   );
 }
 

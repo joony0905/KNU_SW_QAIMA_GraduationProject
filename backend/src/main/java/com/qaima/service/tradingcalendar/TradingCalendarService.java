@@ -9,5 +9,7 @@ public interface TradingCalendarService {
 
     LocalDate previousTradingDay(LocalDate date, String market);
 
+    LocalDate nextTradingDay(LocalDate date, String market);
+
     LocalDate latestTradingDay(ZonedDateTime asOf, String market);
 }

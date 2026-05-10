@@ -1,4 +1,13 @@
-import type { BaseRateSeriesPoint, NewsSentimentSummary, PeerCluster, ShortSellingSeriesPoint, StockMeta } from "./feature2";
+import type {
+  BaseRateSeriesPoint,
+  Feature2InvestorFlow,
+  Feature2MacroRates,
+  Feature2MacroRatesSeries,
+  NewsSentimentSummary,
+  PeerCluster,
+  ShortSellingSeriesPoint,
+  StockMeta,
+} from "./feature2";
 import type { IndicatorBundle } from "./indicator";
 import type { NewsItemDto } from "./news";
 
@@ -17,6 +26,9 @@ export interface AnalysisPanelResult {
       indicators?: AnalysisExplainSection | null;
       financialTimeline?: AnalysisExplainSection | null;
       peerCluster?: AnalysisExplainSection | null;
+      macroEnvironment?: AnalysisExplainSection | null;
+      investorFlow?: AnalysisExplainSection | null;
+      crossSignal?: AnalysisExplainSection | null;
       newsSentiment?: AnalysisExplainSection | null;
       trendSummary?: AnalysisExplainSection | null;
       baseRate?: AnalysisExplainSection | null;
@@ -101,6 +113,9 @@ export interface AnalysisPanelResult {
     baseRateTrendSummary?: import("./feature2").BaseRateTrendSummary | null;
     shortSellingTrendSummary?: import("./feature2").ShortSellingTrendSummary | null;
     baseRateSeries?: BaseRateSeriesPoint[] | null;
+    macroRates?: Feature2MacroRates | null;
+    macroRatesSeries?: Feature2MacroRatesSeries | null;
+    investorFlow?: Feature2InvestorFlow | null;
     shortSellingSeries?: ShortSellingSeriesPoint[] | null;
     peerCluster?: PeerCluster | null;
     newsSentimentSummary?: NewsSentimentSummary | null;

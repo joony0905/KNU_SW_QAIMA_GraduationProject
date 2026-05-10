@@ -468,6 +468,8 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         f"anchor_stock_code={req.anchor_stock_code}, "
         f"freq={req.freq}, "
         f"window={req.window}, "
+        f"from={getattr(req, 'from_', None)}, "
+        f"to={getattr(req, 'to', None)}, "
         f"peer_count={req.peer_count}, "
         f"max_lag={getattr(req, 'max_lag', None)}, "
         f"liquidity_top_k_turnover={getattr(req, 'liquidity_top_k_turnover', None)}, "
@@ -499,6 +501,8 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
                 req.anchor_stock_code,
                 freq,
                 req.window,
+                getattr(req, "from_", None),
+                getattr(req, "to", None),
             )
             if len(pack) >= 7:
                 members, metas, price_map, liq_map, spring_warnings, industry_index_ps, industry_index_name = pack

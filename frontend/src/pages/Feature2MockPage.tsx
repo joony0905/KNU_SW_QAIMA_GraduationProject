@@ -44,7 +44,8 @@ import { isLoggedIn } from "../utils/auth";
 import { getApiErrorMessage } from "../utils/errorMessage";
 import DictTerm from "../components/DictTerm";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
-import { formatKstOffsetDateTime, shiftKstDays } from "../utils/kst";
+import { formatKstOffsetDateTime, shiftKstDays, shiftKstMonths } from "../utils/kst";
+import { refreshTokenBalance } from "../api/billingStore";
 
 const getColorClassByNumber = (n: number | null) => {
   if (n === null || !Number.isFinite(n)) return "text-flat";
@@ -113,6 +114,22 @@ const INITIAL_RELATED_STOCK_LIMIT = 30;
 
 const clampChartWindow = (window: number) =>
   Math.max(INITIAL_HISTORY_DAYS, Math.min(window, MAX_HISTORY_DAYS));
+
+const ANALYSIS_WINDOW_MONTHS: Record<60 | 120 | 180 | 252, number> = {
+  60: 3,
+  120: 6,
+  180: 9,
+  252: 12,
+};
+
+const buildAnalysisDateRange = (window: 60 | 120 | 180 | 252) => {
+  const to = new Date();
+  const from = shiftKstMonths(to, -ANALYSIS_WINDOW_MONTHS[window]);
+  return {
+    from: formatKstOffsetDateTime(from),
+    to: formatKstOffsetDateTime(to),
+  };
+};
 
 const toKstDayKeyFromEpochSec = (sec: number) => {
   const normalizedSec = sec > 10_000_000_000 ? Math.floor(sec / 1000) : sec;
@@ -204,6 +221,9 @@ const parseFeature2Explain = (raw?: string | null): Feature2PanelExplain | null 
       text: overallSummary || raw,
       sections: {
         peerCluster: coerceExplainSection(sections.peer_cluster, "유사종목 반응구조 요약"),
+        macroEnvironment: coerceExplainSection(sections.macro_environment, "시장환경 요약"),
+        investorFlow: coerceExplainSection(sections.investor_flow, "수급 요약"),
+        crossSignal: coerceExplainSection(sections.cross_signal, "신호 조합 요약"),
         newsSentiment: coerceExplainSection(sections.news_sentiment, "뉴스감성 요약"),
         trendSummary: coerceExplainSection(sections.trend_summary, "기간추이 요약"),
         baseRate: coerceExplainSection(sections.base_rate, "기준금리 추이 요약"),
@@ -826,8 +846,18 @@ export default function Feature2MockPage() {
 
     try {
       setShowAnalyzeButton(false);
+      const analysisDateRange = buildAnalysisDateRange(selectedWindow);
       const [result, shortSellingSeries, baseRateSeries] = await Promise.all([
-        fetchFeature2Analysis(mainStock.symbol, selectedFreq, selectedWindow, 30, undefined, llmVendor),
+        fetchFeature2Analysis(
+          mainStock.symbol,
+          selectedFreq,
+          selectedWindow,
+          30,
+          undefined,
+          llmVendor,
+          analysisDateRange.from,
+          analysisDateRange.to,
+        ),
         fetchFeature2ShortSellingSeries(mainStock.symbol, selectedWindow),
         fetchFeature2BaseRateSeries(Math.max(selectedWindow, 365)),
       ]);
@@ -838,6 +868,7 @@ export default function Feature2MockPage() {
         selectedWindow,
       );
       setAnalysisResult(result);
+      refreshTokenBalance().catch(() => {});
       setShortSellingSeriesResult(shortSellingSeries);
       setBaseRateSeriesResult(baseRateSeries);
 
@@ -1073,6 +1104,7 @@ export default function Feature2MockPage() {
               investorFlow={investorFlow}
               investorFlowLoading={investorFlowLoading}
               investorFlowError={investorFlowError}
+              peerCluster={analysisData?.metrics?.peerCluster ?? null}
               onSelectRelatedStock={handleSearch}
             />
           </div>
@@ -1194,6 +1226,9 @@ export default function Feature2MockPage() {
                     shortSellingTrendSummary: analysisData?.metrics?.shortSellingTrendSummary ?? null,
                     shortSellingSeries: shortSellingSeriesResult?.data ?? null,
                     baseRate: analysisData?.metrics?.baseRate ?? null,
+                    macroRates: analysisData?.metrics?.macroRates ?? macroRates,
+                    macroRatesSeries: analysisData?.metrics?.macroRatesSeries ?? macroRatesSeriesResult?.data ?? null,
+                    investorFlow: analysisData?.metrics?.investorFlow ?? investorFlow,
                     baseRateTrendSummary: analysisData?.metrics?.baseRateTrendSummary ?? null,
                     baseRateSeries: baseRateSeriesResult?.data ?? null,
                     newsSentimentSummary: analysisData?.metrics?.newsSentimentSummary ?? null,

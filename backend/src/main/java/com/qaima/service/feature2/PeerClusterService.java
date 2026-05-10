@@ -2,6 +2,7 @@
 package com.qaima.service.feature2;
 
 import com.qaima.domain.Freq;
+import java.time.OffsetDateTime;
 import reactor.core.publisher.Mono;
 
 /**
@@ -19,6 +20,8 @@ public interface PeerClusterService {
             String anchorStockCode,
             Freq freq,
             int window,
+            OffsetDateTime from,
+            OffsetDateTime to,
             int peerCount,
             int maxLag,
             int displayLimit

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Locale;
 
@@ -38,6 +39,8 @@ public class PeerClusterDataController {
                 .anchorStockCode(asString(first(body, "anchor_stock_code", "anchorStockCode")))
                 .freq(asFreq(first(body, "freq")))
                 .window(asInteger(first(body, "window")))
+                .from(asOffsetDateTime(first(body, "from")))
+                .to(asOffsetDateTime(first(body, "to")))
                 .peerCount(asInteger(first(body, "peer_count", "peerCount")))
                 .maxLag(asInteger(first(body, "max_lag", "maxLag")))
                 .displayLimit(asInteger(first(body, "display_limit", "displayLimit")))
@@ -84,6 +87,18 @@ public class PeerClusterDataController {
         }
         try {
             return Long.parseLong(String.valueOf(value).trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private OffsetDateTime asOffsetDateTime(Object value) {
+        String s = asString(value);
+        if (s == null) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(s);
         } catch (Exception e) {
             return null;
         }

@@ -10,6 +10,7 @@ import com.qaima.repository.IndustryIndexOhlcvRepository;
 import com.qaima.repository.PriceOhlcvRepository;
 import com.qaima.repository.StockRepository;
 import com.qaima.service.feature2.PeerClusterDataService;
+import com.qaima.service.tradingcalendar.TradingCalendarService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -19,7 +20,9 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -32,8 +35,12 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
     private final PriceOhlcvRepository priceOhlcvRepository;
     private final IndustryIndexMapRepository industryIndexMapRepository;
     private final IndustryIndexOhlcvRepository industryIndexOhlcvRepository;
+    private final TradingCalendarService tradingCalendarService;
 
-    // 휴장/결측 대비로 range를 넉넉히 당겨서 가져온 뒤, 각 종목별로 tail(window)로 자른다.
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final String KRX_MARKET = "KRX";
+
+    // window 모드에서는 휴장/결측 대비로 range를 넉넉히 당겨서 가져온 뒤, 각 종목별로 tail(window)로 자른다.
     private static final int RANGE_MULTIPLIER = 3;
 
     // 너무 큰 산업이면 비용 폭발 방지 (MVP 상한)
@@ -124,13 +131,25 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
             log.info("[PeerClusterData] stocks size={}", stocks.size());
             log.info("[PeerClusterData] allCodes size={}", allCodes.size());
 
+            DateRange requestedRange = resolveRequestedRange(req);
+            if (requestedRange != null && !requestedRange.isValid()) {
+                warnings.add("BAD_DATE_RANGE");
+                log.warn("[PeerClusterData] bad date range reqFrom={}, reqTo={}", req.getFrom(), req.getTo());
+                return emptyPack(warnings);
+            }
+
             // -----------------------
             // 3) Bulk range fetch
             // -----------------------
-            // v3 확장 포인트: 산업지수 DB 적재 기준일을 peer overlay의 기준일로 사용해 차트 기간을 통일한다.
-            final OffsetDateTime to = resolveIndustryIndexLatestTs(industryId, freq)
-                    .orElseGet(OffsetDateTime::now);
-            final OffsetDateTime from = calcFrom(to, freq, window);
+            // 정확 기간 모드에서는 사용자가 보낸 날짜 범위를 거래일로 보정해서 그대로 사용한다.
+            // window 모드에서는 산업지수 DB 적재 기준일을 peer overlay의 기준일로 사용해 차트 기간을 통일한다.
+            final boolean exactDateRangeMode = requestedRange != null;
+            final OffsetDateTime to = exactDateRangeMode
+                    ? requestedRange.toExclusive()
+                    : resolveIndustryIndexLatestTs(industryId, freq).orElseGet(OffsetDateTime::now);
+            final OffsetDateTime from = exactDateRangeMode
+                    ? requestedRange.fromInclusive()
+                    : calcFrom(to, freq, window);
 
             List<PriceOhlcv> rows;
             try {
@@ -174,7 +193,9 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
             List<Map<String, Object>> prices = new ArrayList<>();
             List<Map<String, Object>> liquidity = new ArrayList<>();
             List<String> members = new ArrayList<>();
-            Map<String, Object> industryIndex = industryIndexItem(industryId, freq, window, warnings);
+            Map<String, Object> industryIndex = exactDateRangeMode
+                    ? industryIndexItem(industryId, freq, from, to, warnings)
+                    : industryIndexItem(industryId, freq, window, warnings);
 
             for (Stock s : stocks) {
                 String code = (s == null) ? null : safeTrim(s.getStockCode());
@@ -203,8 +224,8 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
                     continue;
                 }
 
-                // tail(window) 적용
-                List<PriceOhlcv> cut = tail(series, window);
+                // 정확 기간 모드에서는 range query 결과를 그대로 쓰고, window 모드에서만 tail(window)을 적용한다.
+                List<PriceOhlcv> cut = exactDateRangeMode ? series : tail(series, window);
 
                 if (cut.size() < MIN_POINTS) {
                     warnings.add("SERIES_TOO_SHORT:" + code);
@@ -256,11 +277,44 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
         };
     }
 
+    private DateRange resolveRequestedRange(PeerClusterRequestDto req) {
+        if (req.getFrom() == null || req.getTo() == null) {
+            return null;
+        }
+
+        LocalDate fromDate = req.getFrom().atZoneSameInstant(KST).toLocalDate();
+        LocalDate toDate = req.getTo().atZoneSameInstant(KST).toLocalDate();
+        LocalDate latestTradingDay = tradingCalendarService.latestTradingDay(
+                java.time.ZonedDateTime.now(KST),
+                KRX_MARKET
+        );
+
+        LocalDate adjustedFrom = tradingCalendarService.isTradingDay(fromDate, KRX_MARKET)
+                ? fromDate
+                : tradingCalendarService.nextTradingDay(fromDate, KRX_MARKET);
+        LocalDate adjustedTo = toDate.isAfter(latestTradingDay)
+                ? latestTradingDay
+                : toDate;
+        adjustedTo = tradingCalendarService.isTradingDay(adjustedTo, KRX_MARKET)
+                ? adjustedTo
+                : tradingCalendarService.previousTradingDay(adjustedTo, KRX_MARKET);
+
+        OffsetDateTime fromInclusive = adjustedFrom.atStartOfDay(KST).toOffsetDateTime();
+        OffsetDateTime toExclusive = adjustedTo.plusDays(1).atStartOfDay(KST).toOffsetDateTime();
+        return new DateRange(fromInclusive, toExclusive);
+    }
+
     private static List<PriceOhlcv> tail(List<PriceOhlcv> ascSeries, int window) {
         if (ascSeries == null) return List.of();
         if (window <= 0) return ascSeries;
         if (ascSeries.size() <= window) return ascSeries;
         return ascSeries.subList(ascSeries.size() - window, ascSeries.size());
+    }
+
+    private record DateRange(OffsetDateTime fromInclusive, OffsetDateTime toExclusive) {
+        private boolean isValid() {
+            return fromInclusive != null && toExclusive != null && fromInclusive.isBefore(toExclusive);
+        }
     }
 
     private Optional<OffsetDateTime> resolveIndustryIndexLatestTs(Long industryId, Freq freq) {
@@ -498,6 +552,68 @@ public class PeerClusterDataServiceImpl implements PeerClusterDataService {
                     });
         } catch (Exception e) {
             log.warn("[PeerClusterData] industry index lookup failed. industryId={}, cause={}", industryId, e.getMessage(), e);
+            warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+            return out;
+        }
+    }
+
+    private Map<String, Object> industryIndexItem(
+            Long industryId,
+            Freq freq,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            List<String> warnings
+    ) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (industryId == null || freq == null || from == null || to == null || !from.isBefore(to)) {
+            warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+            return out;
+        }
+
+        try {
+            return industryIndexMapRepository.findFirstByIdIndustryId(industryId)
+                    .map(map -> {
+                        Long indexId = map.getIndustryIndex() == null ? null : map.getIndustryIndex().getIndexId();
+                        String code = map.getIndustryIndex() == null ? null : map.getIndustryIndex().getCode();
+                        String name = map.getIndustryIndex() == null ? null : map.getIndustryIndex().getName();
+                        if (indexId == null) {
+                            warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+                            return out;
+                        }
+
+                        List<IndustryIndexOhlcv> asc = industryIndexOhlcvRepository.findRange(indexId, freq, from, to)
+                                .stream()
+                                .filter(Objects::nonNull)
+                                .filter(row -> row.getId() != null && row.getId().getTs() != null)
+                                .filter(row -> row.getClose() != null)
+                                .collect(Collectors.toList());
+
+                        if (asc.size() < MIN_POINTS) {
+                            warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+                            return out;
+                        }
+
+                        List<String> dates = new ArrayList<>(asc.size());
+                        List<Double> close = new ArrayList<>(asc.size());
+                        for (IndustryIndexOhlcv row : asc) {
+                            dates.add(row.getId().getTs().toInstant().toString());
+                            close.add(toDouble(row.getClose()));
+                        }
+
+                        Map<String, Object> item = new LinkedHashMap<>();
+                        item.put("code", code == null ? "INDUSTRY_INDEX" : code);
+                        item.put("name", name);
+                        item.put("dates", dates);
+                        item.put("close", close);
+                        return item;
+                    })
+                    .orElseGet(() -> {
+                        warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
+                        return out;
+                    });
+        } catch (Exception e) {
+            log.warn("[PeerClusterData] industry index range lookup failed. industryId={}, from={}, to={}, cause={}",
+                    industryId, from, to, e.getMessage(), e);
             warnings.add("INDUSTRY_INDEX_SERIES_MISSING");
             return out;
         }

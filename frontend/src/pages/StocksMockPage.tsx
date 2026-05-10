@@ -25,6 +25,7 @@ import type { AnalysisResponse } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
 import DictTerm from "../components/DictTerm";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
+import { refreshTokenBalance } from "../api/billingStore";
 import { useTheme } from "../hooks/useTheme";
 import {
   formatKstDate,
@@ -630,6 +631,7 @@ export default function StocksMockPage() {
       });
 
       setAnalysisResult(result);
+      refreshTokenBalance().catch(() => {});
       setPriceFlowSummary(buildPriceFlowSummary(analysisCandles, fromDate, toDate));
 
       const timelinePeriod = pickTimelinePeriod(fromDate, toDate);

@@ -326,6 +326,9 @@ export interface Feature2Metrics {
   peerCluster: PeerCluster | null;
   shortSelling: ShortSellingMetrics | null;
   baseRate: BaseRateMetrics | null;
+  macroRates?: Feature2MacroRates | null;
+  macroRatesSeries?: Feature2MacroRatesSeries | null;
+  investorFlow?: Feature2InvestorFlow | null;
   baseRateTrendSummary?: BaseRateTrendSummary | null;
   shortSellingTrendSummary?: ShortSellingTrendSummary | null;
   newsList: NewsItemDto[];

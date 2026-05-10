@@ -37,6 +37,30 @@ public class Feature2MetricsAssembler {
         metrics.setBaseRate(baseRate);
     }
 
+    public void attachMacroRates(Feature2MetricsDto metrics, com.qaima.dto.feature2.Feature2MacroRatesDto macroRates) {
+        if (metrics == null || macroRates == null) {
+            return;
+        }
+        metrics.setMacroRates(macroRates);
+    }
+
+    public void attachMacroRatesSeries(
+            Feature2MetricsDto metrics,
+            com.qaima.dto.feature2.Feature2MacroRatesSeriesDto macroRatesSeries
+    ) {
+        if (metrics == null || macroRatesSeries == null) {
+            return;
+        }
+        metrics.setMacroRatesSeries(macroRatesSeries);
+    }
+
+    public void attachInvestorFlow(Feature2MetricsDto metrics, com.qaima.dto.feature2.Feature2InvestorFlowDto investorFlow) {
+        if (metrics == null || investorFlow == null) {
+            return;
+        }
+        metrics.setInvestorFlow(investorFlow);
+    }
+
     public void attachBaseRateTrendSummary(
             Feature2MetricsDto metrics,
             Feature2MetricsDto.BaseRateTrendSummary baseRateTrendSummary

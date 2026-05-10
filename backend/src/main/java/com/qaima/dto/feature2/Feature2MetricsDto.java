@@ -30,6 +30,9 @@ public class Feature2MetricsDto {
     private PeerClusterDto peerCluster;
     private ShortSellingMetrics shortSelling;
     private BaseRateMetrics baseRate;
+    private Feature2MacroRatesDto macroRates;
+    private Feature2MacroRatesSeriesDto macroRatesSeries;
+    private Feature2InvestorFlowDto investorFlow;
     private BaseRateTrendSummary baseRateTrendSummary;
     private ShortSellingTrendSummary shortSellingTrendSummary;
     private List<NewsItemDto> newsList;

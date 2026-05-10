@@ -47,6 +47,17 @@ public class TradingCalendarServiceImpl implements TradingCalendarService {
     }
 
     @Override
+    public LocalDate nextTradingDay(LocalDate date, String market) {
+        LocalDate cursor = date.plusDays(1);
+        String normalizedMarket = normalizeMarket(market);
+
+        while (!isTradingDay(cursor, normalizedMarket)) {
+            cursor = cursor.plusDays(1);
+        }
+        return cursor;
+    }
+
+    @Override
     public LocalDate latestTradingDay(ZonedDateTime asOf, String market) {
         ZonedDateTime asOfKst = (asOf == null ? ZonedDateTime.now(KST) : asOf).withZoneSameInstant(KST);
         LocalDate today = asOfKst.toLocalDate();
