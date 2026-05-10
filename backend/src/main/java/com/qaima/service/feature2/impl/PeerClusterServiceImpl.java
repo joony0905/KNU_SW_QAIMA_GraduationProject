@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,6 +37,8 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             String anchorStockCode,
             Freq freq,
             int window,
+            OffsetDateTime from,
+            OffsetDateTime to,
             int peerCount,
             int maxLag,
             int displayLimit
@@ -52,7 +55,7 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             ));
         }
 
-        String cacheKey = buildCacheKey(industryId, anchorStockCode, freq, window, peerCount, maxLag, displayLimit);
+        String cacheKey = buildCacheKey(industryId, anchorStockCode, freq, window, from, to, peerCount, maxLag, displayLimit);
 
         return getFromCache(cacheKey)
                 .onErrorResume(e -> {
@@ -71,6 +74,8 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                             .anchorStockCode(anchorStockCode)
                             .freq(freq)
                             .window(window)
+                            .from(from)
+                            .to(to)
                             .peerCount(peerCount)
                             .maxLag(maxLag)
                             .displayLimit(displayLimit)
@@ -110,16 +115,20 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             String anchorStockCode,
             Freq freq,
             int window,
+            OffsetDateTime from,
+            OffsetDateTime to,
             int peerCount,
             int maxLag,
             int displayLimit
     ) {
         return String.format(
-                "feature2:peercluster:v5:%d:%s:%s:%d:%d:%d:%d",
+                "feature2:peercluster:v6:%d:%s:%s:%d:%s:%s:%d:%d:%d",
                 industryId,
                 anchorStockCode,
                 freq.name(),
                 window,
+                from == null ? "-" : from.toInstant().toString(),
+                to == null ? "-" : to.toInstant().toString(),
                 peerCount,
                 maxLag,
                 displayLimit

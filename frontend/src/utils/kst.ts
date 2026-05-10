@@ -23,6 +23,12 @@ export const shiftKstDays = (input: DateLike, days: number): Date => {
   return fromKstShiftedDate(shifted);
 };
 
+export const shiftKstMonths = (input: DateLike, months: number): Date => {
+  const shifted = toKstShiftedDate(input);
+  shifted.setUTCMonth(shifted.getUTCMonth() + months);
+  return fromKstShiftedDate(shifted);
+};
+
 export const shiftKstYears = (input: DateLike, years: number): Date => {
   const shifted = toKstShiftedDate(input);
   shifted.setUTCFullYear(shifted.getUTCFullYear() + years);

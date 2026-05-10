@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { AnalysisExplainSection, AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import type { PeerItem } from "../types/feature2";
 import downloadIcon from "../assets/download_button.png";
@@ -8,7 +9,8 @@ import MarketSnapshotBars from "./MarketSnapshotBars";
 import IndicatorSnapshotCards from "./IndicatorSnapshotCards";
 import PriceFlowBars from "./PriceFlowBars";
 import ShortSellingTrendChart from "./ShortSellingTrendChart";
-import BaseRateStepChart from "./BaseRateStepChart";
+import InvestorFlowTrendChart from "./InvestorFlowTrendChart";
+import { MultiLineTrendChart } from "./Feature2TrendCharts";
 
 export const LLM_VENDOR_OPTIONS = [
   "GPT-5.4",
@@ -85,6 +87,45 @@ const trendDirectionText = (direction?: string | null) => {
       return "확인중";
   }
 };
+
+const investorFlowDirectionText = (direction?: string | null) => {
+  switch (direction) {
+    case "BOTH_NET_BUY":
+      return "동반 순매수";
+    case "BOTH_NET_SELL":
+      return "동반 순매도";
+    case "FOREIGN_BUY_INSTITUTION_SELL":
+      return "외국인 매수·기관 매도";
+    case "FOREIGN_SELL_INSTITUTION_BUY":
+      return "외국인 매도·기관 매수";
+    default:
+      return "혼재";
+  }
+};
+
+const formatFlowAmount = (value?: number | null) => {
+  if (value == null || !Number.isFinite(value)) return "-";
+  const abs = Math.abs(value);
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(1)}조원`;
+  if (abs >= 10_000) return `${sign}${(abs / 10_000).toFixed(1)}억원`;
+  return `${sign}${Math.round(abs).toLocaleString("ko-KR")}백만원`;
+};
+
+const formatRatePoint = (value?: number | null, unit = "%") => {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return `${value.toFixed(2)}${unit}`;
+};
+
+type MacroChartMode = "exchange" | "baseRate" | "domesticBond" | "usRates" | "shortSelling";
+
+const MACRO_CHART_OPTIONS: { key: MacroChartMode; label: string }[] = [
+  { key: "exchange", label: "환율" },
+  { key: "baseRate", label: "기준금리" },
+  { key: "domesticBond", label: "국내국채" },
+  { key: "usRates", label: "미국국채" },
+  { key: "shortSelling", label: "공매도" },
+];
 
 const sentimentLabelText = (label?: string | null, score?: number | null) => {
   switch (label) {
@@ -314,6 +355,7 @@ export default function AnalysisResultPanel({
   layout = "full",
 }: AnalysisResultPanelProps) {
   const isPanel = layout === "panel";
+  const [macroChartMode, setMacroChartMode] = useState<MacroChartMode>("exchange");
   const explainSections = result?.explain?.sections ?? null;
   const overallExplain = result?.explain?.overall ?? null;
   const warningNotes = expandWarningLines(mapWarningsToNotes(result?.warnings));
@@ -404,6 +446,52 @@ export default function AnalysisResultPanel({
               <p className="mt-1 text-lg sm:text-xl font-bold text-ink">
                 {result.metrics.stock.companyName || result.metrics.stock.stockCode}
               </p>
+            </div>
+          )}
+
+          {result.metrics?.investorFlow && (
+            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-semibold text-ink">외국인·기관 수급</h3>
+                <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
+                  종목/시장 비교
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-ink-3">종목 방향</p>
+                  <p className="text-base font-bold text-ink">
+                    {investorFlowDirectionText(result.metrics.investorFlow.stockSummary?.direction)}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-3">
+                    {formatFlowAmount(result.metrics.investorFlow.stockSummary?.combinedNetBuyValueMillionSum)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-ink-3">시장 방향</p>
+                  <p className="text-base font-bold text-ink">
+                    {investorFlowDirectionText(result.metrics.investorFlow.marketSummary?.direction)}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-3">
+                    {formatFlowAmount(result.metrics.investorFlow.marketSummary?.combinedNetBuyValueMillionSum)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                  <p className="text-[11px] sm:text-xs text-ink-3">분석 거래일</p>
+                  <p className="text-base font-bold text-ink">
+                    {result.metrics.investorFlow.stockSummary?.pointCount ?? "-"}일
+                  </p>
+                  <p className="mt-1 text-xs text-ink-3">
+                    {result.metrics.investorFlow.marketCode ?? "시장 매핑 없음"}
+                  </p>
+                </div>
+              </div>
+              {result.metrics.investorFlow.stockSeries?.length ? (
+                <div className="mt-3">
+                  <InvestorFlowTrendChart points={result.metrics.investorFlow.stockSeries} height={230} />
+                </div>
+              ) : null}
+              {renderExplainSection(explainSections?.investorFlow)}
             </div>
           )}
 
@@ -552,94 +640,108 @@ export default function AnalysisResultPanel({
             </div>
           )}
 
-          {(result.metrics?.baseRateTrendSummary || result.metrics?.shortSellingTrendSummary) && (
+          {(result.metrics?.macroRates
+            || result.metrics?.macroRatesSeries?.series?.length
+            || result.metrics?.baseRateTrendSummary
+            || result.metrics?.shortSellingTrendSummary
+            || result.metrics?.shortSellingSeries?.length) && (
             <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-ink">기간 추이 요약</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-ink">기간 추이·시장환경</h3>
                 <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
-                  사용자 설정 기간 기준
+                  금리 · 국채 · 환율 · 공매도
                 </span>
               </div>
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {result.metrics?.baseRateTrendSummary && (
-                  <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-ink">기준금리</p>
-                      <span className="text-xs font-medium text-ink-3">
-                        최근 {result.metrics.baseRateTrendSummary.window}일
-                      </span>
+              <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {result.metrics?.macroRates && (
+                  <>
+                    <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                      <p className="text-[11px] sm:text-xs text-ink-3">한국 기준금리</p>
+                      <p className="text-lg font-bold text-ink">
+                        {formatRatePoint(result.metrics.macroRates.krBaseRate?.value, result.metrics.macroRates.krBaseRate?.unit ?? "%")}
+                      </p>
                     </div>
-                    <p className="mt-2 text-sm text-ink-2">
+                    <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                      <p className="text-[11px] sm:text-xs text-ink-3">미국 기준금리</p>
+                      <p className="text-lg font-bold text-ink">
+                        {formatRatePoint(result.metrics.macroRates.usFedFundsRate?.value, result.metrics.macroRates.usFedFundsRate?.unit ?? "%")}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                      <p className="text-[11px] sm:text-xs text-ink-3">USD/KRW</p>
+                      <p className="text-lg font-bold text-ink">
+                        {formatNumber(result.metrics.macroRates.usdKrw?.value)}
+                      </p>
+                    </div>
+                  </>
+                )}
+                {result.metrics?.baseRateTrendSummary && (
+                  <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                    <p className="text-[11px] sm:text-xs text-ink-3">기준금리 변동</p>
+                    <p className="text-sm font-bold text-ink">
                       {result.metrics.baseRateTrendSummary.startValue ?? "-"}
                       {result.metrics.baseRateTrendSummary.unit ?? ""} → {result.metrics.baseRateTrendSummary.endValue ?? "-"}
                       {result.metrics.baseRateTrendSummary.unit ?? ""}
                     </p>
                     <p className="mt-1 text-xs text-ink-3">
-                      변동 {formatSignedNumber(result.metrics.baseRateTrendSummary.change)} · {trendDirectionText(result.metrics.baseRateTrendSummary.direction)}
+                      {formatSignedNumber(result.metrics.baseRateTrendSummary.change)} · {trendDirectionText(result.metrics.baseRateTrendSummary.direction)}
                     </p>
                   </div>
                 )}
                 {result.metrics?.shortSellingTrendSummary && (
-                  <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-ink">공매도</p>
-                      <span className="text-xs font-medium text-ink-3">
-                        최근 {result.metrics.shortSellingTrendSummary.window}일
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-ink-2">
-                      거래대금 비율 {formatRatio(result.metrics.shortSellingTrendSummary.startShortAmountRatio)}
-                      {" → "}
-                      {formatRatio(result.metrics.shortSellingTrendSummary.endShortAmountRatio)}
+                  <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+                    <p className="text-[11px] sm:text-xs text-ink-3">공매도 거래대금 비율</p>
+                    <p className="text-sm font-bold text-ink">
+                      {formatRatio(result.metrics.shortSellingTrendSummary.startShortAmountRatio)} → {formatRatio(result.metrics.shortSellingTrendSummary.endShortAmountRatio)}
                     </p>
                     <p className="mt-1 text-xs text-ink-3">
-                      변동 {formatSignedNumber(result.metrics.shortSellingTrendSummary.shortAmountRatioChange)}% · 평균 {formatRatio(result.metrics.shortSellingTrendSummary.avgShortAmountRatio)} · {trendDirectionText(result.metrics.shortSellingTrendSummary.direction)}
+                      {formatSignedNumber(result.metrics.shortSellingTrendSummary.shortAmountRatioChange)}% · {trendDirectionText(result.metrics.shortSellingTrendSummary.direction)}
                     </p>
                   </div>
                 )}
               </div>
+              {(result.metrics?.macroRatesSeries?.series?.length || result.metrics?.shortSellingSeries?.length) ? (
+                <div className="mt-3 flex flex-col gap-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {MACRO_CHART_OPTIONS.map((option) => (
+                      <button
+                        key={option.key}
+                        type="button"
+                        onClick={() => setMacroChartMode(option.key)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                          macroChartMode === option.key
+                            ? "bg-ink text-bg"
+                            : "bg-bg-sunk text-ink-3 hover:bg-surface-2"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div>
+                    {macroChartMode === "shortSelling" ? (
+                      <ShortSellingTrendChart points={result.metrics?.shortSellingSeries ?? []} />
+                    ) : (
+                      <MultiLineTrendChart
+                        series={(result.metrics?.macroRatesSeries?.series ?? []).filter((item) => {
+                          if (macroChartMode === "exchange") return item.key === "USD_KRW";
+                          if (macroChartMode === "baseRate") return ["KR_BASE_RATE", "US_FED_FUNDS"].includes(item.key);
+                          if (macroChartMode === "domesticBond") return ["KR3Y", "KR10Y"].includes(item.key);
+                          return ["US2Y", "US5Y", "US10Y"].includes(item.key);
+                        })}
+                        height={macroChartMode === "exchange" ? 190 : 230}
+                      />
+                    )}
+                  </div>
+                </div>
+              ) : null}
+              {renderExplainSection(explainSections?.macroEnvironment)}
               {renderExplainSection(explainSections?.trendSummary)}
             </div>
           )}
 
-          {/* 기준금리 */}
-          {result.metrics?.baseRateSeries && result.metrics.baseRateSeries.length > 0 ? (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-ink">
-                  <DictTerm term="기준금리">기준금리</DictTerm> 추이
-                </h3>
-              </div>
-              <BaseRateStepChart points={result.metrics.baseRateSeries} />
-              {renderExplainSection(explainSections?.baseRate)}
-            </div>
-          ) : result.metrics?.baseRate ? (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-ink">
-                  <DictTerm term="기준금리">기준금리</DictTerm>
-                </h3>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm sm:text-base text-ink-2 mt-2">
-                <div>기준일: {result.metrics.baseRate.date}</div>
-                <div>금리: {result.metrics.baseRate.value}{result.metrics.baseRate.unit}</div>
-              </div>
-              {renderExplainSection(explainSections?.baseRate)}
-            </div>
-          ) : null}
-
           {/* 공매도 현황 */}
-          {result.metrics?.shortSellingSeries && result.metrics.shortSellingSeries.length > 0 ? (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-ink">
-                  <DictTerm term="공매도">공매도</DictTerm> 추이
-                </h3>
-              </div>
-              <ShortSellingTrendChart points={result.metrics.shortSellingSeries} />
-              {renderExplainSection(explainSections?.shortSelling)}
-            </div>
-          ) : result.metrics?.shortSelling ? (
+          {result.metrics?.shortSelling ? (
             <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base sm:text-lg font-semibold text-ink">
@@ -725,6 +827,8 @@ export default function AnalysisResultPanel({
               {renderExplainSection(explainSections?.financialTimeline)}
             </div>
           )}
+
+          {renderExplainSection(explainSections?.crossSignal)}
 
           {(overallExplain?.summary
             || (overallExplain?.bullets && overallExplain.bullets.length > 0)

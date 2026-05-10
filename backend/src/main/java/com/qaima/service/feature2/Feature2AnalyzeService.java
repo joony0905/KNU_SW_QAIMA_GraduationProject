@@ -57,6 +57,7 @@ public class Feature2AnalyzeService {
     private final PeerClusterService peerClusterService;
     private final BaseRateFeatureService baseRateFeatureService;
     private final NewsSentimentService newsSentimentService;
+    private final Feature2CardService feature2CardService;
     private final AnalysisApiClient analysisApiClient;
     private final BaseRateRepository baseRateRepository;
     private final ShortSellingRepository shortSellingRepository;
@@ -88,7 +89,9 @@ public class Feature2AnalyzeService {
                     metricsAssembler.attachStock(metrics, stockContext);
 
                     return attachBaseRate(meta, metrics)
+                            .then(attachMacroRates(command, meta, metrics))
                             .then(attachShortSelling(stockContext, meta, metrics))
+                            .then(attachInvestorFlow(stockContext, command, meta, metrics))
                             .then(industryReader.resolve(stockContext.stock(), meta))
                             .flatMap(industryContextOpt -> {
                                 if (industryContextOpt.isEmpty()) {
@@ -140,6 +143,52 @@ public class Feature2AnalyzeService {
                 .then();
     }
 
+    private Mono<Void> attachMacroRates(
+            Feature2Command command,
+            Feature2MetaDto meta,
+            Feature2MetricsDto metrics
+    ) {
+        int safeLimit = Math.max(30, Math.min(command.window(), 365));
+        return Mono.zip(
+                        feature2CardService.loadMacroRates(),
+                        feature2CardService.loadMacroRatesSeries(safeLimit)
+                )
+                .doOnNext(tuple -> {
+                    metricsAssembler.attachMacroRates(metrics, tuple.getT1().data());
+                    metricsAssembler.attachMacroRatesSeries(metrics, tuple.getT2().data());
+                    Optional.ofNullable(tuple.getT1().meta().getWarnings()).orElseGet(List::of).forEach(meta::addWarning);
+                    Optional.ofNullable(tuple.getT2().meta().getWarnings()).orElseGet(List::of).forEach(meta::addWarning);
+                })
+                .onErrorResume(ex -> {
+                    log.warn("[Feat2] macro rates load failed. stockCode={}, cause={}",
+                            command.stockCode(), ex.getMessage(), ex);
+                    meta.addWarning("MACRO_RATES_LOAD_FAILED");
+                    return Mono.empty();
+                })
+                .then();
+    }
+
+    private Mono<Void> attachInvestorFlow(
+            Feature2StockContext stockContext,
+            Feature2Command command,
+            Feature2MetaDto meta,
+            Feature2MetricsDto metrics
+    ) {
+        int safeLimit = Math.max(1, Math.min(command.window(), 252));
+        return feature2CardService.loadInvestorFlow(stockContext.stock().getStockCode(), safeLimit)
+                .doOnNext(result -> {
+                    metricsAssembler.attachInvestorFlow(metrics, result.data());
+                    Optional.ofNullable(result.meta().getWarnings()).orElseGet(List::of).forEach(meta::addWarning);
+                })
+                .onErrorResume(ex -> {
+                    log.warn("[Feat2] investor flow load failed. stockCode={}, cause={}",
+                            stockContext.stock().getStockCode(), ex.getMessage(), ex);
+                    meta.addWarning("INVESTOR_FLOW_LOAD_FAILED");
+                    return Mono.empty();
+                })
+                .then();
+    }
+
     private Mono<Void> attachIndustryIndex(
             Feature2IndustryContext industryContext,
             Feature2Command command,
@@ -168,6 +217,8 @@ public class Feature2AnalyzeService {
                         stockContext.stock().getStockCode(),
                         command.freq(),
                         command.window(),
+                        command.from(),
+                        command.to(),
                         command.peerCount(),
                         command.maxLag(),
                         command.displayLimit()

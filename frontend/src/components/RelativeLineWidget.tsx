@@ -190,8 +190,8 @@ function RelativeLineWidget({
   };
 
   const lineData = useMemo<LineData<Time>[]>(() => {
-    return normalizeSeries(rawIndustryData, null);
-  }, [rawIndustryData]);
+    return normalizeSeries(rawIndustryData, showPeerOverlay ? commonTimes : null);
+  }, [commonTimes, rawIndustryData, showPeerOverlay]);
 
   const anchorData = useMemo<LineData<Time>[]>(() => {
     return normalizeSeries(rawAnchorData, commonTimes);

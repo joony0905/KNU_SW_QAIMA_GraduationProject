@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.time.OffsetDateTime;
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @Data
@@ -19,6 +20,8 @@ public class PeerClusterRequestDto {
     private String anchorStockCode;
     private Freq freq;
     private Integer window;
+    private OffsetDateTime from;
+    private OffsetDateTime to;
     private Integer peerCount;
     private Integer maxLag;
     private Integer displayLimit;

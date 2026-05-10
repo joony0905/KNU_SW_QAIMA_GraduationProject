@@ -1,6 +1,7 @@
 package com.qaima.service.feature2.support;
 
 import com.qaima.dto.feature2.Feature2ExplainMetricsDto;
+import com.qaima.dto.feature2.Feature2MacroRatesSeriesDto;
 import com.qaima.dto.feature2.Feature2MetricsDto;
 import com.qaima.dto.industry.IndustryIndexBlockDto;
 import com.qaima.dto.news.NewsItemDto;
@@ -8,6 +9,7 @@ import com.qaima.dto.peercluster.BandPointDto;
 import com.qaima.dto.peercluster.PeerClusterDto;
 import com.qaima.dto.peercluster.PeerItemDto;
 import com.qaima.dto.peercluster.RelativePointDto;
+import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +29,10 @@ public class Feature2ExplainMetricsAssembler {
                 .stock(metrics.getStock())
                 .industry(metrics.getIndustry())
                 .baseRate(metrics.getBaseRate())
+                .macroRates(metrics.getMacroRates())
+                .macroTrendSummaries(toMacroTrendSummaries(metrics.getMacroRatesSeries()))
+                .stockInvestorFlowSummary(metrics.getInvestorFlow() == null ? null : metrics.getInvestorFlow().getStockSummary())
+                .marketInvestorFlowSummary(metrics.getInvestorFlow() == null ? null : metrics.getInvestorFlow().getMarketSummary())
                 .shortSelling(metrics.getShortSelling())
                 .baseRateTrendSummary(metrics.getBaseRateTrendSummary())
                 .shortSellingTrendSummary(metrics.getShortSellingTrendSummary())
@@ -35,6 +41,51 @@ public class Feature2ExplainMetricsAssembler {
                 .newsSentimentSummary(metrics.getNewsSentimentSummary())
                 .recentNews(toRecentNews(metrics.getNewsList()))
                 .build();
+    }
+
+    private List<Feature2ExplainMetricsDto.MacroTrendSummary> toMacroTrendSummaries(Feature2MacroRatesSeriesDto seriesDto) {
+        if (seriesDto == null || seriesDto.getSeries() == null || seriesDto.getSeries().isEmpty()) {
+            return List.of();
+        }
+        return seriesDto.getSeries().stream()
+                .filter(series -> series != null && series.getPoints() != null && !series.getPoints().isEmpty())
+                .map(this::toMacroTrendSummary)
+                .toList();
+    }
+
+    private Feature2ExplainMetricsDto.MacroTrendSummary toMacroTrendSummary(Feature2MacroRatesSeriesDto.SeriesBlock series) {
+        List<Feature2MacroRatesSeriesDto.Point> points = series.getPoints();
+        Feature2MacroRatesSeriesDto.Point first = points.get(0);
+        Feature2MacroRatesSeriesDto.Point last = points.get(points.size() - 1);
+        BigDecimal start = first == null ? null : first.getValue();
+        BigDecimal end = last == null ? null : last.getValue();
+        BigDecimal change = start == null || end == null ? null : end.subtract(start);
+        return Feature2ExplainMetricsDto.MacroTrendSummary.builder()
+                .key(series.getKey())
+                .label(series.getLabel())
+                .unit(series.getUnit())
+                .pointCount(points.size())
+                .startDate(first == null || first.getDate() == null ? null : first.getDate().toString())
+                .endDate(last == null || last.getDate() == null ? null : last.getDate().toString())
+                .startValue(start)
+                .endValue(end)
+                .change(change)
+                .direction(direction(change))
+                .build();
+    }
+
+    private String direction(BigDecimal change) {
+        if (change == null) {
+            return "UNKNOWN";
+        }
+        int sign = change.compareTo(BigDecimal.ZERO);
+        if (sign > 0) {
+            return "UP";
+        }
+        if (sign < 0) {
+            return "DOWN";
+        }
+        return "FLAT";
     }
 
     private Feature2ExplainMetricsDto.IndustryIndexSummary toIndustryIndexSummary(IndustryIndexBlockDto index) {

@@ -22,6 +22,10 @@ public class Feature2ExplainMetricsDto {
     private StockMeta stock;
     private IndustryMetaDto industry;
     private Feature2MetricsDto.BaseRateMetrics baseRate;
+    private Feature2MacroRatesDto macroRates;
+    private List<MacroTrendSummary> macroTrendSummaries;
+    private Feature2InvestorFlowDto.InvestorFlowSummary stockInvestorFlowSummary;
+    private Feature2InvestorFlowDto.InvestorFlowSummary marketInvestorFlowSummary;
     private Feature2MetricsDto.ShortSellingMetrics shortSelling;
     private Feature2MetricsDto.BaseRateTrendSummary baseRateTrendSummary;
     private Feature2MetricsDto.ShortSellingTrendSummary shortSellingTrendSummary;
@@ -29,6 +33,25 @@ public class Feature2ExplainMetricsDto {
     private PeerClusterSummary peerClusterSummary;
     private Feature2MetricsDto.NewsSentimentSummary newsSentimentSummary;
     private List<RecentNewsSummary> recentNews;
+
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    public static class MacroTrendSummary {
+        private String key;
+        private String label;
+        private String unit;
+        private Integer pointCount;
+        private String startDate;
+        private String endDate;
+        private BigDecimal startValue;
+        private BigDecimal endValue;
+        private BigDecimal change;
+        private String direction;
+    }
 
     @Getter
     @Setter

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Coins, X, Check, Sparkles } from "lucide-react";
 import { useTokenBalance } from "../hooks/useTokenBalance";
-import { addTokens } from "../api/billingStore";
+import { tempChargeTokens } from "../api/billingStore";
 import { isLoggedIn } from "../utils/auth";
 
 type Props = {
@@ -99,13 +99,17 @@ export default function BillingModal({ isOpen, onClose }: Props) {
 
   const loggedIn = isLoggedIn();
 
-  const handlePurchase = (tokens: number, label: string) => {
+  const handlePurchase = async (tokens: number, label: string) => {
     if (!loggedIn) {
       setToast("로그인 후 결제할 수 있어요.");
       return;
     }
-    addTokens(tokens);
-    setToast(`${label} 결제 완료 · ${tokens.toLocaleString()} 토큰 충전`);
+    try {
+      await tempChargeTokens(tokens);
+      setToast(`${label} 임시 충전 완료 · ${tokens.toLocaleString()} 토큰`);
+    } catch {
+      setToast("토큰 충전에 실패했습니다. 잠시 후 다시 시도해주세요.");
+    }
   };
 
   const selectedPlan = SUBSCRIPTION_PLANS[plan];

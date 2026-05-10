@@ -3,6 +3,7 @@ package com.qaima.dto.feature2;
 import com.qaima.domain.Freq;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
+import java.time.OffsetDateTime;
 
 @Getter
 @Setter
@@ -14,6 +15,8 @@ public class Feature2AnalyzeRequestDto {
     private String stockCode;
     private Freq freq;
     private Integer window;
+    private OffsetDateTime from;
+    private OffsetDateTime to;
     private Integer peerCount;
     private Integer maxLag;
     private Integer displayLimit;

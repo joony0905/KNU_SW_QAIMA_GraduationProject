@@ -21,10 +21,14 @@ export const fetchFeature2Analysis = async (
   peerCount?: number,
   displayLimit?: number,
   llmVendor?: string,
+  from?: string,
+  to?: string,
 ): Promise<ApiResponse<Feature2AnalyzeResponse>> => {
   const body: Record<string, unknown> = { stockCode };
   if (freq) body.freq = freq;
   if (window) body.window = window;
+  if (from) body.from = from;
+  if (to) body.to = to;
   if (peerCount) body.peerCount = peerCount;
   if (displayLimit) body.displayLimit = displayLimit;
   if (llmVendor) body.llmVendor = llmVendor;
