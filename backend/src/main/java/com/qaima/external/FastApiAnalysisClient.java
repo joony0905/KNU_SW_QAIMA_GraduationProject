@@ -16,8 +16,8 @@ import com.qaima.dto.featone.FeatOneMarketSnapshotDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
 import com.qaima.dto.feature2.Feature2ExplainRequestDto;
 import com.qaima.dto.feature2.Feature2ExplainResponseDto;
-import com.qaima.dto.feature3.PortfolioAnalyzeRequestDto;
-import com.qaima.dto.feature3.PortfolioAnalyzeResponseDto;
+import com.qaima.external.dto.feature3.Feature3FastApiAnalyzeRequestDto;
+import com.qaima.external.dto.feature3.Feature3FastApiAnalyzeResponseDto;
 import com.qaima.dto.indicator.IndicatorBundleDto;
 import com.qaima.dto.indicator.IndicatorSpecDto;
 import com.qaima.dto.ohlcv.OhlcvSummaryDto;
@@ -154,7 +154,7 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
     }
 
     @Override
-    public Mono<PortfolioAnalyzeResponseDto> requestPortfolioAnalysis(PortfolioAnalyzeRequestDto request) {
+    public Mono<Feature3FastApiAnalyzeResponseDto> requestPortfolioAnalysis(Feature3FastApiAnalyzeRequestDto request) {
         JsonNode snakePayloadNode = toSnakeCaseNode(request);
         log.info("[FastApiAnalysisClient][feature3-analysis][request] body={}", snakePayloadNode);
 
@@ -176,8 +176,8 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                     log.info("[FastApiAnalysisClient][feature3-analysis] raw response={}", body);
                                     JsonNode root = objectMapper.readTree(body);
                                     JsonNode payloadNode = extractPayload(root, "feature3/analysis");
-                                    PortfolioAnalyzeResponseDto dto =
-                                            snakeCaseObjectMapper.treeToValue(payloadNode, PortfolioAnalyzeResponseDto.class);
+                                    Feature3FastApiAnalyzeResponseDto dto =
+                                            snakeCaseObjectMapper.treeToValue(payloadNode, Feature3FastApiAnalyzeResponseDto.class);
                                     return Mono.just(dto);
                                 } catch (Exception e) {
                                     log.error("[FastApiAnalysisClient][feature3-analysis] decode failed. body={}", body, e);

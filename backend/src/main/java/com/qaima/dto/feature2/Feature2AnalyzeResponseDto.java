@@ -5,10 +5,12 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 import java.util.List;
 
 @Getter
 @Builder
+@Jacksonized
 @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
 public class Feature2AnalyzeResponseDto {
     private final Feature2MetricsDto metrics; // 항상 존재(정책)

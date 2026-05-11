@@ -33,6 +33,7 @@ export const ENDPOINTS = {
   },
   portfolio: {
     analyze: () => "/feature3/analysis",
+    overlayCachePreview: () => "/feature3/overlay-cache/preview",
   },
   dictionary: {
     search: (params: { q?: string; initial?: string; page?: number; size?: number }) => {

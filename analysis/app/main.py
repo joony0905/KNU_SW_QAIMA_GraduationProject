@@ -30,6 +30,9 @@ print("SPRING_LOCAL:", os.getenv("SPRING_BASE_URL"))
 
 @app.on_event("startup")
 async def warmup_news_sentiment_model() -> None:
+    if os.getenv("QAIMA_DISABLE_NEWS_WARMUP", "").lower() in {"1", "true", "yes"}:
+        log.info("news sentiment local model warm-up disabled")
+        return
     log.info("starting news sentiment local model warm-up")
     start_local_model_warmup()
 

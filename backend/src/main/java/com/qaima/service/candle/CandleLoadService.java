@@ -101,6 +101,83 @@ public class CandleLoadService {
                 });
     }
 
+    /**
+     * Feature3 전용 가격 시계열 로딩 경로.
+     *
+     * 차트 화면은 DB에 일부 row만 있어도 즉시 반환할 수 있지만,
+     * 포트폴리오 리스크 분석은 결측률/관측치 수가 계산 품질에 직접 영향을 준다.
+     * 따라서 price_ohlcv 조회 결과가 요청 lookback을 채우지 못하면 Spring 책임으로
+     * 외부 가격 API fallback을 시도하고, FastAPI는 계산만 담당하게 한다.
+     */
+    public Mono<CandleLoadResult> loadForFeature3(
+            Stock stock,
+            Freq freq,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            int requiredRows
+    ) {
+        String stockCode = stock.getStockCode();
+        int minRequiredRows = Math.max(requiredRows, 1);
+
+        return Mono.fromCallable(() ->
+                        priceOhlcvRepository.findRange(stockCode, freq, from, to)
+                )
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(dbCandles -> {
+                    boolean insufficientRows = dbCandles == null || dbCandles.size() < minRequiredRows;
+                    boolean shouldFetch = shouldFetchCandlesFromExternal(dbCandles) || insufficientRows;
+
+                    if (!shouldFetch) {
+                        return Mono.just(new CandleLoadResult(dbCandles, CandleSource.DB));
+                    }
+
+                    log.info("[CANDLE][FEATURE3] price_ohlcv insufficient/stale -> external fetch. stockCode={}, freq={}, existingSize={}, requiredRows={}, requestedFrom={}, requestedTo={}, latestDbDate={}",
+                            stockCode,
+                            freq,
+                            dbCandles == null ? 0 : dbCandles.size(),
+                            minRequiredRows,
+                            from,
+                            to,
+                            latestLocalDate(dbCandles));
+
+                    return stockClient.fetchCandles(stock, freq, from, to)
+                            .flatMap(result ->
+                                    save(stock, freq, dbCandles == null ? List.of() : dbCandles, result.getCandles())
+                                            .map(list -> {
+                                                CandleSource source = list.isEmpty()
+                                                        ? CandleSource.EMPTY
+                                                        : result.getSource();
+                                                return new CandleLoadResult(list, source);
+                                            })
+                            )
+                            .onErrorResume(ErrorException.class, e -> {
+                                if (e.getErrorCode() == ErrorCode.KIS_DECODE_ERROR) {
+                                    return Mono.error(e);
+                                }
+
+                                if (e.getErrorCode() == ErrorCode.KIS_HTTP_ERROR
+                                        || e.getErrorCode() == ErrorCode.KIS_BIZ_ERROR
+                                        || e.getErrorCode() == ErrorCode.KIS_MARKET_CLOSED) {
+                                    log.warn("[CANDLE][FEATURE3] external fallback failed. code={}, msg={}",
+                                            e.getErrorCode().code(), e.getMessage());
+                                    return Mono.just(new CandleLoadResult(
+                                            dbCandles == null ? List.of() : dbCandles,
+                                            dbCandles == null || dbCandles.isEmpty() ? CandleSource.EMPTY : CandleSource.DB
+                                    ));
+                                }
+
+                                return Mono.error(e);
+                            })
+                            .onErrorResume(err -> {
+                                log.error("[CANDLE][FEATURE3] unexpected external fetch error: {}", err.getMessage(), err);
+                                return Mono.just(new CandleLoadResult(
+                                        dbCandles == null ? List.of() : dbCandles,
+                                        dbCandles == null || dbCandles.isEmpty() ? CandleSource.EMPTY : CandleSource.DB
+                                ));
+                            });
+                });
+    }
+
     private Mono<List<PriceOhlcv>> save(
             Stock stock,
             Freq freq,

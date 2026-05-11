@@ -24,6 +24,7 @@ public class CreditService {
 
     public static final long FEATURE1_ANALYSIS_COST = 1L;
     public static final long FEATURE2_ANALYSIS_COST = 1L;
+    public static final long FEATURE3_CORE_ANALYSIS_COST = 1L;
 
     private final UserRepository userRepository;
     private final UserCreditLedgerRepository ledgerRepository;
@@ -56,12 +57,20 @@ public class CreditService {
         return use(userId, FEATURE2_ANALYSIS_COST, CreditReferenceType.FEATURE2, referenceId, "FEATURE2_ANALYSIS");
     }
 
+    public Mono<CreditLedgerDto> useFeature3(Long userId, long cost, String referenceId) {
+        return use(userId, Math.max(FEATURE3_CORE_ANALYSIS_COST, cost), CreditReferenceType.FEATURE3, referenceId, "FEATURE3_ANALYSIS");
+    }
+
     public Mono<CreditLedgerDto> refundFeature1(Long userId, String referenceId, String reason) {
         return refund(userId, FEATURE1_ANALYSIS_COST, CreditReferenceType.FEATURE1, referenceId, reason);
     }
 
     public Mono<CreditLedgerDto> refundFeature2(Long userId, String referenceId, String reason) {
         return refund(userId, FEATURE2_ANALYSIS_COST, CreditReferenceType.FEATURE2, referenceId, reason);
+    }
+
+    public Mono<CreditLedgerDto> refundFeature3(Long userId, long amount, String referenceId, String reason) {
+        return refund(userId, Math.max(FEATURE3_CORE_ANALYSIS_COST, amount), CreditReferenceType.FEATURE3, referenceId, reason);
     }
 
     public Mono<CreditLedgerDto> adjust(Long userId, Long amount, String reason) {
