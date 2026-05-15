@@ -172,7 +172,11 @@ public record PortfolioAnalyzeResponseDto(
     public record OverlayResult(
             List<OverlayInsightCard> insightCards,
             List<HoldingOverlayRow> holdingOverlayTable,
-            List<Map<String, Object>> advancedOverlayExposure
+            List<Map<String, Object>> advancedOverlayExposure,
+            List<OverlaySignal> overlaySignals,
+            List<PortfolioResult> adjustedPortfolios,
+            List<Map<String, Object>> visualizations,
+            List<Map<String, Object>> explanations
     ) {
     }
 
@@ -199,11 +203,50 @@ public record PortfolioAnalyzeResponseDto(
     ) {
     }
 
+    public record OverlaySignal(
+            String stockCode,
+            String companyName,
+            String overlayType,
+            String label,
+            Double score,
+            String severity,
+            String source,
+            String evidence
+    ) {
+    }
+
     public record ExplainResult(
             String provider,
             String model,
             String text,
+            ExplainSections sections,
+            ExplainOverall overall,
             List<Warning> warnings
+    ) {
+    }
+
+    public record ExplainSections(
+            ExplainSection coreRisk,
+            ExplainSection overlayObservations,
+            ExplainSection portfolioComparison,
+            ExplainSection volatilityAnalysis,
+            ExplainSection efficiencyAnalysis,
+            ExplainSection finalJudgement
+    ) {
+    }
+
+    public record ExplainSection(
+            String title,
+            String summary,
+            List<String> bullets
+    ) {
+    }
+
+    public record ExplainOverall(
+            String summary,
+            List<String> bullets,
+            List<String> risks,
+            String conclusion
     ) {
     }
 

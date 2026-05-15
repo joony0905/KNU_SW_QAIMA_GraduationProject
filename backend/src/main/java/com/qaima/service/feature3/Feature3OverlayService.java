@@ -2,7 +2,12 @@ package com.qaima.service.feature3;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.domain.Freq;
-import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
+import com.qaima.dto.featone.FeatOneAnalysisMetricsDto;
+import com.qaima.dto.featone.FeatOneGrowthDto;
+import com.qaima.dto.featone.FeatOneMarketSnapshotDto;
+import com.qaima.dto.featone.FeatOneProfitabilityDto;
+import com.qaima.dto.featone.FeatOneStabilityDto;
+import com.qaima.dto.featone.FeatOneValuationDto;
 import com.qaima.dto.feature2.Feature2MetaDto;
 import com.qaima.dto.feature3.Feature3OverlayCachePreviewRequestDto;
 import com.qaima.dto.feature3.Feature3OverlayCachePreviewResponseDto;
@@ -13,6 +18,7 @@ import com.qaima.dto.industry.IndustryIndexBlockDto;
 import com.qaima.dto.news.NewsItemDto;
 import com.qaima.dto.peercluster.PeerClusterDto;
 import com.qaima.dto.peercluster.PeerItemDto;
+import com.qaima.external.dto.feature3.Feature3FastApiAnalyzeRequestDto;
 import com.qaima.service.featone.FeatOneService;
 import com.qaima.service.feature2.IndustryIndexService;
 import com.qaima.service.feature2.NewsLoadResult;
@@ -25,6 +31,8 @@ import com.qaima.service.feature2.resolver.Feature2IndustryReader;
 import com.qaima.service.feature2.resolver.Feature2StockResolver;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,6 +51,7 @@ public class Feature3OverlayService {
 
     private static final Duration FRESH_TTL = Duration.ofHours(24);
     private static final Duration STALE_TTL = Duration.ofDays(7);
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -106,36 +115,60 @@ public class Feature3OverlayService {
                 ? req.options().selectedOverlays()
                 : List.of();
         if (selected.isEmpty()) {
-            return Mono.just(withOverlayAndExplain(response, emptyOverlay(), deterministicExplain(response)));
+            return Mono.just(withOverlayAndExplain(response, emptyOverlay(), explainOrDeterministic(response)));
         }
+        PortfolioAnalyzeResponseDto.OverlayResult overlayResult = new PortfolioAnalyzeResponseDto.OverlayResult(
+                List.of(),
+                List.of(),
+                List.of(),
+                response.overlays() != null ? response.overlays().overlaySignals() : List.of(),
+                response.overlays() != null ? response.overlays().adjustedPortfolios() : List.of(),
+                response.overlays() != null ? response.overlays().visualizations() : List.of(),
+                response.overlays() != null ? response.overlays().explanations() : List.of()
+        );
+        return Mono.just(withOverlayAndExplain(response, overlayResult, explainOrDeterministic(response)));
+    }
 
+    public Mono<List<Feature3FastApiAnalyzeRequestDto.OverlaySignal>> loadOverlaySignals(PortfolioAnalyzeRequestDto req) {
+        List<String> selected = req.options() != null && req.options().selectedOverlays() != null
+                ? req.options().selectedOverlays()
+                : List.of();
+        if (selected.isEmpty()) {
+            return Mono.just(List.of());
+        }
         List<PortfolioAnalyzeRequestDto.Holding> holdings = req.holdings() != null ? req.holdings() : List.of();
         List<PortfolioAnalyzeRequestDto.Holding> targetHoldings = holdings.stream().limit(3).toList();
-
         return Flux.fromIterable(selected)
-                .flatMap(overlay -> loadOverlay(overlay, targetHoldings)
+                .flatMap(overlay -> loadOverlayForSignals(overlay, targetHoldings)
                         .onErrorResume(ex -> {
-                            log.warn("[Feature3Overlay] overlay load failed. overlay={}, cause={}", overlay, ex.getMessage(), ex);
+                            log.warn("[Feature3Overlay] overlay signal load failed. overlay={}, cause={}",
+                                    overlay, ex.getMessage(), ex);
                             return Mono.just(fallbackBundle(overlay, "MISS"));
                         }))
                 .collectList()
-                .map(bundles -> {
-                    List<PortfolioAnalyzeResponseDto.OverlayInsightCard> cards = bundles.stream()
-                            .flatMap(bundle -> bundle.cards().stream())
-                            .toList();
-                    List<PortfolioAnalyzeResponseDto.HoldingOverlayRow> rows = bundles.stream()
-                            .flatMap(bundle -> bundle.rows().stream())
-                            .toList();
-                    List<Map<String, Object>> exposures = bundles.stream()
-                            .flatMap(bundle -> bundle.exposures().stream())
-                            .toList();
-                    PortfolioAnalyzeResponseDto.OverlayResult overlayResult = new PortfolioAnalyzeResponseDto.OverlayResult(
-                            cards,
-                            rows,
-                            exposures
-                    );
-                    return withOverlayAndExplain(response, overlayResult, deterministicExplain(response));
-                });
+                .map(bundles -> bundles.stream()
+                        .flatMap(bundle -> toOverlaySignals(bundle).stream())
+                        .toList());
+    }
+
+    private Mono<OverlayBundle> loadOverlayForSignals(
+            String overlay,
+            List<PortfolioAnalyzeRequestDto.Holding> holdings
+    ) {
+        if (holdings.isEmpty()) {
+            return Mono.just(fallbackBundle(overlay, "MISS"));
+        }
+        return Flux.fromIterable(holdings)
+                .flatMap(holding -> buildOverlayBundle(overlay, holding)
+                        .flatMap(bundle -> writeCard(overlay, holding.stockCode(), bundle.cards().get(0))
+                                .onErrorResume(ex -> {
+                                    log.warn("[Feature3Overlay] overlay cache write skipped. overlay={}, stockCode={}, cause={}",
+                                            overlay, holding.stockCode(), ex.getMessage());
+                                    return Mono.just(false);
+                                })
+                                .thenReturn(bundle)))
+                .collectList()
+                .map(this::mergeBundles);
     }
 
     private Mono<String> cacheStatusForOverlay(String overlay, List<String> stockCodes) {
@@ -187,8 +220,16 @@ public class Feature3OverlayService {
             return Mono.just(fallbackBundle(overlay, "MISS"));
         }
         return Flux.fromIterable(holdings)
-                .flatMap(holding -> buildOverlayBundle(overlay, holding)
-                        .flatMap(bundle -> writeCard(overlay, holding.stockCode(), bundle.cards().get(0)).thenReturn(bundle)))
+                .flatMap(holding -> readCard(overlay, holding.stockCode())
+                        .map(card -> bundleFromCard(card, holding, card.description()))
+                        .switchIfEmpty(Mono.defer(() -> buildOverlayBundle(overlay, holding)))
+                        .flatMap(bundle -> writeCard(overlay, holding.stockCode(), bundle.cards().get(0))
+                                .onErrorResume(ex -> {
+                                    log.warn("[Feature3Overlay] overlay cache write skipped. overlay={}, stockCode={}, cause={}",
+                                            overlay, holding.stockCode(), ex.getMessage());
+                                    return Mono.just(false);
+                                })
+                                .thenReturn(bundle)))
                 .collectList()
                 .map(this::mergeBundles);
     }
@@ -198,47 +239,77 @@ public class Feature3OverlayService {
             PortfolioAnalyzeRequestDto.Holding holding
     ) {
         if (usesFeature1(overlay)) {
-            return loadFeature1Result(holding.stockCode())
+            return loadFeature1Metrics(holding.stockCode())
                     .map(cached -> "technical".equals(overlay)
-                            ? technicalBundle(holding, cached.response(), cached.cacheStatus())
-                            : feature1Bundle(holding, cached.response(), cached.cacheStatus()))
-                    .onErrorReturn(fallbackBundle(overlay, "MISS"));
+                            ? technicalBundle(holding, cached.metrics(), cached.cacheStatus())
+                            : feature1Bundle(holding, cached.metrics(), cached.cacheStatus()))
+                    .onErrorResume(ex -> {
+                        log.warn("[Feature3Overlay] feature1 overlay failed. overlay={}, stockCode={}, cause={}",
+                                overlay, holding.stockCode(), ex.getMessage(), ex);
+                        return Mono.just(fallbackBundle(overlay, "MISS"));
+                    });
         }
 
         return switch (overlay) {
-            case "industry" -> loadIndustryBundle(holding).onErrorReturn(fallbackBundle(overlay, "MISS"));
-            case "correlation" -> loadPeerClusterBundle(holding).onErrorReturn(fallbackBundle(overlay, "MISS"));
-            case "news" -> loadNewsBundle(holding).onErrorReturn(fallbackBundle(overlay, "MISS"));
+            case "industry" -> loadIndustryBundle(holding).onErrorResume(ex -> {
+                log.warn("[Feature3Overlay] industry overlay failed. stockCode={}, cause={}",
+                        holding.stockCode(), ex.getMessage(), ex);
+                return Mono.just(fallbackBundle(overlay, "MISS"));
+            });
+            case "correlation" -> loadPeerClusterBundle(holding).onErrorResume(ex -> {
+                log.warn("[Feature3Overlay] correlation overlay failed. stockCode={}, cause={}",
+                        holding.stockCode(), ex.getMessage(), ex);
+                return Mono.just(fallbackBundle(overlay, "MISS"));
+            });
+            case "news" -> loadNewsBundle(holding).onErrorResume(ex -> {
+                log.warn("[Feature3Overlay] news overlay failed. stockCode={}, cause={}",
+                        holding.stockCode(), ex.getMessage(), ex);
+                return Mono.just(fallbackBundle(overlay, "MISS"));
+            });
             default -> Mono.just(fallbackBundle(overlay, "MISS"));
         };
     }
 
-    private Mono<CachedFeature1> loadFeature1Result(String stockCode) {
-        return readFeature1Result(stockCode)
-                .map(response -> new CachedFeature1(response, "HIT"))
-                .switchIfEmpty(featOneService.getFeatOneData(
+    private Mono<CachedFeature1Metrics> loadFeature1Metrics(String stockCode) {
+        LocalDate to = LocalDate.now(KST);
+        LocalDate from = to.minusDays(370);
+        return readFeature1Metrics(stockCode)
+                .map(metrics -> new CachedFeature1Metrics(metrics, "HIT"))
+                .switchIfEmpty(Mono.defer(() -> featOneService.getFeatOneData(
                                 stockCode,
                                 Freq.ONE_D,
-                                null,
-                                null,
-                                null,
+                                from.toString(),
+                                to.toString(),
+                                "",
                                 false,
                                 null
                         )
-                        .flatMap(result -> writeFeature1Result(stockCode, result.getData())
-                                .thenReturn(new CachedFeature1(result.getData(), "MISS"))));
+                        .flatMap(result -> writeFeature1Metrics(
+                                        stockCode,
+                                        result.getData() != null ? result.getData().getMetrics() : null
+                                )
+                                .thenReturn(new CachedFeature1Metrics(
+                                        result.getData() != null ? result.getData().getMetrics() : null,
+                                        "MISS"
+                                )))));
+    }
+
+    public Mono<Boolean> cacheFeature1Metrics(String stockCode, FeatOneAnalysisMetricsDto metrics) {
+        return writeFeature1Metrics(stockCode, metrics);
     }
 
     private OverlayBundle feature1Bundle(
             PortfolioAnalyzeRequestDto.Holding holding,
-            FeatOneAnalysisResponseDto response,
+            FeatOneAnalysisMetricsDto metrics,
             String cacheStatus
     ) {
-        boolean hasMetrics = response != null && response.getMetrics() != null;
-        boolean hasSnapshot = hasMetrics && response.getMetrics().getMarketSnapshot() != null;
-        String value = hasMetrics && response.getMetrics().getOhlcvSummary() != null
-                ? "가격 관측치 " + safe(response.getMetrics().getOhlcvSummary().getCount()) + "개"
-                : null;
+        boolean hasMetrics = metrics != null;
+        boolean hasSnapshot = hasMetrics && metrics.getMarketSnapshot() != null;
+        String value = hasSnapshot
+                ? fundamentalsValue(metrics.getMarketSnapshot())
+                : hasMetrics && metrics.getOhlcvSummary() != null
+                        ? "가격 관측치 " + safe(metrics.getOhlcvSummary().getCount()) + "개"
+                        : null;
         String description = hasSnapshot
                 ? "Feature1 재무/밸류에이션 지표를 core risk와 분리된 종목 품질 참고 정보로 표시합니다."
                 : "Feature1 종목 건강도 데이터가 부족해 보조 해석을 제한적으로 표시합니다.";
@@ -255,16 +326,46 @@ public class Feature3OverlayService {
         return new OverlayBundle(List.of(card), List.of(row), List.of(exposure(card, row)));
     }
 
+    private String fundamentalsValue(FeatOneMarketSnapshotDto snapshot) {
+        if (snapshot == null) {
+            return null;
+        }
+        FeatOneValuationDto valuation = snapshot.getValuation();
+        FeatOneProfitabilityDto profitability = snapshot.getProfitability();
+        FeatOneStabilityDto stability = snapshot.getStability();
+        FeatOneGrowthDto growth = snapshot.getGrowth();
+        List<String> parts = new ArrayList<>();
+        if (valuation != null) {
+            if (valuation.getPer() != null) parts.add("PER=" + safe(valuation.getPer()));
+            if (valuation.getPbr() != null) parts.add("PBR=" + safe(valuation.getPbr()));
+            if (valuation.getPsr() != null) parts.add("PSR=" + safe(valuation.getPsr()));
+        }
+        if (profitability != null) {
+            if (profitability.getRoe() != null) parts.add("ROE=" + safe(profitability.getRoe()));
+            if (profitability.getOperatingMargin() != null) parts.add("OPM=" + safe(profitability.getOperatingMargin()));
+            if (profitability.getNetMargin() != null) parts.add("NPM=" + safe(profitability.getNetMargin()));
+        }
+        if (stability != null) {
+            if (stability.getDebtRatio() != null) parts.add("Debt=" + safe(stability.getDebtRatio()));
+            if (stability.getCurrentRatio() != null) parts.add("Current=" + safe(stability.getCurrentRatio()));
+        }
+        if (growth != null) {
+            if (growth.getRevenueGrowth() != null) parts.add("RevenueGrowth=" + safe(growth.getRevenueGrowth()));
+            if (growth.getEpsGrowth() != null) parts.add("EPSGrowth=" + safe(growth.getEpsGrowth()));
+        }
+        return parts.isEmpty() ? "재무/밸류에이션 데이터 부족" : String.join(", ", parts);
+    }
+
     private OverlayBundle technicalBundle(
             PortfolioAnalyzeRequestDto.Holding holding,
-            FeatOneAnalysisResponseDto response,
+            FeatOneAnalysisMetricsDto metrics,
             String cacheStatus
     ) {
-        IndicatorBundleDto indicators = response != null && response.getMetrics() != null
-                ? response.getMetrics().getIndicators()
+        IndicatorBundleDto indicators = metrics != null
+                ? metrics.getIndicators()
                 : null;
-        String summary = response != null && response.getMetrics() != null
-                ? response.getMetrics().getIndicatorSummary()
+        String summary = metrics != null
+                ? metrics.getIndicatorSummary()
                 : null;
         boolean hasIndicators = indicators != null;
         String value = hasIndicators
@@ -397,7 +498,7 @@ public class Feature3OverlayService {
         PortfolioAnalyzeResponseDto.HoldingOverlayRow row = holdingRow(
                 holding,
                 "correlation",
-                metric.label(),
+                "Peer 동행 참고",
                 metric.value(),
                 metric.severity(),
                 "FEATURE2_PEERCLUSTER",
@@ -450,32 +551,52 @@ public class Feature3OverlayService {
     private Mono<PortfolioAnalyzeResponseDto.OverlayInsightCard> readCard(String overlay, String stockCode) {
         return redisTemplate.opsForValue()
                 .get(freshKey(overlay, stockCode))
+                .onErrorResume(ex -> {
+                    log.warn("[Feature3Overlay] overlay cache read skipped. overlay={}, stockCode={}, cause={}",
+                            overlay, stockCode, ex.getMessage());
+                    return Mono.empty();
+                })
                 .flatMap(json -> readCachedCard(json, "HIT"))
                 .switchIfEmpty(redisTemplate.opsForValue()
                         .get(staleKey(overlay, stockCode))
+                        .onErrorResume(ex -> {
+                            log.warn("[Feature3Overlay] overlay stale cache read skipped. overlay={}, stockCode={}, cause={}",
+                                    overlay, stockCode, ex.getMessage());
+                            return Mono.empty();
+                        })
                         .flatMap(json -> readCachedCard(json, "STALE")));
     }
 
-    private Mono<FeatOneAnalysisResponseDto> readFeature1Result(String stockCode) {
+    private Mono<FeatOneAnalysisMetricsDto> readFeature1Metrics(String stockCode) {
         return redisTemplate.opsForValue()
-                .get(feature1ResultFreshKey(stockCode))
+                .get(feature1MetricsFreshKey(stockCode))
+                .onErrorResume(ex -> {
+                    log.warn("[Feature3Overlay] feature1 metrics cache read skipped. stockCode={}, cause={}",
+                            stockCode, ex.getMessage());
+                    return Mono.empty();
+                })
                 .flatMap(json -> {
                     try {
-                        return Mono.just(objectMapper.readValue(json, FeatOneAnalysisResponseDto.class));
+                        return Mono.just(objectMapper.readValue(json, FeatOneAnalysisMetricsDto.class));
                     } catch (Exception ex) {
                         return Mono.empty();
                     }
                 });
     }
 
-    private Mono<Boolean> writeFeature1Result(String stockCode, FeatOneAnalysisResponseDto response) {
-        if (response == null) {
+    private Mono<Boolean> writeFeature1Metrics(String stockCode, FeatOneAnalysisMetricsDto metrics) {
+        if (metrics == null) {
             return Mono.just(false);
         }
         try {
-            String json = objectMapper.writeValueAsString(response);
-            return redisTemplate.opsForValue().set(feature1ResultFreshKey(stockCode), json, FRESH_TTL)
-                    .then(redisTemplate.opsForValue().set(feature1ResultStaleKey(stockCode), json, STALE_TTL));
+            String json = objectMapper.writeValueAsString(metrics);
+            return redisTemplate.opsForValue().set(feature1MetricsFreshKey(stockCode), json, FRESH_TTL)
+                    .then(redisTemplate.opsForValue().set(feature1MetricsStaleKey(stockCode), json, STALE_TTL))
+                    .onErrorResume(ex -> {
+                        log.warn("[Feature3Overlay] feature1 metrics cache write skipped. stockCode={}, cause={}",
+                                stockCode, ex.getMessage());
+                        return Mono.just(false);
+                    });
         } catch (Exception ex) {
             return Mono.just(false);
         }
@@ -503,7 +624,12 @@ public class Feature3OverlayService {
         try {
             String json = objectMapper.writeValueAsString(card);
             return redisTemplate.opsForValue().set(freshKey(overlay, stockCode), json, FRESH_TTL)
-                    .then(redisTemplate.opsForValue().set(staleKey(overlay, stockCode), json, STALE_TTL));
+                    .then(redisTemplate.opsForValue().set(staleKey(overlay, stockCode), json, STALE_TTL))
+                    .onErrorResume(ex -> {
+                        log.warn("[Feature3Overlay] overlay cache write skipped. overlay={}, stockCode={}, cause={}",
+                                overlay, stockCode, ex.getMessage());
+                        return Mono.just(false);
+                    });
         } catch (Exception ex) {
             return Mono.just(false);
         }
@@ -551,8 +677,115 @@ public class Feature3OverlayService {
         );
     }
 
+    private List<Feature3FastApiAnalyzeRequestDto.OverlaySignal> toOverlaySignals(OverlayBundle bundle) {
+        List<PortfolioAnalyzeResponseDto.HoldingOverlayRow> rows = bundle.rows();
+        if (rows == null || rows.isEmpty()) {
+            return List.of();
+        }
+        return rows.stream()
+                .map(row -> new Feature3FastApiAnalyzeRequestDto.OverlaySignal(
+                        row.stockCode(),
+                        row.companyName(),
+                        row.overlayType(),
+                        row.label(),
+                        overlayScore(row),
+                        row.severity(),
+                        row.source(),
+                        row.value()
+                ))
+                .toList();
+    }
+
+    private double overlayScore(PortfolioAnalyzeResponseDto.HoldingOverlayRow row) {
+        String overlay = row.overlayType();
+        String value = row.value() != null ? row.value() : "";
+        String severity = row.severity() != null ? row.severity() : "INFO";
+        if ("fundamentals".equals(overlay)) {
+            return fundamentalsScore(value, severity);
+        }
+        if ("technical".equals(overlay)) {
+            double score = 0.0;
+            if (value.contains("alignment=bullish")) score += 0.20;
+            if (value.contains("alignment=bearish")) score -= 0.20;
+            if (value.contains("zone=overbought")) score -= 0.10;
+            if (value.contains("zone=oversold")) score += 0.10;
+            return clampScore(score);
+        }
+        if ("correlation".equals(overlay)) {
+            return 0.0;
+        }
+        if ("news".equals(overlay)) {
+            return clampScore(parseMetric(value, "score=") * 2.0);
+        }
+        if ("industry".equals(overlay)) {
+            return "WARN".equals(severity) ? -0.20 : 0.0;
+        }
+        return "WARN".equals(severity) ? -0.10 : 0.05;
+    }
+
+    private double parseMetric(String value, String prefix) {
+        if (value == null || prefix == null) {
+            return 0.0;
+        }
+        int start = value.indexOf(prefix);
+        if (start < 0) {
+            return 0.0;
+        }
+        int from = start + prefix.length();
+        int to = from;
+        while (to < value.length()) {
+            char ch = value.charAt(to);
+            if (!(Character.isDigit(ch) || ch == '-' || ch == '+' || ch == '.')) {
+                break;
+            }
+            to++;
+        }
+        try {
+            return Double.parseDouble(value.substring(from, to));
+        } catch (Exception ex) {
+            return 0.0;
+        }
+    }
+
+    private double fundamentalsScore(String value, String severity) {
+        if (!"INFO".equals(severity) || value == null || value.isBlank()) {
+            return -0.12;
+        }
+        double score = 0.0;
+        double roe = parseMetric(value, "ROE=");
+        if (roe >= 15.0) score += 0.18;
+        else if (roe >= 8.0) score += 0.08;
+        else if (roe > 0.0 && roe < 4.0) score -= 0.10;
+
+        double opm = parseMetric(value, "OPM=");
+        if (opm >= 15.0) score += 0.12;
+        else if (opm > 0.0 && opm < 5.0) score -= 0.08;
+
+        double debt = parseMetric(value, "Debt=");
+        if (debt > 0.0 && debt <= 100.0) score += 0.08;
+        else if (debt >= 200.0) score -= 0.12;
+
+        double per = parseMetric(value, "PER=");
+        if (per > 0.0 && per <= 12.0) score += 0.06;
+        else if (per >= 40.0) score -= 0.08;
+
+        double pbr = parseMetric(value, "PBR=");
+        if (pbr > 0.0 && pbr <= 1.2) score += 0.04;
+        else if (pbr >= 5.0) score -= 0.06;
+
+        double revenueGrowth = parseMetric(value, "RevenueGrowth=");
+        if (revenueGrowth >= 10.0) score += 0.08;
+        else if (revenueGrowth < 0.0) score -= 0.08;
+
+        return clampScore(score);
+    }
+
+    private double clampScore(double value) {
+        return Math.max(-1.0, Math.min(1.0, value));
+    }
+
     private PortfolioAnalyzeResponseDto.OverlayResult emptyOverlay() {
-        return new PortfolioAnalyzeResponseDto.OverlayResult(List.of(), List.of(), List.of());
+        return new PortfolioAnalyzeResponseDto.OverlayResult(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     private List<PortfolioAnalyzeResponseDto.HoldingOverlayRow> toHoldingRows(
@@ -631,7 +864,7 @@ public class Feature3OverlayService {
             case "fundamentals" -> name + " 종목 건강도";
             case "industry" -> name + " 산업/Peer 편중";
             case "news" -> name + " 뉴스 흐름";
-            case "correlation" -> name + " 동행 종목 구조";
+            case "correlation" -> name + " Peer 동행 참고";
             case "technical" -> name + " 기술적 지표";
             case "shortSelling" -> name + " 공매도 압력";
             case "macro" -> name + " 매크로 민감도";
@@ -641,21 +874,37 @@ public class Feature3OverlayService {
 
     private OverlayMetric peerClusterMetric(PeerClusterDto peerCluster) {
         if (peerCluster == null) {
-            return new OverlayMetric("동행 종목", null, "Peer cluster 데이터가 부족합니다.", "WARN");
+            return new OverlayMetric("Peer 동행 참고", null, "Peer cluster 데이터가 부족합니다.", "WARN");
         }
         List<PeerItemDto> peers = peerCluster.getPeers();
-        PeerItemDto top = peers != null && !peers.isEmpty() ? peers.get(0) : null;
-        String value = top != null
-                ? safe(top.getCompanyName() != null ? top.getCompanyName() : top.getStockCode())
-                        + " corr=" + safe(top.getAdjustedCorr() != null ? top.getAdjustedCorr() : top.getCorr())
+        List<PeerItemDto> topPeers = peers == null ? List.of() : peers.stream().limit(5).toList();
+        String value = !topPeers.isEmpty()
+                ? String.join(" | ", topPeers.stream().map(this::peerSummary).toList())
+                        + " | selectedPeers=" + safe(peerCluster.getSelectedPeerCount())
                 : "selectedPeers=" + safe(peerCluster.getSelectedPeerCount());
-        Double topCorr = top != null ? top.getAdjustedCorr() != null ? top.getAdjustedCorr() : top.getCorr() : null;
+        boolean hasHighCorr = topPeers.stream()
+                .map(this::peerCorr)
+                .anyMatch(corr -> corr != null && corr >= 0.75);
         return new OverlayMetric(
-                "동행 종목",
+                "Peer 동행 참고",
                 value,
-                "PeerCluster 엔드포인트 기반 가격 동행성 정보를 분산 제한 리스크 참고 정보로 표시합니다.",
-                topCorr != null && topCorr >= 0.75 ? "WARN" : "INFO"
+                "Peer corr은 같은 업종 내 동행 종목 참고 정보입니다. 실제 비중 조정은 보유 종목 간 내부 상관관계를 기준으로 계산합니다.",
+                hasHighCorr ? "WARN" : "INFO"
         );
+    }
+
+    private String peerSummary(PeerItemDto peer) {
+        String name = peer.getCompanyName() != null ? peer.getCompanyName() : peer.getStockCode();
+        String relation = peer.getRelation() != null ? ", relation=" + peer.getRelation().name() : "";
+        String lag = peer.getBestLag() != null ? ", lag=" + peer.getBestLag() : "";
+        return safe(name) + " corr=" + safe(peerCorr(peer)) + relation + lag;
+    }
+
+    private Double peerCorr(PeerItemDto peer) {
+        if (peer == null) {
+            return null;
+        }
+        return peer.getAdjustedCorr() != null ? peer.getAdjustedCorr() : peer.getCorr();
     }
 
     private PortfolioAnalyzeResponseDto.ExplainResult deterministicExplain(PortfolioAnalyzeResponseDto response) {
@@ -673,8 +922,30 @@ public class Feature3OverlayService {
                 "DETERMINISTIC",
                 null,
                 text,
+                new PortfolioAnalyzeResponseDto.ExplainSections(
+                        new PortfolioAnalyzeResponseDto.ExplainSection("핵심 리스크", text, response.summary().mainRiskDrivers() != null ? response.summary().mainRiskDrivers() : List.of()),
+                        new PortfolioAnalyzeResponseDto.ExplainSection("보조 관측", "선택한 보조 관측은 계산 결과와 분리해 참고 신호로 해석합니다.", List.of()),
+                        new PortfolioAnalyzeResponseDto.ExplainSection("포트폴리오 비교", "기본 포트폴리오와 보조 관측 반영 포트폴리오를 함께 비교해 볼 수 있습니다.", List.of()),
+                        new PortfolioAnalyzeResponseDto.ExplainSection("변동성 기반 분석", text, List.of()),
+                        new PortfolioAnalyzeResponseDto.ExplainSection("효율성 기반 분석", "위험 대비 수익 효율은 변동성과 기대수익률을 함께 비교해 참고합니다.", List.of()),
+                        new PortfolioAnalyzeResponseDto.ExplainSection("종합 판단", text, List.of())
+                ),
+                new PortfolioAnalyzeResponseDto.ExplainOverall(
+                        text,
+                        response.summary().mainRiskDrivers() != null ? response.summary().mainRiskDrivers() : List.of(),
+                        response.summary().mainRiskDrivers() != null ? response.summary().mainRiskDrivers() : List.of(),
+                        text
+                ),
                 List.of()
         );
+    }
+
+    private PortfolioAnalyzeResponseDto.ExplainResult explainOrDeterministic(PortfolioAnalyzeResponseDto response) {
+        PortfolioAnalyzeResponseDto.ExplainResult explain = response != null ? response.explain() : null;
+        if (explain != null && (explain.sections() != null || (explain.text() != null && !explain.text().isBlank()))) {
+            return explain;
+        }
+        return deterministicExplain(response);
     }
 
     private PortfolioAnalyzeResponseDto withOverlayAndExplain(
@@ -705,19 +976,19 @@ public class Feature3OverlayService {
     }
 
     private String primaryFreshKey(String overlay, String stockCode) {
-        return usesFeature1(overlay) ? feature1ResultFreshKey(stockCode) : freshKey(overlay, stockCode);
+        return usesFeature1(overlay) ? feature1MetricsFreshKey(stockCode) : freshKey(overlay, stockCode);
     }
 
     private String primaryStaleKey(String overlay, String stockCode) {
-        return usesFeature1(overlay) ? feature1ResultStaleKey(stockCode) : staleKey(overlay, stockCode);
+        return usesFeature1(overlay) ? feature1MetricsStaleKey(stockCode) : staleKey(overlay, stockCode);
     }
 
-    private String feature1ResultFreshKey(String stockCode) {
-        return "feature3:feature1-result:fresh:" + normalize(stockCode);
+    private String feature1MetricsFreshKey(String stockCode) {
+        return "feature1:metrics:fresh:" + normalize(stockCode);
     }
 
-    private String feature1ResultStaleKey(String stockCode) {
-        return "feature3:feature1-result:stale:" + normalize(stockCode);
+    private String feature1MetricsStaleKey(String stockCode) {
+        return "feature1:metrics:stale:" + normalize(stockCode);
     }
 
     private String normalize(String raw) {
@@ -765,8 +1036,8 @@ public class Feature3OverlayService {
         return value == null ? "-" : String.valueOf(value);
     }
 
-    private record CachedFeature1(
-            FeatOneAnalysisResponseDto response,
+    private record CachedFeature1Metrics(
+            FeatOneAnalysisMetricsDto metrics,
             String cacheStatus
     ) {
     }

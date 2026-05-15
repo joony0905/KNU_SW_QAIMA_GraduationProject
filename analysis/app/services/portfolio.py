@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 
 import numpy as np
 
@@ -11,6 +12,8 @@ from app.models.feature3 import (
     Feature3DataQuality,
     Feature3ExcludedHolding,
     Feature3Freshness,
+    Feature3OverlayResult,
+    Feature3OverlaySignal,
     Feature3PolicyEcho,
     Feature3PortfolioResult,
     Feature3PricePolicy,
@@ -106,6 +109,12 @@ def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
         target_volatility,
         risk_free_rate,
         cash_limit,
+    )
+    overlay_adjusted_portfolios, overlay_visualizations, overlay_explanations = _overlay_adjusted_outputs(
+        req,
+        risk_context,
+        target_volatility,
+        risk_free_rate,
     )
 
     candidate_warnings = [
@@ -213,6 +222,12 @@ def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
             correlation_matrix=risk_context["correlation_matrix"],
             frontier=frontier,
             expected_return_policy=expected_return_policy,
+        ),
+        overlays=Feature3OverlayResult(
+            overlay_signals=req.overlay_signals,
+            adjusted_portfolios=overlay_adjusted_portfolios,
+            visualizations=overlay_visualizations,
+            explanations=overlay_explanations,
         ),
         warnings=warnings,
         freshness=Feature3Freshness(
@@ -1130,6 +1145,438 @@ def _expected_return_policy(
         "maxCashWeightSource": "USER_OVERRIDE" if req is not None and req.options.max_cash_weight is not None else "GAMMA_AUTO",
         "frontierAssetUniverse": "RISKY_ASSETS_ONLY",
     }
+
+
+def _overlay_adjusted_outputs(
+    req: PortfolioAnalyzeRequest,
+    risk_context: dict,
+    target_volatility: float,
+    risk_free_rate: float,
+) -> tuple[list[Feature3PortfolioResult], list[dict], list[dict]]:
+    signals = req.overlay_signals or []
+    eligible_results = risk_context["eligible_results"]
+    covariance_annual = risk_context["covariance_annual"]
+    annual_mu = risk_context.get("annual_mu")
+    base_weights = _base_overlay_weights(req, eligible_results)
+    signals = _augment_overlay_signals_for_visualization(signals, base_weights, eligible_results, risk_context)
+    if not signals or not eligible_results or covariance_annual is None or annual_mu is None:
+        return [], _overlay_visualizations(signals), _overlay_explanations(signals)
+
+    asset_count = len(eligible_results)
+    mu_with_cash = np.concatenate([annual_mu, np.array([risk_free_rate])])
+    raw_mu_with_cash = np.concatenate([
+        risk_context.get("raw_historical_annual_mu", annual_mu),
+        np.array([risk_free_rate]),
+    ])
+    display_mu_with_cash = np.concatenate([
+        risk_context.get("display_annual_mu", annual_mu),
+        np.array([risk_free_rate]),
+    ])
+    selected_types = {signal.overlay_type for signal in signals}
+    variants = []
+    if len(selected_types) >= 2:
+        variants.append(("OVERLAY_BALANCED", "보조 관측 균형 시나리오", selected_types, 0.18))
+    if "fundamentals" in selected_types:
+        variants.append(("QUALITY_TILT", "종목 건강도 시나리오", {"fundamentals"}, 0.18))
+    if "technical" in selected_types:
+        variants.append(("MOMENTUM_AWARE", "기술 흐름 시나리오", {"technical"}, 0.10))
+    if "news" in selected_types:
+        variants.append(("NEWS_GUARDED", "뉴스 리스크 시나리오", {"news"}, 0.12))
+    diversification_types = selected_types & {"industry", "correlation"}
+    if diversification_types:
+        variants.append(("DIVERSIFICATION_TILT", "분산 보강 시나리오", diversification_types, _diversification_strength(diversification_types)))
+    portfolios: list[Feature3PortfolioResult] = []
+    for portfolio_type, label, overlay_types, strength in variants:
+        adjusted = _apply_overlay_tilt(
+            base_weights,
+            eligible_results,
+            signals,
+            overlay_types,
+            strength,
+            risk_context,
+            half_turnover_budget=0.09,
+            single_delta_cap=0.035,
+        )
+        portfolio = _portfolio_from_weight_vector(
+            portfolio_type,
+            label,
+            eligible_results,
+            adjusted,
+            covariance_annual,
+            mu_with_cash,
+            raw_mu_with_cash,
+            display_mu_with_cash,
+            target_volatility,
+            risk_free_rate,
+        )
+        portfolio.user_description = _overlay_portfolio_description(label, signals, overlay_types)
+        portfolios.append(portfolio)
+    return portfolios, _overlay_visualizations(signals), _overlay_explanations(signals)
+
+
+def _augment_overlay_signals_for_visualization(
+    signals: list[Feature3OverlaySignal],
+    base_weights: np.ndarray,
+    eligible_results: list[Feature3PriceSeriesResult],
+    risk_context: dict,
+) -> list[Feature3OverlaySignal]:
+    augmented = list(signals)
+    industry_penalties = _industry_concentration_penalties(base_weights, eligible_results, signals)
+    correlation_penalties = _risk_contribution_penalties(base_weights, eligible_results, risk_context)
+    risk_contribution_pct = _risk_contribution_pct_by_code(base_weights, eligible_results, risk_context)
+    for signal in augmented:
+        if signal.overlay_type == "industry" and signal.stock_code in industry_penalties:
+            signal.score = round(float(industry_penalties[signal.stock_code]), 4)
+            signal.evidence = _industry_evidence_with_weight(signal, base_weights, eligible_results, signals)
+        if signal.overlay_type == "correlation" and signal.stock_code in correlation_penalties:
+            signal.score = round(_clamp_float(correlation_penalties[signal.stock_code], -1.0, 1.0), 4)
+            rc_pct = risk_contribution_pct.get(signal.stock_code)
+            rc_text = f"위험기여 {rc_pct:.1%}" if rc_pct is not None else "위험기여 확인"
+            signal.evidence = f"{signal.evidence or ''} {rc_text}, scenario penalty={correlation_penalties[signal.stock_code]:.2f}".strip()
+    return augmented
+
+
+def _industry_evidence_with_weight(
+    signal: Feature3OverlaySignal,
+    base_weights: np.ndarray,
+    eligible_results: list[Feature3PriceSeriesResult],
+    signals: list[Feature3OverlaySignal],
+) -> str:
+    industry_name = (signal.evidence or "").split(" / ")[0].strip()
+    if not industry_name:
+        return signal.evidence or ""
+    industry_by_code = {
+        item.stock_code: (item.evidence or "").split(" / ")[0].strip()
+        for item in signals
+        if item.overlay_type == "industry" and item.evidence
+    }
+    total = 0.0
+    for idx, result in enumerate(eligible_results):
+        if industry_by_code.get(result.stock_code) == industry_name:
+            total += float(base_weights[idx])
+    return f"{signal.evidence or industry_name} · 포트폴리오 업종 비중 {total:.1%}"
+
+
+def _base_overlay_weights(req: PortfolioAnalyzeRequest, eligible_results: list[Feature3PriceSeriesResult]) -> np.ndarray:
+    holding_by_code = {holding.stock_code: holding for holding in req.holdings}
+    risky_values = [
+        max(0.0, holding_by_code[result.stock_code].quantity * (
+            holding_by_code[result.stock_code].current_price
+            or (result.points[-1].close if result.points else holding_by_code[result.stock_code].avg_price)
+        ))
+        for result in eligible_results
+    ]
+    cash_value = sum(cash.amount for cash in req.cash_positions if cash.amount > 0)
+    total = sum(risky_values) + cash_value
+    if total <= 0:
+        risky = np.full(len(eligible_results), 1.0 / max(1, len(eligible_results)), dtype=float)
+        return np.concatenate([risky, np.array([0.0])])
+    risky_weights = np.array([value / total for value in risky_values], dtype=float)
+    return np.concatenate([risky_weights, np.array([cash_value / total])])
+
+
+def _apply_overlay_tilt(
+    base_weights: np.ndarray,
+    eligible_results: list[Feature3PriceSeriesResult],
+    signals: list[Feature3OverlaySignal],
+    overlay_types: set[str],
+    strength: float,
+    risk_context: dict,
+    half_turnover_budget: float,
+    single_delta_cap: float,
+) -> np.ndarray:
+    stock_codes = [result.stock_code for result in eligible_results]
+    score_by_code = {code: 0.0 for code in stock_codes}
+    count_by_code = {code: 0 for code in stock_codes}
+    for signal in signals:
+        if signal.overlay_type not in overlay_types or signal.stock_code not in score_by_code:
+            continue
+        if signal.overlay_type == "correlation":
+            continue
+        score_by_code[signal.stock_code] += _effective_overlay_score(signal)
+        count_by_code[signal.stock_code] += 1
+    if "industry" in overlay_types:
+        industry_penalties = _industry_concentration_penalties(base_weights, eligible_results, signals)
+        for code, penalty in industry_penalties.items():
+            score_by_code[code] += penalty
+            count_by_code[code] += 1
+    if "correlation" in overlay_types:
+        correlation_penalties = _risk_contribution_penalties(base_weights, eligible_results, risk_context)
+        for code, penalty in correlation_penalties.items():
+            score_by_code[code] += penalty
+            count_by_code[code] += 1
+    modifiers = []
+    for code in stock_codes:
+        avg_score = score_by_code[code] / count_by_code[code] if count_by_code[code] else 0.0
+        modifiers.append(_clamp_float(1.0 + strength * avg_score, 0.55, 1.30))
+    adjusted_risky = base_weights[:-1] * np.array(modifiers, dtype=float)
+    cash_weight = float(base_weights[-1])
+    risky_budget = max(0.0, 1.0 - cash_weight)
+    if float(np.sum(adjusted_risky)) <= 1e-12:
+        adjusted_risky = base_weights[:-1]
+    adjusted_risky = adjusted_risky / float(np.sum(adjusted_risky) or 1.0) * risky_budget
+    adjusted_risky = _cap_risky_weights_preserving_cash(adjusted_risky, cash_weight)
+    adjusted = np.concatenate([adjusted_risky, np.array([cash_weight])])
+    return _limit_overlay_change(base_weights, adjusted, half_turnover_budget, single_delta_cap)
+
+
+def _diversification_strength(overlay_types: set[str]) -> float:
+    if overlay_types == {"industry"}:
+        return 0.22
+    if overlay_types == {"correlation"}:
+        return 0.16
+    return 0.18
+
+
+def _effective_overlay_score(signal: Feature3OverlaySignal) -> float:
+    confidence = _overlay_confidence(signal)
+    decay = 1.0
+    regime_multiplier = 1.0
+    return float(signal.score) * confidence * decay * regime_multiplier
+
+
+def _overlay_confidence(signal: Feature3OverlaySignal) -> float:
+    evidence = signal.evidence or ""
+    overlay_type = signal.overlay_type
+    if overlay_type == "news":
+        count = _parse_overlay_number(evidence, "count=")
+        return _clamp_float((count or 0.0) / 15.0, 0.30, 1.0)
+    if overlay_type == "technical":
+        return 0.70
+    if overlay_type == "fundamentals":
+        has_fundamental_metrics = any(token in evidence for token in ("PER=", "PBR=", "ROE=", "OPM=", "Debt="))
+        return 0.90 if has_fundamental_metrics else 0.55
+    if overlay_type == "industry":
+        return 0.90 if evidence else 0.50
+    if overlay_type == "correlation":
+        return 1.00
+    return 0.75
+
+
+def _parse_overlay_number(text: str, key: str) -> float | None:
+    match = re.search(rf"{re.escape(key)}([-+]?\d+(?:\.\d+)?)", text or "")
+    if not match:
+        return None
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return None
+
+
+def _industry_concentration_penalties(
+    base_weights: np.ndarray,
+    eligible_results: list[Feature3PriceSeriesResult],
+    signals: list[Feature3OverlaySignal],
+) -> dict[str, float]:
+    industry_by_code = {
+        signal.stock_code: (signal.evidence or "").split(" / ")[0].strip()
+        for signal in signals
+        if signal.overlay_type == "industry" and signal.evidence
+    }
+    industry_weight: dict[str, float] = {}
+    for idx, result in enumerate(eligible_results):
+        industry = industry_by_code.get(result.stock_code)
+        if not industry:
+            continue
+        industry_weight[industry] = industry_weight.get(industry, 0.0) + float(base_weights[idx])
+    penalties: dict[str, float] = {}
+    for idx, result in enumerate(eligible_results):
+        industry = industry_by_code.get(result.stock_code)
+        if not industry:
+            continue
+        weight = industry_weight.get(industry, 0.0)
+        if weight >= 0.70:
+            penalties[result.stock_code] = -0.35
+        elif weight >= 0.50:
+            penalties[result.stock_code] = -0.22
+        elif weight >= 0.35:
+            penalties[result.stock_code] = -0.10
+        else:
+            penalties[result.stock_code] = 0.0
+    return penalties
+
+
+def _risk_contribution_penalties(
+    base_weights: np.ndarray,
+    eligible_results: list[Feature3PriceSeriesResult],
+    risk_context: dict,
+) -> dict[str, float]:
+    contribution_pct = _risk_contribution_pct_by_code(base_weights, eligible_results, risk_context)
+    penalties: dict[str, float] = {}
+    for code, pct in contribution_pct.items():
+        if pct >= 0.45:
+            penalties[code] = -0.28
+        elif pct >= 0.30:
+            penalties[code] = -0.18
+        elif pct >= 0.20:
+            penalties[code] = -0.10
+    return penalties
+
+
+def _risk_contribution_pct_by_code(
+    base_weights: np.ndarray,
+    eligible_results: list[Feature3PriceSeriesResult],
+    risk_context: dict,
+) -> dict[str, float]:
+    covariance_annual = risk_context.get("covariance_annual")
+    if covariance_annual is None or len(eligible_results) == 0:
+        return {}
+    risky_weights = np.array(base_weights[:-1], dtype=float)
+    if risky_weights.size == 0 or float(np.sum(risky_weights)) <= 1e-12:
+        return {}
+    portfolio_volatility = float(np.sqrt(max(float(risky_weights.T @ covariance_annual @ risky_weights), 0.0)))
+    if portfolio_volatility <= 1e-12:
+        return {}
+    contributions = _risk_contributions_from_covariance(
+        eligible_results,
+        risky_weights,
+        covariance_annual,
+        portfolio_volatility,
+    )
+    return {
+        item.stock_code: float(item.risk_contribution_pct)
+        for item in contributions
+        if item.risk_contribution_pct is not None
+    }
+
+
+def _limit_overlay_change(
+    base_weights: np.ndarray,
+    adjusted_weights: np.ndarray,
+    half_turnover_budget: float,
+    single_delta_cap: float,
+) -> np.ndarray:
+    if base_weights.size != adjusted_weights.size or base_weights.size == 0:
+        return adjusted_weights
+    cash_weight = float(base_weights[-1])
+    risky_budget = max(0.0, 1.0 - cash_weight)
+    base_risky = np.array(base_weights[:-1], dtype=float)
+    desired_risky = np.array(adjusted_weights[:-1], dtype=float)
+    if base_risky.size == 0:
+        return np.array([cash_weight], dtype=float)
+    max_weight = _risky_max_weight(int(base_risky.size))
+    raw_delta = desired_risky - base_risky
+    lower = np.maximum(-single_delta_cap, -base_risky)
+    upper = np.minimum(single_delta_cap, max_weight - base_risky)
+    delta = np.clip(raw_delta, lower, upper)
+    delta = _rebalance_overlay_delta(delta)
+    half_turnover = 0.5 * float(np.sum(np.abs(delta)))
+    if half_turnover > half_turnover_budget and half_turnover > 1e-12:
+        delta = delta * float(half_turnover_budget / half_turnover)
+        delta = np.clip(delta, lower, upper)
+        delta = _rebalance_overlay_delta(delta)
+    risky = np.clip(base_risky + delta, 0.0, max_weight)
+    total = float(np.sum(risky))
+    if total > 1e-12:
+        risky = risky / total * risky_budget
+    risky = _cap_risky_weights_preserving_cash(risky, cash_weight)
+    return np.concatenate([risky, np.array([cash_weight])])
+
+
+def _rebalance_overlay_delta(delta: np.ndarray) -> np.ndarray:
+    balanced = np.array(delta, dtype=float)
+    for _ in range(6):
+        total = float(np.sum(balanced))
+        if abs(total) <= 1e-10:
+            break
+        if total > 0:
+            positive = balanced > 0
+            positive_sum = float(np.sum(balanced[positive]))
+            if positive_sum <= 1e-12:
+                break
+            balanced[positive] *= max(0.0, (positive_sum - total) / positive_sum)
+        else:
+            negative = balanced < 0
+            negative_sum = float(np.sum(-balanced[negative]))
+            if negative_sum <= 1e-12:
+                break
+            balanced[negative] *= max(0.0, (negative_sum + total) / negative_sum)
+    return balanced
+
+
+def _cap_risky_weights_preserving_cash(risky_weights: np.ndarray, cash_weight: float) -> np.ndarray:
+    if risky_weights.size == 0:
+        return risky_weights
+    cap = _risky_max_weight(int(risky_weights.size))
+    budget = max(0.0, 1.0 - cash_weight)
+    weights = np.clip(risky_weights, 0.0, cap)
+    for _ in range(8):
+        total = float(np.sum(weights))
+        if abs(total - budget) <= 1e-9:
+            break
+        if total <= 1e-12:
+            weights = np.full_like(weights, budget / weights.size)
+            break
+        weights = weights / total * budget
+        weights = np.clip(weights, 0.0, cap)
+    total = float(np.sum(weights))
+    return weights / total * budget if total > 1e-12 else weights
+
+
+def _overlay_visualizations(signals: list[Feature3OverlaySignal]) -> list[dict]:
+    by_type: dict[str, list[Feature3OverlaySignal]] = {}
+    for signal in signals:
+        by_type.setdefault(signal.overlay_type, []).append(signal)
+    visualizations = []
+    for overlay_type, items in by_type.items():
+        visualizations.append({
+            "type": overlay_type,
+            "title": _overlay_type_title(overlay_type),
+            "chartType": "bar",
+            "items": [
+                {
+                    "stockCode": item.stock_code,
+                    "companyName": item.company_name,
+                    "label": item.label,
+                    "score": round(float(item.score), 4),
+                    "severity": item.severity,
+                    "evidence": item.evidence,
+                }
+                for item in items
+            ],
+        })
+    return visualizations
+
+
+def _overlay_explanations(signals: list[Feature3OverlaySignal]) -> list[dict]:
+    explanations = []
+    for signal in signals:
+        direction = "확대 압력" if signal.score > 0.08 else "축소 압력" if signal.score < -0.08 else "관찰 압력"
+        explanations.append({
+            "stockCode": signal.stock_code,
+            "companyName": signal.company_name,
+            "overlayType": signal.overlay_type,
+            "title": f"{signal.label}: {direction}",
+            "description": signal.evidence or "보조 관측값을 포트폴리오 비중 조정 시나리오에 반영했습니다.",
+            "score": round(float(signal.score), 4),
+            "severity": signal.severity,
+        })
+    return explanations
+
+
+def _overlay_portfolio_description(label: str, signals: list[Feature3OverlaySignal], overlay_types: set[str]) -> str:
+    used = [signal for signal in signals if signal.overlay_type in overlay_types]
+    warn_count = sum(1 for signal in used if signal.severity == "WARN" or signal.score < -0.15)
+    positive_count = sum(1 for signal in used if signal.score > 0.15)
+    if "correlation" in overlay_types:
+        return (
+            f"{label}: core risk 결과를 대체하지 않는 시뮬레이션입니다. "
+            "분산 리스크는 단순 상관계수가 아니라 보유 종목의 위험 기여도를 우선 기준으로 압력 방향을 관측합니다."
+        )
+    return (
+        f"{label}: core risk 결과를 대체하지 않는 보조 관측 시나리오입니다. "
+        f"보조 관측 {len(used)}개 중 축소/주의 압력 {warn_count}개, 우호 압력 {positive_count}개를 제한적으로 관측했습니다."
+    )
+
+
+def _overlay_type_title(overlay_type: str) -> str:
+    return {
+        "fundamentals": "종목 건강도",
+        "technical": "기술적 지표",
+        "industry": "산업 집중도",
+        "correlation": "내부 분산 리스크",
+        "news": "뉴스 흐름",
+    }.get(overlay_type, overlay_type)
 
 
 def _minimum_variance_weights(covariance_annual: np.ndarray, asset_count: int) -> np.ndarray:

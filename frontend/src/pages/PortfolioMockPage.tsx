@@ -1,9 +1,9 @@
 // src/pages/PortfolioMockPage.tsx
 
 import { useEffect, useRef, useState } from "react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2, Plus, Info, ClipboardList, Sun, Moon } from "lucide-react";
+import { Trash2, Plus, Info, ClipboardList, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchCell from "../components/StockSearchCell";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
@@ -14,6 +14,30 @@ import type { Feature2ExchangeRatePoint } from "../types/feature2";
 
 const RISK_GAMMA_STORAGE_KEY = "qaima_risk_gamma";
 const SURVEY_RESULT_STORAGE_KEY = "qaima_survey_result";
+
+const LLM_VENDOR_OPTIONS = [
+  "GPT-5.4",
+  "GPT-5.2",
+  "GPT-5 mini",
+  "GPT-4.1",
+  "GPT-4o",
+  "Gemini 3.1 Pro",
+  "Gemini 3 Pro",
+  "Gemini 3 Flash",
+  "Gemini 3.1 Flash Lite",
+  "Gemini 2.5 Flash",
+  "Gemini 2.5 Pro",
+  "Claude Opus 4.6",
+  "Claude Opus 4.5",
+  "Claude Sonnet 4.6",
+  "Claude Sonnet 4",
+  "Claude Haiku 4.5",
+  "Grok 4",
+  "Grok 4.1 Fast",
+  "Grok 4 Fast",
+  "Grok 3",
+  "Grok 3 Mini",
+] as const;
 
 const clampRiskGamma = (v: number): number => {
   if (!Number.isFinite(v)) return 0;
@@ -89,8 +113,8 @@ const EXTRA_OPTIONS: AnalysisOption[] = [
     key: "correlation",
     label: "종목 분산 구조 반영",
     descriptions: [
-      "실제 가격 움직임 기준으로 비슷하게 움직이는 종목이 얼마나 겹치는지 보여줍니다.",
-      "여러 종목을 담았더라도 실제로는 함께 움직여 분산 효과가 줄어드는 상황을 확인할 수 있습니다."
+      "보유 종목끼리 실제로 얼마나 함께 움직였는지를 기준으로 분산 효과가 약한 구간을 반영합니다.",
+      "Peer corr은 같은 업종 내 동행 종목 참고 정보이며, 비중 조정에는 보유 종목 간 내부 상관관계를 사용합니다."
     ],
   },
   {
@@ -119,6 +143,199 @@ const formatPct = (value?: number | null, digits = 1): string =>
 const formatKRW = (value?: number | null): string =>
   `${Math.round(value ?? 0).toLocaleString("ko-KR")}원`;
 
+type OverlayValueItem = {
+  label: string;
+  value: string;
+  tone?: "default" | "good" | "warn" | "muted";
+};
+
+const metricLabels: Record<string, string> = {
+  PER: "PER",
+  PBR: "PBR",
+  PSR: "PSR",
+  ROE: "ROE",
+  OPM: "영업이익률",
+  NPM: "순이익률",
+  Debt: "부채비율",
+  Current: "유동비율",
+  RevenueGrowth: "매출 성장",
+  EPSGrowth: "EPS 성장",
+  alignment: "추세 정렬",
+  percent_b: "밴드 위치",
+  zone: "스토캐스틱",
+  k_minus_d: "K-D",
+  score: "감성 점수",
+  count: "뉴스 수",
+};
+
+const valueToneClass: Record<NonNullable<OverlayValueItem["tone"]>, string> = {
+  default: "border-line bg-surface text-ink-3",
+  good: "border-success/30 bg-success/10 text-success",
+  warn: "border-warn/30 bg-warn/10 text-warn",
+  muted: "border-line bg-bg-sunk text-ink-4",
+};
+
+const parseMetricMap = (value: string): Record<string, string> => {
+  const result: Record<string, string> = {};
+  const regex = /([A-Za-z0-9_]+)=([^,|]+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(value)) !== null) {
+    result[match[1]] = match[2].trim();
+  }
+  return result;
+};
+
+const compactNumber = (raw?: string, digits = 2): string | null => {
+  if (!raw) return null;
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) return raw;
+  return numeric.toLocaleString("ko-KR", { maximumFractionDigits: digits });
+};
+
+const displayMetricValue = (key: string, raw?: string): string => {
+  if (!raw) return "-";
+  if (key === "alignment") return raw === "bullish" ? "상승 우위" : raw === "bearish" ? "하락 우위" : raw;
+  if (key === "zone") {
+    if (raw === "overbought") return "과열";
+    if (raw === "oversold") return "침체";
+    return "중립";
+  }
+  if (key === "percent_b") return `${compactNumber(raw, 1) ?? raw}%`;
+  if (["ROE", "OPM", "NPM", "Debt", "Current", "RevenueGrowth", "EPSGrowth"].includes(key)) {
+    return `${compactNumber(raw, 1) ?? raw}%`;
+  }
+  if (key === "count") return `${compactNumber(raw, 0) ?? raw}건`;
+  return compactNumber(raw) ?? raw;
+};
+
+const toneForMetric = (key: string, raw?: string): OverlayValueItem["tone"] => {
+  const numeric = raw ? Number(raw) : NaN;
+  if (key === "alignment") return raw === "bullish" ? "good" : raw === "bearish" ? "warn" : "default";
+  if (key === "zone") return raw === "overbought" ? "warn" : raw === "oversold" ? "good" : "default";
+  if (key === "score") return Number.isFinite(numeric) && numeric < 0 ? "warn" : "good";
+  if (["ROE", "OPM", "NPM", "RevenueGrowth", "EPSGrowth"].includes(key)) {
+    return Number.isFinite(numeric) && numeric < 0 ? "warn" : Number.isFinite(numeric) && numeric > 8 ? "good" : "default";
+  }
+  if (key === "Debt") return Number.isFinite(numeric) && numeric >= 200 ? "warn" : "default";
+  return "default";
+};
+
+const renderValueItems = (items: OverlayValueItem[], caption?: string): ReactNode => (
+  <div className="flex flex-col gap-1.5">
+    {caption ? <p className="text-[11px] leading-tight text-ink-4">{caption}</p> : null}
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((item, index) => (
+        <span
+          key={`${item.label}-${item.value}-${index}`}
+          className={`rounded-md border px-2 py-1 text-[11px] leading-tight ${valueToneClass[item.tone ?? "default"]}`}
+        >
+          <span className="text-ink-4">{item.label}</span> {item.value}
+        </span>
+      ))}
+    </div>
+  </div>
+);
+
+const renderMetricOverlayValue = (value: string, keys: string[], caption?: string): ReactNode => {
+  const metrics = parseMetricMap(value);
+  const items = keys
+    .filter((key) => metrics[key] !== undefined)
+    .map((key) => ({
+      label: metricLabels[key] ?? key,
+      value: displayMetricValue(key, metrics[key]),
+      tone: toneForMetric(key, metrics[key]),
+    }));
+  return items.length ? renderValueItems(items, caption) : value;
+};
+
+const renderIndustryOverlayValue = (value: string): ReactNode => {
+  const [industry, indexName] = value.split("/").map((part) => part.trim()).filter(Boolean);
+  return renderValueItems([
+    { label: "산업", value: industry || value },
+    ...(indexName ? [{ label: "업종 지수", value: indexName, tone: "muted" as const }] : []),
+  ]);
+};
+
+const relationLabel = (raw?: string): string => {
+  if (raw === "LEADER") return "선행";
+  if (raw === "FOLLOWER") return "후행";
+  if (raw === "COINCIDENT") return "동행";
+  return "관계 미확정";
+};
+
+const renderPeerOverlayValue = (value: string): ReactNode => {
+  const peers = value.split(" | ");
+  const items = peers.map((part) => {
+    if (part.startsWith("selectedPeers=")) {
+      return { label: "선택 peer", value: `${part.replace("selectedPeers=", "")}개`, tone: "muted" as const };
+    }
+    const [namePart, ...rest] = part.split(",");
+    const metrics = parseMetricMap(rest.join(","));
+    const corr = parseMetricMap(namePart).corr ?? namePart.split(" corr=")[1];
+    const name = namePart.split(" corr=")[0];
+    const lag = metrics.lag ? ` · ${metrics.lag}일 lag` : "";
+    return {
+      label: name,
+      value: `corr ${compactNumber(corr, 3) ?? "-"} · ${relationLabel(metrics.relation)}${lag}`,
+      tone: Number(corr) >= 0.75 ? "warn" as const : "default" as const,
+    };
+  });
+  return renderValueItems(items, "Peer corr은 동행 종목 참고 정보이며 비중 조정에는 직접 사용하지 않습니다.");
+};
+
+const renderOverlayValue = (overlayType: string, value?: string | null): ReactNode => {
+  if (!value) return "-";
+  if (overlayType === "fundamentals") {
+    return renderMetricOverlayValue(value, ["PER", "PBR", "PSR", "ROE", "OPM", "NPM", "Debt", "RevenueGrowth", "EPSGrowth"]);
+  }
+  if (overlayType === "technical") {
+    return renderMetricOverlayValue(value, ["alignment", "percent_b", "zone", "k_minus_d"], "EMA, 볼린저밴드, 스토캐스틱 핵심값입니다.");
+  }
+  if (overlayType === "news") {
+    return renderMetricOverlayValue(value, ["score", "count"]);
+  }
+  if (overlayType === "industry") {
+    return renderIndustryOverlayValue(value);
+  }
+  if (overlayType === "correlation" && value.includes(" | ")) {
+    return renderPeerOverlayValue(value);
+  }
+  return value;
+};
+
+type PortfolioExplainSection = NonNullable<NonNullable<PortfolioAnalyzeResponse["explain"]>["sections"]>[keyof NonNullable<NonNullable<PortfolioAnalyzeResponse["explain"]>["sections"]>];
+
+const explainSections = (explain?: PortfolioAnalyzeResponse["explain"] | null) => {
+  const sections = explain?.sections;
+  return [
+    sections?.coreRisk,
+    sections?.overlayObservations,
+    sections?.portfolioComparison,
+    sections?.volatilityAnalysis,
+    sections?.efficiencyAnalysis,
+    sections?.finalJudgement,
+  ].filter((section): section is NonNullable<PortfolioExplainSection> => Boolean(section?.summary || section?.bullets?.length));
+};
+
+const renderExplainSection = (section?: PortfolioExplainSection | null, options?: { hideTitle?: boolean }) => {
+  if (!section?.summary && !section?.bullets?.length) return null;
+  return (
+    <div className="rounded-xl bg-bg-sunk border border-line p-4">
+      {!options?.hideTitle ? <h4 className="text-sm font-bold text-ink">{section.title ?? "요약"}</h4> : null}
+      {section.summary ? <p className={`${options?.hideTitle ? "" : "mt-1"} text-xs leading-relaxed text-ink-3`}>{section.summary}</p> : null}
+      {!section.summary && section.bullets?.length ? (
+        <ul className={`${options?.hideTitle ? "" : "mt-2"} flex flex-col gap-1`}>
+          {section.bullets.slice(0, 4).map((bullet, index) => (
+            <li key={`${section.title ?? "explain"}-${index}`} className="text-xs leading-relaxed text-ink-4">
+              {bullet}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+};
+
 const portfolioTypeLabel: Record<string, string> = {
   CURRENT: "현재 구성",
   STABLE: "안정형",
@@ -126,6 +343,11 @@ const portfolioTypeLabel: Record<string, string> = {
   AGGRESSIVE: "공격형",
   PSYCHOLOGICAL: "심리형",
   THEORETICAL_UTILITY: "이론적 효용접점",
+  OVERLAY_BALANCED: "보조 관측 균형 시나리오",
+  QUALITY_TILT: "품질 압력 시나리오",
+  MOMENTUM_AWARE: "기술 흐름 압력",
+  NEWS_GUARDED: "뉴스 경계 압력",
+  DIVERSIFICATION_TILT: "분산 압력 시나리오",
 };
 
 const suitabilityLabel: Record<string, string> = {
@@ -347,6 +569,9 @@ export default function PortfolioMockPage() {
   const [frontierHover, setFrontierHover] = useState<FrontierHoverState | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
+  const [isModelOpen, setIsModelOpen] = useState(false);
+  const modelRef = useRef<HTMLDivElement | null>(null);
 
   const toggleExtraOption = (key: string) => {
     setOverlayPreview(null);
@@ -408,11 +633,12 @@ export default function PortfolioMockPage() {
           lookbackTradingDays: analysisWindow.lookbackTradingDays,
           fetchCalendarDays: analysisWindow.fetchCalendarDays,
           annualizationFactor: 252,
-          cachePolicy: "CORE_ONLY",
+          cachePolicy: "REUSE_AVAILABLE",
           selectedOverlays: selectedOptions,
           includeFrontier: true,
           includeDiagnostics: true,
-          includeLlmExplain: false,
+          includeLlmExplain: true,
+          llmVendor,
           maxCashWeight: cashLimit,
         },
       });
@@ -449,6 +675,22 @@ export default function PortfolioMockPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isModelOpen) return;
+
+    const handleClickOutside = (event: globalThis.MouseEvent) => {
+      if (
+        modelRef.current &&
+        !modelRef.current.contains(event.target as Node)
+      ) {
+        setIsModelOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isModelOpen]);
 
   // 공통: 현재 마켓의 rows 조작
   const handleAddRow = () => {
@@ -929,15 +1171,48 @@ export default function PortfolioMockPage() {
               </p>
             </div>
             <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => void handleAnalyzeClick()}
-                disabled={loading || riskGamma === null}
-                className="px-5 py-2.5 rounded-xl bg-ink text-bg font-semibold text-sm
-                           hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity tracking-tight"
-              >
-                {loading ? "분석 중..." : "분석결과보기 →"}
-              </button>
+              <div className="flex items-center gap-3">
+                <div ref={modelRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsModelOpen((prev) => !prev)}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-line text-sm"
+                  >
+                    <span className="text-ink-3 text-[11px]">모델</span>
+                    <span className="font-semibold text-ink">{llmVendor}</span>
+                    {isModelOpen
+                      ? <ChevronUp size={14} className="text-ink-3 pointer-events-none" />
+                      : <ChevronDown size={14} className="text-ink-3 pointer-events-none" />}
+                  </button>
+                  {isModelOpen && (
+                    <div className="absolute right-0 bottom-full mb-1 w-full min-w-44 bg-surface border border-line rounded-lg shadow-pop z-50 max-h-60 overflow-y-auto">
+                      {LLM_VENDOR_OPTIONS.map((vendor) => (
+                        <button
+                          key={vendor}
+                          type="button"
+                          onClick={() => { setLlmVendor(vendor); setIsModelOpen(false); }}
+                          className={`w-full text-left px-3.5 py-2.5 text-sm first:rounded-t-lg last:rounded-b-lg ${
+                            vendor === llmVendor
+                              ? "bg-accent-soft text-accent font-semibold"
+                              : "text-ink hover:bg-bg-sunk"
+                          }`}
+                        >
+                          {vendor}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleAnalyzeClick()}
+                  disabled={loading || riskGamma === null}
+                  className="px-5 py-2.5 rounded-xl bg-ink text-bg font-semibold text-sm
+                             hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity tracking-tight"
+                >
+                  {loading ? "분석 중..." : "분석결과보기 →"}
+                </button>
+              </div>
               {!loading && riskGamma === null && (
                 <p className="text-xs text-ink-4">투자 성향 지수를 먼저 입력해주세요.</p>
               )}
@@ -1021,7 +1296,7 @@ export default function PortfolioMockPage() {
                         : "text-ink-3 hover:text-ink"
                     }`}
                   >
-                    Basic Mode
+                    리스크 요약
                   </button>
                   <button
                     type="button"
@@ -1032,7 +1307,7 @@ export default function PortfolioMockPage() {
                         : "text-ink-3 hover:text-ink"
                     }`}
                   >
-                    Advanced Mode
+                    최적화 관측
                   </button>
                 </div>
               </div>
@@ -1114,6 +1389,12 @@ export default function PortfolioMockPage() {
                 </div>
               </div>
 
+              {analysisResult.explain?.sections?.coreRisk ? (
+                <div>
+                  {renderExplainSection(analysisResult.explain.sections.coreRisk)}
+                </div>
+              ) : null}
+
               {(() => {
                 const basicPortfolioCards = [
                   analysisResult.currentPortfolio,
@@ -1122,13 +1403,16 @@ export default function PortfolioMockPage() {
                     .filter((portfolio): portfolio is NonNullable<typeof portfolio> => Boolean(portfolio)),
                 ];
                 return (
-                  <section>
+                  <section className="rounded-2xl p-5 bg-surface border border-line shadow-card">
                     <h3 className="text-base font-bold text-ink">변동성 기반 분석</h3>
                     <p className="mt-1 text-sm leading-relaxed text-ink-3">
                       가격 시계열의 공분산과 현금 한도를 기준으로 목표 변동성에 가까운 포트폴리오를 비교합니다.
                       <br></br>
                       LOW/MID/HIGH는 절대 위험등급이 아닌 각 카드의 목표 변동성 대비 실현 변동성 수준입니다.
                     </p>
+                    <div className="mt-3">
+                      {renderExplainSection(analysisResult.explain?.sections?.volatilityAnalysis, { hideTitle: true })}
+                    </div>
                     <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
                       {basicPortfolioCards.map((portfolio) => (
                         <div key={portfolio.type} className="rounded-2xl p-5 bg-surface border border-line shadow-card">
@@ -1229,6 +1513,9 @@ export default function PortfolioMockPage() {
                       기대수익률과 변동성을 함께 고려해 위험 대비 수익 효율이 높은 포트폴리오를 비교합니다. <br></br>
                       평단 기준 현재 수익률은 참고 용도로 제공되며, 분석에 사용되지 않습니다.
                     </p>
+                    <div className="mt-3">
+                      {renderExplainSection(analysisResult.explain?.sections?.efficiencyAnalysis, { hideTitle: true })}
+                    </div>
                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                       {portfolioCards.map((portfolio) => (
                         <div key={`basic-pie-${portfolio.type}`} className="rounded-lg bg-bg-sunk border border-line p-3">
@@ -1393,62 +1680,135 @@ export default function PortfolioMockPage() {
                 </div>
               </div>
 
-              {(analysisResult.overlays?.insightCards.length || analysisResult.explain?.text) && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {analysisResult.explain?.text && (
-                    <div className="rounded-2xl p-5 bg-surface border border-line shadow-card">
+              {analysisResult.overlays?.adjustedPortfolios?.length ? (
+                <section className="rounded-2xl p-5 bg-surface border border-line shadow-card">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-bold text-ink">보조 관측 시나리오</h3>
+                      <p className="mt-1 text-sm leading-relaxed text-ink-3">
+                        core risk 최적화 결과를 대체하지 않고, 선택한 보조 관측에서 어떤 확대·축소·분산 압력이 관측되는지 보여주는 시뮬레이션입니다.
+                        Peer corr은 참고 정보로 표시하며, 분산 리스크는 위험 기여도를 우선 기준으로 봅니다.
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono tabular text-ink-4">
+                      signals {analysisResult.overlays.overlaySignals?.length ?? 0}
+                    </span>
+                  </div>
+
+                  {analysisResult.overlays.visualizations?.length ? (
+                    <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {analysisResult.overlays.visualizations.map((viz) => (
+                        <div key={viz.type} className="rounded-xl bg-bg-sunk border border-line p-4">
+                          <h4 className="text-sm font-bold text-ink">{viz.title}</h4>
+                          <div className="mt-3 flex flex-col gap-2">
+                            {viz.items.map((item) => {
+                              return (
+                                <div key={`${viz.type}-${item.stockCode}`} className="grid grid-cols-[96px_1fr_48px] items-center gap-2">
+                                  <span className="text-xs text-ink-3 truncate">{item.companyName ?? item.stockCode}</span>
+                                  <div className="relative h-2.5 rounded-full bg-surface overflow-hidden">
+                                    <div className="absolute left-1/2 top-0 h-full w-px bg-line" />
+                                    <div
+                                      className={`h-full rounded-full ${item.score >= 0 ? "bg-success" : "bg-danger"}`}
+                                      style={{
+                                        width: `${Math.abs(item.score) * 50}%`,
+                                        marginLeft: item.score >= 0 ? "50%" : `${50 - Math.abs(item.score) * 50}%`,
+                                      }}
+                                    />
+                                  </div>
+                                  <span className="text-right text-xs font-mono tabular text-ink-4">{item.score.toFixed(2)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-5">
+                    {renderExplainSection(analysisResult.explain?.sections?.overlayObservations)}
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+                    {analysisResult.overlays.adjustedPortfolios.map((portfolio) => (
+                      <div key={portfolio.type} className="rounded-xl bg-bg-sunk border border-line p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-bold text-ink">{portfolioTypeLabel[portfolio.type] ?? portfolio.label}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-ink-3">{portfolio.userDescription}</p>
+                          </div>
+                          <span className="text-[11px] font-bold text-ink-4">{portfolio.riskLevel}</span>
+                        </div>
+                        <div className="mt-4 flex items-center gap-3">
+                          <div
+                            className="w-16 h-16 rounded-full border border-line flex-shrink-0"
+                            style={portfolioPieStyle(portfolio.weights)}
+                            aria-label={`${portfolio.label} 구성비 파이차트`}
+                          />
+                          <div className="min-w-0">
+                            <p className="text-[11px] text-ink-4">변동성</p>
+                            <p className="text-lg font-bold font-mono tabular text-ink">{formatPct(portfolio.volatility)}</p>
+                            <p className="mt-0.5 text-[11px] font-mono tabular text-ink-4">
+                              압력 반영 예시
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 flex flex-col gap-1.5">
+                          {portfolio.weights.map((weight) => (
+                            <div key={`${portfolio.type}-${weight.stockCode}`} className="flex items-center gap-2">
+                              <span className="w-20 truncate text-xs text-ink-3">{weight.companyName ?? weight.stockCode}</span>
+                              <div className="flex-1 h-2 rounded-full bg-surface overflow-hidden">
+                                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, weight.weight * 100))}%` }} />
+                              </div>
+                                  <span className="w-12 text-right text-xs font-mono tabular text-ink-4">{formatPct(weight.weight, 0)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-5">
+                    {renderExplainSection(analysisResult.explain?.sections?.portfolioComparison)}
+                  </div>
+
+                  {analysisResult.overlays.explanations?.length ? (
+                    <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      {analysisResult.overlays.explanations.slice(0, 8).map((item, index) => (
+                        <div key={`${item.overlayType}-${item.stockCode}-${index}`} className="rounded-xl bg-bg-sunk border border-line p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-semibold text-ink-4 truncate">
+                                {item.companyName ?? item.stockCode}
+                                {item.companyName && item.stockCode ? <span className="ml-1 font-mono tabular">({item.stockCode})</span> : null}
+                              </p>
+                              <p className="mt-0.5 text-sm font-bold text-ink">{item.title}</p>
+                            </div>
+                            <span className={`flex-shrink-0 text-xs font-mono tabular ${item.score >= 0 ? "text-success" : "text-danger"}`}>
+                              {item.score.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-xs leading-relaxed text-ink-3">{renderOverlayValue(item.overlayType, item.description)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {analysisResult.explain?.sections?.finalJudgement ? (
+                    <div className="mt-5">
+                      {renderExplainSection(analysisResult.explain.sections.finalJudgement)}
+                    </div>
+                  ) : analysisResult.explain?.text && !explainSections(analysisResult.explain).length ? (
+                    <div className="mt-5 rounded-xl bg-bg-sunk border border-line p-4">
                       <div className="flex items-center justify-between gap-2">
                         <h3 className="text-base font-bold text-ink">설명 요약</h3>
                         <span className="text-[11px] font-bold text-ink-4">{analysisResult.explain.provider}</span>
                       </div>
                       <p className="mt-3 text-sm leading-relaxed text-ink-3">{analysisResult.explain.text}</p>
                     </div>
-                  )}
-
-                  {analysisResult.overlays?.insightCards.length ? (
-                    <div className="rounded-2xl p-5 bg-surface border border-line shadow-card">
-                      <h3 className="text-base font-bold text-ink">보조 분석 Overlay</h3>
-                      <div className="mt-4 flex flex-col gap-3">
-                        {analysisResult.overlays.insightCards.map((card, index) => (
-                          <div key={`${card.overlayType}-${card.source}-${card.affectedHoldings.join("_")}-${index}`} className="rounded-xl bg-bg-sunk border border-line p-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm font-bold text-ink">{card.title}</p>
-                              <span className="text-[11px] font-bold text-ink-4">{card.cacheStatus}</span>
-                            </div>
-                            <p className="mt-1 text-xs leading-relaxed text-ink-3">{card.description}</p>
-                          </div>
-                        ))}
-                      </div>
-                      {analysisResult.overlays.holdingOverlayTable.length ? (
-                        <div className="mt-5 overflow-x-auto">
-                          <table className="w-full min-w-[560px] text-left text-xs">
-                            <thead className="text-ink-4">
-                              <tr>
-                                <th className="py-2 pr-3">종목</th>
-                                <th className="py-2 pr-3">분석</th>
-                                <th className="py-2 pr-3">값</th>
-                                <th className="py-2 pr-3">상태</th>
-                                <th className="py-2 pr-3">캐시</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {analysisResult.overlays.holdingOverlayTable.map((row, index) => (
-                                <tr key={`${row.stockCode}-${row.overlayType}-${index}`} className="border-t border-line text-ink-3">
-                                  <td className="py-2 pr-3 font-medium text-ink">{row.companyName ?? row.stockCode}</td>
-                                  <td className="py-2 pr-3">{row.label}</td>
-                                  <td className="py-2 pr-3 font-mono tabular">{row.value ?? "-"}</td>
-                                  <td className="py-2 pr-3">{row.severity}</td>
-                                  <td className="py-2 pr-3">{row.cacheStatus}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : null}
-                    </div>
                   ) : null}
-                </div>
-              )}
+                </section>
+              ) : null}
 
               {analysisResult.warnings.length > 0 && (
                 <div className="rounded-2xl p-4 bg-warn/10 border border-warn/20">

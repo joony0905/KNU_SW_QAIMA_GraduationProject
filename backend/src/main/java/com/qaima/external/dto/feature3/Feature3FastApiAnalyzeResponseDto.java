@@ -24,7 +24,7 @@ public record Feature3FastApiAnalyzeResponseDto(
                 basicPortfolios != null ? basicPortfolios.stream().map(PortfolioResult::toPublicDto).toList() : List.of(),
                 riskDrivers != null ? riskDrivers.stream().map(RiskDriver::toPublicDto).toList() : List.of(),
                 advanced != null ? advanced.toPublicDto() : null,
-                overlays != null ? overlays.toPublicDto() : new PortfolioAnalyzeResponseDto.OverlayResult(List.of(), List.of(), List.of()),
+                overlays != null ? overlays.toPublicDto() : new PortfolioAnalyzeResponseDto.OverlayResult(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of()),
                 explain != null ? explain.toPublicDto() : null,
                 warnings != null ? warnings.stream().map(Warning::toPublicDto).toList() : List.of(),
                 freshness != null ? freshness.toPublicDto() : null
@@ -285,13 +285,38 @@ public record Feature3FastApiAnalyzeResponseDto(
     public record OverlayResult(
             List<OverlayInsightCard> insightCards,
             List<HoldingOverlayRow> holdingOverlayTable,
-            List<Map<String, Object>> advancedOverlayExposure
+            List<Map<String, Object>> advancedOverlayExposure,
+            List<OverlaySignal> overlaySignals,
+            List<PortfolioResult> adjustedPortfolios,
+            List<Map<String, Object>> visualizations,
+            List<Map<String, Object>> explanations
     ) {
         PortfolioAnalyzeResponseDto.OverlayResult toPublicDto() {
             return new PortfolioAnalyzeResponseDto.OverlayResult(
                     insightCards != null ? insightCards.stream().map(OverlayInsightCard::toPublicDto).toList() : List.of(),
                     holdingOverlayTable != null ? holdingOverlayTable.stream().map(HoldingOverlayRow::toPublicDto).toList() : List.of(),
-                    advancedOverlayExposure != null ? advancedOverlayExposure : List.of()
+                    advancedOverlayExposure != null ? advancedOverlayExposure : List.of(),
+                    overlaySignals != null ? overlaySignals.stream().map(OverlaySignal::toPublicDto).toList() : List.of(),
+                    adjustedPortfolios != null ? adjustedPortfolios.stream().map(PortfolioResult::toPublicDto).toList() : List.of(),
+                    visualizations != null ? visualizations : List.of(),
+                    explanations != null ? explanations : List.of()
+            );
+        }
+    }
+
+    public record OverlaySignal(
+            String stockCode,
+            String companyName,
+            String overlayType,
+            String label,
+            Double score,
+            String severity,
+            String source,
+            String evidence
+    ) {
+        PortfolioAnalyzeResponseDto.OverlaySignal toPublicDto() {
+            return new PortfolioAnalyzeResponseDto.OverlaySignal(
+                    stockCode, companyName, overlayType, label, score, severity, source, evidence
             );
         }
     }
@@ -334,6 +359,8 @@ public record Feature3FastApiAnalyzeResponseDto(
             String provider,
             String model,
             String text,
+            ExplainSections sections,
+            ExplainOverall overall,
             List<Warning> warnings
     ) {
         PortfolioAnalyzeResponseDto.ExplainResult toPublicDto() {
@@ -341,7 +368,55 @@ public record Feature3FastApiAnalyzeResponseDto(
                     provider,
                     model,
                     text,
+                    sections != null ? sections.toPublicDto() : null,
+                    overall != null ? overall.toPublicDto() : null,
                     warnings != null ? warnings.stream().map(Warning::toPublicDto).toList() : List.of()
+            );
+        }
+    }
+
+    public record ExplainSections(
+            ExplainSection coreRisk,
+            ExplainSection overlayObservations,
+            ExplainSection portfolioComparison,
+            ExplainSection volatilityAnalysis,
+            ExplainSection efficiencyAnalysis,
+            ExplainSection finalJudgement
+    ) {
+        PortfolioAnalyzeResponseDto.ExplainSections toPublicDto() {
+            return new PortfolioAnalyzeResponseDto.ExplainSections(
+                    coreRisk != null ? coreRisk.toPublicDto() : null,
+                    overlayObservations != null ? overlayObservations.toPublicDto() : null,
+                    portfolioComparison != null ? portfolioComparison.toPublicDto() : null,
+                    volatilityAnalysis != null ? volatilityAnalysis.toPublicDto() : null,
+                    efficiencyAnalysis != null ? efficiencyAnalysis.toPublicDto() : null,
+                    finalJudgement != null ? finalJudgement.toPublicDto() : null
+            );
+        }
+    }
+
+    public record ExplainSection(
+            String title,
+            String summary,
+            List<String> bullets
+    ) {
+        PortfolioAnalyzeResponseDto.ExplainSection toPublicDto() {
+            return new PortfolioAnalyzeResponseDto.ExplainSection(title, summary, bullets != null ? bullets : List.of());
+        }
+    }
+
+    public record ExplainOverall(
+            String summary,
+            List<String> bullets,
+            List<String> risks,
+            String conclusion
+    ) {
+        PortfolioAnalyzeResponseDto.ExplainOverall toPublicDto() {
+            return new PortfolioAnalyzeResponseDto.ExplainOverall(
+                    summary,
+                    bullets != null ? bullets : List.of(),
+                    risks != null ? risks : List.of(),
+                    conclusion
             );
         }
     }

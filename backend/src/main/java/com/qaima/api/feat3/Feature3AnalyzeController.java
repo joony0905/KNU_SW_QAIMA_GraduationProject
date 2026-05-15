@@ -53,9 +53,16 @@ public class Feature3AnalyzeController {
         return feature3OverlayService.estimateCredit(req)
                 .flatMap(cost -> creditService.useFeature3(userId, cost, referenceId)
                         .then(toFastApiRequest(req))
-                        .flatMap(fastApiRequest -> analysisApiClient.requestPortfolioAnalysis(fastApiRequest)
+                        .flatMap(fastApiRequest -> {
+                            PortfolioAnalyzeRequestDto resolvedReq = withResolvedHoldings(req, fastApiRequest.holdings());
+                            return feature3OverlayService.loadOverlaySignals(resolvedReq)
+                                    .map(signals -> withOverlaySignals(fastApiRequest, signals))
+                                    .flatMap(requestWithSignals -> analysisApiClient.requestPortfolioAnalysis(requestWithSignals)
                                 .map(response -> response.toPublicDto())
-                                .flatMap(response -> feature3OverlayService.enrich(req, response))
+                                .flatMap(response -> feature3OverlayService.enrich(
+                                        resolvedReq,
+                                        response
+                                ))
                                 .map(ApiResponse::success)
                                 .onErrorResume(ex -> creditService.refundFeature3(
                                                 userId,
@@ -63,7 +70,8 @@ public class Feature3AnalyzeController {
                                                 referenceId,
                                                 "FEATURE3_ANALYZE_FAILED"
                                         )
-                                        .then(Mono.error(ex)))));
+                                        .then(Mono.error(ex))));
+                        }));
     }
 
     @PostMapping("/overlay-cache/preview")
@@ -129,9 +137,51 @@ public class Feature3AnalyzeController {
                                 riskFree.source(),
                                 riskFree.asOf(),
                                 options != null ? options.maxCashWeight() : null
-                        )
+                        ),
+                        List.of()
                 );
                 });
+    }
+
+    private Feature3FastApiAnalyzeRequestDto withOverlaySignals(
+            Feature3FastApiAnalyzeRequestDto request,
+            List<Feature3FastApiAnalyzeRequestDto.OverlaySignal> overlaySignals
+    ) {
+        return new Feature3FastApiAnalyzeRequestDto(
+                request.portfolioId(),
+                request.holdings(),
+                request.cashPositions(),
+                request.riskProfile(),
+                request.options(),
+                overlaySignals != null ? overlaySignals : List.of()
+        );
+    }
+
+    private PortfolioAnalyzeRequestDto withResolvedHoldings(
+            PortfolioAnalyzeRequestDto original,
+            List<Feature3FastApiAnalyzeRequestDto.Holding> resolvedHoldings
+    ) {
+        if (resolvedHoldings == null || resolvedHoldings.isEmpty()) {
+            return original;
+        }
+        List<PortfolioAnalyzeRequestDto.Holding> holdings = resolvedHoldings.stream()
+                .map(holding -> new PortfolioAnalyzeRequestDto.Holding(
+                        holding.stockCode(),
+                        holding.companyName(),
+                        holding.quantity(),
+                        holding.avgPrice(),
+                        holding.currentPrice(),
+                        holding.currency(),
+                        holding.assetType()
+                ))
+                .toList();
+        return new PortfolioAnalyzeRequestDto(
+                original.portfolioId(),
+                holdings,
+                original.cashPositions(),
+                original.riskProfile(),
+                original.options()
+        );
     }
 
     private Mono<Feature3FastApiAnalyzeRequestDto.Holding> toFastApiHolding(PortfolioAnalyzeRequestDto.Holding holding) {

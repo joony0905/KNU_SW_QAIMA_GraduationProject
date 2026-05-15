@@ -5,7 +5,7 @@ import type { ApiResponse } from "../types/common/api";
 
 export type Feature3ProfileType = "CONSERVATIVE" | "NEUTRAL" | "AGGRESSIVE";
 export type Feature3RiskLevel = "LOW" | "MID" | "HIGH";
-export type Feature3PortfolioType = "CURRENT" | "STABLE" | "BALANCED" | "AGGRESSIVE" | "PSYCHOLOGICAL" | "MIN_VOL" | "MAX_SHARPE" | "UTILITY_OPTIMAL" | "THEORETICAL_UTILITY";
+export type Feature3PortfolioType = "CURRENT" | "STABLE" | "BALANCED" | "AGGRESSIVE" | "PSYCHOLOGICAL" | "MIN_VOL" | "MAX_SHARPE" | "UTILITY_OPTIMAL" | "THEORETICAL_UTILITY" | "OVERLAY_BALANCED" | "QUALITY_TILT" | "MOMENTUM_AWARE" | "NEWS_GUARDED" | "DIVERSIFICATION_TILT";
 
 export type PortfolioHoldingRequest = {
   stockCode: string;
@@ -245,11 +245,58 @@ export type PortfolioAnalyzeResponse = {
       cacheStatus: "HIT" | "STALE" | "MISS" | "BYPASSED";
     }>;
     advancedOverlayExposure: Array<Record<string, unknown>>;
+    overlaySignals: Array<{
+      stockCode: string;
+      companyName?: string | null;
+      overlayType: string;
+      label: string;
+      score: number;
+      severity: "INFO" | "WARN" | "ERROR";
+      source: string;
+      evidence?: string | null;
+    }>;
+    adjustedPortfolios: Feature3PortfolioResult[];
+    visualizations: Array<{
+      type: string;
+      title: string;
+      chartType: string;
+      items: Array<{
+        stockCode: string;
+        companyName?: string | null;
+        label: string;
+        score: number;
+        severity: "INFO" | "WARN" | "ERROR";
+        evidence?: string | null;
+      }>;
+    }>;
+    explanations: Array<{
+      stockCode: string;
+      companyName?: string | null;
+      overlayType: string;
+      title: string;
+      description: string;
+      score: number;
+      severity: "INFO" | "WARN" | "ERROR";
+    }>;
   };
   explain?: {
     provider: string;
     model?: string | null;
     text?: string | null;
+    sections?: {
+      coreRisk?: Feature3ExplainSection | null;
+      overlayObservations?: Feature3ExplainSection | null;
+      portfolioComparison?: Feature3ExplainSection | null;
+      volatilityAnalysis?: Feature3ExplainSection | null;
+      efficiencyAnalysis?: Feature3ExplainSection | null;
+      finalJudgement?: Feature3ExplainSection | null;
+    } | null;
+    overall?: {
+      summary?: string | null;
+      bullets?: string[] | null;
+      risks?: string[] | null;
+      conclusion?: string | null;
+    } | null;
     warnings: Feature3Warning[];
   } | null;
   warnings: Feature3Warning[];
@@ -269,6 +316,12 @@ export type PortfolioAnalyzeResponse = {
       source: string;
     }>;
   };
+};
+
+export type Feature3ExplainSection = {
+  title?: string | null;
+  summary?: string | null;
+  bullets?: string[] | null;
 };
 
 export const fetchPortfolioAnalysis = async (

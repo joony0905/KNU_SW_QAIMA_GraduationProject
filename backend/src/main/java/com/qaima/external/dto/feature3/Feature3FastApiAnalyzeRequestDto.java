@@ -7,7 +7,8 @@ public record Feature3FastApiAnalyzeRequestDto(
         List<Holding> holdings,
         List<CashPosition> cashPositions,
         RiskProfile riskProfile,
-        Options options
+        Options options,
+        List<OverlaySignal> overlaySignals
 ) {
     public record Holding(
             String stockCode,
@@ -52,6 +53,18 @@ public record Feature3FastApiAnalyzeRequestDto(
             String riskFreeRateSource,
             String riskFreeRateAsOf,
             Double maxCashWeight
+    ) {
+    }
+
+    public record OverlaySignal(
+            String stockCode,
+            String companyName,
+            String overlayType,
+            String label,
+            Double score,
+            String severity,
+            String source,
+            String evidence
     ) {
     }
 }

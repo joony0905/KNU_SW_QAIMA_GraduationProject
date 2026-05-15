@@ -16,6 +16,11 @@ PortfolioType = Literal[
     "MAX_SHARPE",
     "UTILITY_OPTIMAL",
     "THEORETICAL_UTILITY",
+    "OVERLAY_BALANCED",
+    "QUALITY_TILT",
+    "MOMENTUM_AWARE",
+    "NEWS_GUARDED",
+    "DIVERSIFICATION_TILT",
 ]
 RiskLevel = Literal["LOW", "MID", "HIGH"]
 Suitability = Literal["CONSERVATIVE_THAN_PROFILE", "ALIGNED", "AGGRESSIVE_THAN_PROFILE"]
@@ -65,12 +70,24 @@ class Feature3AnalyzeOptions(BaseModel):
     max_cash_weight: float | None = Field(default=None, ge=0, le=1)
 
 
+class Feature3OverlaySignal(BaseModel):
+    stock_code: str
+    company_name: str | None = None
+    overlay_type: str
+    label: str
+    score: float = Field(ge=-1, le=1)
+    severity: WarningSeverity = "INFO"
+    source: str = "FEATURE3"
+    evidence: str | None = None
+
+
 class PortfolioAnalyzeRequest(BaseModel):
     portfolio_id: int | None = None
     holdings: list[Feature3HoldingRequest] = Field(min_length=1)
     cash_positions: list[Feature3CashPositionRequest] = Field(default_factory=list)
     risk_profile: Feature3RiskProfileRequest
     options: Feature3AnalyzeOptions = Field(default_factory=Feature3AnalyzeOptions)
+    overlay_signals: list[Feature3OverlaySignal] = Field(default_factory=list)
 
 
 class Feature3Warning(BaseModel):
@@ -280,12 +297,18 @@ class Feature3OverlayResult(BaseModel):
     insight_cards: list[Feature3OverlayInsightCard] = Field(default_factory=list)
     holding_overlay_table: list[Feature3HoldingOverlayRow] = Field(default_factory=list)
     advanced_overlay_exposure: list[dict] = Field(default_factory=list)
+    overlay_signals: list[Feature3OverlaySignal] = Field(default_factory=list)
+    adjusted_portfolios: list[Feature3PortfolioResult] = Field(default_factory=list)
+    visualizations: list[dict] = Field(default_factory=list)
+    explanations: list[dict] = Field(default_factory=list)
 
 
 class Feature3ExplainResult(BaseModel):
     provider: str = "DETERMINISTIC"
     model: str | None = None
     text: str | None = None
+    sections: dict[str, dict] | None = None
+    overall: dict | None = None
     warnings: list[Feature3Warning] = Field(default_factory=list)
 
 
