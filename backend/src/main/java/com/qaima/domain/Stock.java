@@ -85,6 +85,9 @@ public class Stock {
     @Column(name = "sec_synced_at")
     private Instant secSyncedAt;
 
+    @Column(name = "sec_issued_shares_synced_at")
+    private Instant secIssuedSharesSyncedAt;
+
     private LocalDate listedAt;
     private LocalDate delistedAt;
 

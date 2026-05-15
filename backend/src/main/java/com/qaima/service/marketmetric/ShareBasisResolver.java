@@ -27,6 +27,9 @@ public class ShareBasisResolver {
     private static final String SHARE_TYPE_PREFERRED = "우선주";
     private static final String SHARE_TYPE_TOTAL = "합계";
 
+    private static final String SHARE_TYPE_SEC_COMMON = "COMMON";
+    private static final String SHARE_TYPE_SEC_TOTAL = "TOTAL";
+
     private final IssuedSharesRepository issuedSharesRepository;
     private final KrStockClient krStockClient;
 
@@ -49,7 +52,13 @@ public class ShareBasisResolver {
         }
         IssuedShares issuedShares = findIssuedShares(stock, SHARE_TYPE_COMMON, asOfDate);
         if (issuedShares == null) {
+            issuedShares = findIssuedShares(stock, SHARE_TYPE_SEC_COMMON, asOfDate);
+        }
+        if (issuedShares == null) {
             issuedShares = findIssuedShares(stock, SHARE_TYPE_TOTAL, asOfDate);
+        }
+        if (issuedShares == null) {
+            issuedShares = findIssuedShares(stock, SHARE_TYPE_SEC_TOTAL, asOfDate);
         }
         return issuedShares;
     }
@@ -64,6 +73,9 @@ public class ShareBasisResolver {
         }
         IssuedShares primaryIssuedShares = findPrimaryIssuedShares(stock, asOfDate);
         IssuedShares totalIssuedShares = findIssuedShares(stock, SHARE_TYPE_TOTAL, asOfDate);
+        if (totalIssuedShares == null) {
+            totalIssuedShares = findIssuedShares(stock, SHARE_TYPE_SEC_TOTAL, asOfDate);
+        }
         return fromIssuedShares(primaryIssuedShares, totalIssuedShares);
     }
 

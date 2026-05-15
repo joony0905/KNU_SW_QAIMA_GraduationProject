@@ -11,7 +11,13 @@ finra:
 sec:
   edgar:
     base-url: "https://www.sec.gov"
+    data-base-url: "https://data.sec.gov"
     user-agent: ${SEC_EDGAR_USER_AGENT:qaima-dev contact@example.com}
+  issued-shares:
+    sync:
+      enabled: true
+      daily-cron: "0 0 18 * * *"
+      limit: 300
 
 feature2:
   news:

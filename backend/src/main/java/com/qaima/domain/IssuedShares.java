@@ -49,15 +49,15 @@ public class IssuedShares {
     private Stock stock;
 
     // OpenDART 공시 접수번호
-    @Column(name = "rcept_no", nullable = false, length = 14)
+    @Column(name = "rcept_no", nullable = false, length = 32)
     private String rceptNo;
 
     // 법인 구분(Y: 유가, K: 코스닥, N: 코넥스 등)
-    @Column(name = "corp_cls", length = 1)
+    @Column(name = "corp_cls", length = 10)
     private String corpCls;
 
     // OpenDART 회사 고유 코드
-    @Column(name = "corp_code", nullable = false, length = 8)
+    @Column(name = "corp_code", nullable = false, length = 10)
     private String corpCode;
 
     // OpenDART 회사명
