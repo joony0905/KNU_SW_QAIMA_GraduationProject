@@ -8,6 +8,7 @@ import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.service.credit.CreditService;
 import com.qaima.service.featone.FeatOneResult;
 import com.qaima.service.featone.FeatOneService;
+import com.qaima.service.feature3.Feature3OverlayService;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -29,6 +30,7 @@ public class FeatOneController {
 
     private final FeatOneService featOneService;
     private final CreditService creditService;
+    private final Feature3OverlayService feature3OverlayService;
 
     @PostMapping("/analyze")
     public Mono<ApiResponse<FeatOneAnalysisResponseDto>> analyze(
@@ -50,6 +52,12 @@ public class FeatOneController {
 
         return creditService.useFeature1(userId, referenceId)
                 .then(analysis
+                        .flatMap(result -> feature3OverlayService
+                                .cacheFeature1Metrics(
+                                        request.getStockCode(),
+                                        result.getData() != null ? result.getData().getMetrics() : null
+                                )
+                                .thenReturn(result))
                         .map(this::toApiResponse)
                         .onErrorResume(ex -> creditService
                                 .refundFeature1(userId, referenceId, "FEATURE1_ANALYZE_FAILED")
