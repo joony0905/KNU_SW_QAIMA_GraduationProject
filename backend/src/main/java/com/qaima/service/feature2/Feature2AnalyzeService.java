@@ -3,7 +3,9 @@ package com.qaima.service.feature2;
 import com.qaima.common.ErrorCode;
 import com.qaima.common.Feat2WarningCode;
 import com.qaima.domain.BaseRate;
+import com.qaima.domain.Exchange;
 import com.qaima.domain.ShortSelling;
+import com.qaima.domain.Stock;
 import com.qaima.dto.feature2.Feature2AnalyzeRequestDto;
 import com.qaima.dto.feature2.Feature2AnalyzeResponseDto;
 import com.qaima.dto.feature2.Feature2ExplainMetricsDto;
@@ -16,6 +18,7 @@ import com.qaima.external.AnalysisApiClient;
 import com.qaima.repository.BaseRateRepository;
 import com.qaima.repository.ShortSellingRepository;
 import com.qaima.service.baserate.BaseRateSyncService;
+import com.qaima.service.baserate.FredBaseRateSyncService;
 import com.qaima.service.feature2.model.Feature2Command;
 import com.qaima.service.feature2.model.Feature2IndustryContext;
 import com.qaima.service.feature2.model.Feature2StockContext;
@@ -88,7 +91,7 @@ public class Feature2AnalyzeService {
                     Feature2StockContext stockContext = stockContextOpt.get();
                     metricsAssembler.attachStock(metrics, stockContext);
 
-                    return attachBaseRate(meta, metrics)
+                    return attachBaseRate(stockContext, meta, metrics)
                             .then(attachMacroRates(command, meta, metrics))
                             .then(attachShortSelling(stockContext, meta, metrics))
                             .then(attachInvestorFlow(stockContext, command, meta, metrics))
@@ -125,10 +128,11 @@ public class Feature2AnalyzeService {
     }
 
     private Mono<Void> attachBaseRate(
+            Feature2StockContext stockContext,
             Feature2MetaDto meta,
             Feature2MetricsDto metrics
     ) {
-        return baseRateFeatureService.loadLatest(meta)
+        return baseRateFeatureService.loadLatest(stockContext, meta)
                 .doOnNext(baseRate -> metricsAssembler.attachBaseRate(metrics, baseRate))
                 .then();
     }
@@ -275,20 +279,22 @@ public class Feature2AnalyzeService {
     ) {
         int safeWindow = Math.max(1, Math.min(command.window(), 365));
         return Mono.when(
-                attachBaseRateTrendSummary(safeWindow, meta, metrics),
+                attachBaseRateTrendSummary(stockContext, safeWindow, meta, metrics),
                 attachShortSellingTrendSummary(stockContext, safeWindow, meta, metrics)
         ).then();
     }
 
     private Mono<Void> attachBaseRateTrendSummary(
+            Feature2StockContext stockContext,
             int window,
             Feature2MetaDto meta,
             Feature2MetricsDto metrics
     ) {
+        BaseRateSeriesSpec spec = resolveBaseRateSeriesSpec(stockContext);
         return Mono.fromCallable(() -> baseRateRepository.findByStatCodeAndItemCodeAndCycleOrderByBaseDateDesc(
-                        BaseRateSyncService.DEFAULT_STAT_CODE,
-                        BaseRateSyncService.DEFAULT_ITEM_CODE,
-                        BaseRateSyncService.DEFAULT_CYCLE,
+                        spec.statCode(),
+                        spec.itemCode(),
+                        spec.cycle(),
                         PageRequest.of(0, Math.max(1, Math.min(window, 1095)))
                 ))
                 .subscribeOn(Schedulers.boundedElastic())
@@ -558,6 +564,41 @@ public class Feature2AnalyzeService {
         return "FLAT";
     }
 
+    private BaseRateSeriesSpec resolveBaseRateSeriesSpec(Feature2StockContext stockContext) {
+        if (isUsStock(stockContext)) {
+            return new BaseRateSeriesSpec(
+                    FredBaseRateSyncService.FED_FUNDS_STAT_CODE,
+                    FredBaseRateSyncService.FED_FUNDS_ITEM_CODE,
+                    FredBaseRateSyncService.DEFAULT_CYCLE
+            );
+        }
+        return new BaseRateSeriesSpec(
+                BaseRateSyncService.DEFAULT_STAT_CODE,
+                BaseRateSyncService.DEFAULT_ITEM_CODE,
+                BaseRateSyncService.DEFAULT_CYCLE
+        );
+    }
+
+    private boolean isUsStock(Feature2StockContext stockContext) {
+        if (stockContext == null) {
+            return false;
+        }
+        Stock stock = stockContext.stock();
+        if (stock == null) {
+            return false;
+        }
+        Exchange exchange = stock.getExchange();
+        if (exchange == null) {
+            return false;
+        }
+        String country = exchange.getCountry();
+        if ("US".equalsIgnoreCase(country)) {
+            return true;
+        }
+        String exchangeCode = exchange.getCode();
+        return "NASDAQ".equalsIgnoreCase(exchangeCode) || "NYSE".equalsIgnoreCase(exchangeCode);
+    }
+
     private int countByLabel(List<NewsItemDto> newsList, String label) {
         if (newsList == null || label == null) {
             return 0;
@@ -578,5 +619,12 @@ public class Feature2AnalyzeService {
             return "negative";
         }
         return "neutral";
+    }
+
+    private record BaseRateSeriesSpec(
+            String statCode,
+            String itemCode,
+            String cycle
+    ) {
     }
 }

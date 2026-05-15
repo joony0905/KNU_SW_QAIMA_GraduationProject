@@ -80,6 +80,10 @@ public class Feature2MetricsDto {
         private LocalDate date;
         private BigDecimal value;
         private String unit;
+        private String source;
+        private String countryCode;
+        private String statCode;
+        private String itemCode;
     }
 
     @Getter
