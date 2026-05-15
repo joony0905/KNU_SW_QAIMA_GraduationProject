@@ -941,7 +941,7 @@ export default function Feature2MockPage() {
               : "0.00%";
           const mainColorClass = getColorClassByNumber(mainNumericChange);
           return (
-        <main className="w-full flex flex-col xl:flex-row justify-center items-start gap-6">
+        <main className="w-full flex flex-col xl:flex-row justify-center xl:items-stretch gap-6">
           <div className="flex-1 flex flex-col gap-5">
             <section className="w-full flex flex-col gap-3 sm:gap-4">
               <div className="flex items-start justify-between gap-4">
@@ -1085,7 +1085,7 @@ export default function Feature2MockPage() {
             </section>
           </div>
 
-          <div className="w-full xl:w-[440px] 2xl:w-[480px] flex flex-col items-stretch">
+          <div className="w-full xl:w-[440px] 2xl:w-[480px] flex flex-col">
             <Feature2ExternalFactorPanel
               stockName={mainStock.name}
               baseRateMetrics={baseRateMetrics}
@@ -1213,42 +1213,51 @@ export default function Feature2MockPage() {
           </section>
         )}
 
-        <AnalysisResultPanel
-          result={
-            analysisResult
-              ? {
-                  explain: feature2Explain,
-                  warnings: analysisResult?.meta?.warnings ?? null,
-                  metrics: {
-                    stock: analysisData?.metrics?.stock ?? null,
-                    peerCluster: analysisData?.metrics?.peerCluster ?? null,
-                    shortSelling: analysisData?.metrics?.shortSelling ?? null,
-                    shortSellingTrendSummary: analysisData?.metrics?.shortSellingTrendSummary ?? null,
-                    shortSellingSeries: shortSellingSeriesResult?.data ?? null,
-                    baseRate: analysisData?.metrics?.baseRate ?? null,
-                    macroRates: analysisData?.metrics?.macroRates ?? macroRates,
-                    macroRatesSeries: analysisData?.metrics?.macroRatesSeries ?? macroRatesSeriesResult?.data ?? null,
-                    investorFlow: analysisData?.metrics?.investorFlow ?? investorFlow,
-                    baseRateTrendSummary: analysisData?.metrics?.baseRateTrendSummary ?? null,
-                    baseRateSeries: baseRateSeriesResult?.data ?? null,
-                    newsSentimentSummary: analysisData?.metrics?.newsSentimentSummary ?? null,
-                    newsList: analysisData?.metrics?.newsList ?? null,
-                  },
-                  meta: analysisResult?.meta,
-                }
-              : null
-          }
-          loading={loading}
-          err={err}
-          showAnalyzeButton={false}
-          onAnalyze={handleAnalyzeClick}
-          onDownload={() => {}}
-          onZoom={() => {}}
-          llmVendor={llmVendor}
-          onLlmVendorChange={setLlmVendor}
-          displayText={displayText}
-          layout="full"
-        />
+        {!analysisResult && !loading && !err && (
+          <div className="w-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-24 bg-bg-sunk border-line text-ink-4">
+            <p className="text-base font-medium">분석 결과가 여기에 표시됩니다</p>
+            <p className="text-sm mt-1">분석을 실행해주세요</p>
+          </div>
+        )}
+
+        {(loading || !!err || !!analysisResult) && (
+          <AnalysisResultPanel
+            result={
+              analysisResult
+                ? {
+                    explain: feature2Explain,
+                    warnings: analysisResult?.meta?.warnings ?? null,
+                    metrics: {
+                      stock: analysisData?.metrics?.stock ?? null,
+                      peerCluster: analysisData?.metrics?.peerCluster ?? null,
+                      shortSelling: analysisData?.metrics?.shortSelling ?? null,
+                      shortSellingTrendSummary: analysisData?.metrics?.shortSellingTrendSummary ?? null,
+                      shortSellingSeries: shortSellingSeriesResult?.data ?? null,
+                      baseRate: analysisData?.metrics?.baseRate ?? null,
+                      macroRates: analysisData?.metrics?.macroRates ?? macroRates,
+                      macroRatesSeries: analysisData?.metrics?.macroRatesSeries ?? macroRatesSeriesResult?.data ?? null,
+                      investorFlow: analysisData?.metrics?.investorFlow ?? investorFlow,
+                      baseRateTrendSummary: analysisData?.metrics?.baseRateTrendSummary ?? null,
+                      baseRateSeries: baseRateSeriesResult?.data ?? null,
+                      newsSentimentSummary: analysisData?.metrics?.newsSentimentSummary ?? null,
+                      newsList: analysisData?.metrics?.newsList ?? null,
+                    },
+                    meta: analysisResult?.meta,
+                  }
+                : null
+            }
+            loading={loading}
+            err={err}
+            showAnalyzeButton={false}
+            onAnalyze={handleAnalyzeClick}
+            onDownload={() => {}}
+            onZoom={() => {}}
+            llmVendor={llmVendor}
+            onLlmVendorChange={setLlmVendor}
+            displayText={displayText}
+            layout="full"
+          />
+        )}
         </>)}
 
         {toast.visible && (

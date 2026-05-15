@@ -1102,6 +1102,13 @@ export default function StocksMockPage() {
             )}
 
             {/* ========== 하단 분석 결과 영역 ========== */}
+            {!analysisData && !loading && !err && (
+              <div className="w-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-24 bg-bg-sunk border-line text-ink-4">
+                <p className="text-base font-medium">분석 결과가 여기에 표시됩니다</p>
+                <p className="text-sm mt-1">분석을 실행해주세요</p>
+              </div>
+            )}
+
             {(loading || !!err || !!analysisData) && <div ref={pdfRef}>
               <AnalysisResultPanel
                 result={analysisData ? {

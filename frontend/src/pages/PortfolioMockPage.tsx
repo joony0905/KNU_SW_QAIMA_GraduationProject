@@ -1025,7 +1025,7 @@ export default function PortfolioMockPage() {
                     {EXTRA_OPTIONS.map((opt) => (
                       <label
                         key={opt.key}
-                        className="group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors hover:bg-bg-sunk"
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors hover:bg-bg-sunk"
                       >
                         <input
                           type="checkbox"
@@ -1034,7 +1034,7 @@ export default function PortfolioMockPage() {
                           className="w-4 h-4 cursor-pointer accent-accent flex-shrink-0"
                         />
                         <span className="text-sm font-medium text-ink-2">{opt.label}</span>
-                        <div className="relative flex-shrink-0">
+                        <div className="group relative flex-shrink-0">
                           <Info size={14} className="transition-colors text-ink-4 group-hover:text-ink-3" />
                           <div className="absolute left-5 top-0 w-64 p-2.5 text-xs rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-30 leading-relaxed bg-ink text-bg">
                             {opt.descriptions.map((d, i) => (
@@ -1169,6 +1169,10 @@ export default function PortfolioMockPage() {
               <p className="text-sm text-ink-3 mt-1">
                 변동성 · 분산 구조 · 효율성을 종합한 리포트
               </p>
+              {!loading && riskGamma === null && (
+                <p className="text-xs text-ink-4 mt-1.5">투자 성향 지수를 먼저 입력해주세요.</p>
+              )}
+              {err && <p className="text-xs text-danger mt-1.5">{err}</p>}
             </div>
             <div className="flex flex-col items-end gap-1 flex-shrink-0">
               <div className="flex items-center gap-3">

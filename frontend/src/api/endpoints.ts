@@ -28,6 +28,10 @@ export const ENDPOINTS = {
     deleteItem: (itemId: number) => `/watchlist/items/${itemId}`,
     updateItem: (itemId: number) => `/watchlist/items/${itemId}`,
   },
+  featuredStocks: {
+    getByTopic: (topic: string, limit = 10) =>
+      `/featured-stocks?topic=${topic}&limit=${limit}`,
+  },
   analysis: {
     analyze: () => "/feature1/analyze",
   },

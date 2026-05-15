@@ -425,8 +425,8 @@ export default function MainPage() {
   return (
     <div className="min-h-screen bg-bg text-ink ml-[84px]">
       {/* HERO */}
-      <section className="px-8 sm:px-12 lg:px-16 pt-16 sm:pt-20 pb-14">
-        <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-12 items-center max-w-[1400px] mx-auto">
+      <section className="pt-16 sm:pt-20 pb-14 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-12 items-start max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           {/* 좌측 */}
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-soft text-accent-ink text-xs font-mono font-semibold tracking-wider mb-6">
@@ -485,15 +485,15 @@ export default function MainPage() {
           </div>
 
           {/* 우측 — AI 비주얼 */}
-          <div className="grid place-items-center">
+          <div className="hidden lg:flex items-start justify-end overflow-hidden">
             <HeroVisual />
           </div>
         </div>
       </section>
 
       {/* FEATURES */}
-      <section className="px-8 sm:px-12 lg:px-16 py-20">
-        <div className="max-w-[1400px] mx-auto">
+      <section className="py-20">
+        <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <SectionHead
             eyebrow="WHAT QAIMA DOES"
             title="3가지 시선으로, 한 종목을 본다"
@@ -569,8 +569,8 @@ export default function MainPage() {
       </section>
 
       {/* DATA SOURCES */}
-      <section className="px-8 sm:px-12 lg:px-16 py-20">
-        <div className="max-w-[1400px] mx-auto">
+      <section className="py-20">
+        <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <SectionHead
             eyebrow="DATA YOU CAN TRUST"
             title="공식 출처에서, 실시간으로"
@@ -589,8 +589,8 @@ export default function MainPage() {
       </section>
 
       {/* FINAL CTA */}
-      <section className="px-8 sm:px-12 lg:px-16 py-20 pb-24">
-        <div className="max-w-[1400px] mx-auto">
+      <section className="py-20 pb-24">
+        <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <div
             className="rounded-3xl px-10 sm:px-14 py-14 sm:py-16 relative overflow-hidden"
             style={{

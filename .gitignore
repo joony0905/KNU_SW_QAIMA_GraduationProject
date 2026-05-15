@@ -1519,3 +1519,6 @@ data/financials_kosdaq_2020_2025.csv
 /backend/.gradle-home/wrapper/dists/gradle-8.14-bin/38aieal9i53h9rfe7vjup95b9/gradle-8.14-bin.zip.lck
 /backend/.gradle-home/wrapper/dists/gradle-8.14-bin/38aieal9i53h9rfe7vjup95b9/gradle-8.14-bin.zip.ok
 /backend/.gradle-home/wrapper/dists/CACHEDIR.TAG
+backend/src/main/java/com/qaima/importer/StockCsvImportRunner.java
+.gitignore
+backend/src/main/java/com/qaima/importer/StockCsvImportService.java
