@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useDictionary } from "./DictContext";
 
 interface DictTermProps {
@@ -36,14 +37,14 @@ export default function DictTerm({ term, children }: DictTermProps) {
             e.stopPropagation();
             setModalOpen(true);
           }}
-          className="relative -top-1 w-3.5 h-3.5 rounded-full bg-line hover:bg-accent text-[9px] font-bold text-white flex items-center justify-center flex-shrink-0 transition-colors"
+          className="w-3.5 h-3.5 rounded-full bg-ink-4 hover:bg-accent text-[9px] font-bold text-white flex items-center justify-center flex-shrink-0 transition-colors"
           title={entry.term}
         >
           ?
         </button>
       </span>
 
-      {modalOpen && (
+      {modalOpen && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
           onClick={() => setModalOpen(false)}
@@ -71,7 +72,8 @@ export default function DictTerm({ term, children }: DictTermProps) {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

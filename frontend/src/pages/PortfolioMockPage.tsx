@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2, Plus, Info, ClipboardList, Sun, Moon } from "lucide-react";
+import { Trash2, Plus, Info, ClipboardList, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchCell from "../components/StockSearchCell";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { fetchPortfolioAnalysis } from "../api/portfolio";
 import { getApiErrorMessage } from "../utils/errorMessage";
+import { LLM_VENDOR_OPTIONS } from "../components/AnalysisResultPanel";
 
 const RISK_GAMMA_STORAGE_KEY = "qaima_risk_gamma";
 const SURVEY_RESULT_STORAGE_KEY = "qaima_survey_result";
@@ -191,6 +192,19 @@ export default function PortfolioMockPage() {
   const [analysisResult, setAnalysisResult] = useState<PortfolioAnalyzeResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
+  const [isModelOpen, setIsModelOpen] = useState(false);
+  const modelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!modelRef.current) return;
+      if (modelRef.current.contains(e.target as Node)) return;
+      setIsModelOpen(false);
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  }, []);
 
   const toggleExtraOption = (key: string) => {
     setExtraOptions((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -515,7 +529,7 @@ export default function PortfolioMockPage() {
                     {EXTRA_OPTIONS.map((opt) => (
                       <label
                         key={opt.key}
-                        className="group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors hover:bg-bg-sunk"
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer transition-colors hover:bg-bg-sunk"
                       >
                         <input
                           type="checkbox"
@@ -524,7 +538,7 @@ export default function PortfolioMockPage() {
                           className="w-4 h-4 cursor-pointer accent-accent flex-shrink-0"
                         />
                         <span className="text-sm font-medium text-ink-2">{opt.label}</span>
-                        <div className="relative flex-shrink-0">
+                        <div className="group relative flex-shrink-0">
                           <Info size={14} className="transition-colors text-ink-4 group-hover:text-ink-3" />
                           <div className="absolute left-5 top-0 w-64 p-2.5 text-xs rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-30 leading-relaxed bg-ink text-bg">
                             {opt.descriptions.map((d, i) => (
@@ -611,8 +625,41 @@ export default function PortfolioMockPage() {
               <p className="text-sm text-ink-3 mt-1">
                 변동성 · 분산 구조 · 효율성을 종합한 리포트
               </p>
+              {!loading && riskGamma === null && (
+                <p className="text-xs text-ink-4 mt-1.5">투자 성향 지수를 먼저 입력해주세요.</p>
+              )}
+              {err && <p className="text-xs text-danger mt-1.5">{err}</p>}
             </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div ref={modelRef} className="relative">
+                <button
+                  onClick={() => setIsModelOpen((prev) => !prev)}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-line text-sm"
+                >
+                  <span className="text-ink-3 text-[11px]">모델</span>
+                  <span className="font-semibold text-ink">{llmVendor}</span>
+                  {isModelOpen
+                    ? <ChevronUp size={14} className="text-ink-3 pointer-events-none" />
+                    : <ChevronDown size={14} className="text-ink-3 pointer-events-none" />}
+                </button>
+                {isModelOpen && (
+                  <div className="absolute right-0 bottom-full mb-1 w-full bg-surface border border-line rounded-xl shadow-pop z-50 max-h-60 overflow-y-auto">
+                    {LLM_VENDOR_OPTIONS.map((vendor) => (
+                      <button
+                        key={vendor}
+                        onClick={() => { setLlmVendor(vendor); setIsModelOpen(false); }}
+                        className={`w-full text-left px-3.5 py-2.5 text-sm first:rounded-t-xl last:rounded-b-xl ${
+                          vendor === llmVendor
+                            ? "bg-accent-soft text-accent font-semibold"
+                            : "text-ink hover:bg-bg-sunk"
+                        }`}
+                      >
+                        {vendor}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handleAnalyzeClick}
@@ -620,12 +667,8 @@ export default function PortfolioMockPage() {
                 className="px-5 py-2.5 rounded-xl bg-ink text-bg font-semibold text-sm
                            hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity tracking-tight"
               >
-                {loading ? "분석 중..." : "분석결과보기 →"}
+                분석 결과 보기 →
               </button>
-              {!loading && riskGamma === null && (
-                <p className="text-xs text-ink-4">투자 성향 지수를 먼저 입력해주세요.</p>
-              )}
-              {err && <p className="text-xs text-danger">{err}</p>}
             </div>
           </section>
 

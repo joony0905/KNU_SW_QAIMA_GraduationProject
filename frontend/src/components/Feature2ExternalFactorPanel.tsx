@@ -597,10 +597,10 @@ export default function Feature2ExternalFactorPanel({
   }[activeTab];
 
   return (
-    <section className="w-full bg-white rounded-2xl border-[3px] border-stone-300 px-4 py-4 flex flex-col gap-4">
+    <section className="w-full flex-1 bg-surface rounded-2xl border border-line shadow-card px-4 py-4 flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h3 className="text-black text-lg font-semibold">외부요인 패널</h3>
-        <p className="text-xs text-zinc-500 truncate">{stockName || "선택 종목"} 기준</p>
+        <h3 className="text-ink text-lg font-semibold">외부요인 패널</h3>
+        <p className="text-xs text-ink-3 truncate">{stockName || "선택 종목"} 기준</p>
       </div>
       <div className="grid grid-cols-3 gap-1.5">
         {tabs.map((tab) => (
@@ -617,7 +617,7 @@ export default function Feature2ExternalFactorPanel({
           </button>
         ))}
       </div>
-      <div className="min-h-[420px]">
+      <div className="flex-1 overflow-y-auto min-h-[420px]">
         {content()}
       </div>
     </section>

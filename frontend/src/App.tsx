@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layout/MainLayout";
 import LoginPage from "./pages/LoginPage";
+import OAuth2SuccessPage from "./pages/OAuth2SuccessPage";
+import FindAccountPage from "./pages/FindAccountPage";
+import RequireAuth from "./components/RequireAuth";
 import MainPage from "./pages/MainPage";
 import StocksMockPage from "./pages/StocksMockPage";
 import Feature2MockPage from "./pages/Feature2MockPage";
@@ -34,10 +37,33 @@ export default function App() {
 
   return (
     <Routes>
-      {/* 로그인은 단독 화면 nav바 없이*/}
-      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/login"
+        element={
+          <MainLayout>
+            <LoginPage />
+          </MainLayout>
+        }
+      />
 
-      {/* 나머지는 레이아웃으로 감싼다 */}
+      <Route
+        path="/login/oauth2/success"
+        element={
+          <MainLayout>
+            <OAuth2SuccessPage />
+          </MainLayout>
+        }
+      />
+
+      <Route
+        path="/find-account"
+        element={
+          <MainLayout>
+            <FindAccountPage />
+          </MainLayout>
+        }
+      />
+
       <Route
         path="/"
         element={
@@ -46,8 +72,15 @@ export default function App() {
           </MainLayout>
         }
       />
-      
-      <Route path="/signup" element={<SignupPage />} />
+
+      <Route
+        path="/signup"
+        element={
+          <MainLayout>
+            <SignupPage />
+          </MainLayout>
+        }
+      />
 
       <Route
         path="/main"
@@ -69,7 +102,9 @@ export default function App() {
         path="/feature/2"
         element={
           <MainLayout>
-            <Feature2MockPage />
+            <RequireAuth>
+              <Feature2MockPage />
+            </RequireAuth>
           </MainLayout>
         }
       />
