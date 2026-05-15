@@ -24,6 +24,11 @@ public class FinancialImportRunner implements CommandLineRunner {
                 .filter(a -> !a.startsWith("--"))   // 스프링 옵션 제외
                 .findFirst()
                 .orElse(null);
+        String exchangeArg = Arrays.stream(args)
+                .filter(a -> a != null && a.startsWith("--exchange="))
+                .map(a -> a.substring("--exchange=".length()))
+                .findFirst()
+                .orElse(null);
 
         if (csvArg == null) {
             log.error("CSV 경로를 인자로 넘겨주세요. ex) data/financials_top200_2020_2024.csv");
@@ -32,7 +37,8 @@ public class FinancialImportRunner implements CommandLineRunner {
 
         Path csvPath = Path.of(csvArg);
         log.info("재무제표 CSV import 시작: {}", csvPath);
-        importService.importFromCsv(csvPath);
+        FinancialImportService.ImportResult result = importService.importFromCsv(csvPath, exchangeArg);
+        log.info("?щТ?쒗몴 CSV import 寃곌낵: {}", result);
         log.info("재무제표 CSV import 완료");
     }
 

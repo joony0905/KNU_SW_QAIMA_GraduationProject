@@ -47,16 +47,16 @@ public class ShortSelling {
     @Column(name = "security_type", nullable = false, length = 30)
     private String securityType;
 
-    @Column(name = "short_volume_total", precision = 20, scale = 0)
+    @Column(name = "short_volume_total", precision = 24, scale = 6)
     private BigDecimal shortVolumeTotal;
 
-    @Column(name = "short_volume_uptick_applied", precision = 20, scale = 0)
+    @Column(name = "short_volume_uptick_applied", precision = 24, scale = 6)
     private BigDecimal shortVolumeUptickApplied;
 
-    @Column(name = "short_volume_uptick_exempt", precision = 20, scale = 0)
+    @Column(name = "short_volume_uptick_exempt", precision = 24, scale = 6)
     private BigDecimal shortVolumeUptickExempt;
 
-    @Column(name = "total_volume", precision = 20, scale = 0)
+    @Column(name = "total_volume", precision = 24, scale = 6)
     private BigDecimal totalVolume;
 
     @Column(name = "short_volume_ratio", precision = 10, scale = 6)
