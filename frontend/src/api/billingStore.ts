@@ -88,6 +88,18 @@ export const tempChargeTokens = async (amount: number, reason = "TEMP_FRONTEND_C
   return safe;
 };
 
+// 로그아웃 시 호출 — 이전 사용자의 토큰 잔액이 localStorage/메모리에 남아
+// 비로그인 상태에서도 표시되는 문제를 막는다. 다음 조회 시 0으로 재읽기된다.
+export const clearTokenBalance = (): void => {
+  cached = null;
+  try {
+    localStorage.removeItem(LS_KEY);
+  } catch {
+    // localStorage 불가 환경은 메모리 캐시만 정리
+  }
+  listeners.forEach((fn) => fn());
+};
+
 export const addTokens = (delta: number): number => {
   const next = getTokenBalance() + Math.floor(delta);
   setTokenBalance(next);
