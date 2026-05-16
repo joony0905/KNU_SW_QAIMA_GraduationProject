@@ -55,7 +55,7 @@ export function Sparkline({
   }, [points]);
 
   if (!path) {
-    return <div className="h-8 w-[110px] rounded bg-zinc-100" />;
+    return <div className="h-8 w-[110px] rounded bg-bg-sunk" />;
   }
 
   return (
@@ -83,13 +83,13 @@ export function MiniTrendRow({
   const first = points[0] ?? null;
   const latest = points[points.length - 1] ?? null;
   const delta = first && latest ? latest.value - first.value : null;
-  const deltaClass = delta == null ? "text-zinc-500" : delta > 0 ? "text-red-600" : delta < 0 ? "text-blue-600" : "text-zinc-500";
+  const deltaClass = delta == null ? "text-ink-3" : delta > 0 ? "text-rise" : delta < 0 ? "text-fall" : "text-ink-3";
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-zinc-900">{series.label}</p>
-        <p className="text-[11px] text-zinc-500">
+        <p className="truncate text-sm font-semibold text-ink">{series.label}</p>
+        <p className="text-[11px] text-ink-3">
           {latest ? fmtValue(latest.value, series.unit) : "-"}
           <span className={`ml-2 font-semibold ${deltaClass}`}>{fmtDelta(delta, series.unit)}</span>
         </p>
@@ -143,7 +143,7 @@ export function MultiLineTrendChart({
 
   if (!chart) {
     return (
-      <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-8 text-sm text-zinc-500">
+      <div className="rounded-lg border border-line bg-bg-sunk px-4 py-8 text-sm text-ink-3">
         추세 데이터가 없습니다.
       </div>
     );
@@ -154,10 +154,10 @@ export function MultiLineTrendChart({
   const firstSeries = validSeries[0];
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
+    <div className="rounded-lg border border-line bg-bg-sunk px-3 py-3">
       <div className="mb-3 flex flex-wrap gap-2">
         {validSeries.map((item, index) => (
-          <span key={item.key} className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-600">
+          <span key={item.key} className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-3">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: colorMap[defaultColors[index % defaultColors.length]] }} />
             {item.label}
           </span>
@@ -176,10 +176,10 @@ export function MultiLineTrendChart({
                 x2={chart.width - chart.paddingX}
                 y1={chart.toY(tick)}
                 y2={chart.toY(tick)}
-                stroke="#e4e4e7"
+                stroke="rgb(var(--color-line))"
                 strokeDasharray="4 4"
               />
-              <text x={2} y={chart.toY(tick) + 4} fontSize="11" fill="#71717a">
+              <text x={2} y={chart.toY(tick) + 4} fontSize="11" fill="rgb(var(--color-ink-3))">
                 {fmtValue(tick, validSeries[0]?.unit)}
               </text>
             </g>
@@ -208,7 +208,7 @@ export function MultiLineTrendChart({
               x2={chart.toX(hoveredIndex)}
               y1={chart.paddingTop}
               y2={height - chart.paddingBottom}
-              stroke="#111827"
+              stroke="rgb(var(--color-ink))"
               strokeDasharray="6 6"
             />
           )}
@@ -220,7 +220,7 @@ export function MultiLineTrendChart({
               y={height - 10}
               textAnchor="middle"
               fontSize="11"
-              fill="#71717a"
+              fill="rgb(var(--color-ink-3))"
             >
               {firstSeries?.points[index]?.date ?? ""}
             </text>
