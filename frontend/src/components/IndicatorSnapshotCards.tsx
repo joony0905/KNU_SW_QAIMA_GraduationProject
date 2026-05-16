@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { usePdfExportReveal } from "../contexts/PdfExportContext";
 import type { IndicatorBundle } from "../types/indicator";
 
 type Props = {
@@ -42,10 +43,12 @@ const normalizeGauge = (value: number | null | undefined, max: number) => {
 
 export default function IndicatorSnapshotCards({ indicators }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [animated, setAnimated] = useState(false);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const forceReveal = usePdfExportReveal();
+  const animated = hasAnimated || forceReveal;
 
   useEffect(() => {
-    setAnimated(false);
+    setHasAnimated(false);
   }, [indicators]);
 
   useEffect(() => {
@@ -55,7 +58,7 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
       (entries) => {
         const entry = entries[0];
         if (!entry?.isIntersecting) return;
-        setAnimated(true);
+        setHasAnimated(true);
         observer.disconnect();
       },
       { threshold: 0.2, rootMargin: "0px 0px -10% 0px" },
