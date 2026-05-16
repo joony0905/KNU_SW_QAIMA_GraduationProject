@@ -4,6 +4,7 @@ import StockInputBox from "./StockInputBox";
 import StockCard from "./StockCard";
 import { fetchFeaturedStocks } from "../api/featuredStock";
 import type { FeaturedStockDto, FeaturedStockTopic } from "../types/featuredStock";
+import { isLoggedIn } from "../utils/auth";
 
 interface StockItem {
   name: string;
@@ -99,6 +100,10 @@ export default function StockSearchBar({
     let cancelled = false;
 
     const load = async () => {
+      if (!isLoggedIn()) {
+        setStocks(FALLBACK_STOCKS);
+        return;
+      }
       setLoading(true);
       setHasError(false);
       try {
@@ -280,7 +285,7 @@ export default function StockSearchBar({
           </div>
           <button
             onClick={() => setIsOpen((prev) => !prev)}
-            className="w-7 h-7 mt-4 bg-ink text-bg rounded-full grid place-items-center flex-shrink-0 hover:opacity-80 transition-opacity"
+            className="w-7 h-7 mt-4 bg-accent-soft border border-accent/30 text-accent rounded-full grid place-items-center flex-shrink-0 hover:bg-accent/10 transition-colors"
           >
             <span className="pointer-events-none">
               {isOpen ? <Minus size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
