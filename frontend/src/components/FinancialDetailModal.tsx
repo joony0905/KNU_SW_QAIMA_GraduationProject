@@ -182,7 +182,7 @@ export default function FinancialDetailModal({
               onClick={() => setTab(key)}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 tab === key
-                  ? "bg-zinc-800 text-white"
+                  ? "bg-accent text-white"
                   : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
               }`}
             >
