@@ -7,11 +7,17 @@ import { searchStocks, getStockByCode } from "../api/stock";
 interface StockInputBoxProps {
   placeholder?: string;
   onSearch?: (value: string) => void;
+  /** 좌측 "관심"(워치리스트) 버튼 표시 여부. 메인 랜딩 등에서는 false */
+  showInterest?: boolean;
+  /** 최근 검색어 저장/표시 사용 여부. 메인 검색창에서는 false */
+  enableRecent?: boolean;
 }
 
 export default function StockInputBox({
   placeholder = "종목을 입력해주세요",
   onSearch,
+  showInterest = true,
+  enableRecent = true,
 }: StockInputBoxProps) {
   const [inputValue, setInputValue] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -51,15 +57,17 @@ export default function StockInputBox({
   }, []);
 
   const saveRecentSearch = useCallback((companyName: string) => {
+    if (!enableRecent) return;
     const stored = localStorage.getItem("recentSearches");
     let recent: string[] = stored ? JSON.parse(stored) : [];
     recent = recent.filter((item) => item !== companyName);
     recent.unshift(companyName);
     recent = recent.slice(0, 5);
     localStorage.setItem("recentSearches", JSON.stringify(recent));
-  }, []);
+  }, [enableRecent]);
 
   const handleFocus = () => {
+    if (!enableRecent) return;
     if (inputValue.trim() === "") {
       const stored = localStorage.getItem("recentSearches");
       const recent: string[] = stored ? JSON.parse(stored) : [];
@@ -84,11 +92,13 @@ export default function StockInputBox({
       setShowSuggestions(false);
       setIsSearching(false);
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      const stored = localStorage.getItem("recentSearches");
-      const recent: string[] = stored ? JSON.parse(stored) : [];
-      if (recent.length > 0) {
-        setRecentSearches(recent);
-        setShowRecentSearches(true);
+      if (enableRecent) {
+        const stored = localStorage.getItem("recentSearches");
+        const recent: string[] = stored ? JSON.parse(stored) : [];
+        if (recent.length > 0) {
+          setRecentSearches(recent);
+          setShowRecentSearches(true);
+        }
       }
       return;
     }
@@ -186,24 +196,26 @@ export default function StockInputBox({
 
   return (
     <div ref={wrapperRef} className={`w-full relative flex items-center gap-2 px-3 py-[9px] bg-surface border border-line shadow-card ${showDropdown ? "rounded-t-2xl border-b-surface" : "rounded-2xl"}`}>
-      {/* 관심 버튼 */}
-      <button
-        onClick={() => {
-          setIsInterestListOpen((prev) => !prev);
-          setShowSuggestions(false);
-          setShowRecentSearches(false);
-          setGuideMessage("");
-        }}
-        type="button"
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
-                   bg-bg-sunk text-ink-2 font-semibold text-sm flex-shrink-0"
-      >
-        관심
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
-             fill="currentColor" viewBox="0 0 24 24" className="text-warn">
-          <path d="M12 17.75l-6.16 3.73 1.18-6.88L2 9.77l6.92-1L12 2.5l3.08 6.27 6.92 1-5.02 4.83 1.18 6.88z" />
-        </svg>
-      </button>
+      {/* 관심 버튼 — showInterest=false 면 숨김 (메인 랜딩 등) */}
+      {showInterest && (
+        <button
+          onClick={() => {
+            setIsInterestListOpen((prev) => !prev);
+            setShowSuggestions(false);
+            setShowRecentSearches(false);
+            setGuideMessage("");
+          }}
+          type="button"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
+                     bg-bg-sunk text-ink-2 font-semibold text-sm flex-shrink-0"
+        >
+          관심
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+               fill="currentColor" viewBox="0 0 24 24" className="text-warn">
+            <path d="M12 17.75l-6.16 3.73 1.18-6.88L2 9.77l6.92-1L12 2.5l3.08 6.27 6.92 1-5.02 4.83 1.18 6.88z" />
+          </svg>
+        </button>
+      )}
 
       {/* 입력 필드 */}
       <input
