@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { usePdfExportReveal } from "../contexts/PdfExportContext";
 import type { AnalysisResponse } from "../types/analysis";
 import { formatKstDateTimeDisplay } from "../utils/kst";
 
@@ -136,11 +137,13 @@ const buildSections = (snapshot: Snapshot): Section[] => [
 
 export default function MarketSnapshotBars({ snapshot }: Props) {
   const sections = buildSections(snapshot);
-  const [animated, setAnimated] = useState(false);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const forceReveal = usePdfExportReveal();
+  const animated = hasAnimated || forceReveal;
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setAnimated(false);
+    setHasAnimated(false);
   }, [snapshot]);
 
   useEffect(() => {
@@ -151,7 +154,7 @@ export default function MarketSnapshotBars({ snapshot }: Props) {
       (entries) => {
         const entry = entries[0];
         if (!entry?.isIntersecting) return;
-        setAnimated(true);
+        setHasAnimated(true);
         observer.disconnect();
       },
       {
