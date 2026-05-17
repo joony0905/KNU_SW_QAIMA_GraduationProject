@@ -236,8 +236,7 @@ public class Sec13fInstitutionalHoldingImportService {
             throw new IllegalArgumentException("SEC 13F file not found: " + zipPath);
         }
 
-        ImportFileStart importFileStart = startImportFile(zipPath);
-        Sec13fImportFile importFile = importFileStart.importFile();
+        Sec13fImportFile importFile = startImportFile(zipPath);
         try {
             Map<String, StockSecurityIdentifier> identifierByCusip = loadCusipMappings();
             if (identifierByCusip.isEmpty()) {
@@ -248,8 +247,7 @@ public class Sec13fInstitutionalHoldingImportService {
             UpsertCounters counters = upsertParsedData(
                     parsed,
                     identifierByCusip,
-                    aggregate,
-                    importFileStart.forceAggregate()
+                    aggregate
             );
             finishImportFile(importFile, parsed.stats(), counters, null);
 
@@ -264,11 +262,10 @@ public class Sec13fInstitutionalHoldingImportService {
         }
     }
 
-    private ImportFileStart startImportFile(Path zipPath) {
+    private Sec13fImportFile startImportFile(Path zipPath) {
         String sourceFile = zipPath.getFileName().toString();
         Sec13fImportFile entity = sec13fImportFileRepository.findBySourceFile(sourceFile)
                 .orElseGet(Sec13fImportFile::new);
-        boolean forceAggregate = entity.getSec13fImportFileId() == null || !"SUCCESS".equals(entity.getStatus());
         entity.setSourceFile(sourceFile);
         entity.setSourcePath(zipPath.toAbsolutePath().toString());
         entity.setStatus("STARTED");
@@ -276,7 +273,7 @@ public class Sec13fInstitutionalHoldingImportService {
         entity.setFinishedAt(null);
         entity.setErrorMessage(null);
         resetImportStats(entity);
-        return new ImportFileStart(sec13fImportFileRepository.save(entity), forceAggregate);
+        return sec13fImportFileRepository.save(entity);
     }
 
     private void finishImportFile(
@@ -342,14 +339,11 @@ public class Sec13fInstitutionalHoldingImportService {
     private UpsertCounters upsertParsedData(
             Sec13fDataSetParseResult parsed,
             Map<String, StockSecurityIdentifier> identifierByCusip,
-            boolean aggregate,
-            boolean forceAggregate
+            boolean aggregate
     ) {
         UpsertCounters counters = new UpsertCounters();
         Map<Long, Stock> parsedStocks = new LinkedHashMap<>();
-        Map<Long, Stock> affectedStocks = new LinkedHashMap<>();
         Map<Long, List<LocalDate>> parsedPeriodsByStock = new LinkedHashMap<>();
-        Map<Long, List<LocalDate>> affectedPeriodsByStock = new LinkedHashMap<>();
         Map<String, FilingContext> filingContexts = new LinkedHashMap<>();
         List<PreparedHolding> preparedHoldings = new ArrayList<>(parsed.holdings().size());
 
@@ -422,8 +416,6 @@ public class Sec13fInstitutionalHoldingImportService {
             );
             if (changed != null) {
                 holdingsToSave.add(changed);
-                affectedStocks.put(prepared.stock().getStockId(), prepared.stock());
-                addPeriod(affectedPeriodsByStock, prepared.stock().getStockId(), prepared.reportPeriod());
             }
             if (holdingsToSave.size() >= DB_SAVE_BATCH_SIZE) {
                 flushHoldings(holdingsToSave);
@@ -431,12 +423,11 @@ public class Sec13fInstitutionalHoldingImportService {
         }
         flushHoldings(holdingsToSave);
         includeRestatementAffectedStocks(filingContexts.values(), parsedStocks, parsedPeriodsByStock);
-        includeRestatementAffectedStocks(filingContexts.values(), affectedStocks, affectedPeriodsByStock);
 
         if (aggregate) {
             counters.aggregatedRows += recalculateAggregates(
-                    forceAggregate ? parsedStocks : affectedStocks,
-                    forceAggregate ? parsedPeriodsByStock : affectedPeriodsByStock
+                    parsedStocks,
+                    parsedPeriodsByStock
             );
         }
         return counters;
@@ -1091,12 +1082,6 @@ public class Sec13fInstitutionalHoldingImportService {
             SubmissionRow submission,
             CoverPageRow coverPage,
             LocalDate reportPeriod
-    ) {
-    }
-
-    private record ImportFileStart(
-            Sec13fImportFile importFile,
-            boolean forceAggregate
     ) {
     }
 
