@@ -51,6 +51,8 @@ import reactor.core.publisher.Mono;
 public class Sec13fInstitutionalHoldingImportService {
 
     public static final String SOURCE = StockInstitutionalHoldingQuarterly.SOURCE;
+    private static final LocalDate VALUE_UNIT_CUTOFF_DATE = LocalDate.of(2023, 1, 3);
+    private static final String VALUE_UNIT_USD = "USD";
     private static final String VALUE_UNIT_THOUSANDS_USD = "THOUSANDS_USD";
     private static final String SHARE_TYPE_SEC_COMMON = "COMMON";
     private static final String SHARE_TYPE_SEC_TOTAL = "TOTAL";
@@ -542,7 +544,7 @@ public class Sec13fInstitutionalHoldingImportService {
             Sec13fHolding existing,
             UpsertCounters counters
     ) {
-        ValueNormalization value = normalizeMarketValue(row.valueRaw());
+        ValueNormalization value = normalizeMarketValue(row.valueRaw(), submission.filingDate());
         Sec13fHolding entity = existing == null ? new Sec13fHolding() : existing;
         boolean isNew = entity.getSec13fHoldingId() == null;
 
@@ -920,9 +922,12 @@ public class Sec13fInstitutionalHoldingImportService {
         return coverPage == null ? null : coverPage.reportCalendarOrQuarter();
     }
 
-    private ValueNormalization normalizeMarketValue(BigDecimal valueRaw) {
+    private ValueNormalization normalizeMarketValue(BigDecimal valueRaw, LocalDate filingDate) {
         BigDecimal safeValue = valueRaw == null ? BigDecimal.ZERO : valueRaw;
-        return new ValueNormalization(VALUE_UNIT_THOUSANDS_USD, safeValue.multiply(BigDecimal.valueOf(1000)));
+        if (filingDate != null && filingDate.isBefore(VALUE_UNIT_CUTOFF_DATE)) {
+            return new ValueNormalization(VALUE_UNIT_THOUSANDS_USD, safeValue.multiply(BigDecimal.valueOf(1000)));
+        }
+        return new ValueNormalization(VALUE_UNIT_USD, safeValue);
     }
 
     private Path resolveFilePath(String filePath) {
