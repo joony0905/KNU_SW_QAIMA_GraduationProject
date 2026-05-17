@@ -1,6 +1,18 @@
 analysis:
   base-url: "http://localhost:8000"
 
+finra:
+  base-url: "https://cdn.finra.org"
+  sync:
+    enabled: true
+    daily-cron: "0 0 9 * * *"
+    lookback-days: 7
+
+sec:
+  edgar:
+    base-url: "https://www.sec.gov"
+    user-agent: ${SEC_EDGAR_USER_AGENT:qaima-dev contact@example.com}
+
 feature2:
   news:
     sentiment:

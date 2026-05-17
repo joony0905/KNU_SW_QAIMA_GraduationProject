@@ -3,6 +3,8 @@ package com.qaima.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.codec.ClientCodecConfigurer;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -65,8 +67,32 @@ public class WebClientConfig {
                 .build();
     }
 
+    // SEC EDGAR
+    @Bean(name = "secWebClient")
+    public WebClient secWebClient(
+            @Value("${sec.edgar.base-url:https://www.sec.gov}") String baseUrl,
+            @Value("${sec.edgar.user-agent:qaima-dev contact@example.com}") String userAgent
+    ) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader(HttpHeaders.USER_AGENT, userAgent)
+                .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+                .codecs(this::configureLargeResponseCodecs)
+                .build();
+    }
+
 
     // opendart(금융감독원)
+    @Bean(name = "finraWebClient")
+    public WebClient finraWebClient(
+            @Value("${finra.base-url:https://cdn.finra.org}") String baseUrl
+    ) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .codecs(this::configureLargeResponseCodecs)
+                .build();
+    }
+
     @Bean(name = "opendartWebClient")
     public WebClient openDartWebClient(
             @Value("${opendart.base-url:https://opendart.fss.or.kr/api}") String baseUrl
@@ -78,6 +104,10 @@ public class WebClientConfig {
     }
 
     private void configureOpenDartCodecs(ClientCodecConfigurer codecs) {
+        configureLargeResponseCodecs(codecs);
+    }
+
+    private void configureLargeResponseCodecs(ClientCodecConfigurer codecs) {
         codecs.defaultCodecs().maxInMemorySize(16 * 1024 * 1024);
     }
 

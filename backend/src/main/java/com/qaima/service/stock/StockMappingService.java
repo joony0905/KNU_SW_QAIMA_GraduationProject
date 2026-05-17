@@ -75,15 +75,17 @@ public class StockMappingService {
         }
 
         String normalizedKey = CompanyNameNormalizer.normalizeKey(query);
+        String trimmedQuery = query == null ? "" : query.trim();
 
         return Blocking.call(() -> {
             Map<Long, Stock> merged = new LinkedHashMap<>();
 
-            List<Stock> fromName = stockRepository
-                    .findTop20ByCompanyNameContainingIgnoreCaseOrderByCompanyNameAsc(keyword);
-            for (Stock stock : fromName) {
-                if (stock.getStockId() != null) {
-                    merged.putIfAbsent(stock.getStockId(), stock);
+            if (!trimmedQuery.isBlank()) {
+                List<Stock> fromStockCode = stockRepository.findByStockCodeIgnoreCaseWithExchange(trimmedQuery);
+                for (Stock stock : fromStockCode) {
+                    if (stock.getStockId() != null) {
+                        merged.putIfAbsent(stock.getStockId(), stock);
+                    }
                 }
             }
 
@@ -94,6 +96,14 @@ public class StockMappingService {
                     if (stock != null && stock.getStockId() != null) {
                         merged.putIfAbsent(stock.getStockId(), stock);
                     }
+                }
+            }
+
+            List<Stock> fromName = stockRepository
+                    .findTop20ByCompanyNameContainingIgnoreCaseOrderByCompanyNameAsc(keyword);
+            for (Stock stock : fromName) {
+                if (stock.getStockId() != null) {
+                    merged.putIfAbsent(stock.getStockId(), stock);
                 }
             }
 
