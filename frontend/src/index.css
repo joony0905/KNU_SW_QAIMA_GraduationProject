@@ -6,37 +6,44 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: 247 247 245;
-  --color-bg-soft: 241 241 239;
-  --color-bg-sunk: 234 234 232;
+  /* Naver-style pure white bg + blue accents */
+  --color-bg: 255 255 255; /* #FFFFFF — pure white (Naver) */
+  --color-bg-soft: 250 250 250; /* #FAFAFA */
+  --color-bg-sunk: 245 246 247; /* #F5F6F7 — Naver section dividers */
   --color-surface: 255 255 255;
-  --color-surface-2: 233 233 231;
+  --color-surface-2: 248 249 250;
 
-  --color-ink: 26 26 26;
-  --color-ink-2: 64 64 64;
-  --color-ink-3: 115 115 115;
-  --color-ink-4: 163 163 163;
+  --color-ink: 15 23 42; /* #0F172A — slate-900, deep navy ink */
+  --color-ink-2: 51 65 85; /* slate-700 */
+  --color-ink-3: 100 116 139; /* slate-500 */
+  --color-ink-4: 148 163 184; /* slate-400 */
 
-  --color-line: 228 228 226;
-  --color-line-strong: 212 212 210;
+  --color-line: 226 232 240; /* #E2E8F0 — slate-200, neutral */
+  --color-line-strong: 203 213 225;
 
-  --color-accent: 30 58 138;
-  --color-accent-ink: 30 58 138;
-  --color-accent-soft: 232 235 248;
+  --color-accent: 29 78 216; /* #1D4ED8 blue-700 */
+  --color-accent-ink: 30 64 175; /* #1E40AF blue-800 */
+  --color-accent-soft: 219 234 254; /* #DBEAFE blue-100 */
 
   --color-rise: 220 38 38;
   --color-rise-soft: 254 226 226;
   --color-fall: 37 99 235;
   --color-fall-soft: 219 234 254;
-  --color-flat: 115 115 115;
+  --color-flat: 100 116 145;
 
   --color-success: 22 163 74;
   --color-warn: 217 119 6;
   --color-danger: 220 38 38;
 
   font-family:
-    "Pretendard", "Pretendard Variable", -apple-system, BlinkMacSystemFont,
-    "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    "Pretendard",
+    "Pretendard Variable",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
+    sans-serif;
   line-height: 1.5;
   color-scheme: light;
   color: rgb(var(--color-ink));
@@ -48,6 +55,7 @@
 }
 
 .dark {
+  /* Neutral dark — original tones, no blue tint */
   --color-bg: 14 14 16;
   --color-bg-soft: 20 20 22;
   --color-bg-sunk: 24 24 27;
@@ -79,7 +87,10 @@
   color-scheme: dark;
 }
 
+/* 세로 스크롤바를 항상 띄워, 등장 애니메이션 중 스크롤 영역이 잠깐
+   바뀌어도 가로 폭이 흔들리지 않도록 한다 (가운데 정렬 레이아웃 덜컥거림 방지) */
 html {
+  overflow-y: scroll;
   scrollbar-gutter: stable;
 }
 
@@ -104,11 +115,145 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
-.tabular { font-variant-numeric: tabular-nums; }
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
 
-.text-rise { color: rgb(var(--color-rise)); }
-.text-fall { color: rgb(var(--color-fall)); }
-.text-flat { color: rgb(var(--color-flat)); }
+.text-rise {
+  color: rgb(var(--color-rise));
+}
+.text-fall {
+  color: rgb(var(--color-fall));
+}
+.text-flat {
+  color: rgb(var(--color-flat));
+}
 
-.bg-rise-soft { background-color: rgb(var(--color-rise-soft)); }
-.bg-fall-soft { background-color: rgb(var(--color-fall-soft)); }
+.bg-rise-soft {
+  background-color: rgb(var(--color-rise-soft));
+}
+.bg-fall-soft {
+  background-color: rgb(var(--color-fall-soft));
+}
+
+/* =========================
+   페이지 전환 / 순차 등장 모션
+========================= */
+
+@keyframes qaima-page-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 라우트가 바뀔 때마다 key 변경으로 재마운트되어 매번 재생된다 */
+.qaima-page-in {
+  animation: qaima-page-in 0.34s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes qaima-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 컨테이너 직계 자식을 위에서 아래로 촤라락 순차 등장 */
+.qaima-stagger > * {
+  animation: qaima-rise 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+.qaima-stagger > *:nth-child(1) {
+  animation-delay: 0.04s;
+}
+.qaima-stagger > *:nth-child(2) {
+  animation-delay: 0.1s;
+}
+.qaima-stagger > *:nth-child(3) {
+  animation-delay: 0.16s;
+}
+.qaima-stagger > *:nth-child(4) {
+  animation-delay: 0.22s;
+}
+.qaima-stagger > *:nth-child(5) {
+  animation-delay: 0.28s;
+}
+.qaima-stagger > *:nth-child(6) {
+  animation-delay: 0.34s;
+}
+.qaima-stagger > *:nth-child(7) {
+  animation-delay: 0.4s;
+}
+.qaima-stagger > *:nth-child(8) {
+  animation-delay: 0.46s;
+}
+.qaima-stagger > *:nth-child(9) {
+  animation-delay: 0.52s;
+}
+.qaima-stagger > *:nth-child(n + 10) {
+  animation-delay: 0.58s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qaima-page-in,
+  .qaima-stagger > * {
+    animation: none !important;
+  }
+}
+
+/* 스크롤로 뷰포트에 들어오면 아래에서 떠오르며 등장 */
+.qaima-reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition:
+    opacity 0.6s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: opacity, transform;
+}
+.qaima-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qaima-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* 파이차트가 처음 뜰 때 회전하며 부풀어 오르는 동적 등장 */
+@keyframes qaima-pie-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.55) rotate(-110deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04) rotate(6deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.qaima-pie-in {
+  animation: qaima-pie-in 0.72s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qaima-pie-in {
+    animation: none !important;
+  }
+}

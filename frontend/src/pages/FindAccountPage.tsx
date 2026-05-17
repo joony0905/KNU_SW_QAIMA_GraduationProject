@@ -6,7 +6,7 @@ const inputClass =
   "w-full px-4 py-3 rounded-lg bg-bg-sunk border border-line text-ink placeholder:text-ink-4 text-sm outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-colors";
 
 const primaryBtn =
-  "w-full py-3 rounded-lg bg-ink text-bg text-base font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity";
+  "w-full py-3 rounded-lg bg-accent text-white text-base font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity";
 
 type ResultState =
   | { type: "idle" }

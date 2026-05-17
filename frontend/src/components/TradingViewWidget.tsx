@@ -345,6 +345,25 @@ function TradingViewWidget({
 
   // theme-aware candle/volume colors (시세 토큰 --color-rise / --color-fall과 매칭)
   const { theme } = useTheme();
+
+  // 차트 캔버스 배경/격자/축 색 — 다크모드 대응 (카드 surface 색과 맞춤)
+  const chartTheme = useMemo(
+    () =>
+      theme === "dark"
+        ? {
+            bg: "#202024",
+            text: "#d4d4d4",
+            grid: "#303035",
+            border: "#3a3a40",
+          }
+        : {
+            bg: "#ffffff",
+            text: "#1f2937",
+            grid: "#f3f4f6",
+            border: "#e5e7eb",
+          },
+    [theme],
+  );
   const candleColors = useMemo(() => {
     if (theme === "dark") {
       return {
@@ -440,14 +459,14 @@ function TradingViewWidget({
     const chart = createChart(el, {
       width: w,
       height: h,
-      layout: { background: { color: "#ffffff" }, textColor: "#1f2937" },
-      grid: { vertLines: { color: "#f3f4f6" }, horzLines: { color: "#f3f4f6" } },
+      layout: { background: { color: chartTheme.bg }, textColor: chartTheme.text },
+      grid: { vertLines: { color: chartTheme.grid }, horzLines: { color: chartTheme.grid } },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: { labelVisible: true },
         horzLine: { labelVisible: true },
       },
-      rightPriceScale: { borderColor: "#e5e7eb" },
+      rightPriceScale: { borderColor: chartTheme.border },
       timeScale: { timeVisible: true, visible: true },
     });
 
@@ -583,14 +602,14 @@ function TradingViewWidget({
           const sc = createChart(el, {
             width: w,
             height: h,
-            layout: { background: { color: "#ffffff" }, textColor: "#1f2937" },
-            grid: { vertLines: { color: "#f3f4f6" }, horzLines: { color: "#f3f4f6" } },
+            layout: { background: { color: chartTheme.bg }, textColor: chartTheme.text },
+            grid: { vertLines: { color: chartTheme.grid }, horzLines: { color: chartTheme.grid } },
             crosshair: {
               mode: CrosshairMode.Normal,
               vertLine: { labelVisible: false },
               horzLine: { labelVisible: false },
             },
-            rightPriceScale: { borderColor: "#e5e7eb" },
+            rightPriceScale: { borderColor: chartTheme.border },
             timeScale: { timeVisible: true, visible: false },
           });
 
@@ -623,14 +642,14 @@ function TradingViewWidget({
           const vc = createChart(el, {
             width: w,
             height: h,
-            layout: { background: { color: "#ffffff" }, textColor: "#1f2937" },
-            grid: { vertLines: { color: "#f3f4f6" }, horzLines: { color: "#f3f4f6" } },
+            layout: { background: { color: chartTheme.bg }, textColor: chartTheme.text },
+            grid: { vertLines: { color: chartTheme.grid }, horzLines: { color: chartTheme.grid } },
             crosshair: {
               mode: CrosshairMode.Normal,
               vertLine: { labelVisible: false },
               horzLine: { labelVisible: false },
             },
-            rightPriceScale: { borderColor: "#e5e7eb" },
+            rightPriceScale: { borderColor: chartTheme.border },
             timeScale: { timeVisible: true, visible: true },
           });
 
@@ -750,6 +769,25 @@ function TradingViewWidget({
       wickDownColor: candleColors.down,
     });
   }, [candleColors]);
+
+  /* =========================
+     Theme-aware chart canvas sync
+  ========================= */
+  useEffect(() => {
+    const opts = {
+      layout: { background: { color: chartTheme.bg }, textColor: chartTheme.text },
+      grid: {
+        vertLines: { color: chartTheme.grid },
+        horzLines: { color: chartTheme.grid },
+      },
+      rightPriceScale: { borderColor: chartTheme.border },
+    };
+    try {
+      priceChartRef.current?.applyOptions(opts);
+      stochChartRef.current?.applyOptions(opts);
+      volumeChartRef.current?.applyOptions(opts);
+    } catch {}
+  }, [chartTheme]);
 
   /* =========================
      Volume data
@@ -1292,7 +1330,7 @@ function TradingViewWidget({
         className={paneBaseClass}
         style={{
           display: showSubPanes ? "block" : "none",
-          borderTop: showSubPanes ? "1px solid #f1f5f9" : "none",
+          borderTop: showSubPanes ? `1px solid ${chartTheme.grid}` : "none",
         }}
       />
 
@@ -1301,7 +1339,7 @@ function TradingViewWidget({
         className={paneBaseClass}
         style={{
           display: showSubPanes ? "block" : "none",
-          borderTop: showSubPanes ? "1px solid #f1f5f9" : "none",
+          borderTop: showSubPanes ? `1px solid ${chartTheme.grid}` : "none",
         }}
       />
     </div>

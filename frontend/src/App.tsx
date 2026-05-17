@@ -13,6 +13,7 @@ import PortfolioMockPage from "./pages/PortfolioMockPage";
 import DictionaryMockPage from "./pages/DictionaryMockPage";
 import SignupPage from "./pages/SignupPage";
 import SettingPage from "./pages/SettingPage";
+import EditProfilePage from "./pages/EditProfilePage";
 import SurveyPage from "./pages/SurveyPage";
 import { bootstrapAccessToken } from "./api/tokenStore";
 
@@ -112,7 +113,9 @@ export default function App() {
         path="/feature/3"
         element={
           <MainLayout>
-            <PortfolioMockPage />
+            <RequireAuth>
+              <PortfolioMockPage />
+            </RequireAuth>
           </MainLayout>
         }
       />
@@ -129,6 +132,14 @@ export default function App() {
         element={
           <MainLayout>
             <SettingPage />
+          </MainLayout>
+        }
+      />
+      <Route
+        path="/setting/edit"
+        element={
+          <MainLayout>
+            <EditProfilePage />
           </MainLayout>
         }
       />

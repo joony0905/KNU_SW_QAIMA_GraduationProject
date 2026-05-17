@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { searchStocks, getStockByCode } from "../api/stock";
 import type { StockDto } from "../types/stock";
 
@@ -7,6 +8,8 @@ interface StockSearchCellProps {
   onSelect: (name: string, stockCode?: string) => void;
   placeholder?: string;
 }
+
+const DROPDOWN_WIDTH = 224; // w-56
 
 export default function StockSearchCell({
   value,
@@ -18,17 +21,45 @@ export default function StockSearchCell({
   const [showDropdown, setShowDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isFallback, setIsFallback] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setInputValue(value);
   }, [value]);
 
+  // 입력창 위치를 화면 좌표로 계산 (overflow 컨테이너에 가리지 않게 portal + fixed)
+  const updateCoords = useCallback(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setCoords({
+      top: rect.bottom + 4,
+      left: rect.left + rect.width / 2,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!showDropdown) return;
+    updateCoords();
+    // 내부 스크롤 컨테이너 스크롤까지 잡으려면 capture=true
+    window.addEventListener("scroll", updateCoords, true);
+    window.addEventListener("resize", updateCoords);
+    return () => {
+      window.removeEventListener("scroll", updateCoords, true);
+      window.removeEventListener("resize", updateCoords);
+    };
+  }, [showDropdown, updateCoords]);
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inWrapper = wrapperRef.current?.contains(target);
+      const inDropdown = dropdownRef.current?.contains(target);
+      if (!inWrapper && !inDropdown) {
         setShowDropdown(false);
       }
     };
@@ -118,41 +149,53 @@ export default function StockSearchCell({
         placeholder={placeholder}
       />
 
-      {showDropdown && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-56 z-50 bg-surface border border-line rounded-xl shadow-pop overflow-hidden">
-          {isSearching ? (
-            <div className="px-3 py-2 text-sm text-ink-4">검색 중...</div>
-          ) : suggestions.length > 0 ? (
-            <ul className="max-h-40 overflow-y-auto">
-              {suggestions.map((stock) => (
-                <li
-                  key={stock.stockCode}
-                  onClick={() => handleSelectItem(stock)}
-                  className="px-3 py-2 text-sm text-ink cursor-pointer hover:bg-accent/5 transition-colors"
+      {showDropdown && coords &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              width: DROPDOWN_WIDTH,
+              transform: "translateX(-50%)",
+            }}
+            className="z-[200] bg-surface border border-line rounded-xl shadow-pop overflow-hidden"
+          >
+            {isSearching ? (
+              <div className="px-3 py-2 text-sm text-ink-4">검색 중...</div>
+            ) : suggestions.length > 0 ? (
+              <ul className="max-h-40 overflow-y-auto">
+                {suggestions.map((stock) => (
+                  <li
+                    key={stock.stockCode}
+                    onClick={() => handleSelectItem(stock)}
+                    className="px-3 py-2 text-sm text-ink cursor-pointer hover:bg-accent/5 transition-colors"
+                  >
+                    <span className="font-medium">{stock.companyName}</span>
+                    <span className="ml-1.5 text-xs text-ink-4">
+                      {stock.stockCode}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : isFallback ? (
+              <div className="px-3 py-2">
+                <p className="text-xs text-ink-4 mb-1.5">
+                  검색 결과가 없습니다
+                </p>
+                <button
+                  type="button"
+                  onClick={handleFallbackConfirm}
+                  className="w-full text-sm text-accent font-medium py-1.5 rounded-lg hover:bg-accent/5 transition-colors"
                 >
-                  <span className="font-medium">{stock.companyName}</span>
-                  <span className="ml-1.5 text-xs text-ink-4">
-                    {stock.stockCode}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : isFallback ? (
-            <div className="px-3 py-2">
-              <p className="text-xs text-ink-4 mb-1.5">
-                검색 결과가 없습니다
-              </p>
-              <button
-                type="button"
-                onClick={handleFallbackConfirm}
-                className="w-full text-sm text-accent font-medium py-1.5 rounded-lg hover:bg-accent/5 transition-colors"
-              >
-                "{inputValue}" 직접 입력
-              </button>
-            </div>
-          ) : null}
-        </div>
-      )}
+                  "{inputValue}" 직접 입력
+                </button>
+              </div>
+            ) : null}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

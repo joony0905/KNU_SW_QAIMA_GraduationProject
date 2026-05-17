@@ -7,7 +7,7 @@ const inputClass =
   "w-full px-4 py-3 rounded-lg bg-bg-sunk border border-line text-ink placeholder:text-ink-4 text-sm outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-colors";
 
 const inlineActionBtn =
-  "px-4 py-3 rounded-lg bg-ink text-bg text-sm font-semibold whitespace-nowrap hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight";
+  "px-4 py-3 rounded-lg bg-accent text-white text-sm font-semibold whitespace-nowrap hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight";
 
 const inlineSuccessBadge =
   "px-4 py-3 rounded-lg bg-success/15 text-success border border-success/30 text-sm font-semibold whitespace-nowrap flex items-center";
@@ -425,7 +425,7 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={signupLoading}
-            className="w-full mt-3 py-3 rounded-lg bg-ink text-bg text-base font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="w-full mt-3 py-3 rounded-lg bg-accent text-white text-base font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {signupLoading ? "가입 중..." : "회원가입"}
           </button>

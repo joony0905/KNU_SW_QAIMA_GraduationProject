@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchBar from "../components/StockSearchBar";
+import FeatureIntro from "../components/FeatureIntro";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import TradingViewWidget from "../components/TradingViewWidget";
@@ -40,6 +41,12 @@ import type { ApiResponse } from "../types/common/api";
 import { fetchNewsByStock } from "../api/news";
 import type { NewsItemDto } from "../types/news";
 import { getStockByCode } from "../api/stock";
+import {
+  fetchWatchlist,
+  addWatchlistItem,
+  deleteWatchlistItem,
+  DEFAULT_WATCHLIST_ID,
+} from "../api/watchlist";
 import { isLoggedIn } from "../utils/auth";
 import { getApiErrorMessage } from "../utils/errorMessage";
 import DictTerm from "../components/DictTerm";
@@ -496,6 +503,8 @@ export default function Feature2MockPage() {
   const currentTime = useKSTTime();
 
   const [isInterested, setIsInterested] = useState(false);
+  const [currentStockId, setCurrentStockId] = useState<number | null>(null);
+  const [watchlistItemId, setWatchlistItemId] = useState<number | null>(null);
   const [isModelOpen, setIsModelOpen] = useState(false);
   const modelRef = useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
@@ -548,14 +557,62 @@ export default function Feature2MockPage() {
     return () => document.removeEventListener("click", handler);
   }, []);
 
-  const toggleInterest = () => {
-    setIsInterested((prev) => !prev);
-    setToast({
-      message: isInterested
-        ? "관심종목에서 삭제되었습니다."
-        : "관심종목에 추가되었습니다.",
-      visible: true,
-    });
+  // 검색한 종목이 관심종목(워치리스트)에 들어있는지 동기화
+  const syncWatchlistMembership = async (stockId: number | null) => {
+    setIsInterested(false);
+    setWatchlistItemId(null);
+    if (!stockId) return;
+    try {
+      const items = await fetchWatchlist(DEFAULT_WATCHLIST_ID);
+      const hit = items.find((it) => it.stockId === stockId);
+      if (hit) {
+        setIsInterested(true);
+        setWatchlistItemId(hit.watchlistItemId);
+      }
+    } catch {
+      // 워치리스트 미존재/권한 등은 조용히 무시
+    }
+  };
+
+  const toggleInterest = async () => {
+    // 이미 등록됨 → 삭제
+    if (isInterested && watchlistItemId != null) {
+      try {
+        await deleteWatchlistItem(watchlistItemId);
+        setIsInterested(false);
+        setWatchlistItemId(null);
+        setToast({ message: "관심종목에서 삭제되었습니다.", visible: true });
+      } catch (e) {
+        setToast({
+          message: getApiErrorMessage(e, "관심종목 삭제에 실패했습니다."),
+          visible: true,
+        });
+      }
+      return;
+    }
+
+    // 미등록 → 추가
+    if (!currentStockId) {
+      setToast({
+        message: "종목 정보를 불러온 뒤 다시 시도해주세요.",
+        visible: true,
+      });
+      return;
+    }
+    try {
+      const created = await addWatchlistItem({
+        stockId: currentStockId,
+        watchlistId: DEFAULT_WATCHLIST_ID,
+      });
+      setIsInterested(true);
+      setWatchlistItemId(created.watchlistItemId);
+      setToast({ message: "관심종목에 추가되었습니다.", visible: true });
+    } catch (e) {
+      setToast({
+        message: getApiErrorMessage(e, "관심종목 추가에 실패했습니다."),
+        visible: true,
+      });
+    }
   };
 
   const industrySeries = useMemo(() => {
@@ -604,12 +661,14 @@ export default function Feature2MockPage() {
     setErr("");
 
     let resolvedStockCode = q;
+    let resolvedStockId: number | null = null;
 
     // 종목명 조회
     try {
       const stockInfo = await getStockByCode(q);
       if (stockInfo) {
         resolvedStockCode = stockInfo.stockCode || q;
+        resolvedStockId = stockInfo.stockId ?? null;
         setMainStock({
           name: stockInfo.companyName || q,
           symbol: resolvedStockCode,
@@ -628,6 +687,9 @@ export default function Feature2MockPage() {
         changeRate: null,
       });
     }
+
+    setCurrentStockId(resolvedStockId);
+    void syncWatchlistMembership(resolvedStockId);
 
     setNewsLoading(true);
     setNewsError(null);
@@ -894,7 +956,7 @@ export default function Feature2MockPage() {
 
   return (
     <div className="min-h-screen bg-bg ml-[84px]">
-      <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
+      <div className="qaima-stagger max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         <header className="flex items-center justify-between">
           <div>
             <div className="text-xs font-medium text-ink-3 tracking-tight">
@@ -918,7 +980,15 @@ export default function Feature2MockPage() {
           </div>
         </header>
 
-        <StockSearchBar onSearch={handleSearch} />
+        <div className="relative z-30">
+          <StockSearchBar onSearch={handleSearch} />
+        </div>
+
+        {!hasSelectedStock && (
+          <div className="relative z-0 mt-10 sm:mt-20">
+            <FeatureIntro variant="external" />
+          </div>
+        )}
 
         {hasSelectedStock && (<>
           <div className="border-t border-line-strong" />
@@ -943,7 +1013,7 @@ export default function Feature2MockPage() {
           return (
         <main className="w-full flex flex-col xl:flex-row justify-center xl:items-stretch gap-6">
           <div className="flex-1 flex flex-col gap-5">
-            <section className="w-full flex flex-col gap-3 sm:gap-4">
+            <section className="w-full bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -1003,82 +1073,93 @@ export default function Feature2MockPage() {
                 </div>
               </div>
 
-              <div className="w-full h-96 sm:h-[480px] bg-surface border border-line shadow-card overflow-hidden">
+              {/* 헤더와 차트 사이 divider */}
+              <div className="h-px bg-line" />
+
+              {/* 차트 영역 — sunken 제거, 카드 안 surface 위에 차트 */}
+              <div className="w-full h-96 sm:h-[480px] flex items-stretch overflow-hidden">
                 {chartLoading && (
-                  <div className="h-full flex items-center justify-center">
-                    <p className="text-md text-ink-3">
-                      차트를 불러오는 중입니다…
+                  <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                    <p className="text-sm sm:text-base text-ink-3">
+                      차트를 불러오는 중입니다...
                     </p>
                   </div>
                 )}
 
                 {chartError && !chartLoading && (
-                  <div className="h-full flex items-center justify-center">
-                    <p className="text-md text-danger">
+                  <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                    <p className="text-sm sm:text-base text-danger">
                       {chartError ?? "차트를 불러오지 못했습니다."}
                     </p>
                   </div>
                 )}
 
                 {!chartLoading && !chartError && (
-                  <TradingViewWidget
-                  candles={candles}
-                  showSubPanes={false}
-                  onRequestMoreHistory={handleRequestMoreHistory}
-                  hoveredDayKey={hoveredDayKey}
-                  onHoverDayKeyChange={setHoveredDayKey}
-                  />
+                  <div className="flex-1 min-h-0 w-full">
+                    <TradingViewWidget
+                      candles={candles}
+                      showSubPanes={false}
+                      onRequestMoreHistory={handleRequestMoreHistory}
+                      hoveredDayKey={hoveredDayKey}
+                      onHoverDayKeyChange={setHoveredDayKey}
+                    />
+                  </div>
                 )}
               </div>
             </section>
 
             {/* [좌측 하단] 산업 지수 차트 카드 */}
-            <section className="w-full flex flex-col gap-2.5 sm:gap-4">
+            <section className="w-full bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4">
               <h2 className="text-ink text-lg sm:text-2xl font-semibold tracking-tight">
-                {mainStock.name}({mainStock.symbol}) 관련 <DictTerm term="산업 지수">산업 지수</DictTerm>
+                {mainStock.name} 관련 <DictTerm term="산업 지수">산업 지수</DictTerm>
               </h2>
 
-              <div className="w-full h-80 sm:h-[420px] bg-surface border border-line shadow-card overflow-hidden">
+              {/* 헤더와 차트 사이 divider */}
+              <div className="h-px bg-line" />
+
+              <div className="w-full h-80 sm:h-[420px] flex items-stretch overflow-hidden">
               {industryChartLoading && (
-                <div className="h-full flex items-center justify-center">
-                  <p className="text-md text-ink-3">차트를 불러오는 중입니다…</p>
+                <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                  <p className="text-sm sm:text-base text-ink-3">차트를 불러오는 중입니다...</p>
                 </div>
               )}
 
               {industryChartError && !industryChartLoading && (
-                <div className="h-full flex items-center justify-center">
-                  <p className="text-md text-danger">
+                <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                  <p className="text-sm sm:text-base text-danger">
                     {industryChartError ?? "차트를 불러오지 못했습니다."}
                   </p>
                 </div>
               )}
 
               {!industryChartLoading && !industryChartError && industrySeries.length > 0 && (
-              <RelativeLineWidget
-              data={industrySeries}
-              height={420}
-              overlayAnchor={analysisData?.metrics?.peerCluster?.anchorSeries ?? null}
-              overlayCentroid={
-                analysisData?.metrics?.peerCluster?.peerCentroid
-                ?? analysisData?.metrics?.peerCluster?.centroid
-                ?? null
-              }
-              overlayBand={
-                analysisData?.metrics?.peerCluster?.peerBand
-                ?? analysisData?.metrics?.peerCluster?.band
-                ?? null
-              }
-              overlayCoverage={analysisData?.metrics?.peerCluster?.peerCoverage ?? null}
-              overlayPeers={analysisData?.metrics?.peerCluster?.peers ?? null}
-              showPeerOverlay={Boolean(analysisData?.metrics?.peerCluster)}
-              hoveredDayKey={hoveredDayKey}
-              onHoverDayKeyChange={setHoveredDayKey}
-              />
+              <div className="flex-1 min-h-0 w-full">
+                <RelativeLineWidget
+                data={industrySeries}
+                height={420}
+                overlayAnchor={analysisData?.metrics?.peerCluster?.anchorSeries ?? null}
+                overlayCentroid={
+                  analysisData?.metrics?.peerCluster?.peerCentroid
+                  ?? analysisData?.metrics?.peerCluster?.centroid
+                  ?? null
+                }
+                overlayBand={
+                  analysisData?.metrics?.peerCluster?.peerBand
+                  ?? analysisData?.metrics?.peerCluster?.band
+                  ?? null
+                }
+                overlayCoverage={analysisData?.metrics?.peerCluster?.peerCoverage ?? null}
+                overlayPeers={analysisData?.metrics?.peerCluster?.peers ?? null}
+                showPeerOverlay={Boolean(analysisData?.metrics?.peerCluster)}
+                hoveredDayKey={hoveredDayKey}
+                onHoverDayKeyChange={setHoveredDayKey}
+                />
+              </div>
             )}
 
             {!industryChartLoading && !industryChartError && industrySeries.length === 0 && (
-              <div className="h-full flex items-center justify-center">
-                <p className="text-md text-ink-3">산업 지수 데이터가 없습니다.</p>
+              <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                <p className="text-sm sm:text-base text-ink-3">산업 지수 데이터가 없습니다.</p>
               </div>
             )}
             </div>
@@ -1204,7 +1285,7 @@ export default function Feature2MockPage() {
               <button
                 onClick={handleAnalyzeClick}
                 disabled={loading}
-                className="px-5 py-2.5 rounded-xl bg-ink text-bg font-semibold text-sm
+                className="px-5 py-2.5 rounded-xl bg-accent text-white font-semibold text-sm
                            hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight"
               >
                 분석 결과 보기 →

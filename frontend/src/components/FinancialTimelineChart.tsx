@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePdfExportReveal } from "../contexts/PdfExportContext";
 
 export type FinancialTimelinePeriod = "A" | "H" | "Q";
 
@@ -56,11 +57,13 @@ export default function FinancialTimelineChart({
   points,
 }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [animated, setAnimated] = useState(false);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const forceReveal = usePdfExportReveal();
+  const animated = hasAnimated || forceReveal;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    setAnimated(false);
+    setHasAnimated(false);
   }, [points, period]);
 
   useEffect(() => {
@@ -71,7 +74,7 @@ export default function FinancialTimelineChart({
       (entries) => {
         const entry = entries[0];
         if (!entry?.isIntersecting) return;
-        setAnimated(true);
+        setHasAnimated(true);
         observer.disconnect();
       },
       {

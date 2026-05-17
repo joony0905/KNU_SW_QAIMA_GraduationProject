@@ -6,9 +6,10 @@ import { isLoggedIn } from "../utils/auth";
 import { logout } from "../api/auth";
 import { clearAccessToken } from "../api/tokenStore";
 import { clearUser, getUser } from "../api/userStore";
+import { clearTokenBalance } from "../api/billingStore";
 import { useBilling } from "../contexts/BillingContext";
 
-import introIcon from "../assets/intro.png";
+import introIcon from "../assets/qaima-final.png";
 
 const navItems = [
   { path: "/feature/1", icon: BarChart2,  label: "심층분석" },
@@ -68,6 +69,7 @@ export default function Sidebar() {
     } finally {
       clearAccessToken();
       clearUser();
+      clearTokenBalance();
       setLoggedIn(false);
       if (isAccountOnlyPath(location.pathname)) navigate("/main");
     }

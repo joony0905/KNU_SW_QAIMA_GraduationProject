@@ -133,7 +133,7 @@ export default function BillingModal({ isOpen, onClose }: Props) {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-bg-sunk text-ink-3 hover:text-zinc-800 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-bg-sunk text-ink-3 hover:text-ink transition-colors"
             aria-label="닫기"
           >
             <X size={18} />
@@ -153,13 +153,13 @@ export default function BillingModal({ isOpen, onClose }: Props) {
             </span>
           </div>
 
-          <div className="flex gap-1 bg-zinc-100 rounded-lg p-1">
+          <div className="flex gap-1 bg-bg-sunk rounded-lg p-1">
             <button
               onClick={() => setTab("SUBSCRIPTION")}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 tab === "SUBSCRIPTION"
-                  ? "bg-surface text-ink shadow-sm"
-                  : "text-ink-3 hover:text-ink-2"
+                  ? "bg-accent text-white shadow-sm"
+                  : "text-ink-3 hover:text-ink"
               }`}
             >
               구독제
@@ -168,8 +168,8 @@ export default function BillingModal({ isOpen, onClose }: Props) {
               onClick={() => setTab("BULK")}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 tab === "BULK"
-                  ? "bg-surface text-ink shadow-sm"
-                  : "text-ink-3 hover:text-ink-2"
+                  ? "bg-accent text-white shadow-sm"
+                  : "text-ink-3 hover:text-ink"
               }`}
             >
               토큰 충전
@@ -192,14 +192,14 @@ export default function BillingModal({ isOpen, onClose }: Props) {
                       onClick={() => setPlan(key)}
                       className={`flex-1 px-4 py-3 rounded-xl border text-left transition-colors ${
                         isActive
-                          ? "border-sky-500 bg-sky-50"
-                          : "border-line bg-surface hover:border-zinc-300"
+                          ? "border-accent bg-accent-soft"
+                          : "border-line bg-surface hover:border-line-strong"
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span
                           className={`text-sm font-semibold ${
-                            isActive ? "text-sky-700" : "text-ink-2"
+                            isActive ? "text-accent-ink" : "text-ink-2"
                           }`}
                         >
                           {item.label}
@@ -246,7 +246,7 @@ export default function BillingModal({ isOpen, onClose }: Props) {
                     handlePurchase(selectedPlan.tokens, selectedPlan.label)
                   }
                   disabled={!loggedIn}
-                  className="w-full py-3 rounded-xl bg-sky-500 text-white text-sm font-semibold hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full py-3 rounded-xl bg-accent text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                 >
                   {loggedIn ? `${selectedPlan.label} 결제하기` : "로그인 후 이용 가능"}
                 </button>
@@ -272,12 +272,12 @@ export default function BillingModal({ isOpen, onClose }: Props) {
                     disabled={!loggedIn}
                     className={`relative text-left rounded-xl border p-4 transition-all ${
                       tier.highlight
-                        ? "border-sky-400 bg-sky-50 hover:bg-sky-100"
-                        : "border-line bg-surface hover:border-sky-300 hover:bg-sky-50/40"
+                        ? "border-accent bg-accent-soft hover:bg-accent/15"
+                        : "border-line bg-surface hover:border-accent/40 hover:bg-accent-soft/40"
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {tier.highlight && (
-                      <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-sky-500 text-white text-[10px] font-bold">
+                      <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-accent text-white text-[10px] font-bold">
                         BEST
                       </span>
                     )}
@@ -318,7 +318,7 @@ export default function BillingModal({ isOpen, onClose }: Props) {
         {/* 토스트 */}
         {toast && (
           <div className="px-5 sm:px-6 pb-4">
-            <div className="px-4 py-2.5 rounded-lg bg-zinc-900 text-white text-sm text-center">
+            <div className="px-4 py-2.5 rounded-lg bg-accent text-white text-sm text-center">
               {toast}
             </div>
           </div>

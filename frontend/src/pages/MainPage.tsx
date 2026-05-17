@@ -1,6 +1,7 @@
 // src/pages/MainPage.tsx
-import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import Reveal from "../components/Reveal";
+import StockInputBox from "../components/StockInputBox";
 
 // ───────────────────────────────────────────────────────────────
 // Hero AI 비주얼 — 6 streams convergence (Qaima 로고 자리 포함)
@@ -377,11 +378,10 @@ function WorkflowIcon({ kind }: { kind: "search" | "ai" | "doc" }) {
 // ───────────────────────────────────────────────────────────────
 export default function MainPage() {
   const navigate = useNavigate();
-  const [query, setQuery] = useState("");
 
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    const q = query.trim();
+  // StockInputBox가 종목코드(또는 입력값)를 넘겨주면 심층분석으로 이동
+  const goAnalyze = (value: string) => {
+    const q = value.trim();
     navigate(q ? `/feature/1?q=${encodeURIComponent(q)}` : "/feature/1");
   };
 
@@ -443,31 +443,10 @@ export default function MainPage() {
               가격, 재무, 산업, 뉴스, 금리까지 — 흩어진 데이터를 하나의 분석 보고서로 정리합니다. 종목 하나만 입력하면 됩니다.
             </p>
 
-            {/* 검색박스 */}
-            <form onSubmit={handleSubmit} className="flex items-stretch bg-surface border border-line rounded-2xl p-1.5 max-w-[520px] shadow-card">
-              <div className="flex items-center px-3.5 text-ink-3">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m21 21-4.3-4.3" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="삼성전자, 005930, NVDA…"
-                className="flex-1 bg-transparent border-none outline-none px-1 py-3 text-[15px] text-ink"
-              />
-              <button
-                type="submit"
-                className="bg-accent text-white border-none rounded-xl px-5 text-sm font-semibold cursor-pointer flex items-center gap-1.5 hover:opacity-90 transition-opacity"
-              >
-                분석 시작
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14M13 5l7 7-7 7" />
-                </svg>
-              </button>
-            </form>
+            {/* 검색박스 — 심층분석과 동일한 자동완성 검색 컴포넌트 */}
+            <div className="max-w-[520px]">
+              <StockInputBox placeholder="삼성전자, 005930, NVDA…" onSearch={goAnalyze} showInterest={false} enableRecent={false} />
+            </div>
 
             {/* 인기 종목 */}
             <div className="flex flex-wrap items-center gap-2 mt-4 text-xs text-ink-3">
@@ -492,6 +471,7 @@ export default function MainPage() {
       </section>
 
       {/* FEATURES */}
+      <Reveal>
       <section className="py-20">
         <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <SectionHead
@@ -533,8 +513,10 @@ export default function MainPage() {
           </div>
         </div>
       </section>
+      </Reveal>
 
       {/* WORKFLOW */}
+      <Reveal>
       <section className="py-20 bg-bg-sunk">
         <div className="px-8 sm:px-12 lg:px-16 max-w-[1400px] mx-auto">
           <SectionHead
@@ -567,8 +549,10 @@ export default function MainPage() {
           </div>
         </div>
       </section>
+      </Reveal>
 
       {/* DATA SOURCES */}
+      <Reveal>
       <section className="py-20">
         <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <SectionHead
@@ -587,8 +571,10 @@ export default function MainPage() {
           </div>
         </div>
       </section>
+      </Reveal>
 
       {/* FINAL CTA */}
+      <Reveal>
       <section className="py-20 pb-24">
         <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <div
@@ -637,6 +623,7 @@ export default function MainPage() {
           </div>
         </div>
       </section>
+      </Reveal>
     </div>
   );
 }

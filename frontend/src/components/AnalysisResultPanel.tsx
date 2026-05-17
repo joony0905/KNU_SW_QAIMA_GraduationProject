@@ -1,8 +1,7 @@
 import { useState } from "react";
 import type { AnalysisExplainSection, AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import type { PeerItem } from "../types/feature2";
-import downloadIcon from "../assets/download_button.png";
-import zoomIcon from "../assets/zoom_button.png";
+import { Download, Maximize2 } from "lucide-react";
 import DictTerm from "./DictTerm";
 import FinancialTimelineChart from "./FinancialTimelineChart";
 import MarketSnapshotBars from "./MarketSnapshotBars";
@@ -369,24 +368,36 @@ export default function AnalysisResultPanel({
 
   return (
     <div className={wrapperClass}>
-      {/* 상단 헤더 바: 다운로드/확대 버튼 — result 있을 때만 */}
+      {/* 상단 헤더 바: 다운로드/확대 버튼 — result 있을 때만. data-pdf-exclude: PDF 캡처 시 제외 */}
       {result && (
-        <div className="w-[90%] max-w-4xl flex items-center justify-end">
-          <div className="flex items-center gap-3">
-            <button onClick={onDownload} className="w-7 h-7 sm:w-8 sm:h-8">
-              <img
-                src={downloadIcon}
-                alt="다운로드"
-                className="w-full h-full object-contain"
-              />
-            </button>
-            <button onClick={onZoom} className="w-6 h-6 sm:w-7 sm:h-7">
-              <img
-                src={zoomIcon}
-                alt="확대"
-                className="w-full h-full object-contain"
-              />
-            </button>
+        <div data-pdf-exclude="true" className="w-[90%] max-w-4xl flex items-center justify-end">
+          <div className="flex items-center gap-2">
+            <div className="relative group">
+              <button
+                onClick={onDownload}
+                aria-label="PDF로 다운로드"
+                title="PDF로 다운로드"
+                className="w-8 h-8 grid place-items-center rounded-lg border border-line bg-surface text-ink-2 hover:bg-bg-sunk transition-colors"
+              >
+                <Download size={16} />
+              </button>
+              <span className="pointer-events-none absolute bottom-full right-0 mb-2 whitespace-nowrap rounded-md bg-ink text-bg text-[11px] font-medium px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                PDF로 다운로드
+              </span>
+            </div>
+            <div className="relative group">
+              <button
+                onClick={onZoom}
+                aria-label="크게 보기"
+                title="크게 보기"
+                className="w-8 h-8 grid place-items-center rounded-lg border border-line bg-surface text-ink-2 hover:bg-bg-sunk transition-colors"
+              >
+                <Maximize2 size={16} />
+              </button>
+              <span className="pointer-events-none absolute bottom-full right-0 mb-2 whitespace-nowrap rounded-md bg-ink text-bg text-[11px] font-medium px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                크게 보기
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -710,7 +721,7 @@ export default function AnalysisResultPanel({
                         onClick={() => setMacroChartMode(option.key)}
                         className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
                           macroChartMode === option.key
-                            ? "bg-ink text-bg"
+                            ? "bg-accent text-white"
                             : "bg-bg-sunk text-ink-3 hover:bg-surface-2"
                         }`}
                       >
