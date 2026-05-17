@@ -77,7 +77,7 @@ public class WebClientConfig {
                 .baseUrl(baseUrl)
                 .defaultHeader(HttpHeaders.USER_AGENT, userAgent)
                 .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
-                .codecs(this::configureLargeResponseCodecs)
+                .codecs(this::configureSecCodecs)
                 .build();
     }
 
@@ -109,6 +109,10 @@ public class WebClientConfig {
 
     private void configureLargeResponseCodecs(ClientCodecConfigurer codecs) {
         codecs.defaultCodecs().maxInMemorySize(16 * 1024 * 1024);
+    }
+
+    private void configureSecCodecs(ClientCodecConfigurer codecs) {
+        codecs.defaultCodecs().maxInMemorySize(32 * 1024 * 1024);
     }
 
 }
