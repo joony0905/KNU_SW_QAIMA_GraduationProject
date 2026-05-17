@@ -76,7 +76,7 @@ CREATE TABLE sec_13f_holding (
     filing_date DATE NOT NULL,
     cusip VARCHAR(16) NOT NULL,
     name_of_issuer VARCHAR(255) NULL,
-    title_of_class VARCHAR(120) NULL,
+    title_of_class VARCHAR(150) NULL,
     filing_row_count INT NOT NULL DEFAULT 1,
     shares DECIMAL(30,0) NOT NULL,
     value_raw DECIMAL(30,0) NOT NULL,

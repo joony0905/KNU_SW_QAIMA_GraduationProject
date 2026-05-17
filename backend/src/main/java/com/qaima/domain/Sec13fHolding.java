@@ -74,7 +74,7 @@ public class Sec13fHolding {
     @Column(name = "name_of_issuer", length = 255)
     private String nameOfIssuer;
 
-    @Column(name = "title_of_class", length = 120)
+    @Column(name = "title_of_class", length = 150)
     private String titleOfClass;
 
     @Column(name = "filing_row_count", nullable = false)
