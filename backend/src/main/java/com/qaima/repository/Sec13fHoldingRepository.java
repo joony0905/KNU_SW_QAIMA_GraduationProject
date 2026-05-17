@@ -1,0 +1,113 @@
+package com.qaima.repository;
+
+import com.qaima.domain.Sec13fHolding;
+import com.qaima.domain.Stock;
+import jakarta.persistence.QueryHint;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.repository.query.Param;
+
+public interface Sec13fHoldingRepository extends JpaRepository<Sec13fHolding, Long> {
+
+    @EntityGraph(attributePaths = {"stock", "filing"})
+    Optional<Sec13fHolding> findByAccessionNumberAndStockAndCusip(
+            String accessionNumber,
+            Stock stock,
+            String cusip
+    );
+
+    @EntityGraph(attributePaths = {"stock", "filing"})
+    List<Sec13fHolding> findByAccessionNumberIn(Collection<String> accessionNumbers);
+
+    @EntityGraph(attributePaths = {"stock", "filing"})
+    List<Sec13fHolding> findByStockAndReportPeriodOrderByManagerCikAscFilingDateDescAccessionNumberDesc(
+            Stock stock,
+            LocalDate reportPeriod
+    );
+
+    @Query("""
+        select distinct h.reportPeriod
+        from Sec13fHolding h
+        where h.stock = :stock
+        order by h.reportPeriod asc
+    """)
+    List<LocalDate> findDistinctReportPeriodsByStock(@Param("stock") Stock stock);
+
+    @Query(value = """
+        SELECT
+            latest.stock_id AS stockId,
+            latest.report_period AS reportPeriod,
+            SUBSTRING_INDEX(GROUP_CONCAT(latest.cusip ORDER BY latest.manager_cik ASC SEPARATOR ','), ',', 1) AS cusip,
+            COUNT(*) AS institutionCount,
+            COALESCE(SUM(latest.filing_row_count), 0) AS filingRowCount,
+            COALESCE(SUM(latest.shares), 0) AS sharesHeld,
+            COALESCE(SUM(latest.market_value_usd), 0) AS marketValueUsd
+        FROM (
+            SELECT ranked.*
+            FROM (
+                SELECT
+                    h.stock_id,
+                    h.report_period,
+                    h.manager_cik,
+                    h.cusip,
+                    h.filing_row_count,
+                    h.shares,
+                    h.market_value_usd,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY h.stock_id, h.report_period, h.manager_cik
+                        ORDER BY h.filing_date DESC, h.accession_number DESC
+                    ) AS rn
+                FROM sec_13f_holding h
+                WHERE h.stock_id IN (:stockIds)
+                    AND h.report_period IN (:reportPeriods)
+            ) ranked
+            WHERE ranked.rn = 1
+        ) latest
+        GROUP BY latest.stock_id, latest.report_period
+        ORDER BY latest.stock_id ASC, latest.report_period ASC
+        """, nativeQuery = true)
+    @QueryHints(@QueryHint(name = "jakarta.persistence.query.timeout", value = "60000"))
+    List<AggregatePeriodProjection> aggregateLatestByStockIdsAndReportPeriods(
+            @Param("stockIds") Collection<Long> stockIds,
+            @Param("reportPeriods") Collection<LocalDate> reportPeriods
+    );
+
+    @Query(value = """
+        SELECT
+            h.stock_id AS stockId,
+            h.report_period AS reportPeriod
+        FROM sec_13f_holding h
+        GROUP BY h.stock_id, h.report_period
+        ORDER BY h.stock_id ASC, h.report_period ASC
+        """, nativeQuery = true)
+    List<StockPeriodProjection> findDistinctStockPeriods();
+
+    interface AggregatePeriodProjection {
+        Long getStockId();
+
+        LocalDate getReportPeriod();
+
+        String getCusip();
+
+        Integer getInstitutionCount();
+
+        Integer getFilingRowCount();
+
+        BigDecimal getSharesHeld();
+
+        BigDecimal getMarketValueUsd();
+    }
+
+    interface StockPeriodProjection {
+        Long getStockId();
+
+        LocalDate getReportPeriod();
+    }
+}
