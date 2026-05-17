@@ -353,6 +353,22 @@ public class Sec13fInstitutionalHoldingImportService {
         Map<String, FilingContext> filingContexts = new LinkedHashMap<>();
         List<PreparedHolding> preparedHoldings = new ArrayList<>(parsed.holdings().size());
 
+        for (Map.Entry<String, SubmissionRow> entry : parsed.submissionsByAccession().entrySet()) {
+            SubmissionRow submission = entry.getValue();
+            if (submission == null || submission.managerCik() == null || submission.managerCik().isBlank()) {
+                continue;
+            }
+            CoverPageRow coverPage = parsed.coverPagesByAccession().get(entry.getKey());
+            LocalDate reportPeriod = resolveReportPeriod(submission, coverPage);
+            if (reportPeriod == null || submission.filingDate() == null) {
+                continue;
+            }
+            FilingContext context = new FilingContext(parsed.sourceFile(), submission, coverPage, reportPeriod);
+            if (isRestatement(context)) {
+                filingContexts.putIfAbsent(entry.getKey(), context);
+            }
+        }
+
         for (HoldingRow row : parsed.holdings()) {
             SubmissionRow submission = parsed.submissionsByAccession().get(row.accessionNumber());
             if (submission == null || submission.managerCik() == null || submission.managerCik().isBlank()) {
@@ -414,6 +430,8 @@ public class Sec13fInstitutionalHoldingImportService {
             }
         }
         flushHoldings(holdingsToSave);
+        includeRestatementAffectedStocks(filingContexts.values(), parsedStocks, parsedPeriodsByStock);
+        includeRestatementAffectedStocks(filingContexts.values(), affectedStocks, affectedPeriodsByStock);
 
         if (aggregate) {
             counters.aggregatedRows += recalculateAggregates(
@@ -422,6 +440,43 @@ public class Sec13fInstitutionalHoldingImportService {
             );
         }
         return counters;
+    }
+
+    private void includeRestatementAffectedStocks(
+            Collection<FilingContext> filingContexts,
+            Map<Long, Stock> stocks,
+            Map<Long, List<LocalDate>> periodsByStock
+    ) {
+        Map<ManagerPeriodKey, Boolean> processed = new HashMap<>();
+        for (FilingContext context : filingContexts) {
+            if (!isRestatement(context)) {
+                continue;
+            }
+            ManagerPeriodKey key = new ManagerPeriodKey(
+                    context.submission().managerCik(),
+                    context.reportPeriod()
+            );
+            if (key.managerCik() == null || key.managerCik().isBlank() || key.reportPeriod() == null) {
+                continue;
+            }
+            if (processed.putIfAbsent(key, Boolean.TRUE) != null) {
+                continue;
+            }
+            for (Stock stock : sec13fHoldingRepository.findDistinctStocksByManagerCikAndReportPeriod(
+                    key.managerCik(),
+                    key.reportPeriod()
+            )) {
+                stocks.putIfAbsent(stock.getStockId(), stock);
+                addPeriod(periodsByStock, stock.getStockId(), key.reportPeriod());
+            }
+        }
+    }
+
+    private boolean isRestatement(FilingContext context) {
+        if (context == null || context.coverPage() == null || !context.coverPage().amendment()) {
+            return false;
+        }
+        return normalize(context.coverPage().amendmentType()).contains("RESTAT");
     }
 
     private void addPeriod(Map<Long, List<LocalDate>> periodsByStockId, Long stockId, LocalDate period) {
@@ -621,6 +676,7 @@ public class Sec13fInstitutionalHoldingImportService {
 
         int changedRows = 0;
         List<StockInstitutionalHoldingQuarterly> aggregatesToSave = new ArrayList<>(DB_SAVE_BATCH_SIZE);
+        List<StockInstitutionalHoldingQuarterly> aggregatesToDelete = new ArrayList<>(DB_SAVE_BATCH_SIZE);
         Map<AggregateKey, Sec13fHoldingRepository.AggregatePeriodProjection> aggregateByKey = new HashMap<>();
         for (Map.Entry<LocalDate, List<Long>> entry : stockIdsByTargetPeriod.entrySet()) {
             LocalDate targetPeriod = entry.getKey();
@@ -650,7 +706,18 @@ public class Sec13fInstitutionalHoldingImportService {
                 for (LocalDate targetPeriod : targetPeriods) {
                     Sec13fHoldingRepository.AggregatePeriodProjection aggregate =
                             aggregateByKey.get(new AggregateKey(stockId, targetPeriod));
-                    if (stock == null || aggregate == null) {
+                    if (stock == null) {
+                        continue;
+                    }
+                    if (aggregate == null) {
+                        StockInstitutionalHoldingQuarterly existing = existingByPeriod.remove(targetPeriod);
+                        if (existing != null) {
+                            aggregatesToDelete.add(existing);
+                            changedRows++;
+                            if (aggregatesToDelete.size() >= DB_SAVE_BATCH_SIZE) {
+                                flushAggregateDeletes(aggregatesToDelete);
+                            }
+                        }
                         continue;
                     }
 
@@ -717,6 +784,7 @@ public class Sec13fInstitutionalHoldingImportService {
             }
         }
         flushAggregates(aggregatesToSave);
+        flushAggregateDeletes(aggregatesToDelete);
         return changedRows;
     }
 
@@ -825,6 +893,14 @@ public class Sec13fInstitutionalHoldingImportService {
         }
         quarterlyRepository.saveAll(aggregatesToSave);
         aggregatesToSave.clear();
+    }
+
+    private void flushAggregateDeletes(List<StockInstitutionalHoldingQuarterly> aggregatesToDelete) {
+        if (aggregatesToDelete.isEmpty()) {
+            return;
+        }
+        quarterlyRepository.deleteAllInBatch(aggregatesToDelete);
+        aggregatesToDelete.clear();
     }
 
     private AggregatedPeriod aggregatePeriod(Stock stock, LocalDate period) {
@@ -1048,6 +1124,12 @@ public class Sec13fInstitutionalHoldingImportService {
 
     private record AggregateKey(
             Long stockId,
+            LocalDate reportPeriod
+    ) {
+    }
+
+    private record ManagerPeriodKey(
+            String managerCik,
             LocalDate reportPeriod
     ) {
     }

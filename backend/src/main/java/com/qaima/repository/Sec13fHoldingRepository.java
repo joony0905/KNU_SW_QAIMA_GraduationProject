@@ -33,6 +33,17 @@ public interface Sec13fHoldingRepository extends JpaRepository<Sec13fHolding, Lo
     );
 
     @Query("""
+        select distinct h.stock
+        from Sec13fHolding h
+        where h.managerCik = :managerCik
+            and h.reportPeriod = :reportPeriod
+    """)
+    List<Stock> findDistinctStocksByManagerCikAndReportPeriod(
+            @Param("managerCik") String managerCik,
+            @Param("reportPeriod") LocalDate reportPeriod
+    );
+
+    @Query("""
         select distinct h.reportPeriod
         from Sec13fHolding h
         where h.stock = :stock
@@ -67,6 +78,21 @@ public interface Sec13fHoldingRepository extends JpaRepository<Sec13fHolding, Lo
                 FROM sec_13f_holding h
                 WHERE h.stock_id IN (:stockIds)
                     AND h.report_period IN (:reportPeriods)
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM sec_13f_filing rf
+                        WHERE rf.manager_cik = h.manager_cik
+                            AND rf.report_period = h.report_period
+                            AND rf.is_amendment = TRUE
+                            AND UPPER(COALESCE(rf.amendment_type, '')) LIKE '%RESTAT%'
+                            AND (
+                                rf.filing_date > h.filing_date
+                                OR (
+                                    rf.filing_date = h.filing_date
+                                    AND rf.accession_number > h.accession_number
+                                )
+                            )
+                    )
             ) ranked
             WHERE ranked.rn = 1
         ) latest
