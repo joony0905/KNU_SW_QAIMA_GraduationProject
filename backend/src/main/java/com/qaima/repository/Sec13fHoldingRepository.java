@@ -55,46 +55,56 @@ public interface Sec13fHoldingRepository extends JpaRepository<Sec13fHolding, Lo
         SELECT
             latest.stock_id AS stockId,
             latest.report_period AS reportPeriod,
-            SUBSTRING_INDEX(GROUP_CONCAT(latest.cusip ORDER BY latest.manager_cik ASC SEPARATOR ','), ',', 1) AS cusip,
-            COUNT(*) AS institutionCount,
+            SUBSTRING_INDEX(GROUP_CONCAT(latest.cusip ORDER BY latest.manager_cik ASC, latest.cusip ASC SEPARATOR ','), ',', 1) AS cusip,
+            COUNT(DISTINCT latest.manager_cik) AS institutionCount,
             COALESCE(SUM(latest.filing_row_count), 0) AS filingRowCount,
             COALESCE(SUM(latest.shares), 0) AS sharesHeld,
             COALESCE(SUM(latest.market_value_usd), 0) AS marketValueUsd
         FROM (
-            SELECT ranked.*
-            FROM (
-                SELECT
-                    h.stock_id,
-                    h.report_period,
-                    h.manager_cik,
-                    h.cusip,
-                    h.filing_row_count,
-                    h.shares,
-                    h.market_value_usd,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY h.stock_id, h.report_period, h.manager_cik
-                        ORDER BY h.filing_date DESC, h.accession_number DESC
-                    ) AS rn
-                FROM sec_13f_holding h
-                WHERE h.stock_id IN (:stockIds)
-                    AND h.report_period IN (:reportPeriods)
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM sec_13f_filing rf
-                        WHERE rf.manager_cik = h.manager_cik
-                            AND rf.report_period = h.report_period
-                            AND rf.is_amendment = TRUE
-                            AND UPPER(COALESCE(rf.amendment_type, '')) LIKE '%RESTAT%'
-                            AND (
-                                rf.filing_date > h.filing_date
-                                OR (
-                                    rf.filing_date = h.filing_date
-                                    AND rf.accession_number > h.accession_number
-                                )
+            SELECT h.*
+            FROM sec_13f_holding h
+            JOIN (
+                SELECT ranked_filing.*
+                FROM (
+                    SELECT
+                        filing_candidate.*,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY filing_candidate.stock_id, filing_candidate.report_period, filing_candidate.manager_cik
+                            ORDER BY filing_candidate.filing_date DESC, filing_candidate.accession_number DESC
+                        ) AS rn
+                    FROM (
+                        SELECT DISTINCT
+                            h.stock_id,
+                            h.report_period,
+                            h.manager_cik,
+                            h.accession_number,
+                            h.filing_date
+                        FROM sec_13f_holding h
+                        WHERE h.stock_id IN (:stockIds)
+                            AND h.report_period IN (:reportPeriods)
+                            AND NOT EXISTS (
+                                SELECT 1
+                                FROM sec_13f_filing rf
+                                WHERE rf.manager_cik = h.manager_cik
+                                    AND rf.report_period = h.report_period
+                                    AND rf.is_amendment = TRUE
+                                    AND UPPER(COALESCE(rf.amendment_type, '')) LIKE '%RESTAT%'
+                                    AND (
+                                        rf.filing_date > h.filing_date
+                                        OR (
+                                            rf.filing_date = h.filing_date
+                                            AND rf.accession_number > h.accession_number
+                                        )
+                                    )
                             )
-                    )
-            ) ranked
-            WHERE ranked.rn = 1
+                    ) filing_candidate
+                ) ranked_filing
+                WHERE ranked_filing.rn = 1
+            ) latest_filing
+                ON latest_filing.stock_id = h.stock_id
+                AND latest_filing.report_period = h.report_period
+                AND latest_filing.manager_cik = h.manager_cik
+                AND latest_filing.accession_number = h.accession_number
         ) latest
         GROUP BY latest.stock_id, latest.report_period
         ORDER BY latest.stock_id ASC, latest.report_period ASC
