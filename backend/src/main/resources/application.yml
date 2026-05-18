@@ -21,6 +21,8 @@ sec:
       enabled: true
       daily-cron: "0 0 18 * * *"
       limit: 300
+  form13f:
+    source-dir: ${SEC_13F_SOURCE_DIR:}
 
 feature2:
   news:
