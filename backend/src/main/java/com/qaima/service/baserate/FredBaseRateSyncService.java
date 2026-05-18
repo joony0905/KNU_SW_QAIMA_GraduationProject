@@ -23,9 +23,9 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class FredBaseRateSyncService {
 
-    public static final String FED_FUNDS_STAT_CODE = "FEDFUNDS";
+    public static final String FED_FUNDS_STAT_CODE = "DFF";
     public static final String FED_FUNDS_STAT_NAME = "Effective Federal Funds Rate";
-    public static final String FED_FUNDS_ITEM_CODE = "FEDFUNDS";
+    public static final String FED_FUNDS_ITEM_CODE = "DFF";
     public static final String FED_FUNDS_ITEM_NAME = "미국 정책금리";
     public static final String DEFAULT_CYCLE = "D";
     public static final String DEFAULT_SOURCE = "FRED";

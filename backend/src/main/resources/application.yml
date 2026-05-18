@@ -1,6 +1,9 @@
 analysis:
   base-url: "http://localhost:8000"
 
+fred:
+  base-url: "https://api.stlouisfed.org"
+  api-key: ${FRED_API_KEY:}
 finra:
   base-url: "https://cdn.finra.org"
   sync:
