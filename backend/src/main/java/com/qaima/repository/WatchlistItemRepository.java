@@ -12,9 +12,12 @@ public interface WatchlistItemRepository extends JpaRepository<WatchlistItem, Lo
 
     @Query("""
         select wi from WatchlistItem wi
+        join fetch wi.watchlist w
         join fetch wi.stock s
+        left join fetch s.exchange e
         left join fetch s.industry i
         where wi.watchlist = :watchlist
+        order by wi.createdAt desc, wi.watchlistItemId desc
     """)
     List<WatchlistItem> findByWatchlistWithStock(@Param("watchlist") Watchlist watchlist);
 
@@ -23,6 +26,7 @@ public interface WatchlistItemRepository extends JpaRepository<WatchlistItem, Lo
         join fetch wi.watchlist w
         join fetch w.user u
         join fetch wi.stock s
+        left join fetch s.exchange e
         left join fetch s.industry i
         where wi.watchlistItemId = :watchlistItemId
     """)

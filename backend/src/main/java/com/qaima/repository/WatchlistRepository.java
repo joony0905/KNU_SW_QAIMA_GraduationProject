@@ -8,6 +8,8 @@ import org.springframework.data.repository.query.Param;
 
 public interface WatchlistRepository extends JpaRepository<Watchlist, Long> {
 
+    Optional<Watchlist> findFirstByUser_UserIdOrderByWatchlistIdAsc(Long userId);
+
     @Query("""
         select w from Watchlist w
         join fetch w.user u

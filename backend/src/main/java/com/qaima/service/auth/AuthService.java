@@ -3,6 +3,8 @@ package com.qaima.service.auth;
 import com.qaima.common.Blocking;
 import com.qaima.domain.User;
 import com.qaima.domain.UserRole;
+import com.qaima.dto.user.FindIdRequestDto;
+import com.qaima.dto.user.FindIdResponseDto;
 import com.qaima.dto.user.LoginRequestDto;
 import com.qaima.dto.user.LoginResponseDto;
 import com.qaima.dto.user.SignupRequestDto;
@@ -14,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
@@ -100,6 +103,19 @@ public class AuthService {
                 );
     }
 
+    public Mono<FindIdResponseDto> findLoginId(FindIdRequestDto requestDto) {
+        String name = trimToNull(requestDto.getName());
+        String birthdate = normalizeBirthdate(requestDto.getBirthdate());
+
+        if (!StringUtils.hasText(name) || !StringUtils.hasText(birthdate)) {
+            return Mono.error(new IllegalArgumentException("이름과 생년월일을 입력해 주세요."));
+        }
+
+        return Blocking.call(() -> userRepository.findByNameAndBirthdate(name, birthdate)
+                        .orElseThrow(() -> new IllegalArgumentException("일치하는 계정을 찾을 수 없습니다.")))
+                .map(user -> new FindIdResponseDto(user.getEmail(), maskEmail(user.getEmail())));
+    }
+
     public Mono<RefreshResult> refresh(String refreshToken, String ip, String ua) {
         return loginSessionService.rotateRefreshToken(refreshToken, ip, ua)
                 .flatMap(rotated -> {
@@ -156,5 +172,40 @@ public class AuthService {
             throw new IllegalArgumentException("이메일은 필수입니다.");
         }
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String normalizeBirthdate(String value) {
+        if (value == null) {
+            return null;
+        }
+        String digits = value.replaceAll("[^0-9]", "");
+        if (digits.length() != 6) {
+            throw new IllegalArgumentException("생년월일은 6자리로 입력해 주세요.");
+        }
+        return digits;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String maskEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return "";
+        }
+        int at = email.indexOf('@');
+        if (at <= 0) {
+            return email.length() <= 2 ? email.charAt(0) + "*" : email.substring(0, 2) + "***";
+        }
+        String local = email.substring(0, at);
+        String domain = email.substring(at);
+        if (local.length() <= 2) {
+            return local.charAt(0) + "***" + domain;
+        }
+        return local.substring(0, 2) + "***" + domain;
     }
 }

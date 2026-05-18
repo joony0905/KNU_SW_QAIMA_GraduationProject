@@ -7,11 +7,9 @@ import lombok.NoArgsConstructor;
 
 @Getter
 @NoArgsConstructor
-public class WatchlistRequestDto {
+public class MyWatchlistItemRequestDto {
+
     @NotNull(message = "stockId는 필수입니다.")
     @Positive(message = "stockId는 1 이상이어야 합니다.")
     private Long stockId;
-
-    @Positive(message = "watchlistId는 1 이상이어야 합니다.")
-    private Long watchlistId;
 }
