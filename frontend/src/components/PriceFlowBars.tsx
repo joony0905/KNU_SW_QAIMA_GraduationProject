@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePdfExportReveal } from "../contexts/PdfExportContext";
 import type { PriceFlowSummary } from "../types/analysisPanel";
 import { formatKstDateTimeDisplay } from "../utils/kst";
 
@@ -31,10 +32,12 @@ const fmtVolume = (value: number | null | undefined) => {
 
 export default function PriceFlowBars({ summary }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [animated, setAnimated] = useState(false);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const forceReveal = usePdfExportReveal();
+  const animated = hasAnimated || forceReveal;
 
   useEffect(() => {
-    setAnimated(false);
+    setHasAnimated(false);
   }, [summary]);
 
   useEffect(() => {
@@ -45,7 +48,7 @@ export default function PriceFlowBars({ summary }: Props) {
       (entries) => {
         const entry = entries[0];
         if (!entry?.isIntersecting) return;
-        setAnimated(true);
+        setHasAnimated(true);
         observer.disconnect();
       },
       {

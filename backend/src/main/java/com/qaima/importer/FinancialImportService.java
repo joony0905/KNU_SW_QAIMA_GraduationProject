@@ -23,10 +23,13 @@ import java.sql.Types;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -166,12 +169,17 @@ public class FinancialImportService {
     private final JdbcTemplate jdbcTemplate;
     private final PlatformTransactionManager transactionManager;
 
-    public void importFromCsv(Path csvPath) throws IOException {
+    public ImportResult importFromCsv(Path csvPath) throws IOException {
+        return importFromCsv(csvPath, null);
+    }
+
+    public ImportResult importFromCsv(Path csvPath, String defaultExchangeCode) throws IOException {
         if (!Files.exists(csvPath)) {
             throw new IllegalArgumentException("CSV file does not exist: " + csvPath);
         }
 
-        Map<String, Long> stockIdByCode = loadStockIdByCode();
+        StockLookup stockLookup = loadStockLookup();
+        String normalizedDefaultExchange = normalizeExchangeCode(defaultExchangeCode);
 
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -180,9 +188,11 @@ public class FinancialImportService {
         int upserted = 0;
         int skippedBlank = 0;
         int skippedUnknownStock = 0;
+        int skippedAmbiguousStock = 0;
         int failed = 0;
 
         Map<String, Integer> missingStockCounts = new LinkedHashMap<>();
+        Map<String, Integer> ambiguousStockCounts = new LinkedHashMap<>();
         List<Object[]> batch = new ArrayList<>(BATCH_SIZE);
 
         try (BufferedReader reader = Files.newBufferedReader(csvPath, StandardCharsets.UTF_8)) {
@@ -190,7 +200,7 @@ public class FinancialImportService {
             lineNo++;
             if (headerLine == null) {
                 log.warn("Financial CSV is empty: {}", csvPath);
-                return;
+                return new ImportResult(csvPath.toString(), normalizedDefaultExchange, 0, 0, 0, 0, 0);
             }
 
             Map<String, Integer> idx = buildHeaderIndex(headerLine);
@@ -207,7 +217,23 @@ public class FinancialImportService {
                 String[] cols = line.split(",", -1);
 
                 try {
-                    Object[] params = toSqlParams(idx, cols, stockIdByCode, missingStockCounts);
+                    RowParams rowParams = toSqlParams(
+                            idx,
+                            cols,
+                            stockLookup,
+                            normalizedDefaultExchange,
+                            missingStockCounts,
+                            ambiguousStockCounts
+                    );
+                    if (rowParams == RowParams.UNKNOWN_STOCK) {
+                        skippedUnknownStock++;
+                        continue;
+                    }
+                    if (rowParams == RowParams.AMBIGUOUS_STOCK) {
+                        skippedAmbiguousStock++;
+                        continue;
+                    }
+                    Object[] params = rowParams.params();
                     if (params == null) {
                         skippedUnknownStock++;
                         continue;
@@ -228,12 +254,14 @@ public class FinancialImportService {
                     );
                 }
 
-                int processed = upserted + skippedUnknownStock + failed;
-                if (processed > 0 && processed % 5000 == 0) {
+                int processedRows = lineNo - 1;
+                if (processedRows > 0 && processedRows % 5000 == 0) {
                     log.info(
-                            "financial import progress: upserted={}, skippedUnknownStock={}, failed={}, lastLine={}",
+                            "financial import progress: processedRows={}, upserted={}, skippedUnknownStock={}, skippedAmbiguousStock={}, failed={}, lastLine={}",
+                            processedRows,
                             upserted,
                             skippedUnknownStock,
+                            skippedAmbiguousStock,
                             failed,
                             lineNo
                     );
@@ -246,11 +274,12 @@ public class FinancialImportService {
         }
 
         log.info(
-                "financial import done: file={}, upserted={}, skippedBlank={}, skippedUnknownStock={}, failed={}",
+                "financial import done: file={}, upserted={}, skippedBlank={}, skippedUnknownStock={}, skippedAmbiguousStock={}, failed={}",
                 csvPath,
                 upserted,
                 skippedBlank,
                 skippedUnknownStock,
+                skippedAmbiguousStock,
                 failed
         );
 
@@ -260,6 +289,23 @@ public class FinancialImportService {
                     .forEach(entry ->
                             log.warn("unknown stock code skipped: {} (count={})", entry.getKey(), entry.getValue()));
         }
+
+        if (!ambiguousStockCounts.isEmpty()) {
+            ambiguousStockCounts.entrySet().stream()
+                    .limit(20)
+                    .forEach(entry ->
+                            log.warn("ambiguous stock code skipped: {} (count={})", entry.getKey(), entry.getValue()));
+        }
+
+        return new ImportResult(
+                csvPath.toString(),
+                normalizedDefaultExchange,
+                upserted,
+                skippedBlank,
+                skippedUnknownStock,
+                skippedAmbiguousStock,
+                failed
+        );
     }
 
     private int flushBatch(TransactionTemplate tx, List<Object[]> batch) {
@@ -269,30 +315,60 @@ public class FinancialImportService {
         return batchSize;
     }
 
-    private Map<String, Long> loadStockIdByCode() {
-        Map<String, Long> map = new HashMap<>();
+    private StockLookup loadStockLookup() {
+        Map<String, Long> byListing = new HashMap<>();
+        Map<String, Long> byCode = new HashMap<>();
+        Set<String> ambiguousCodes = new HashSet<>();
+
         for (Stock stock : stockRepository.findAllByOrderByStockCodeAsc()) {
-            if (stock.getStockId() == null || stock.getStockCode() == null) {
+            if (stock.getStockId() == null || stock.getStockCode() == null || stock.getExchange() == null) {
                 continue;
             }
-            map.put(normalizeStockCode(stock.getStockCode()), stock.getStockId());
+
+            String stockCode = normalizeStockCode(stock.getStockCode());
+            String exchangeCode = normalizeExchangeCode(stock.getExchange().getCode());
+            byListing.put(listingKey(exchangeCode, stockCode), stock.getStockId());
+
+            if (ambiguousCodes.contains(stockCode)) {
+                continue;
+            }
+
+            Long existing = byCode.putIfAbsent(stockCode, stock.getStockId());
+            if (existing != null && !existing.equals(stock.getStockId())) {
+                byCode.remove(stockCode);
+                ambiguousCodes.add(stockCode);
+            }
         }
-        return map;
+        return new StockLookup(byListing, byCode, ambiguousCodes);
     }
 
-    private Object[] toSqlParams(
+    private RowParams toSqlParams(
             Map<String, Integer> idx,
             String[] cols,
-            Map<String, Long> stockIdByCode,
-            Map<String, Integer> missingStockCounts
+            StockLookup stockLookup,
+            String defaultExchangeCode,
+            Map<String, Integer> missingStockCounts,
+            Map<String, Integer> ambiguousStockCounts
     ) {
         String stockCode = requireString(cols, idx, "stock_code");
         String normalizedCode = normalizeStockCode(stockCode);
+        String exchangeCode = normalizeExchangeCode(firstNonBlank(getString(cols, idx, "exchange_code"), defaultExchangeCode));
 
-        Long stockId = stockIdByCode.get(normalizedCode);
+        Long stockId;
+        if (exchangeCode == null) {
+            if (stockLookup.ambiguousCodes().contains(normalizedCode)) {
+                ambiguousStockCounts.merge(normalizedCode, 1, Integer::sum);
+                return RowParams.AMBIGUOUS_STOCK;
+            }
+            stockId = stockLookup.byCode().get(normalizedCode);
+        } else {
+            stockId = stockLookup.byListing().get(listingKey(exchangeCode, normalizedCode));
+        }
+
         if (stockId == null) {
-            missingStockCounts.merge(normalizedCode, 1, Integer::sum);
-            return null;
+            String missingKey = exchangeCode == null ? normalizedCode : listingKey(exchangeCode, normalizedCode);
+            missingStockCounts.merge(missingKey, 1, Integer::sum);
+            return RowParams.UNKNOWN_STOCK;
         }
 
         LocalDate reportDate = parseLocalDate(requireString(cols, idx, "report_date"));
@@ -308,7 +384,7 @@ public class FinancialImportService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        return new Object[]{
+        return new RowParams(new Object[]{
                 stockId,
                 toSqlDate(reportDate),
                 version,
@@ -363,7 +439,7 @@ public class FinancialImportService {
 
                 Timestamp.valueOf(now),
                 Timestamp.valueOf(now)
-        };
+        });
     }
 
     private Map<String, Integer> buildHeaderIndex(String headerLine) {
@@ -411,6 +487,36 @@ public class FinancialImportService {
             return String.format("%06d", Integer.parseInt(trimmed));
         }
         return trimmed;
+    }
+
+    private String normalizeExchangeCode(String exchangeCode) {
+        if (exchangeCode == null || exchangeCode.isBlank()) {
+            return null;
+        }
+
+        String normalized = exchangeCode.trim().toUpperCase(Locale.ROOT).replace(" ", "");
+        return switch (normalized) {
+            case "XKRX", "KRX", "KOSPI" -> "KOSPI";
+            case "XKOS", "KOSDAQ" -> "KOSDAQ";
+            case "XKON", "KONEX" -> "KONEX";
+            case "XNYS", "NYSE" -> "NYSE";
+            case "XNAS", "NASDAQ" -> "NASDAQ";
+            default -> normalized;
+        };
+    }
+
+    private String listingKey(String exchangeCode, String stockCode) {
+        return exchangeCode + ":" + stockCode;
+    }
+
+    private String firstNonBlank(String left, String right) {
+        if (left != null && !left.isBlank()) {
+            return left;
+        }
+        if (right != null && !right.isBlank()) {
+            return right;
+        }
+        return null;
     }
 
     private String normalizePeriodType(String raw) {
@@ -504,5 +610,28 @@ public class FinancialImportService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private record StockLookup(
+            Map<String, Long> byListing,
+            Map<String, Long> byCode,
+            Set<String> ambiguousCodes
+    ) {
+    }
+
+    private record RowParams(Object[] params) {
+        private static final RowParams UNKNOWN_STOCK = new RowParams(null);
+        private static final RowParams AMBIGUOUS_STOCK = new RowParams(null);
+    }
+
+    public record ImportResult(
+            String csvPath,
+            String defaultExchangeCode,
+            int upserted,
+            int skippedBlank,
+            int skippedUnknownStock,
+            int skippedAmbiguousStock,
+            int failed
+    ) {
     }
 }

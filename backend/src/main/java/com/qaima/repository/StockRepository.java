@@ -81,6 +81,22 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     @EntityGraph(attributePaths = "exchange")
     List<Stock> findByDartCorpCodeIsNotNullOrderByStockCodeAsc();
 
+    @EntityGraph(attributePaths = "exchange")
+    List<Stock> findBySecCikIsNotNullOrderByStockCodeAsc();
+
+    long countBySecCikIsNotNull();
+
+    @Query("""
+        select s from Stock s
+        join fetch s.exchange e
+        where s.secCik is not null
+        order by
+          case when s.secIssuedSharesSyncedAt is null then 0 else 1 end asc,
+          s.secIssuedSharesSyncedAt asc,
+          s.stockCode asc
+    """)
+    List<Stock> findSecIssuedSharesSyncTargets(Pageable pageable);
+
     @Query(value = """
         SELECT s.stock_code
         FROM stock s

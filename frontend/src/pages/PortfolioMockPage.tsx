@@ -535,19 +535,37 @@ export default function PortfolioMockPage() {
   // 현재 구현: Portfolio Manager의 rows 상태를 즉시 비중 데이터로 변환해 왼쪽 파이차트에 실시간 반영한다.
   // 진행 예정: pie slice 클릭 시 해당 보유 종목 수정 popup을 연결한다.
   const allocationBaseValue = rows.reduce((sum, row) => sum + Math.max(0, row.quantity * row.avgPrice), 0) + Math.max(0, cashValueDisplay);
-  const holdingAllocations: HoldingAllocation[] = [
-    ...rows
-    .map((row, index) => {
-      const value = Math.max(0, row.quantity * row.avgPrice);
-      return {
+  // 입력 행에서는 같은 종목을 평균단가별로 따로 두지만, 비율 차트에서는 동일 종목을 합산해 한 조각으로 표시한다.
+  const aggregatedByStock = new Map<string, { id: number; label: string; value: number }>();
+  const aggregatedOrder: string[] = [];
+  rows.forEach((row) => {
+    const value = Math.max(0, row.quantity * row.avgPrice);
+    if (value <= 0) return;
+    const key =
+      (row.stockCode && row.stockCode.trim()) || row.name.trim() || `__row_${row.id}`;
+    const existing = aggregatedByStock.get(key);
+    if (existing) {
+      existing.value += value;
+    } else {
+      aggregatedByStock.set(key, {
         id: row.id,
         label: row.name.trim() || "미입력 종목",
         value,
-        weight: allocationBaseValue > 0 ? value / allocationBaseValue : 0,
+      });
+      aggregatedOrder.push(key);
+    }
+  });
+  const holdingAllocations: HoldingAllocation[] = [
+    ...aggregatedOrder.map((key, index) => {
+      const item = aggregatedByStock.get(key)!;
+      return {
+        id: item.id,
+        label: item.label,
+        value: item.value,
+        weight: allocationBaseValue > 0 ? item.value / allocationBaseValue : 0,
         color: pieColorForIndex(index),
       };
-    })
-    .filter((allocation) => allocation.value > 0),
+    }),
     ...(cashValueDisplay > 0
       ? [{
           id: -1,
@@ -558,6 +576,13 @@ export default function PortfolioMockPage() {
         }]
       : []),
   ];
+
+  // 원기둥 파이차트: 윗면과 동일한 conic을 어둡게 깔아 세그먼트 색을 따라가는 옆면을 만든다
+  const pieBackground = holdingAllocationPieStyle(holdingAllocations).background;
+  const PIE_DEPTH = 16; // 옆면(기둥) 두께 px
+  // 윗면 + 바깥 옆면 링: 가운데 구멍(안쪽 반지름 ≈ 박스의 26%)
+  const PIE_TOP_MASK =
+    "radial-gradient(circle closest-side at 50% 50%, transparent 0 52%, #000 52.5%)";
 
   // 분석 옵션 상태
   const [extraOptions, setExtraOptions] = useState<Record<string, boolean>>(
@@ -744,7 +769,7 @@ export default function PortfolioMockPage() {
 
   return (
     <div className="min-h-screen bg-bg ml-[84px]">
-      <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
+      <div className="qaima-stagger max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         {/* 헤더 */}
         <header className="flex items-center justify-between">
           <div>
@@ -775,10 +800,10 @@ export default function PortfolioMockPage() {
           <div className="w-full flex flex-col lg:flex-row gap-6 items-stretch pt-4">
 
             {/* 왼쪽: 투자 자산 비율 */}
-            <section className="w-full lg:flex-1 flex flex-col">
+            <section className="w-full lg:flex-[1.6] flex flex-col">
               <div className="flex-1 flex flex-col rounded-2xl bg-surface border border-line shadow-card">
                 {/* 카드 헤더: 드롭다운(좌) + 타이틀(중앙) + 총금액(우) */}
-                <div className="px-6 pt-5 pb-3 flex items-center justify-between gap-4">
+                <div className="relative px-6 pt-5 pb-3 flex items-center justify-between gap-4">
                   {/* 드롭다운 */}
                   <div ref={dropdownRef} className="relative flex-shrink-0">
                     <button
@@ -815,44 +840,85 @@ export default function PortfolioMockPage() {
                     )}
                   </div>
 
-                  {/* 타이틀 */}
-                  <p className="text-lg font-bold text-ink tracking-tight flex-1 text-center">
+                  {/* 타이틀: 좌우 내용 너비가 변해도 항상 카드 정중앙 고정 (밀림 방지) */}
+                  <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-lg font-bold text-ink tracking-tight whitespace-nowrap pointer-events-none">
                     {selectedMarket} 투자 자산 비율
                   </p>
 
                   {/* 총 금액 / 환율 */}
-	                  <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
-	                    <p className="font-medium text-sm font-mono tabular tracking-tight text-ink">
-	                      {selectedMarket === "국내" || exchangeRate
-                          ? `${Math.round(totalKRW).toLocaleString()}원`
-                          : "-"}
-	                    </p>
-	                    <p className="text-xs text-ink-3 font-mono tabular">
-	                      {selectedMarket === "해외" || exchangeRate
-                          ? `${totalUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}달러`
-                          : "-"}
-	                    </p>
-	                    <p className="text-[11px] text-ink-4">
-	                      {exchangeRate
-                          ? `환율 ${exchangeRate.toLocaleString()} · ${usdKrwRate?.date ?? usdKrwRate?.source ?? ""}`
-                          : exchangeRateError || "환율 로딩중"}
-	                    </p>
-	                  </div>
+                  <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
+                    <p className="font-medium text-sm font-mono tabular tracking-tight text-ink">
+                      {selectedMarket === "국내" || exchangeRate
+                        ? `${Math.round(totalKRW).toLocaleString()}원`
+                        : "-"}
+                    </p>
+                    <p className="text-xs text-ink-3 font-mono tabular">
+                      {selectedMarket === "해외" || exchangeRate
+                        ? `${totalUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}달러`
+                        : "-"}
+                    </p>
+                    <p className="text-[11px] text-ink-4">
+                      {exchangeRate
+                        ? `환율 ${exchangeRate.toLocaleString()} · ${usdKrwRate?.date ?? usdKrwRate?.source ?? ""}`
+                        : exchangeRateError || "환율 로딩중"}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Portfolio Manager 입력값이 바뀔 때마다 즉시 다시 렌더링되는 실시간 비중 파이차트 */}
                 <div className="px-4 pb-4 flex-1 flex flex-col">
-                  <div className="flex-1 rounded-xl bg-bg-sunk border border-line p-4 flex flex-col sm:flex-row items-center justify-center gap-5">
-                    <div className="relative w-44 h-44 sm:w-52 sm:h-52 flex-shrink-0">
-                      <div
-                        className="absolute inset-0 rounded-full border border-line shadow-card"
-                        style={holdingAllocationPieStyle(holdingAllocations)}
-                        aria-label={`${selectedMarket} 투자 자산 비율 파이차트`}
-                      />
-                      <div className="absolute inset-[28%] rounded-full bg-surface border border-line grid place-items-center text-center px-2">
-                        <div>
-                          <p className="text-[11px] text-ink-4">총 평가액</p>
-                          <p className="mt-0.5 text-sm font-bold text-ink font-mono tabular">
+                  <div className="flex-1 rounded-xl bg-bg-sunk border border-line p-4 flex flex-col sm:flex-row items-center justify-center gap-8 sm:gap-10">
+                    <div className="relative w-56 h-56 sm:w-64 sm:h-64 flex-shrink-0 mb-6">
+                      <div className="qaima-pie-in absolute inset-0">
+                        {/* 바닥 그림자 */}
+                        <div
+                          className="absolute inset-0 rounded-full shadow-[0_20px_24px_-10px_rgba(15,23,42,0.5)]"
+                          style={{ transform: `translateY(${PIE_DEPTH}px)` }}
+                        />
+                        {/* 옆면: 같은 conic을 어둡게 한 레이어를 아래로 쌓아 기둥처럼 */}
+                        {Array.from({ length: PIE_DEPTH }).map((_, i) => {
+                          const depthRatio = i / PIE_DEPTH;
+                          const brightness = (0.42 + depthRatio * 0.26).toFixed(3);
+                          return (
+                            <div
+                              key={i}
+                              className="absolute inset-0 rounded-full"
+                              style={{
+                                background: pieBackground,
+                                filter: `brightness(${brightness}) saturate(1.12)`,
+                                transform: `translateY(${PIE_DEPTH - i}px)`,
+                                WebkitMaskImage: PIE_TOP_MASK,
+                                maskImage: PIE_TOP_MASK,
+                              }}
+                            />
+                          );
+                        })}
+                        {/* 윗면 */}
+                        <div
+                          className="absolute inset-0 rounded-full"
+                          style={{
+                            background: pieBackground,
+                            WebkitMaskImage: PIE_TOP_MASK,
+                            maskImage: PIE_TOP_MASK,
+                          }}
+                          aria-label={`${selectedMarket} 투자 자산 비율 파이차트`}
+                        />
+                        {/* 윗면 광택 */}
+                        <div
+                          className="absolute inset-0 rounded-full pointer-events-none"
+                          style={{
+                            background:
+                              "radial-gradient(circle at 34% 24%, rgba(255,255,255,0.5), rgba(255,255,255,0) 58%)",
+                          }}
+                        />
+                      </div>
+                      {/* 가운데 흰 구멍 (정중앙 고정) */}
+                      <div className="absolute inset-[24%] rounded-full bg-surface shadow-[inset_0_2px_4px_rgba(15,23,42,0.12)] pointer-events-none" />
+                      {/* 총 평가액: 바닥과 무관하게 차트 정중앙 고정 */}
+                      <div className="absolute inset-0 grid place-items-center text-center pointer-events-none">
+                        <div className="max-w-[58%]">
+                          <p className="text-[10px] text-ink-4">총 평가액</p>
+                          <p className="mt-0.5 text-sm font-bold text-ink font-mono tabular leading-tight truncate">
                             {selectedMarket === "국내"
                               ? `${Math.round(totalKRW).toLocaleString()}원`
                               : `$${totalUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
@@ -861,7 +927,7 @@ export default function PortfolioMockPage() {
                       </div>
                     </div>
 
-                    <div className="w-full sm:flex-1 min-w-0 flex flex-col gap-2 max-h-52 overflow-y-auto">
+                    <div className="w-full sm:w-auto sm:min-w-[200px] sm:max-w-[260px] min-w-0 flex flex-col gap-2 max-h-56 overflow-y-auto">
                       {holdingAllocations.length === 0 ? (
                         <div className="text-center sm:text-left">
                           <p className="text-sm font-medium text-ink-3">표시할 보유 비중이 없습니다</p>
@@ -870,13 +936,15 @@ export default function PortfolioMockPage() {
                       ) : (
                         holdingAllocations.map((allocation) => (
                           <div key={allocation.id} className="flex items-center gap-2">
-                            <span
-                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: allocation.color }}
-                            />
-                            <span className="flex-1 min-w-0 truncate text-sm font-medium text-ink">
-                              {allocation.label}
-                            </span>
+                            <div className="flex-1 min-w-0 flex items-center justify-end gap-2">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: allocation.color }}
+                              />
+                              <span className="min-w-0 truncate text-sm font-medium text-ink">
+                                {allocation.label}
+                              </span>
+                            </div>
                             <span className="w-14 text-right text-xs font-mono tabular text-ink-3">
                               {formatPct(allocation.weight)}
                             </span>
@@ -890,7 +958,7 @@ export default function PortfolioMockPage() {
             </section>
 
             {/* 오른쪽: Portfolio Manager */}
-            <section className="w-full lg:flex-1 flex flex-col gap-4">
+            <section className="w-full lg:flex-[1.4] flex flex-col gap-4">
               <div className="w-full rounded-2xl bg-surface border border-line shadow-card">
                 <div className="px-6 pt-5 pb-3 flex items-center justify-between">
                   <div>
@@ -900,7 +968,7 @@ export default function PortfolioMockPage() {
                   <button
                     type="button"
                     onClick={handleAddRow}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-ink text-bg hover:opacity-90"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-accent text-white hover:opacity-90"
                   >
                     <Plus size={14} />
                     종목 추가
@@ -925,11 +993,11 @@ export default function PortfolioMockPage() {
                   </div>
 
                   {/* 데이터 행들 */}
-                  <div ref={rowsContainerRef} className="h-52 overflow-y-auto">
+                  <div ref={rowsContainerRef} className="h-64 overflow-y-auto">
                     {rows.map((row) => (
                       <div
                         key={row.id}
-                        className="grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] last:border-b-0 transition-colors border-b border-line hover:bg-bg-sunk"
+                        className="grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] transition-colors border-b border-line hover:bg-bg-sunk"
                       >
                         <div className="px-4 py-3 flex items-center justify-center">
                           <StockSearchCell
@@ -1124,30 +1192,35 @@ export default function PortfolioMockPage() {
 	                </div>
 
 	                <div className="flex flex-col gap-3 px-3 py-3 rounded-lg bg-bg-sunk border border-line">
-	                  <div className="flex items-center justify-between gap-3">
-	                    <div>
-	                      <p className="text-sm font-semibold text-ink">최대 현금비중 한도</p>
-	                      <p className="mt-0.5 text-xs text-ink-4"> 포트폴리오에 현금을 최대로 얼마나 남기게 할수 있는지 설정해요.</p>
+	                  <div className="flex items-center justify-between flex-wrap gap-2">
+	                    <div className="flex items-center gap-1.5">
+	                      <span className="text-sm font-semibold text-ink">최대 현금비중 한도</span>
 	                    </div>
-	                    <span className="px-2.5 py-1 rounded-md bg-surface border border-line text-sm font-bold font-mono tabular text-ink">
+	                  </div>
+
+	                  <div className="flex items-center gap-3">
+	                    <div className="flex-1 flex flex-col gap-1">
+	                      <input
+	                        type="range"
+	                        min={0}
+	                        max={1}
+	                        step={0.01}
+	                        value={cashLimit}
+	                        onChange={(e) => setCashLimit(clampCashLimit(Number(e.target.value)))}
+	                        className="w-full cursor-pointer accent-accent"
+	                      />
+	                      <div className="flex justify-between text-[11px] text-ink-3">
+	                        <span>0% · 현금 X</span>
+	                        <span>현금 O · 100%</span>
+	                      </div>
+	                    </div>
+	                    <span className="w-20 inline-block text-center text-sm font-semibold rounded-lg py-1.5 text-ink bg-surface border border-line font-mono tabular">
 	                      {formatPct(cashLimit, 0)}
 	                    </span>
 	                  </div>
-	                  <input
-	                    type="range"
-	                    min={0}
-	                    max={1}
-	                    step={0.01}
-	                    value={cashLimit}
-	                    onChange={(e) => setCashLimit(clampCashLimit(Number(e.target.value)))}
-	                    className="w-full cursor-pointer accent-accent"
-	                  />
-	                  <div className="flex justify-between text-[11px] text-ink-3">
-	                    <span>0% · 현금 X</span>
-	                    <span>100% · 현금 O</span>
-	                  </div>
+
 	                  <p className="text-xs leading-relaxed text-ink-3">
-	                    투자 성향 지수를 조정하면 기본 한도가 함께 갱신되고, 여기서 직접 조정할 수도 있어요. 해당 값이 분석에 반영돼요.
+	                    포트폴리오에 현금을 최대로 얼마나 남길지 설정해요. 투자 성향 지수를 조정하면 기본 한도가 함께 갱신되고, 여기서 직접 조정할 수도 있어요. 해당 값이 분석에 반영돼요.
 	                  </p>
 	                </div>
 
@@ -1211,7 +1284,7 @@ export default function PortfolioMockPage() {
                   type="button"
                   onClick={() => void handleAnalyzeClick()}
                   disabled={loading || riskGamma === null}
-                  className="px-5 py-2.5 rounded-xl bg-ink text-bg font-semibold text-sm
+                  className="px-5 py-2.5 rounded-xl bg-accent text-white font-semibold text-sm
                              hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity tracking-tight"
                 >
                   {loading ? "분석 중..." : "분석결과보기 →"}

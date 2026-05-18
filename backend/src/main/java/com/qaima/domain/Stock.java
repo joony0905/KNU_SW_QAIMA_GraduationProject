@@ -76,6 +76,18 @@ public class Stock {
     @Column(name = "dart_synced_at")
     private Instant dartSyncedAt;
 
+    @Column(name = "sec_cik", length = 10)
+    private String secCik;
+
+    @Column(name = "sec_company_name", length = 255)
+    private String secCompanyName;
+
+    @Column(name = "sec_synced_at")
+    private Instant secSyncedAt;
+
+    @Column(name = "sec_issued_shares_synced_at")
+    private Instant secIssuedSharesSyncedAt;
+
     private LocalDate listedAt;
     private LocalDate delistedAt;
 

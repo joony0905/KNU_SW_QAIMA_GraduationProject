@@ -12,6 +12,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import type { PeerItem } from "../types/feature2";
+import { useTheme } from "../hooks/useTheme";
 
 export type RelativeLinePoint = {
   t: string;      // 표준 날짜/시간 문자열
@@ -118,6 +119,26 @@ function RelativeLineWidget({
   hoveredDayKey,
   onHoverDayKeyChange,
 }: Props) {
+  const { theme } = useTheme();
+  // 차트 캔버스 배경/격자/축 색 — 다크모드 대응 (카드 surface 색과 맞춤)
+  const chartTheme = useMemo(
+    () =>
+      theme === "dark"
+        ? {
+            bg: "#202024",
+            text: "#d4d4d4",
+            grid: "#303035",
+            border: "#3a3a40",
+          }
+        : {
+            bg: "#ffffff",
+            text: "#1f2937",
+            grid: "#f3f4f6",
+            border: "#e5e7eb",
+          },
+    [theme],
+  );
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -377,12 +398,12 @@ function RelativeLineWidget({
       width,
       height,
       layout: {
-        background: { color: "#ffffff" },
-        textColor: "#1f2937",
+        background: { color: chartTheme.bg },
+        textColor: chartTheme.text,
       },
       grid: {
-        vertLines: { color: "#f3f4f6" },
-        horzLines: { color: "#f3f4f6" },
+        vertLines: { color: chartTheme.grid },
+        horzLines: { color: chartTheme.grid },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -390,7 +411,7 @@ function RelativeLineWidget({
         horzLine: { labelVisible: true },
       },
       rightPriceScale: {
-        borderColor: "#e5e7eb",
+        borderColor: chartTheme.border,
       },
       timeScale: {
         timeVisible: true,
@@ -429,8 +450,8 @@ function RelativeLineWidget({
 
     const bandLowSeries = chart.addSeries(AreaSeries, {
       lineColor: "rgba(255,255,255,0)",
-      topColor: "#ffffff",
-      bottomColor: "#ffffff",
+      topColor: chartTheme.bg,
+      bottomColor: chartTheme.bg,
       lineWidth: 1,
       priceLineVisible: false,
       lastValueVisible: false,
@@ -456,8 +477,8 @@ function RelativeLineWidget({
     const coverageLowSeries = coverageBandConfigs.map(() =>
       chart.addSeries(AreaSeries, {
         lineColor: "rgba(255,255,255,0)",
-        topColor: "#ffffff",
-        bottomColor: "#ffffff",
+        topColor: chartTheme.bg,
+        bottomColor: chartTheme.bg,
         lineWidth: 1,
         priceLineVisible: false,
         lastValueVisible: false,
@@ -572,6 +593,37 @@ function RelativeLineWidget({
     bandLowerLine.setData(showPeerOverlay ? bandLowData : []);
     chart.timeScale().fitContent();
   }, [anchorData, lineData, centroidData, bandHighData, bandLowData, bandCoverageBuckets, showPeerOverlay]);
+
+  /**
+   * 다크모드 토글 시 차트 캔버스/마스크 색 갱신 (차트 재생성 없이)
+   */
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    try {
+      chart.applyOptions({
+        layout: {
+          background: { color: chartTheme.bg },
+          textColor: chartTheme.text,
+        },
+        grid: {
+          vertLines: { color: chartTheme.grid },
+          horzLines: { color: chartTheme.grid },
+        },
+        rightPriceScale: { borderColor: chartTheme.border },
+      });
+      bandLowSeriesRef.current?.applyOptions({
+        topColor: chartTheme.bg,
+        bottomColor: chartTheme.bg,
+      });
+      coverageBandLowSeriesRefs.current.forEach((series) =>
+        series.applyOptions({
+          topColor: chartTheme.bg,
+          bottomColor: chartTheme.bg,
+        }),
+      );
+    } catch {}
+  }, [chartTheme]);
 
   /**
    * 차트에서 hover하면 부모에 KST day key 전달

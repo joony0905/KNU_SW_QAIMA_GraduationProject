@@ -124,10 +124,10 @@ const flowStatusText = (delta?: number | null) => {
 };
 
 const flowStatusClass = (status: string) => {
-  if (status === "상승") return "text-rose-700 bg-rose-50 border-rose-200";
-  if (status === "하락") return "text-blue-700 bg-blue-50 border-blue-200";
-  if (status === "혼재") return "text-zinc-700 bg-zinc-100 border-zinc-200";
-  return "text-zinc-500 bg-zinc-50 border-zinc-200";
+  if (status === "상승") return "text-rise bg-rise-soft border-rise/30";
+  if (status === "하락") return "text-fall bg-fall-soft border-fall/30";
+  if (status === "혼재") return "text-ink-2 bg-bg-sunk border-line";
+  return "text-ink-3 bg-bg-sunk border-line";
 };
 
 const seriesDelta = (series?: RelativePoint[] | null) => {
@@ -146,10 +146,10 @@ function MetricTile({
   sub?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2">
-      <p className="text-[11px] font-medium text-zinc-500">{label}</p>
-      <p className="mt-1 text-base font-bold text-zinc-900">{value}</p>
-      {sub && <p className="mt-0.5 text-[11px] text-zinc-500">{sub}</p>}
+    <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+      <p className="text-[11px] font-medium text-ink-3">{label}</p>
+      <p className="mt-1 text-base font-bold text-ink">{value}</p>
+      {sub && <p className="mt-0.5 text-[11px] text-ink-3">{sub}</p>}
     </div>
   );
 }
@@ -255,7 +255,7 @@ export default function Feature2ExternalFactorPanel({
           label="유사종목 흐름"
           value={
             peerFlowLocked ? (
-              <span className="inline-flex items-center gap-1 text-zinc-500">
+              <span className="inline-flex items-center gap-1 text-ink-3">
                 <Lock size={14} aria-hidden="true" />
                 잠금
               </span>
@@ -277,24 +277,24 @@ export default function Feature2ExternalFactorPanel({
           sub={shortSellingMetrics ? formatDate(shortSellingMetrics.reportDate) : "데이터 없음"}
         />
       </div>
-      <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3">
-        <p className="text-xs font-semibold text-zinc-800">금리 환경</p>
+      <div className="rounded-lg border border-line bg-surface px-3 py-3">
+        <p className="text-xs font-semibold text-ink-2">금리 환경</p>
         <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
           {[...krBondYields, ...usBondYields].slice(0, 4).map((item) => (
             <div key={item.instrumentCode} className="flex items-center justify-between gap-2">
-              <span className="text-zinc-500">{item.instrumentCode}</span>
-              <span className="font-semibold text-zinc-900">{formatRate(item.value, item.unit)}</span>
+              <span className="text-ink-3">{item.instrumentCode}</span>
+              <span className="font-semibold text-ink">{formatRate(item.value, item.unit)}</span>
             </div>
           ))}
           {krBondYields.length + usBondYields.length === 0 && (
-            <p className="col-span-2 text-zinc-500">
+            <p className="col-span-2 text-ink-3">
               {macroRatesLoading ? "국채 데이터를 확인하는 중입니다." : "국채 데이터가 없습니다."}
             </p>
           )}
         </div>
       </div>
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-semibold text-zinc-800">간단 추세</p>
+        <p className="text-xs font-semibold text-ink-2">간단 추세</p>
         {summaryTrendSeries.slice(0, 7).map((series, index) => (
           <MiniTrendRow
             key={series.key}
@@ -303,7 +303,7 @@ export default function Feature2ExternalFactorPanel({
           />
         ))}
         {summaryTrendSeries.length === 0 && (
-          <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-5 text-center text-sm text-zinc-500">
+          <div className="rounded-lg border border-line bg-bg-sunk px-3 py-5 text-center text-sm text-ink-3">
             {macroRatesLoading ? "추세 데이터를 확인하는 중입니다." : "표시할 추세 데이터가 없습니다."}
           </div>
         )}
@@ -344,15 +344,15 @@ export default function Feature2ExternalFactorPanel({
       <BondYieldList title="미국 금리" items={usBondYields} />
       <div className="flex flex-col gap-3">
         <div>
-          <p className="mb-2 text-sm font-semibold text-zinc-900">환율 추세</p>
+          <p className="mb-2 text-sm font-semibold text-ink">환율 추세</p>
           <MultiLineTrendChart series={exchangeSeries} height={190} />
         </div>
         <div>
-          <p className="mb-2 text-sm font-semibold text-zinc-900">국내 금리 추세</p>
+          <p className="mb-2 text-sm font-semibold text-ink">국내 금리 추세</p>
           <MultiLineTrendChart series={domesticMacroSeries} height={210} />
         </div>
         <div>
-          <p className="mb-2 text-sm font-semibold text-zinc-900">미국 금리 추세</p>
+          <p className="mb-2 text-sm font-semibold text-ink">미국 금리 추세</p>
           <MultiLineTrendChart series={usMacroSeries} height={210} />
         </div>
       </div>
@@ -362,17 +362,17 @@ export default function Feature2ExternalFactorPanel({
   const renderFlow = () => (
     <div className="flex flex-col gap-3">
       {investorFlowLoading && (
-        <div className="h-40 flex items-center justify-center text-sm text-gray-500">
+        <div className="h-40 flex items-center justify-center text-sm text-ink-3">
           수급 데이터를 불러오는 중입니다…
         </div>
       )}
       {investorFlowError && !investorFlowLoading && (
-        <div className="h-40 flex items-center justify-center text-sm text-red-500">
+        <div className="h-40 flex items-center justify-center text-sm text-danger">
           {investorFlowError}
         </div>
       )}
       {!investorFlowLoading && !investorFlowError && !investorFlow?.stockSummary && (
-        <div className="min-h-[360px] flex items-center justify-center text-sm text-gray-500 rounded-lg border border-zinc-200 bg-zinc-50">
+        <div className="min-h-[360px] flex items-center justify-center text-sm text-ink-3 rounded-lg border border-line bg-bg-sunk">
           수급 데이터가 없습니다.
         </div>
       )}
@@ -405,12 +405,12 @@ export default function Feature2ExternalFactorPanel({
             />
           </div>
           <div>
-            <p className="mb-2 text-sm font-semibold text-zinc-900">종목 외국인/기관 순매수</p>
+            <p className="mb-2 text-sm font-semibold text-ink">종목 외국인/기관 순매수</p>
             <InvestorFlowTrendChart points={investorFlow.stockSeries ?? []} height={210} />
           </div>
           {investorFlow.marketSeries?.length > 0 && (
             <div>
-              <p className="mb-2 text-sm font-semibold text-zinc-900">시장 외국인/기관 순매수</p>
+              <p className="mb-2 text-sm font-semibold text-ink">시장 외국인/기관 순매수</p>
               <InvestorFlowTrendChart points={investorFlow.marketSeries} height={190} />
             </div>
           )}
@@ -422,39 +422,39 @@ export default function Feature2ExternalFactorPanel({
   const renderNews = () => (
     <div className="flex flex-col gap-3">
       {newsLoading && (
-        <div className="h-40 flex items-center justify-center text-sm text-gray-500">
+        <div className="h-40 flex items-center justify-center text-sm text-ink-3">
           뉴스를 불러오는 중입니다…
         </div>
       )}
 
       {newsError && !newsLoading && (
-        <div className="h-40 flex items-center justify-center text-sm text-red-500">
+        <div className="h-40 flex items-center justify-center text-sm text-danger">
           {newsError ?? "뉴스를 불러오지 못했습니다."}
         </div>
       )}
 
       {!newsLoading && !newsError && (
-        <div className="flex flex-col min-h-[360px] max-h-[520px] overflow-y-auto rounded-lg border border-zinc-200 bg-white">
+        <div className="flex flex-col min-h-[360px] max-h-[520px] overflow-y-auto rounded-lg border border-line bg-surface">
           {newsItems.map((item, idx) => (
             <a
               key={item.newsId}
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
-              className={`flex items-center gap-4 px-3 py-3 bg-white border-t ${
+              className={`flex items-center gap-4 px-3 py-3 bg-surface border-t ${
                 idx === newsItems.length - 1 ? "border-b" : ""
-              } border-zinc-200 hover:bg-zinc-50 transition-colors`}
+              } border-line hover:bg-bg-sunk transition-colors`}
             >
               <div className="flex-1 flex flex-col gap-2 min-w-0">
                 <div className="flex flex-col">
-                  <h4 className="text-black text-sm font-semibold line-clamp-1">
+                  <h4 className="text-ink text-sm font-semibold line-clamp-1">
                     {item.title}
                   </h4>
-                  <p className="text-zinc-700 text-xs leading-snug line-clamp-2">
+                  <p className="text-ink-2 text-xs leading-snug line-clamp-2">
                     {item.summary}
                   </p>
                 </div>
-                <p className="text-zinc-500 text-[11px] font-medium">
+                <p className="text-ink-3 text-[11px] font-medium">
                   {formatTimeAgo(item.publishedAt)} · {item.publisher}
                 </p>
               </div>
@@ -462,7 +462,7 @@ export default function Feature2ExternalFactorPanel({
           ))}
 
           {newsItems.length === 0 && (
-            <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
+            <div className="flex-1 flex items-center justify-center text-sm text-ink-3">
               표시할 뉴스가 없습니다.
             </div>
           )}
@@ -482,21 +482,21 @@ export default function Feature2ExternalFactorPanel({
         peerCount={peerCluster?.peers?.length ?? 0}
       />
       {relatedLoading && (
-        <div className="h-40 flex items-center justify-center text-sm text-gray-500">
+        <div className="h-40 flex items-center justify-center text-sm text-ink-3">
           유사 종목을 불러오는 중입니다…
         </div>
       )}
 
       {relatedError && !relatedLoading && (
-        <div className="h-40 flex items-center justify-center text-sm text-red-500">
+        <div className="h-40 flex items-center justify-center text-sm text-danger">
           {relatedError ?? "유사 종목을 불러오지 못했습니다."}
         </div>
       )}
 
       {!relatedLoading && !relatedError && (
-        <div className="flex flex-col min-h-[360px] max-h-[520px] overflow-y-auto rounded-lg border border-zinc-200 bg-white">
+        <div className="flex flex-col min-h-[360px] max-h-[520px] overflow-y-auto rounded-lg border border-line bg-surface">
           {relatedStocks.map((row, idx) => {
-            const colorClass = row.change > 0 ? "text-red-600" : row.change < 0 ? "text-blue-600" : "text-black";
+            const colorClass = row.change > 0 ? "text-rise" : row.change < 0 ? "text-fall" : "text-flat";
             const fmtPrice = row.price.toLocaleString("ko-KR");
             const fmtVolume = row.volume.toLocaleString("ko-KR");
             const fmtChange = row.change > 0 ? `+${row.change.toLocaleString("ko-KR")}` : row.change.toLocaleString("ko-KR");
@@ -506,17 +506,17 @@ export default function Feature2ExternalFactorPanel({
               <button
                 key={row.stockCode}
                 onClick={() => onSelectRelatedStock(row.stockCode)}
-                className={`flex items-center gap-2 px-3 py-3 bg-white border-t ${
+                className={`flex items-center gap-2 px-3 py-3 bg-surface border-t ${
                   idx === relatedStocks.length - 1 ? "border-b" : ""
-                } border-zinc-200 hover:bg-zinc-50 transition-colors cursor-pointer w-full text-left`}
+                } border-line hover:bg-bg-sunk transition-colors cursor-pointer w-full text-left`}
               >
                 <div className="min-w-0 w-[104px] flex-shrink-0">
-                  <p className="text-sm font-semibold text-black truncate">{row.companyName}</p>
-                  <p className="text-[10px] text-gray-400">{row.stockCode}</p>
+                  <p className="text-sm font-semibold text-ink truncate">{row.companyName}</p>
+                  <p className="text-[10px] text-ink-4">{row.stockCode}</p>
                 </div>
                 <div className="flex flex-col items-end flex-1 min-w-0">
                   <span className={`text-sm font-semibold ${colorClass}`}>{fmtPrice}</span>
-                  <span className="text-xs text-gray-500">{fmtVolume}</span>
+                  <span className="text-xs text-ink-3">{fmtVolume}</span>
                 </div>
                 <div className="flex-shrink-0 w-3 flex items-center justify-center">
                   {row.change > 0 && (
@@ -526,7 +526,7 @@ export default function Feature2ExternalFactorPanel({
                     <div className={`${colorClass} w-0 h-0 border-l-[5px] border-r-[5px] border-t-[7px] border-transparent border-t-current`} />
                   )}
                   {row.change === 0 && (
-                    <span className="text-black text-lg font-extrabold leading-none">-</span>
+                    <span className="text-ink text-lg font-extrabold leading-none">-</span>
                   )}
                 </div>
                 <div className="flex flex-col items-end flex-shrink-0 min-w-[64px]">
@@ -538,7 +538,7 @@ export default function Feature2ExternalFactorPanel({
           })}
 
           {relatedStocks.length === 0 && (
-            <div className="flex-1 flex items-center justify-center text-sm text-gray-500">
+            <div className="flex-1 flex items-center justify-center text-sm text-ink-3">
               표시할 유사 종목이 없습니다.
             </div>
           )}
@@ -551,7 +551,7 @@ export default function Feature2ExternalFactorPanel({
     const ss = shortSellingMetrics;
     if (!ss) {
       return (
-        <div className="min-h-[360px] flex items-center justify-center text-sm text-gray-500 rounded-lg border border-zinc-200 bg-zinc-50">
+        <div className="min-h-[360px] flex items-center justify-center text-sm text-ink-3 rounded-lg border border-line bg-bg-sunk">
           공매도 데이터가 없습니다.
         </div>
       );
@@ -569,16 +569,16 @@ export default function Feature2ExternalFactorPanel({
 
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col rounded-lg border border-zinc-200 bg-white overflow-hidden">
+        <div className="flex flex-col rounded-lg border border-line bg-surface overflow-hidden">
           {rows.map((row, idx) => (
             <div
               key={`short-selling-row-${idx}`}
               className={`flex items-center justify-between gap-3 px-3 py-3 border-t ${
                 idx === rows.length - 1 ? "border-b" : ""
-              } border-zinc-200`}
+              } border-line`}
             >
-              <span className="text-xs sm:text-sm text-gray-600">{row.label}</span>
-              <span className="text-xs sm:text-sm font-semibold text-black text-right">{row.value}</span>
+              <span className="text-xs sm:text-sm text-ink-3">{row.label}</span>
+              <span className="text-xs sm:text-sm font-semibold text-ink text-right">{row.value}</span>
             </div>
           ))}
         </div>
@@ -609,8 +609,8 @@ export default function Feature2ExternalFactorPanel({
             onClick={() => setActiveTab(tab.key)}
             className={`h-9 rounded-md border text-xs font-semibold transition-colors ${
               activeTab === tab.key
-                ? "border-zinc-900 bg-zinc-900 text-white"
-                : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                ? "border-accent bg-accent text-white"
+                : "border-line bg-bg-sunk text-ink-3 hover:bg-bg-sunk hover:text-ink hover:border-line-strong"
             }`}
           >
             {tab.label}
@@ -641,13 +641,13 @@ function PeerFlowSummaryCard({
 }) {
   if (locked) {
     return (
-      <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4">
+      <div className="rounded-lg border border-dashed border-line bg-bg-sunk px-3 py-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-zinc-800">유사종목 흐름</p>
-            <p className="mt-1 text-xs text-zinc-500">분석 결과 보기 후 피어 평균 흐름이 활성화됩니다.</p>
+            <p className="text-sm font-semibold text-ink-2">유사종목 흐름</p>
+            <p className="mt-1 text-xs text-ink-3">분석 결과 보기 후 피어 평균 흐름이 활성화됩니다.</p>
           </div>
-          <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs font-semibold text-zinc-500">
+          <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-ink-3">
             <Lock size={13} aria-hidden="true" />
             잠금
           </span>
@@ -666,28 +666,28 @@ function PeerFlowSummaryCard({
           : "분석 종목과 피어 평균 흐름이 유사";
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3">
+    <div className="rounded-lg border border-line bg-surface px-3 py-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-zinc-900">유사종목 흐름</p>
-          <p className="mt-1 text-xs text-zinc-500">{relativeText}</p>
+          <p className="text-sm font-semibold text-ink">유사종목 흐름</p>
+          <p className="mt-1 text-xs text-ink-3">{relativeText}</p>
         </div>
         <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${flowStatusClass(peerStatus)}`}>
           {peerStatus}
         </span>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-        <div className="rounded-md bg-zinc-50 px-2 py-2">
-          <p className="text-zinc-500">피어 평균</p>
-          <p className="mt-0.5 font-bold text-zinc-900">{formatSignedPct(peerDelta)}</p>
+        <div className="rounded-md bg-bg-sunk px-2 py-2">
+          <p className="text-ink-3">피어 평균</p>
+          <p className="mt-0.5 font-bold text-ink">{formatSignedPct(peerDelta)}</p>
         </div>
-        <div className="rounded-md bg-zinc-50 px-2 py-2">
-          <p className="text-zinc-500">분석 종목</p>
-          <p className="mt-0.5 font-bold text-zinc-900">{formatSignedPct(anchorDelta)}</p>
+        <div className="rounded-md bg-bg-sunk px-2 py-2">
+          <p className="text-ink-3">분석 종목</p>
+          <p className="mt-0.5 font-bold text-ink">{formatSignedPct(anchorDelta)}</p>
         </div>
-        <div className="rounded-md bg-zinc-50 px-2 py-2">
-          <p className="text-zinc-500">피어 수</p>
-          <p className="mt-0.5 font-bold text-zinc-900">{peerCount}개</p>
+        <div className="rounded-md bg-bg-sunk px-2 py-2">
+          <p className="text-ink-3">피어 수</p>
+          <p className="mt-0.5 font-bold text-ink">{peerCount}개</p>
         </div>
       </div>
     </div>
@@ -702,23 +702,23 @@ function BondYieldList({
   items: NonNullable<Feature2MacroRates["bondYields"]>;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white px-3 py-3">
+    <div className="rounded-lg border border-line bg-surface px-3 py-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-zinc-900">{title}</p>
-        <span className="text-[11px] text-zinc-400">{items.length}개</span>
+        <p className="text-sm font-semibold text-ink">{title}</p>
+        <span className="text-[11px] text-ink-4">{items.length}개</span>
       </div>
-      <div className="mt-2 flex flex-col divide-y divide-zinc-100">
+      <div className="mt-2 flex flex-col divide-y divide-line">
         {items.map((item) => (
           <div key={item.instrumentCode} className="flex items-center justify-between gap-3 py-2">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-zinc-800">{item.instrumentCode}</p>
-              <p className="text-[11px] text-zinc-500">{item.instrumentName} · {formatDate(item.date)}</p>
+              <p className="text-sm font-semibold text-ink-2">{item.instrumentCode}</p>
+              <p className="text-[11px] text-ink-3">{item.instrumentName} · {formatDate(item.date)}</p>
             </div>
-            <p className="text-sm font-bold text-zinc-900">{formatRate(item.value, item.unit)}</p>
+            <p className="text-sm font-bold text-ink">{formatRate(item.value, item.unit)}</p>
           </div>
         ))}
         {items.length === 0 && (
-          <p className="py-5 text-center text-sm text-zinc-500">데이터가 없습니다.</p>
+          <p className="py-5 text-center text-sm text-ink-3">데이터가 없습니다.</p>
         )}
       </div>
     </div>

@@ -1,12 +1,15 @@
 // frontend/src/pages/StocksMockPage.tsx
 import { isLoggedIn } from "../utils/auth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import TradingViewWidget from "../components/TradingViewWidget";
 import AnalysisResultPanel, { LLM_VENDOR_OPTIONS } from "../components/AnalysisResultPanel";
+import { PdfExportContext } from "../contexts/PdfExportContext";
+import qaimaLogo from "../assets/qaima-final.png";
 import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import { useRef, useEffect, useState } from "react";
 import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
 import StockSearchBar from "../components/StockSearchBar";
+import FeatureIntro from "../components/FeatureIntro";
 import { type IndicatorSection } from "../mocks/financialIndicators";
 import type { FinancialDto } from "../types/financial";
 import { buildSectionsFromDto } from "../mappers/financialMapper";
@@ -15,6 +18,12 @@ import type { MarketSnapshotDto } from "../types/financial";
 import FinancialDetailModal from "../components/FinancialDetailModal";
 import { fetchAnalysis } from "../api/analysis";
 import { getStockByCode } from "../api/stock";
+import {
+  fetchWatchlist,
+  addWatchlistItem,
+  deleteWatchlistItem,
+  DEFAULT_WATCHLIST_ID,
+} from "../api/watchlist";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import jsPDF from "jspdf";
@@ -200,6 +209,7 @@ const buildPriceFlowSummary = (
 
 export default function StocksMockPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const currentTime = useKSTTime();
 
   const [chartLoading, setChartLoading] = useState(false);
@@ -255,6 +265,8 @@ export default function StocksMockPage() {
   const isLoadingMoreRef = useRef(false);
   const requestedRangesRef = useRef<Set<string>>(new Set());
   const pdfRef = useRef<HTMLDivElement | null>(null);
+  // PDF 캡처 중 true → 스크롤 등장 컴포넌트가 즉시 최종 상태로 렌더
+  const [pdfExporting, setPdfExporting] = useState(false);
 
   const chartRangeRef = useRef<{
     stockCode: string;
@@ -508,10 +520,12 @@ export default function StocksMockPage() {
     }));
 
     let resolvedCode: string | null = null;
+    let resolvedStockId: number | null = null;
 
     try {
       const stockInfo = await getStockByCode(q);
       resolvedCode = stockInfo.stockCode;
+      resolvedStockId = stockInfo.stockId ?? null;
 
       setMainStock((prev) => ({
         ...prev,
@@ -543,6 +557,9 @@ export default function StocksMockPage() {
       }
     }
 
+    setCurrentStockId(resolvedStockId);
+    void syncWatchlistMembership(resolvedStockId);
+
     const code = resolvedCode;
 
     try {
@@ -571,6 +588,18 @@ export default function StocksMockPage() {
     // 초기 차트는 30일만 로드하고, 분석기간 입력값은 유지
     await loadCandles(code, "INITIAL");
   };
+
+  // 메인페이지에서 ?q=종목 으로 진입 시, 검색창에 입력한 것과 동일하게 자동 검색 (분석은 사용자가 직접 실행)
+  const didAutoSearchRef = useRef(false);
+  useEffect(() => {
+    if (didAutoSearchRef.current) return;
+    const q = searchParams.get("q");
+    if (q && q.trim()) {
+      didAutoSearchRef.current = true;
+      void handleSearch(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleAnalyzeClick = async () => {
     if (!isLoggedIn()) {
@@ -662,17 +691,41 @@ export default function StocksMockPage() {
     }
   };
 
+  const loadImageElement = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
   const handleDownloadClick = async () => {
     if (!analysisResult || !pdfRef.current) return;
 
+    // 스크롤로 아직 등장하지 않은 섹션도 빠짐없이 캡처되도록 강제 렌더 ON
+    setPdfExporting(true);
     try {
-      const fullCanvas = await html2canvas(pdfRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        windowWidth: pdfRef.current.scrollWidth,
-        windowHeight: pdfRef.current.scrollHeight,
-      });
+      // React 커밋 + 등장 트랜지션(~0.5s) 정착 대기 후 캡처
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 700));
+
+      const [fullCanvas, logoImg] = await Promise.all([
+        html2canvas(pdfRef.current, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          windowWidth: pdfRef.current.scrollWidth,
+          windowHeight: pdfRef.current.scrollHeight,
+          // data-pdf-exclude 요소(다운로드/확대 버튼)는 캡처에서 제외
+          ignoreElements: (element) =>
+            element instanceof HTMLElement &&
+            element.hasAttribute("data-pdf-exclude"),
+        }),
+        loadImageElement(qaimaLogo).catch(() => null),
+      ]);
 
       const doc = new jsPDF("p", "mm", "a4");
       const pdfWidth = doc.internal.pageSize.getWidth();
@@ -711,10 +764,33 @@ export default function StocksMockPage() {
         pageIndex++;
       }
 
+      // 모든 페이지 중앙에 로고 워터마크(반투명) 삽입
+      if (logoImg && logoImg.naturalWidth > 0) {
+        const docGState = doc as unknown as {
+          GState: new (opts: { opacity: number }) => unknown;
+          setGState: (g: unknown) => void;
+        };
+        const wmWidth = pdfWidth * 0.5;
+        const wmHeight = wmWidth * (logoImg.naturalHeight / logoImg.naturalWidth);
+        const wmX = (pdfWidth - wmWidth) / 2;
+        const wmY = (pdfHeight - wmHeight) / 2;
+        const pageCount = doc.getNumberOfPages();
+        for (let p = 1; p <= pageCount; p++) {
+          doc.setPage(p);
+          doc.saveGraphicsState();
+          docGState.setGState(new docGState.GState({ opacity: 0.08 }));
+          doc.addImage(logoImg, "PNG", wmX, wmY, wmWidth, wmHeight);
+          doc.restoreGraphicsState();
+        }
+      }
+
       const fileName = `${mainStock.symbol}_analysis.pdf`;
       doc.save(fileName);
     } catch (e) {
       console.error("PDF 생성 실패:", e);
+    } finally {
+      // 캡처 종료 — 화면을 원래 스크롤 등장 동작으로 복원
+      setPdfExporting(false);
     }
   };
 
@@ -747,6 +823,8 @@ export default function StocksMockPage() {
   };
 
   const [isInterested, setIsInterested] = useState(false);
+  const [currentStockId, setCurrentStockId] = useState<number | null>(null);
+  const [watchlistItemId, setWatchlistItemId] = useState<number | null>(null);
 
 
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
@@ -762,18 +840,65 @@ export default function StocksMockPage() {
     return () => clearTimeout(t);
   }, [toast.visible]);
 
-  const toggleInterest = async () => {
-    console.log("toggleInterest clicked, isInterested =", isInterested);
+  // 검색한 종목이 관심종목(워치리스트)에 들어있는지 동기화
+  const syncWatchlistMembership = async (stockId: number | null) => {
+    setIsInterested(false);
+    setWatchlistItemId(null);
+    if (!stockId) return;
+    // 비로그인 시 워치리스트 조회(인증 필요)를 호출하지 않는다.
+    // 호출하면 401 → apiClient 인터셉터가 강제로 /login 으로 이동시켜
+    // "종목 검색만 해도 로그인 창으로 튕기는" 문제가 발생한다. (분석은 별도로 로그인 요구)
+    if (!isLoggedIn()) return;
     try {
-      setIsInterested((prev) => !prev);
+      const items = await fetchWatchlist(DEFAULT_WATCHLIST_ID);
+      const hit = items.find((it) => it.stockId === stockId);
+      if (hit) {
+        setIsInterested(true);
+        setWatchlistItemId(hit.watchlistItemId);
+      }
+    } catch {
+      // 워치리스트 미존재/권한 등은 조용히 무시 (별 비활성 상태 유지)
+    }
+  };
+
+  const toggleInterest = async () => {
+    // 이미 등록됨 → 삭제
+    if (isInterested && watchlistItemId != null) {
+      try {
+        await deleteWatchlistItem(watchlistItemId);
+        setIsInterested(false);
+        setWatchlistItemId(null);
+        setToast({ message: "관심종목에서 삭제되었습니다.", visible: true });
+      } catch (e) {
+        setToast({
+          message: getApiErrorMessage(e, "관심종목 삭제에 실패했습니다."),
+          visible: true,
+        });
+      }
+      return;
+    }
+
+    // 미등록 → 추가
+    if (!currentStockId) {
       setToast({
-        message: isInterested
-          ? "관심종목에서 삭제되었습니다."
-          : "관심종목에 추가되었습니다.",
+        message: "종목 정보를 불러온 뒤 다시 시도해주세요.",
         visible: true,
       });
-    } catch (err2) {
-      console.error("관심 종목 토글 실패:", err2);
+      return;
+    }
+    try {
+      const created = await addWatchlistItem({
+        stockId: currentStockId,
+        watchlistId: DEFAULT_WATCHLIST_ID,
+      });
+      setIsInterested(true);
+      setWatchlistItemId(created.watchlistItemId);
+      setToast({ message: "관심종목에 추가되었습니다.", visible: true });
+    } catch (e) {
+      setToast({
+        message: getApiErrorMessage(e, "관심종목 추가에 실패했습니다."),
+        visible: true,
+      });
     }
   };
 
@@ -818,7 +943,7 @@ export default function StocksMockPage() {
 
   return (
     <div className="min-h-screen bg-bg ml-[84px]">
-      <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
+      <div className="qaima-stagger max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         <header className="flex items-end justify-between">
           <div>
             <div className="text-xs font-medium text-ink-3 tracking-tight">
@@ -842,16 +967,24 @@ export default function StocksMockPage() {
           </div>
         </header>
 
-        <StockSearchBar onSearch={handleSearch} />
+        <div className="relative z-30">
+          <StockSearchBar onSearch={handleSearch} />
+        </div>
+
+        {!hasSelectedStock && (
+          <div className="relative z-0 mt-10 sm:mt-20">
+            <FeatureIntro variant="deep" />
+          </div>
+        )}
 
         {hasSelectedStock && (
           <>
             <div className="border-t border-line-strong" />
           <main className="w-full flex flex-col gap-4 sm:gap-5">
             <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1.2fr)] gap-4 lg:gap-6 items-start">
-              <div className="flex flex-col gap-3 sm:gap-4 xl:h-[580px]">
-                {/* 종목 헤더 — 카드 밖, 페이지 위에 직접 표시 */}
-                <div className="flex items-start justify-between gap-4 px-1">
+              <section className="bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4 xl:h-[580px] min-h-0">
+                {/* 종목 헤더 — 카드 안 */}
+                <div className="flex items-start justify-between gap-4">
                   <div className="flex flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-ink tracking-tight">
@@ -910,9 +1043,11 @@ export default function StocksMockPage() {
                   </div>
                 </div>
 
-                {/* 차트만 흰 카드로 감쌈 */}
-                <section className="w-full flex-1 bg-surface border border-line shadow-card overflow-hidden min-h-0 flex flex-col">
-                  <div className="flex-1 min-h-0 w-full flex items-stretch">
+                {/* 헤더와 차트 사이 divider */}
+                <div className="h-px bg-line" />
+
+                {/* 차트 영역 — sunken 제거, 같은 흰 배경 위에 차트 */}
+                <div className="flex-1 min-h-0 w-full flex items-stretch">
                     {chartLoading && (
                       <div className="flex-1 min-h-0 w-full flex items-center justify-center">
                         <p className="text-sm sm:text-base text-ink-3">
@@ -941,47 +1076,39 @@ export default function StocksMockPage() {
                         />
                       </div>
                     )}
-                  </div>
-                </section>
-              </div>
+                </div>
+              </section>
 
-              <div className="w-full xl:h-[580px] flex flex-col gap-3 sm:gap-4">
+              <aside className="bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4 xl:h-[580px] min-h-0">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-ink tracking-tight">
                     투자지표
                   </h2>
                   <button
                     onClick={() => setIsFinModalOpen(true)}
-                    className="px-4 py-1.5 rounded-lg text-sm font-medium bg-accent-soft text-accent border border-accent/30 hover:bg-accent/15 hover:border-accent/50 transition-colors"
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent-soft text-accent-ink hover:bg-accent/15 transition-colors"
                   >
                     재무제표
                   </button>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-5">
-                    {sections.length > 0 ? (
-                      sections.map((section) => (
-                        <IndicatorSectionBlock
-                          key={section.sectionTitle}
-                          section={section}
-                          layout={
-                            section.sectionTitle === "밸류에이션"
-                              ? "2-2-2"
-                              : section.sectionTitle === "수익성"
-                                ? "2-2"
-                                : section.sectionTitle === "재무안정성"
-                                  ? "2-2-1"
-                                  : "2"
-                          }
-                        />
-                      ))
-                    ) : (
-                      <p className="text-sm text-ink-3">
-                        해당 조건의 재무제표 데이터가 없습니다.
-                      </p>
-                    )}
+                <div className="h-px bg-line" />
+
+                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+                  {sections.length > 0 ? (
+                    sections.map((section) => (
+                      <IndicatorSectionBlock
+                        key={section.sectionTitle}
+                        section={section}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-sm text-ink-3">
+                      해당 조건의 재무제표 데이터가 없습니다.
+                    </p>
+                  )}
                 </div>
-              </div>
+              </aside>
             </div>
             {/* ========== 분석 기간 선택 ========== */}
             <div className="w-full bg-surface rounded-xl border border-line px-4 sm:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-3 shadow-card">
@@ -1092,7 +1219,7 @@ export default function StocksMockPage() {
                   <button
                     onClick={handleAnalyzeClick}
                     disabled={loading}
-                    className="px-5 py-2.5 rounded-lg bg-ink text-bg font-semibold text-sm
+                    className="px-5 py-2.5 rounded-lg bg-accent text-white font-semibold text-sm
                                hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight"
                   >
                     분석 결과 보기 →
@@ -1110,6 +1237,7 @@ export default function StocksMockPage() {
             )}
 
             {(loading || !!err || !!analysisData) && <div ref={pdfRef}>
+              <PdfExportContext.Provider value={pdfExporting}>
               <AnalysisResultPanel
                 result={analysisData ? {
                   ...analysisData,
@@ -1131,6 +1259,7 @@ export default function StocksMockPage() {
                 priceFlowSummary={priceFlowSummary}
                 layout="full"
               />
+              </PdfExportContext.Provider>
             </div>}
           </main>
           </>
@@ -1205,163 +1334,58 @@ export default function StocksMockPage() {
   );
 }
 
-/** 공통 셀 */
+/** 공통 셀 — sunken 제거로 셀마다 border 로 구분 */
 function Cell({
   title,
   subtitle,
   value,
-  className = "",
 }: {
   title: string;
   subtitle: string;
   value: string;
-  className?: string;
 }) {
   const isEmpty = value === "-" || value === "" || value == null;
   return (
-    <div className={`px-3 py-2 bg-surface flex flex-col ${className}`}>
-      <div className="flex justify-between items-center gap-2">
-        <span className="text-ink text-sm sm:text-base font-semibold whitespace-nowrap">
+    <div className="bg-surface border border-line rounded-lg px-3 py-2.5 flex flex-col gap-1 min-w-0">
+      <div className="flex justify-between items-baseline gap-2 min-w-0">
+        <span className="text-[12.5px] font-semibold text-ink whitespace-nowrap tracking-tight">
           <DictTerm term={title}>{title}</DictTerm>
         </span>
         <span
-          className={`text-sm sm:text-base whitespace-nowrap flex-shrink-0 font-mono tabular ${
-            isEmpty ? "text-ink-4 font-normal" : "text-ink font-semibold"
+          className={`text-[13px] font-mono tabular whitespace-nowrap ${
+            isEmpty ? "text-ink-4 font-normal" : "text-ink font-bold"
           }`}
         >
           {isEmpty ? "—" : value}
         </span>
       </div>
-
-      <div className="h-[3px] sm:h-[4px]" />
-
-      <span className="text-ink-3 text-[11px] sm:text-xs font-normal leading-tight truncate">
+      <div className="text-[11px] text-ink-3 truncate">
         <DictTerm term={subtitle}>{subtitle}</DictTerm>
-      </span>
-
-      <div className="h-[3px] sm:h-[4px]" />
+      </div>
     </div>
   );
 }
 
 type IndicatorSectionBlockProps = {
   section: IndicatorSection;
-  layout: "2-2-2" | "2-2" | "2-2-1" | "2";
 };
 
-function IndicatorSectionBlock({
-  section,
-  layout,
-}: IndicatorSectionBlockProps) {
-  const rows = section.rows;
-
-  if (layout === "2-2-2") {
-    const chunks = [rows.slice(0, 2), rows.slice(2, 4), rows.slice(4, 6)];
-
-    return (
-      <div className="flex flex-col gap-2.5">
-        <div className="text-ink text-base sm:text-lg font-semibold">
-          <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
-        </div>
-        <div className="border-2 border-line-strong rounded-xl overflow-hidden divide-y divide-line-strong">
-          {chunks.map((chunk, rowIdx) => (
-            <div key={rowIdx} className="grid grid-cols-2 divide-x divide-line-strong">
-              {chunk.map((cell, idx) => (
-                <Cell
-                  key={`${cell.title}-${idx}`}
-                  title={cell.title}
-                  subtitle={cell.subtitle}
-                  value={cell.value}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (layout === "2-2-1") {
-    const row1 = rows.slice(0, 2);
-    const row2 = rows.slice(2, 4);
-    const last = rows[4];
-
-    return (
-      <div className="flex flex-col gap-2.5">
-        <div className="text-ink text-base sm:text-lg font-semibold">
-          <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
-        </div>
-        <div className="border-2 border-line-strong rounded-xl overflow-hidden divide-y divide-line-strong">
-          <div className="grid grid-cols-2 divide-x divide-line-strong">
-            {row1.map((cell, idx) => (
-              <Cell
-                key={`${cell.title}-${idx}`}
-                title={cell.title}
-                subtitle={cell.subtitle}
-                value={cell.value}
-              />
-            ))}
-          </div>
-          <div className="grid grid-cols-2 divide-x divide-line-strong">
-            {row2.map((cell, idx) => (
-              <Cell
-                key={`${cell.title}-${idx}`}
-                title={cell.title}
-                subtitle={cell.subtitle}
-                value={cell.value}
-              />
-            ))}
-          </div>
-          {last && (
-            <div className="grid grid-cols-1">
-              <Cell
-                title={last.title}
-                subtitle={last.subtitle}
-                value={last.value}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (layout === "2-2") {
-    return (
-      <div className="flex flex-col gap-2.5">
-        <div className="text-ink text-base sm:text-lg font-semibold">
-          <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 border-2 border-line-strong rounded-xl overflow-hidden">
-          {rows.map((cell, idx) => (
-            <Cell
-              key={`${cell.title}-${idx}`}
-              title={cell.title}
-              subtitle={cell.subtitle}
-              value={cell.value}
-              className={`${idx < 2 ? "border-b border-line-strong" : ""} ${
-                idx % 2 === 0 ? "sm:border-r sm:border-line-strong" : ""
-              }`}
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
+function IndicatorSectionBlock({ section }: IndicatorSectionBlockProps) {
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="text-ink text-base sm:text-lg font-semibold">
-        {section.sectionTitle}
+    <div className="flex flex-col gap-2">
+      <div className="flex justify-between items-baseline">
+        <span className="text-sm font-semibold text-ink tracking-tight">
+          <DictTerm term={section.sectionTitle}>{section.sectionTitle}</DictTerm>
+        </span>
+        <span className="text-xs text-ink-4">{section.rows.length}</span>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 border-2 border-line-strong rounded-xl overflow-hidden">
-        {rows.map((cell, idx) => (
+      <div className="grid grid-cols-2 gap-2">
+        {section.rows.map((cell, idx) => (
           <Cell
             key={`${cell.title}-${idx}`}
             title={cell.title}
             subtitle={cell.subtitle}
             value={cell.value}
-            className={idx % 2 === 0 ? "sm:border-r sm:border-line-strong" : ""}
           />
         ))}
       </div>
