@@ -129,7 +129,7 @@ public class AuthService {
                     }
                     return matches.get(0);
                 })
-                .map(user -> new FindIdResponseDto(user.getEmail(), maskEmail(user.getEmail())));
+                .map(user -> new FindIdResponseDto(maskEmail(user.getEmail())));
     }
 
     public Mono<RefreshResult> refresh(String refreshToken, String ip, String ua) {
