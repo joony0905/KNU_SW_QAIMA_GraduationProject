@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     List<User> findAllByNameAndBirthdate(String name, String birthdate);
+    List<User> findAllByPhoneIsNotNull();
     Optional<User> findByPhone(String phone);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

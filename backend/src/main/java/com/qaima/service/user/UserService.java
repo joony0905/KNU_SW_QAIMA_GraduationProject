@@ -29,12 +29,8 @@ public class UserService {
                     }
 
                     String nextPhone = normalizePhone(requestDto.getPhone());
-                    if (nextPhone != null && !nextPhone.equals(user.getPhone())) {
-                        userRepository.findByPhone(nextPhone)
-                                .filter(found -> !found.getUserId().equals(user.getUserId()))
-                                .ifPresent(found -> {
-                                    throw new IllegalArgumentException("이미 사용 중인 전화번호입니다.");
-                                });
+                    if (nextPhone != null) {
+                        validatePhoneAvailable(nextPhone, user.getUserId());
                         user.setPhone(nextPhone);
                     }
 
@@ -63,6 +59,17 @@ public class UserService {
         }
         String digits = value.replaceAll("[^0-9]", "");
         return digits.isBlank() ? null : digits;
+    }
+
+    private void validatePhoneAvailable(String phone, Long currentUserId) {
+        boolean exists = userRepository.findAllByPhoneIsNotNull().stream()
+                .filter(user -> !user.getUserId().equals(currentUserId))
+                .map(User::getPhone)
+                .map(UserService::normalizePhone)
+                .anyMatch(phone::equals);
+        if (exists) {
+            throw new IllegalArgumentException("이미 사용 중인 전화번호입니다.");
+        }
     }
 
     private static String trimToNull(String value) {

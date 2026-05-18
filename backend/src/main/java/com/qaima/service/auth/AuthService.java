@@ -164,6 +164,9 @@ public class AuthService {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         }
 
+        String phone = normalizeOptionalDigits(requestDto.getPhone());
+        validatePhoneAvailable(phone);
+
         mailAuthService.consumeSignupEmailVerification(email, requestDto.getVerificationCode());
 
         Instant now = Instant.now();
@@ -171,7 +174,7 @@ public class AuthService {
         newUser.setEmail(email);
         newUser.setPasswordHash(passwordEncoder.encode(requestDto.getPassword()));
         newUser.setName(requestDto.getName());
-        newUser.setPhone(requestDto.getPhone());
+        newUser.setPhone(phone);
         newUser.setBirthdate(requestDto.getBirthdate());
         newUser.setRole(UserRole.user);
         newUser.setStatus("active");
@@ -181,6 +184,20 @@ public class AuthService {
         newUser.setCreditBalance(SIGNUP_INITIAL_CREDIT_BALANCE);
 
         return userRepository.save(newUser);
+    }
+
+    private void validatePhoneAvailable(String phone) {
+        if (!StringUtils.hasText(phone)) {
+            return;
+        }
+
+        boolean exists = userRepository.findAllByPhoneIsNotNull().stream()
+                .map(User::getPhone)
+                .map(AuthService::normalizeOptionalDigits)
+                .anyMatch(phone::equals);
+        if (exists) {
+            throw new IllegalArgumentException("이미 사용 중인 전화번호입니다.");
+        }
     }
 
     private static String normalizeEmail(String email) {
