@@ -20,6 +20,7 @@ import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -106,13 +107,28 @@ public class AuthService {
     public Mono<FindIdResponseDto> findLoginId(FindIdRequestDto requestDto) {
         String name = trimToNull(requestDto.getName());
         String birthdate = normalizeBirthdate(requestDto.getBirthdate());
+        String phone = normalizeOptionalDigits(requestDto.getPhone());
 
         if (!StringUtils.hasText(name) || !StringUtils.hasText(birthdate)) {
             return Mono.error(new IllegalArgumentException("이름과 생년월일을 입력해 주세요."));
         }
 
-        return Blocking.call(() -> userRepository.findByNameAndBirthdate(name, birthdate)
-                        .orElseThrow(() -> new IllegalArgumentException("일치하는 계정을 찾을 수 없습니다.")))
+        return Blocking.call(() -> {
+                    List<User> matches = userRepository.findAllByNameAndBirthdate(name, birthdate);
+                    if (StringUtils.hasText(phone)) {
+                        matches = matches.stream()
+                                .filter(user -> phone.equals(normalizeOptionalDigits(user.getPhone())))
+                                .toList();
+                    }
+
+                    if (matches.isEmpty()) {
+                        throw new IllegalArgumentException("일치하는 계정을 찾을 수 없습니다.");
+                    }
+                    if (matches.size() > 1) {
+                        throw new IllegalArgumentException("동일한 이름과 생년월일의 계정이 여러 개입니다. 전화번호를 함께 입력해 주세요.");
+                    }
+                    return matches.get(0);
+                })
                 .map(user -> new FindIdResponseDto(user.getEmail(), maskEmail(user.getEmail())));
     }
 
@@ -183,6 +199,14 @@ public class AuthService {
             throw new IllegalArgumentException("생년월일은 6자리로 입력해 주세요.");
         }
         return digits;
+    }
+
+    private static String normalizeOptionalDigits(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String digits = value.replaceAll("[^0-9]", "");
+        return digits.isEmpty() ? null : digits;
     }
 
     private static String trimToNull(String value) {

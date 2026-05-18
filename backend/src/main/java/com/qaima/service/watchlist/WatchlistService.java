@@ -15,6 +15,7 @@ import com.qaima.repository.WatchlistItemRepository;
 import com.qaima.repository.WatchlistRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -142,12 +143,20 @@ public class WatchlistService {
 
     private Mono<Watchlist> loadOrCreateDefaultWatchlist(User user) {
         return Blocking.call(() -> watchlistRepository.findFirstByUser_UserIdOrderByWatchlistIdAsc(user.getUserId())
-                .orElseGet(() -> {
-                    Watchlist watchlist = new Watchlist();
-                    watchlist.setUser(user);
-                    watchlist.setName(DEFAULT_WATCHLIST_NAME);
-                    return watchlistRepository.save(watchlist);
-                }));
+                .orElseGet(() -> createDefaultWatchlist(user)));
+    }
+
+    private Watchlist createDefaultWatchlist(User user) {
+        Watchlist watchlist = new Watchlist();
+        watchlist.setUser(user);
+        watchlist.setName(DEFAULT_WATCHLIST_NAME);
+
+        try {
+            return watchlistRepository.saveAndFlush(watchlist);
+        } catch (DataIntegrityViolationException e) {
+            return watchlistRepository.findFirstByUser_UserIdOrderByWatchlistIdAsc(user.getUserId())
+                    .orElseThrow(() -> e);
+        }
     }
 
     private Mono<WatchlistResponseDto> addStockToWatchlist(Watchlist watchlist, Stock stock) {
