@@ -142,7 +142,7 @@ public class WatchlistService {
     }
 
     private Mono<Watchlist> loadOrCreateDefaultWatchlist(User user) {
-        return Blocking.call(() -> watchlistRepository.findFirstByUser_UserIdOrderByWatchlistIdAsc(user.getUserId())
+        return Blocking.call(() -> watchlistRepository.findByUser_UserIdAndName(user.getUserId(), DEFAULT_WATCHLIST_NAME)
                 .orElseGet(() -> createDefaultWatchlist(user)));
     }
 
@@ -154,7 +154,7 @@ public class WatchlistService {
         try {
             return watchlistRepository.saveAndFlush(watchlist);
         } catch (DataIntegrityViolationException e) {
-            return watchlistRepository.findFirstByUser_UserIdOrderByWatchlistIdAsc(user.getUserId())
+            return watchlistRepository.findByUser_UserIdAndName(user.getUserId(), DEFAULT_WATCHLIST_NAME)
                     .orElseThrow(() -> e);
         }
     }
