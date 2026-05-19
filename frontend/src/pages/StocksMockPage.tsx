@@ -22,14 +22,11 @@ import {
   fetchWatchlist,
   addWatchlistItem,
   deleteWatchlistItem,
-  DEFAULT_WATCHLIST_ID,
 } from "../api/watchlist";
 import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas-pro";
-import downloadIcon from "../assets/download_button.png";
-import zoomIcon from "../assets/zoom_button.png";
 import type { AnalysisResponse } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
 import DictTerm from "../components/DictTerm";
@@ -38,7 +35,6 @@ import { refreshTokenBalance } from "../api/billingStore";
 import { useTheme } from "../hooks/useTheme";
 import {
   formatKstDate,
-  formatKstDateTimeDisplay,
   formatKstOffsetDateTime,
   shiftKstDays,
   shiftKstYears,
@@ -247,20 +243,22 @@ export default function StocksMockPage() {
   const [err, setErr] = useState("");
 
   const [hasSelectedStock, setHasSelectedStock] = useState(false);
-  const [financial, setFinancial] = useState<FinancialDto | null>(null);
-  const [snapshot, setSnapshot] = useState<MarketSnapshotDto | null>(null);
+  // 표시부 미연결(스캐폴딩) — write 경로/타입 유지, 안 읽히는 바인딩만 생략
+  const [, setFinancial] = useState<FinancialDto | null>(null);
+  const [, setSnapshot] = useState<MarketSnapshotDto | null>(null);
   const [financialTimeline, setFinancialTimeline] = useState<FinancialTimelineSection | null>(null);
   const [priceFlowSummary, setPriceFlowSummary] = useState<PriceFlowSummary | null>(null);
   const [sections, setSections] = useState<IndicatorSection[]>([]);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
-  const [analysisZoom, setAnalysisZoom] = useState(1); // 1 = 100%
+  const [, setAnalysisZoom] = useState(1); // 1 = 100% (표시부 미연결)
 
   const [isFinModalOpen, setIsFinModalOpen] = useState(false);
-  const [selectedYear, setSelectedYear] = useState<number>(2024);
-  const [selectedPeriodType, setSelectedPeriodType] = useState<"A" | "Q" | "H">("A");
-  const [selectedPeriodNo, setSelectedPeriodNo] = useState<number | undefined>(undefined);
-  const [trendData, setTrendData] = useState<FinancialDto[]>([]);
+  // 기간선택 UI 미연결(스캐폴딩) — 값은 조회에 쓰이고 setter 만 생략
+  const [selectedYear] = useState<number>(2024);
+  const [selectedPeriodType] = useState<"A" | "Q" | "H">("A");
+  const [selectedPeriodNo] = useState<number | undefined>(undefined);
+  const [, setTrendData] = useState<FinancialDto[]>([]);
 
   const isLoadingMoreRef = useRef(false);
   const requestedRangesRef = useRef<Set<string>>(new Set());
@@ -483,10 +481,6 @@ export default function StocksMockPage() {
     }
   };
 
-  const looksLikeCode = (s: string) => {
-    return /^\d{6}$/.test(s) || /^[A-Za-z0-9.\-]{1,15}$/.test(s);
-  };
-
   const handleSearch = async (value: string) => {
     console.log("검색 실행:", value);
 
@@ -603,7 +597,14 @@ export default function StocksMockPage() {
 
   const handleAnalyzeClick = async () => {
     if (!isLoggedIn()) {
-      sessionStorage.setItem("qaima_redirect", window.location.pathname + window.location.search);
+      // 검색한 종목을 ?q= 로 실어 두면 로그인 복귀 후 자동검색으로 동일 화면이
+      // 그대로 복원된다(빈 화면 재시작 방지). 스크롤 위치는 복원하지 않는다
+      // (복원하면 "맨 위→점프" 가 보여서, 그냥 맨 위에서 시작).
+      const symbol = mainStock?.symbol?.trim();
+      sessionStorage.setItem(
+        "qaima_redirect",
+        symbol ? `/feature/1?q=${encodeURIComponent(symbol)}` : "/feature/1",
+      );
       navigate("/login");
       return;
     }
@@ -794,34 +795,12 @@ export default function StocksMockPage() {
     }
   };
 
-  const handleFullscreenClick = () => {
-    const elem = document.documentElement;
-    if (!document.fullscreenElement) {
-      elem.requestFullscreen().catch((err) => {
-        console.error(`Error attempting to enable fullscreen: ${err.message}`);
-      });
-    } else {
-      document.exitFullscreen();
-    }
-  };
-
   /*
   useEffect(() => {
     void loadCandles(mainStock.symbol);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   */
-  const formatNumber = (value?: number | null) => {
-    if (value === null || value === undefined) {
-      return "-";
-    }
-    return value.toLocaleString();
-  };
-
-  const formatDate = (value?: string | null) => {
-    return formatKstDateTimeDisplay(value);
-  };
-
   const [isInterested, setIsInterested] = useState(false);
   const [currentStockId, setCurrentStockId] = useState<number | null>(null);
   const [watchlistItemId, setWatchlistItemId] = useState<number | null>(null);
@@ -850,7 +829,7 @@ export default function StocksMockPage() {
     // "종목 검색만 해도 로그인 창으로 튕기는" 문제가 발생한다. (분석은 별도로 로그인 요구)
     if (!isLoggedIn()) return;
     try {
-      const items = await fetchWatchlist(DEFAULT_WATCHLIST_ID);
+      const items = await fetchWatchlist();
       const hit = items.find((it) => it.stockId === stockId);
       if (hit) {
         setIsInterested(true);
@@ -862,6 +841,11 @@ export default function StocksMockPage() {
   };
 
   const toggleInterest = async () => {
+    // 관심종목은 로그인 사용자 기준. 비로그인 시 강제 리다이렉트 대신 안내.
+    if (!isLoggedIn()) {
+      setToast({ message: "로그인 후 이용할 수 있습니다.", visible: true });
+      return;
+    }
     // 이미 등록됨 → 삭제
     if (isInterested && watchlistItemId != null) {
       try {
@@ -889,7 +873,6 @@ export default function StocksMockPage() {
     try {
       const created = await addWatchlistItem({
         stockId: currentStockId,
-        watchlistId: DEFAULT_WATCHLIST_ID,
       });
       setIsInterested(true);
       setWatchlistItemId(created.watchlistItemId);
