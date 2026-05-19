@@ -21,7 +21,6 @@ export default function StockCard({
   change,
   changeRate,
   getColorClass,
-  onToggle,
   isOpen,
 }: StockCardProps) {
   const colorClass = getColorClass(changeRate);
