@@ -8,6 +8,7 @@ export default {
         bg: "rgb(var(--color-bg) / <alpha-value>)",
         "bg-soft": "rgb(var(--color-bg-soft) / <alpha-value>)",
         "bg-sunk": "rgb(var(--color-bg-sunk) / <alpha-value>)",
+        "bg-alt": "rgb(var(--color-bg-alt) / <alpha-value>)",
         surface: "rgb(var(--color-surface) / <alpha-value>)",
         "surface-2": "rgb(var(--color-surface-2) / <alpha-value>)",
 
