@@ -11,8 +11,14 @@ type Props = {
 export default function PageTransition({ children }: Props) {
   const location = useLocation();
 
+  // 기본은 경로(pathname) 기준 키 — 쿼리만 바뀌는 이동은 리마운트하지 않는다.
+  // 사이드바에서 "현재 페이지"를 다시 누르면 location.state.__reload 가 갱신되어
+  // 키가 바뀌고, 해당 페이지만 새로 마운트된다(= 새로고침 효과).
+  const reloadNonce =
+    (location.state as { __reload?: number } | null)?.__reload ?? "";
+
   return (
-    <div key={location.pathname} className="qaima-page-in">
+    <div key={`${location.pathname}:${reloadNonce}`} className="qaima-page-in">
       {children}
     </div>
   );
