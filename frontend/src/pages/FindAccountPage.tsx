@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { requestPasswordReset } from "../api/auth";
+import { findLoginId, requestPasswordReset } from "../api/auth";
+import { getApiErrorMessage } from "../utils/errorMessage";
 
 const inputClass =
   "w-full px-4 py-3 rounded-lg bg-bg-sunk border border-line text-ink placeholder:text-ink-4 text-sm outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-colors";
@@ -13,18 +14,13 @@ type ResultState =
   | { type: "success"; message: string }
   | { type: "error"; message: string };
 
-const maskEmail = (email: string): string => {
-  const [local, domain] = email.split("@");
-  if (!local || !domain) return email;
-  if (local.length <= 2) return `${local[0]}*@${domain}`;
-  const visible = local.slice(0, 2);
-  const masked = "*".repeat(Math.min(local.length - 2, 4));
-  return `${visible}${masked}@${domain}`;
-};
-
 export default function FindAccountPage() {
-  // 아이디 찾기 (목업)
-  const [findIdForm, setFindIdForm] = useState({ name: "", birthdate: "" });
+  // 아이디 찾기 (백엔드 연결: POST /auth/find-id)
+  const [findIdForm, setFindIdForm] = useState({
+    name: "",
+    birthdate: "",
+    phone: "",
+  });
   const [findIdLoading, setFindIdLoading] = useState(false);
   const [findIdResult, setFindIdResult] = useState<ResultState>({ type: "idle" });
 
@@ -47,14 +43,24 @@ export default function FindAccountPage() {
     setFindIdLoading(true);
     setFindIdResult({ type: "idle" });
 
-    // 목업: 0.6초 지연 후 마스킹된 이메일 반환
-    await new Promise((r) => setTimeout(r, 600));
-    const mockEmail = `${findIdForm.name.trim().toLowerCase().slice(0, 2)}user@example.com`;
-    setFindIdResult({
-      type: "success",
-      message: maskEmail(mockEmail),
-    });
-    setFindIdLoading(false);
+    try {
+      const phone = findIdForm.phone.trim();
+      const { maskedEmail } = await findLoginId({
+        name: findIdForm.name.trim(),
+        birthdate: findIdForm.birthdate,
+        ...(phone ? { phone } : {}),
+      });
+      setFindIdResult({ type: "success", message: maskedEmail });
+    } catch (err) {
+      // 미존재/동명이인 중복 등은 백엔드가 한글 메시지를 errors[0].message 로 내려준다.
+      // (중복 시: "...전화번호를 함께 입력해 주세요." → 아래 전화번호 입력 안내로 이어짐)
+      setFindIdResult({
+        type: "error",
+        message: getApiErrorMessage(err, "아이디를 찾지 못했습니다."),
+      });
+    } finally {
+      setFindIdLoading(false);
+    }
   };
 
   const handleRequestReset = async (e: React.FormEvent) => {
@@ -156,6 +162,20 @@ export default function FindAccountPage() {
                 maxLength={6}
                 className={inputClass}
               />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="전화번호 (선택 · 동명이인 구분용)"
+                value={findIdForm.phone}
+                onChange={(e) =>
+                  setFindIdForm((prev) => ({
+                    ...prev,
+                    phone: e.target.value.replace(/[^\d-]/g, ""),
+                  }))
+                }
+                maxLength={13}
+                className={inputClass}
+              />
 
               <button
                 type="submit"
@@ -173,7 +193,7 @@ export default function FindAccountPage() {
                   {findIdResult.message}
                 </p>
                 <p className="mt-2 text-[11px] text-ink-4">
-                  ※ 현재 목업 응답입니다 (백엔드 미구현)
+                  보안을 위해 이메일 일부를 가렸습니다.
                 </p>
               </div>
             )}
