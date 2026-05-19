@@ -4,9 +4,11 @@ import { useNavigate } from "react-router-dom";
 import {
   fetchWatchlist,
   deleteWatchlistItem,
-  DEFAULT_WATCHLIST_ID,
 } from "../api/watchlist";
 import type { WatchlistItem } from "../types/watchlist";
+import { getMyProfile, updateMyProfile } from "../api/user";
+import type { MyProfile } from "../api/user";
+import { getApiErrorMessage } from "../utils/errorMessage";
 import {
   Sun,
   Moon,
@@ -20,8 +22,30 @@ import {
   Star,
   Languages,
   LifeBuoy,
+  BookOpen,
 } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
+import { useDictionary } from "../components/DictContext";
+
+const INVEST_LEVELS = ["초급자", "중급자", "고급자"] as const;
+type InvestLevel = (typeof INVEST_LEVELS)[number];
+
+const toInvestLevel = (v: string | null | undefined): InvestLevel =>
+  (INVEST_LEVELS as readonly string[]).includes(v ?? "")
+    ? (v as InvestLevel)
+    : "초급자";
+
+const formatPhone = (v: string): string => {
+  const d = (v ?? "").replace(/[^0-9]/g, "");
+  if (d.length === 11) return `${d.slice(0, 3)} ${d.slice(3, 7)} ${d.slice(7)}`;
+  if (d.length === 10) return `${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6)}`;
+  return v || "-";
+};
+
+const formatBirthdate = (v: string): string =>
+  /^\d{6}$/.test(v ?? "")
+    ? `${v.slice(0, 2)}.${v.slice(2, 4)}.${v.slice(4, 6)}`
+    : v || "-";
 
 type CardProps = {
   icon: React.ElementType;
@@ -156,10 +180,12 @@ function SettingSelect<T extends string>({
 export default function SettingPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
+  const { glossaryHover, setGlossaryHover } = useDictionary();
 
-  const [investLevel, setInvestLevel] = useState<
-    "초급자" | "중급자" | "고급자"
-  >("초급자");
+  const [profile, setProfile] = useState<MyProfile | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [investLevel, setInvestLevel] = useState<InvestLevel>("초급자");
+  const [savingPref, setSavingPref] = useState(false);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [wlLoading, setWlLoading] = useState(true);
   const [wlError, setWlError] = useState<string | null>(null);
@@ -170,7 +196,7 @@ export default function SettingPage() {
     let alive = true;
     setWlLoading(true);
     setWlError(null);
-    fetchWatchlist(DEFAULT_WATCHLIST_ID)
+    fetchWatchlist()
       .then((items) => {
         if (alive) setWatchlist(items);
       })
@@ -184,6 +210,52 @@ export default function SettingPage() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    getMyProfile()
+      .then((p) => {
+        if (!alive) return;
+        setProfile(p);
+        setInvestLevel(toInvestLevel(p.experience));
+        setGlossaryHover(p.glossaryHover);
+      })
+      .catch((e) => {
+        if (alive)
+          setProfileError(getApiErrorMessage(e, "내 정보를 불러오지 못했습니다."));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [setGlossaryHover]);
+
+  // 투자레벨 = 백엔드 experience(자유 문자열). 선택 즉시 저장.
+  const handleInvestLevelChange = async (next: InvestLevel) => {
+    const prev = investLevel;
+    setInvestLevel(next);
+    try {
+      await updateMyProfile({ experience: next });
+    } catch (e) {
+      setInvestLevel(prev);
+      alert(getApiErrorMessage(e, "투자레벨 저장에 실패했습니다."));
+    }
+  };
+
+  // 용어 hover 설명 표시 여부 = 백엔드 glossaryHover. 토글 즉시 저장 + 앱 전역 반영.
+  const handleToggleGlossaryHover = async () => {
+    if (savingPref) return;
+    const next = !glossaryHover;
+    setGlossaryHover(next);
+    setSavingPref(true);
+    try {
+      await updateMyProfile({ glossaryHover: next });
+    } catch (e) {
+      setGlossaryHover(!next);
+      alert(getApiErrorMessage(e, "환경설정 저장에 실패했습니다."));
+    } finally {
+      setSavingPref(false);
+    }
+  };
 
   const handleDeleteWatchlistItem = async (item: WatchlistItem) => {
     const prev = watchlist;
@@ -203,10 +275,10 @@ export default function SettingPage() {
     item.stockName ?? (item.stockId != null ? `#${item.stockId}` : "종목");
 
   const basicInfo: [string, string][] = [
-    ["이름", "홍길동"],
-    ["아이디(이메일)", "honggildong123@naver.com"],
-    ["전화번호", "010 1234 5678"],
-    ["생년월일", "1999년 99월 99일"],
+    ["이름", profile?.name || "-"],
+    ["아이디(이메일)", profile?.email || "-"],
+    ["전화번호", profile ? formatPhone(profile.phone) : "-"],
+    ["생년월일", profile ? formatBirthdate(profile.birthdate) : "-"],
   ];
 
   const ghostBtn =
@@ -249,6 +321,9 @@ export default function SettingPage() {
             </button>
           }
         >
+          {profileError && (
+            <p className="text-sm text-danger mb-3">{profileError}</p>
+          )}
           <dl className="divide-y divide-line">
             {basicInfo.map(([label, value]) => (
               <div
@@ -272,8 +347,8 @@ export default function SettingPage() {
         >
           <SettingSelect
             value={investLevel}
-            options={["초급자", "중급자", "고급자"] as const}
-            onChange={setInvestLevel}
+            options={INVEST_LEVELS}
+            onChange={handleInvestLevelChange}
           />
         </SettingCard>
 
@@ -292,6 +367,32 @@ export default function SettingPage() {
           <div className="inline-flex items-center px-3.5 py-2 rounded-lg bg-accent-soft text-accent text-sm font-semibold">
             Aggressive · 수익 우선, 손실 감수
           </div>
+        </SettingCard>
+
+        {/* 용어 설명 hover */}
+        <SettingCard
+          icon={BookOpen}
+          title="용어 설명 미리보기"
+          desc="분석 화면의 용어에 마우스를 올리면 클릭 없이 설명을 보여줍니다"
+        >
+          <button
+            type="button"
+            onClick={handleToggleGlossaryHover}
+            disabled={savingPref}
+            aria-pressed={glossaryHover}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors disabled:opacity-50 ${
+              glossaryHover ? "bg-accent" : "bg-line-strong"
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                glossaryHover ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+          <span className="ml-3 text-sm text-ink-2 align-middle">
+            {glossaryHover ? "켜짐" : "꺼짐"}
+          </span>
         </SettingCard>
 
         {/* 관심종목 */}
