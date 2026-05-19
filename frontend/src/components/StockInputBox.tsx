@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import type { WatchlistItem } from "../types/watchlist";
 import type { StockDto } from "../types/stock";
 import { searchStocks, getStockByCode } from "../api/stock";
+import { fetchWatchlist } from "../api/watchlist";
 
 interface StockInputBoxProps {
   placeholder?: string;
@@ -29,6 +30,7 @@ export default function StockInputBox({
   const [guideMessage, setGuideMessage] = useState("");
   const [isInterestListOpen, setIsInterestListOpen] = useState(false);
   const [interests, setInterests] = useState<WatchlistItem[]>([]);
+  const [interestsLoading, setInterestsLoading] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,14 +48,20 @@ export default function StockInputBox({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    // TODO: 나중에 실제 watchlist API로 교체
-    const dummy: WatchlistItem[] = [
-      { watchlistItemId: 1, stockId: 1, stockName: "삼성전자",      note: null, industryName: "전자" },
-      { watchlistItemId: 2, stockId: 2, stockName: "LG에너지솔루션", note: null, industryName: "2차전지" },
-      { watchlistItemId: 3, stockId: 3, stockName: "카카오",         note: null, industryName: "인터넷" },
-    ];
-    setInterests(dummy);
+  // "관심" 목록을 열 때마다 실제 워치리스트를 조회한다(다른 화면에서 추가/삭제된
+  // 내용을 반영하기 위해 매번 갱신). 비로그인 시 fetchWatchlist 가 401 →
+  // apiClient 인터셉터가 /login 으로 이동시킨다(의도된 동작).
+  const loadInterests = useCallback(async () => {
+    setInterestsLoading(true);
+    try {
+      const items = await fetchWatchlist();
+      setInterests(items);
+    } catch {
+      // 일시적 실패 시 직전에 불러온 목록을 그대로 둔다(빈 목록으로 깜빡이지 않게).
+      // 최초 조회 실패면 interests 가 이미 [] 라 "관심종목이 없습니다"가 표시됨.
+    } finally {
+      setInterestsLoading(false);
+    }
   }, []);
 
   const saveRecentSearch = useCallback((companyName: string) => {
@@ -67,6 +75,9 @@ export default function StockInputBox({
   }, [enableRecent]);
 
   const handleFocus = () => {
+    // 입력창을 누르면 "관심" 리스트는 닫는다(버튼 상태와 화면 표시를 일치시켜
+    // 다음 관심 클릭이 어긋나지 않도록).
+    setIsInterestListOpen(false);
     if (!enableRecent) return;
     if (inputValue.trim() === "") {
       const stored = localStorage.getItem("recentSearches");
@@ -200,10 +211,23 @@ export default function StockInputBox({
       {showInterest && (
         <button
           onClick={() => {
-            setIsInterestListOpen((prev) => !prev);
+            // 상태값(prev)이 아니라 "관심 리스트가 지금 실제로 보이는지"를
+            // 기준으로 토글한다. 입력 포커스 등으로 다른 드롭다운이 가려도
+            // 버튼 동작이 화면과 어긋나지 않게 한다.
+            const interestVisible =
+              isInterestListOpen &&
+              !showSuggestions &&
+              !showRecentSearches &&
+              !guideMessage;
             setShowSuggestions(false);
             setShowRecentSearches(false);
             setGuideMessage("");
+            if (interestVisible) {
+              setIsInterestListOpen(false);
+            } else {
+              setIsInterestListOpen(true);
+              void loadInterests();
+            }
           }}
           type="button"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
@@ -279,20 +303,30 @@ export default function StockInputBox({
             </div>
           ) : isInterestListOpen && (
             <div className="bg-surface border border-line border-t-0 rounded-b-2xl shadow-pop">
-              <ul className="max-h-40 overflow-y-auto">
-                {interests.map((item) => (
-                  <li
-                    key={item.watchlistItemId}
-                    onClick={() => {
-                      if (item.stockName) handleRecentSelect(item.stockName);
-                      else setIsInterestListOpen(false);
-                    }}
-                    className="px-3 py-2 cursor-pointer hover:bg-bg-sunk text-sm text-ink last:rounded-b-2xl"
-                  >
-                    {item.stockName ?? "(이름 없음)"}
-                  </li>
-                ))}
-              </ul>
+              {interestsLoading && interests.length === 0 ? (
+                // 최초 조회 중에는 아무것도 그리지 않는다(로딩/"없습니다" 깜빡임 방지).
+                // 데이터가 도착하면 바로 아래 분기로 리스트가 그려진다.
+                null
+              ) : interests.length === 0 ? (
+                <p className="px-3 py-3 text-sm text-ink-3 rounded-b-2xl">
+                  관심종목이 없습니다.
+                </p>
+              ) : (
+                <ul className="max-h-40 overflow-y-auto">
+                  {interests.map((item) => (
+                    <li
+                      key={item.watchlistItemId}
+                      onClick={() => {
+                        if (item.stockName) handleRecentSelect(item.stockName);
+                        else setIsInterestListOpen(false);
+                      }}
+                      className="px-3 py-2 cursor-pointer hover:bg-bg-sunk text-sm text-ink last:rounded-b-2xl"
+                    >
+                      {item.stockName ?? "(이름 없음)"}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>
