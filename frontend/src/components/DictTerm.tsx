@@ -8,7 +8,7 @@ interface DictTermProps {
 }
 
 export default function DictTerm({ term, children }: DictTermProps) {
-  const { terms, ready } = useDictionary();
+  const { terms, ready, glossaryHover } = useDictionary();
   const [hovered, setHovered] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -42,6 +42,21 @@ export default function DictTerm({ term, children }: DictTermProps) {
         >
           ?
         </button>
+
+        {/* glossaryHover 환경설정이 켜져 있으면 클릭 없이 hover 만으로 설명을 보여준다 */}
+        {glossaryHover && hovered && (
+          <span className="absolute left-0 top-full z-[9998] mt-1.5 w-72 max-w-[80vw] rounded-xl bg-surface border border-line shadow-pop px-4 py-3 text-left cursor-default">
+            <span className="block text-sm font-semibold text-accent mb-1">
+              {entry.term}
+            </span>
+            <span className="block text-xs text-ink-2 leading-relaxed max-h-32 overflow-hidden whitespace-pre-wrap">
+              {entry.description}
+            </span>
+            <span className="block mt-1.5 text-[11px] text-ink-4">
+              ? 클릭 시 전체 설명
+            </span>
+          </span>
+        )}
       </span>
 
       {modalOpen && createPortal(
