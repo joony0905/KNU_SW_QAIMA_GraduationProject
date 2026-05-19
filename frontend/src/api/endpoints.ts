@@ -23,8 +23,8 @@ export const ENDPOINTS = {
     },
   },
   watchlist: {
-    getItems: (watchlistId: number) => `/watchlist/${watchlistId}`,
-    addItem: "/watchlist/items",
+    getMyItems: "/watchlist/me",
+    addMyItem: "/watchlist/me/items",
     deleteItem: (itemId: number) => `/watchlist/items/${itemId}`,
     updateItem: (itemId: number) => `/watchlist/items/${itemId}`,
   },
