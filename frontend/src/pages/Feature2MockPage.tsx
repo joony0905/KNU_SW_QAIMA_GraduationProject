@@ -45,7 +45,6 @@ import {
   fetchWatchlist,
   addWatchlistItem,
   deleteWatchlistItem,
-  DEFAULT_WATCHLIST_ID,
 } from "../api/watchlist";
 import { isLoggedIn } from "../utils/auth";
 import { getApiErrorMessage } from "../utils/errorMessage";
@@ -562,8 +561,12 @@ export default function Feature2MockPage() {
     setIsInterested(false);
     setWatchlistItemId(null);
     if (!stockId) return;
+    // 비로그인 시 워치리스트 조회(인증 필요)를 호출하지 않는다.
+    // 호출하면 401 → apiClient 인터셉터가 강제로 /login 으로 이동시켜
+    // "종목 검색만 해도 로그인 창으로 튕기는" 문제가 발생한다. (분석은 별도로 로그인 요구)
+    if (!isLoggedIn()) return;
     try {
-      const items = await fetchWatchlist(DEFAULT_WATCHLIST_ID);
+      const items = await fetchWatchlist();
       const hit = items.find((it) => it.stockId === stockId);
       if (hit) {
         setIsInterested(true);
@@ -575,6 +578,11 @@ export default function Feature2MockPage() {
   };
 
   const toggleInterest = async () => {
+    // 관심종목은 로그인 사용자 기준. 비로그인 시 강제 리다이렉트 대신 안내.
+    if (!isLoggedIn()) {
+      setToast({ message: "로그인 후 이용할 수 있습니다.", visible: true });
+      return;
+    }
     // 이미 등록됨 → 삭제
     if (isInterested && watchlistItemId != null) {
       try {
@@ -602,7 +610,6 @@ export default function Feature2MockPage() {
     try {
       const created = await addWatchlistItem({
         stockId: currentStockId,
-        watchlistId: DEFAULT_WATCHLIST_ID,
       });
       setIsInterested(true);
       setWatchlistItemId(created.watchlistItemId);
