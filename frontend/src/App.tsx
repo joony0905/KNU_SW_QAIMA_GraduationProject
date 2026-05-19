@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import OAuth2SuccessPage from "./pages/OAuth2SuccessPage";
 import FindAccountPage from "./pages/FindAccountPage";
 import RequireAuth from "./components/RequireAuth";
+import ScrollToTop from "./components/ScrollToTop";
 import MainPage from "./pages/MainPage";
 import StocksMockPage from "./pages/StocksMockPage";
 import Feature2MockPage from "./pages/Feature2MockPage";
@@ -37,7 +38,9 @@ export default function App() {
   }
 
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       <Route
         path="/login"
         element={
@@ -154,6 +157,7 @@ export default function App() {
 
       {/* 없는 주소는 로그인으로 */}
       <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }
