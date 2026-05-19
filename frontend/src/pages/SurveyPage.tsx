@@ -151,40 +151,40 @@ const PROFILE_TYPES: ProfileType[] = [
     maxGamma: 0.20,
     description:
       "원금 보전을 최우선으로 하는 보수적 성향. 예적금 수준의 안정 자산 위주 배분이 적합합니다.",
-    bgClass: "bg-emerald-50 border-emerald-200",
-    textClass: "text-emerald-700",
+    bgClass: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800",
+    textClass: "text-emerald-700 dark:text-emerald-300",
   },
   {
     name: "안정추구형",
     maxGamma: 0.40,
     description:
       "원금 손실 위험을 최소화하면서 예적금 이상의 수익을 추구. 채권 중심의 배분이 적합합니다.",
-    bgClass: "bg-sky-50 border-sky-200",
-    textClass: "text-sky-700",
+    bgClass: "bg-sky-50 border-sky-200 dark:bg-sky-950/40 dark:border-sky-800",
+    textClass: "text-sky-700 dark:text-sky-300",
   },
   {
     name: "위험중립형",
     maxGamma: 0.60,
     description:
       "위험과 수익의 균형을 추구. 채권과 주식을 균형 있게 배분합니다.",
-    bgClass: "bg-amber-50 border-amber-200",
-    textClass: "text-amber-700",
+    bgClass: "bg-amber-50 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800",
+    textClass: "text-amber-700 dark:text-amber-300",
   },
   {
     name: "적극투자형",
     maxGamma: 0.80,
     description:
       "시장 평균 이상의 수익을 위해 변동성을 감수. 주식 비중이 높은 배분이 적합합니다.",
-    bgClass: "bg-orange-50 border-orange-200",
-    textClass: "text-orange-700",
+    bgClass: "bg-orange-50 border-orange-200 dark:bg-orange-950/40 dark:border-orange-800",
+    textClass: "text-orange-700 dark:text-orange-300",
   },
   {
     name: "공격투자형",
     maxGamma: 1.00,
     description:
       "장기 고수익 추구를 위해 단기 변동성을 적극 감수. 주식·고변동성 자산 위주 배분이 적합합니다.",
-    bgClass: "bg-rose-50 border-rose-200",
-    textClass: "text-rose-700",
+    bgClass: "bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800",
+    textClass: "text-rose-700 dark:text-rose-300",
   },
 ];
 
@@ -342,16 +342,16 @@ export default function SurveyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFDFD] ml-[84px]">
+    <div className="min-h-screen bg-bg ml-[84px]">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
-        <header className="w-full bg-white border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
-          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-black">
+        <header className="w-full bg-surface border-b border-line px-4 py-3 flex items-center justify-between">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-ink">
             투자 성향 설문
           </h1>
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            className="inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink transition-colors"
           >
             <ChevronLeft size={16} />
             돌아가기
@@ -361,18 +361,18 @@ export default function SurveyPage() {
         <div ref={formTopRef} />
 
         {/* 안내 + 진행 현황 */}
-        <section className="w-full bg-white rounded-2xl border border-stone-300 px-5 py-4 flex flex-col gap-3">
+        <section className="w-full bg-surface rounded-2xl border border-line px-5 py-4 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <p className="text-sm text-gray-700">
-              총 <span className="font-semibold text-[#3F51B5]">{QUESTIONS.length}개</span> 문항입니다. 모두 응답하신 뒤 하단의 결과 보기 버튼을 눌러주세요.
+            <p className="text-sm text-ink-2">
+              총 <span className="font-semibold text-accent">{QUESTIONS.length}개</span> 문항입니다. 모두 응답하신 뒤 하단의 결과 보기 버튼을 눌러주세요.
             </p>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-ink-3">
               {answeredCount} / {QUESTIONS.length} 응답 ({progressPercent}%)
             </span>
           </div>
-          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-bg-sunk rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#3F51B5] transition-all duration-300"
+              className="h-full bg-accent transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -386,22 +386,22 @@ export default function SurveyPage() {
             <section
               key={q.id}
               id={`survey-q-${q.id}`}
-              className={`w-full bg-white rounded-2xl border-2 transition-colors p-5 sm:p-6 flex flex-col gap-4 scroll-mt-6 ${
-                showWarning ? "border-rose-300" : "border-stone-300"
+              className={`w-full bg-surface rounded-2xl border-2 transition-colors p-5 sm:p-6 flex flex-col gap-4 scroll-mt-6 ${
+                showWarning ? "border-danger" : "border-line"
               }`}
             >
               <div className="flex flex-col gap-1.5">
-                <span className="text-sm text-[#3F51B5] font-semibold">
+                <span className="text-sm text-accent font-semibold">
                   Q{q.number}
                 </span>
-                <h2 className="text-base sm:text-lg font-bold text-gray-800">
+                <h2 className="text-base sm:text-lg font-bold text-ink">
                   {q.title}
                 </h2>
                 {q.subtitle && (
-                  <p className="text-xs sm:text-sm text-gray-500">{q.subtitle}</p>
+                  <p className="text-xs sm:text-sm text-ink-3">{q.subtitle}</p>
                 )}
                 {showWarning && (
-                  <p className="text-xs text-rose-600 mt-1">
+                  <p className="text-xs text-danger mt-1">
                     이 문항에 답변해주세요.
                   </p>
                 )}
@@ -419,15 +419,15 @@ export default function SurveyPage() {
                         onClick={() => handleToggleMulti(q.id, idx)}
                         className={`text-left px-4 py-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
                           selected
-                            ? "border-[#3F51B5] bg-[#3F51B5]/5"
-                            : "border-gray-200 bg-white hover:border-gray-300"
+                            ? "border-accent bg-accent/10"
+                            : "border-line bg-surface hover:border-line-strong"
                         }`}
                       >
                         <span
                           className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
                             selected
-                              ? "border-[#3F51B5] bg-[#3F51B5]"
-                              : "border-gray-300 bg-white"
+                              ? "border-accent bg-accent"
+                              : "border-line-strong bg-surface"
                           }`}
                         >
                           {selected && (
@@ -448,7 +448,7 @@ export default function SurveyPage() {
                         </span>
                         <span
                           className={`text-sm sm:text-base ${
-                            selected ? "text-gray-900 font-medium" : "text-gray-700"
+                            selected ? "text-ink font-medium" : "text-ink-2"
                           }`}
                         >
                           {opt.label}
@@ -465,22 +465,22 @@ export default function SurveyPage() {
                       onClick={() => handleSelectSingle(q.id, idx)}
                       className={`text-left px-4 py-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
                         selected
-                          ? "border-[#3F51B5] bg-[#3F51B5]/5"
-                          : "border-gray-200 bg-white hover:border-gray-300"
+                          ? "border-accent bg-accent/10"
+                          : "border-line bg-surface hover:border-line-strong"
                       }`}
                     >
                       <span
                         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                          selected ? "border-[#3F51B5]" : "border-gray-300"
+                          selected ? "border-accent" : "border-line-strong"
                         }`}
                       >
                         {selected && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#3F51B5]" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-accent" />
                         )}
                       </span>
                       <span
                         className={`text-sm sm:text-base ${
-                          selected ? "text-gray-900 font-medium" : "text-gray-700"
+                          selected ? "text-ink font-medium" : "text-ink-2"
                         }`}
                       >
                         {opt.label}
@@ -499,12 +499,12 @@ export default function SurveyPage() {
             <button
               type="button"
               onClick={handleSubmit}
-              className="w-full sm:w-auto px-10 py-3 bg-[#3F51B5] text-white font-semibold text-base rounded-xl shadow-md hover:bg-[#354499] transition-all"
+              className="w-full sm:w-auto px-10 py-3 bg-accent text-white font-semibold text-base rounded-xl shadow-md hover:bg-accent-ink transition-all"
             >
               결과 보기
             </button>
             {submitAttempted && !allAnswered && (
-              <p className="text-sm text-rose-600">
+              <p className="text-sm text-danger">
                 응답하지 않은 문항이 있습니다. 미응답 문항으로 이동했습니다.
               </p>
             )}
@@ -517,18 +517,18 @@ export default function SurveyPage() {
             <section
               className={`w-full rounded-2xl border-2 ${result.profile.bgClass} p-6 sm:p-8 flex flex-col gap-4 items-center text-center`}
             >
-              <p className="text-sm text-gray-500">고객님의 투자 성향은</p>
+              <p className="text-sm text-ink-3">고객님의 투자 성향은</p>
               <h2
                 className={`text-3xl sm:text-4xl font-bold ${result.profile.textClass}`}
               >
                 {result.profile.name}
               </h2>
-              <p className="text-gray-700 text-sm sm:text-base leading-relaxed max-w-md">
+              <p className="text-ink-2 text-sm sm:text-base leading-relaxed max-w-md">
                 {result.profile.description}
               </p>
 
               <div className="flex flex-col items-center gap-1 mt-3">
-                <span className="text-xs text-gray-500">투자 성향 지수</span>
+                <span className="text-xs text-ink-3">투자 성향 지수</span>
                 <span
                   className={`text-5xl font-bold ${result.profile.textClass}`}
                 >
@@ -536,25 +536,25 @@ export default function SurveyPage() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-6 text-xs text-gray-500 mt-3">
+              <div className="flex items-center gap-6 text-xs text-ink-3 mt-3">
                 <div className="flex flex-col items-center">
                   <span>원점수</span>
-                  <span className="font-semibold text-gray-700 mt-0.5">
+                  <span className="font-semibold text-ink-2 mt-0.5">
                     {result.rawSum} / {result.rawMax}
                   </span>
                 </div>
                 <div className="flex flex-col items-center">
                   <span>환산점수</span>
-                  <span className="font-semibold text-gray-700 mt-0.5">
+                  <span className="font-semibold text-ink-2 mt-0.5">
                     {result.normalizedScore.toFixed(1)} / 100
                   </span>
                 </div>
               </div>
 
               {result.capApplied && (
-                <div className="mt-4 px-4 py-3 rounded-lg bg-white/70 border border-amber-300 text-xs sm:text-sm text-amber-800">
+                <div className="mt-4 px-4 py-3 rounded-lg bg-warn/10 border border-warn/40 text-xs sm:text-sm text-warn">
                   ⓘ {result.capReason}
-                  <span className="block mt-1 text-amber-700/80">
+                  <span className="block mt-1 text-warn/80">
                     한도 적용 전 지수: {result.rawGamma.toFixed(2)}
                   </span>
                 </div>
@@ -565,14 +565,14 @@ export default function SurveyPage() {
               <button
                 type="button"
                 onClick={handleReset}
-                className="px-5 py-2.5 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                className="px-5 py-2.5 rounded-lg border border-line bg-surface text-sm font-medium text-ink-2 hover:bg-bg-soft transition-colors"
               >
                 다시 응답하기
               </button>
               <button
                 type="button"
                 onClick={handleApply}
-                className="px-7 py-2.5 rounded-lg bg-[#3F51B5] text-white text-sm font-semibold hover:bg-[#354499] transition-all"
+                className="px-7 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent-ink transition-all"
               >
                 포트폴리오에 적용하기
               </button>
