@@ -1,24 +1,41 @@
 package com.qaima.api.UserController;
 
 import com.qaima.common.ApiResponse;
+import com.qaima.dto.user.UserProfileUpdateRequestDto;
+import com.qaima.dto.user.UserResponseDto;
+import com.qaima.service.user.UserService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/api/v1/users")
-
+@RequiredArgsConstructor
 public class UserController {
 
-    @GetMapping("/jwt_test")
-    public ApiResponse<MeResponse> jwt_test(Authentication authentication) {
-        Long userId = (Long) authentication.getPrincipal();
-        String role = authentication.getAuthorities().stream()
-                .findFirst()
-                .map(a -> a.getAuthority())
-                .orElse("UNKNOWN");
+    private final UserService userService;
 
-        return ApiResponse.success(new MeResponse(userId, role));
+    @GetMapping("/me")
+    public Mono<ApiResponse<UserResponseDto>> me(Authentication authentication) {
+        return userService.getProfile(currentUserId(authentication))
+                .map(ApiResponse::success);
     }
 
-    public record MeResponse(Long userId, String role) {}
+    @PatchMapping("/me")
+    public Mono<ApiResponse<UserResponseDto>> updateMe(
+            Authentication authentication,
+            @Valid @RequestBody UserProfileUpdateRequestDto requestDto
+    ) {
+        return userService.updateProfile(currentUserId(authentication), requestDto)
+                .map(ApiResponse::success);
+    }
+
+    private static Long currentUserId(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof Long userId)) {
+            throw new IllegalArgumentException("로그인이 필요합니다.");
+        }
+        return userId;
+    }
 }

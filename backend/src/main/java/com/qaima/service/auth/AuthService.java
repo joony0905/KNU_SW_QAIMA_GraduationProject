@@ -3,6 +3,8 @@ package com.qaima.service.auth;
 import com.qaima.common.Blocking;
 import com.qaima.domain.User;
 import com.qaima.domain.UserRole;
+import com.qaima.dto.user.FindIdRequestDto;
+import com.qaima.dto.user.FindIdResponseDto;
 import com.qaima.dto.user.LoginRequestDto;
 import com.qaima.dto.user.LoginResponseDto;
 import com.qaima.dto.user.SignupRequestDto;
@@ -14,9 +16,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -100,6 +104,34 @@ public class AuthService {
                 );
     }
 
+    public Mono<FindIdResponseDto> findLoginId(FindIdRequestDto requestDto) {
+        String name = trimToNull(requestDto.getName());
+        String birthdate = normalizeBirthdate(requestDto.getBirthdate());
+        String phone = normalizeOptionalDigits(requestDto.getPhone());
+
+        if (!StringUtils.hasText(name) || !StringUtils.hasText(birthdate)) {
+            return Mono.error(new IllegalArgumentException("이름과 생년월일을 입력해 주세요."));
+        }
+
+        return Blocking.call(() -> {
+                    List<User> matches = userRepository.findAllByNameAndBirthdate(name, birthdate);
+                    if (StringUtils.hasText(phone)) {
+                        matches = matches.stream()
+                                .filter(user -> phone.equals(normalizeOptionalDigits(user.getPhone())))
+                                .toList();
+                    }
+
+                    if (matches.isEmpty()) {
+                        throw new IllegalArgumentException("일치하는 계정을 찾을 수 없습니다.");
+                    }
+                    if (matches.size() > 1) {
+                        throw new IllegalArgumentException("동일한 이름과 생년월일의 계정이 여러 개입니다. 전화번호를 함께 입력해 주세요.");
+                    }
+                    return matches.get(0);
+                })
+                .map(user -> new FindIdResponseDto(maskEmail(user.getEmail())));
+    }
+
     public Mono<RefreshResult> refresh(String refreshToken, String ip, String ua) {
         return loginSessionService.rotateRefreshToken(refreshToken, ip, ua)
                 .flatMap(rotated -> {
@@ -132,6 +164,9 @@ public class AuthService {
             throw new IllegalArgumentException("이미 사용 중인 이메일입니다.");
         }
 
+        String phone = normalizeOptionalDigits(requestDto.getPhone());
+        validatePhoneAvailable(phone);
+
         mailAuthService.consumeSignupEmailVerification(email, requestDto.getVerificationCode());
 
         Instant now = Instant.now();
@@ -139,7 +174,7 @@ public class AuthService {
         newUser.setEmail(email);
         newUser.setPasswordHash(passwordEncoder.encode(requestDto.getPassword()));
         newUser.setName(requestDto.getName());
-        newUser.setPhone(requestDto.getPhone());
+        newUser.setPhone(phone);
         newUser.setBirthdate(requestDto.getBirthdate());
         newUser.setRole(UserRole.user);
         newUser.setStatus("active");
@@ -151,10 +186,67 @@ public class AuthService {
         return userRepository.save(newUser);
     }
 
+    private void validatePhoneAvailable(String phone) {
+        if (!StringUtils.hasText(phone)) {
+            return;
+        }
+
+        boolean exists = userRepository.findAllByPhoneIsNotNull().stream()
+                .map(User::getPhone)
+                .map(AuthService::normalizeOptionalDigits)
+                .anyMatch(phone::equals);
+        if (exists) {
+            throw new IllegalArgumentException("이미 사용 중인 전화번호입니다.");
+        }
+    }
+
     private static String normalizeEmail(String email) {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("이메일은 필수입니다.");
         }
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String normalizeBirthdate(String value) {
+        if (value == null) {
+            return null;
+        }
+        String digits = value.replaceAll("[^0-9]", "");
+        if (digits.length() != 6) {
+            throw new IllegalArgumentException("생년월일은 6자리로 입력해 주세요.");
+        }
+        return digits;
+    }
+
+    private static String normalizeOptionalDigits(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String digits = value.replaceAll("[^0-9]", "");
+        return digits.isEmpty() ? null : digits;
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String maskEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return "";
+        }
+        int at = email.indexOf('@');
+        if (at <= 0) {
+            return email.length() <= 2 ? email.charAt(0) + "*" : email.substring(0, 2) + "***";
+        }
+        String local = email.substring(0, at);
+        String domain = email.substring(at);
+        if (local.length() <= 2) {
+            return local.charAt(0) + "***" + domain;
+        }
+        return local.substring(0, 2) + "***" + domain;
     }
 }

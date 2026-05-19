@@ -1,6 +1,8 @@
 package com.qaima.api.AuthController;
 
 import com.qaima.common.ApiResponse;
+import com.qaima.dto.user.FindIdRequestDto;
+import com.qaima.dto.user.FindIdResponseDto;
 import com.qaima.dto.user.LoginRequestDto;
 import com.qaima.dto.user.LoginResponseDto;
 import com.qaima.dto.user.SignupRequestDto;
@@ -55,6 +57,12 @@ public class AuthController {
                     refreshTokenCookieService.writeRefreshTokenCookie(response, result.refreshToken());
                     return ApiResponse.success(result.response());
                 });
+    }
+
+    @PostMapping("/find-id")
+    public Mono<ApiResponse<FindIdResponseDto>> findId(@Valid @RequestBody FindIdRequestDto requestDto) {
+        return authService.findLoginId(requestDto)
+                .map(ApiResponse::success);
     }
 
     @PostMapping("/refresh")

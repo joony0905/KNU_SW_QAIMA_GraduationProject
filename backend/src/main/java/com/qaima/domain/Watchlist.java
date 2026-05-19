@@ -7,11 +7,13 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 
 @Getter
 @NoArgsConstructor
 @Entity
+@Setter
 @Table(name = "watchlist", uniqueConstraints = {
         // indexes { (user_id, name) [unique] }
         @UniqueConstraint(name = "uk_user_watchlist_name", columnNames = {"user_id", "name"})
