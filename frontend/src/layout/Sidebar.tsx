@@ -50,11 +50,29 @@ export default function Sidebar() {
 
   const handleAccountClick = () => {
     if (!loggedIn) {
+      // 로그인 후 원래 보던 페이지로 복귀(미지정 시 기본값 /feature/1).
+      sessionStorage.setItem(
+        "qaima_redirect",
+        location.pathname + location.search,
+      );
       navigate("/login");
       return;
     }
     if (menuOpen) closeMenu();
     else openMenu();
+  };
+
+  // 이미 그 페이지에 있을 때 사이드바의 같은 항목을 누르면 React Router 가
+  // no-op 이라 화면이 그대로다. 같은 경로면 state 에 nonce 를 실어 강제
+  // 재네비게이트 → PageTransition 키가 바뀌어 해당 페이지가 새로 마운트된다.
+  const handleNavClick = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    path: string,
+  ) => {
+    if (location.pathname === path) {
+      e.preventDefault();
+      navigate(path, { replace: true, state: { __reload: Date.now() } });
+    }
   };
 
   const handleGoSetting = () => { closeMenu(); navigate("/setting"); };
@@ -71,7 +89,13 @@ export default function Sidebar() {
       clearUser();
       clearTokenBalance();
       setLoggedIn(false);
-      if (isAccountOnlyPath(location.pathname)) navigate("/main");
+      // 계정 전용 페이지면 메인으로, 그 외엔 현재 페이지를 그대로 두되
+      // 둘 다 __reload nonce 로 강제 리마운트 → 비로그인 상태가 화면에 반영됨
+      // (예: 메인의 "로그인" 버튼 다시 노출, 토큰 잔액 배지 갱신 등).
+      const target = isAccountOnlyPath(location.pathname)
+        ? "/main"
+        : location.pathname;
+      navigate(target, { replace: true, state: { __reload: Date.now() } });
     }
   };
 
@@ -99,6 +123,7 @@ export default function Sidebar() {
       {/* 상단 로고 — introIcon, /main 이동 */}
       <NavLink
         to="/main"
+        onClick={(e) => handleNavClick(e, "/main")}
         className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center mb-2 flex-shrink-0"
         aria-label="홈"
       >
@@ -110,6 +135,7 @@ export default function Sidebar() {
         <NavLink
           key={path}
           to={path}
+          onClick={(e) => handleNavClick(e, path)}
           className={({ isActive }) =>
             `flex flex-col items-center gap-1 py-2.5 px-1 w-16 rounded-xl transition-colors ${
               isActive
