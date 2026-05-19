@@ -1,7 +1,14 @@
 // src/pages/MainPage.tsx
 import { useNavigate } from "react-router-dom";
+import { Sun, Moon } from "lucide-react";
 import Reveal from "../components/Reveal";
 import StockInputBox from "../components/StockInputBox";
+import { isLoggedIn } from "../utils/auth";
+import { useTheme } from "../hooks/useTheme";
+import { logout } from "../api/auth";
+import { clearAccessToken } from "../api/tokenStore";
+import { clearUser } from "../api/userStore";
+import { clearTokenBalance } from "../api/billingStore";
 
 // ───────────────────────────────────────────────────────────────
 // Hero AI 비주얼 — 6 streams convergence (Qaima 로고 자리 포함)
@@ -378,6 +385,29 @@ function WorkflowIcon({ kind }: { kind: "search" | "ai" | "doc" }) {
 // ───────────────────────────────────────────────────────────────
 export default function MainPage() {
   const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
+  const loggedIn = isLoggedIn();
+
+  const handleLogin = () => {
+    // 로그인 후 메인으로 복귀(미지정 시 LoginPage 기본값 /feature/1).
+    sessionStorage.setItem("qaima_redirect", "/main");
+    navigate("/login");
+  };
+
+  // 사이드바 로그아웃과 동일한 정리 절차. 끝나면 __reload nonce 로 메인을
+  // 강제 리마운트해 비로그인 상태가 화면에 반영되게 한다.
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch {
+      // 서버 로그아웃 실패해도 클라이언트 상태는 정리한다.
+    } finally {
+      clearAccessToken();
+      clearUser();
+      clearTokenBalance();
+      navigate("/main", { replace: true, state: { __reload: Date.now() } });
+    }
+  };
 
   // StockInputBox가 종목코드(또는 입력값)를 넘겨주면 심층분석으로 이동
   const goAnalyze = (value: string) => {
@@ -425,7 +455,38 @@ export default function MainPage() {
   return (
     <div className="min-h-screen bg-bg text-ink ml-[84px]">
       {/* HERO */}
-      <section className="pt-16 sm:pt-20 pb-14 overflow-hidden">
+      <section className="relative pt-16 sm:pt-20 pb-14 overflow-hidden">
+        {/* 우상단 — 로그인/로그아웃 + 다크모드 토글. 사이드바에만 있으면
+            처음 온 사용자가 찾기 어려워 메인 상단에도 노출한다. */}
+        <div className="absolute top-6 right-8 sm:right-12 lg:right-16 z-10 flex items-center gap-2.5">
+          <button
+            onClick={loggedIn ? handleLogout : handleLogin}
+            className="h-9 px-3.5 inline-flex items-center rounded-xl bg-surface
+                       border border-line text-ink-2 text-sm font-semibold
+                       shadow-card hover:bg-bg-sunk transition-colors"
+          >
+            {loggedIn ? "로그아웃" : "로그인"}
+          </button>
+          <div className="relative group">
+            <button
+              onClick={toggle}
+              aria-label={theme === "dark" ? "라이트모드로 변경" : "다크모드로 변경"}
+              className="w-9 h-9 grid place-items-center rounded-xl bg-surface
+                         border border-line text-ink-2 shadow-card
+                         hover:bg-bg-sunk transition-colors"
+            >
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+            <span
+              className="pointer-events-none absolute top-full right-0 mt-2
+                         whitespace-nowrap rounded-lg bg-ink text-bg text-xs font-medium
+                         px-2.5 py-1.5 shadow-pop opacity-0 group-hover:opacity-100
+                         transition-opacity"
+            >
+              {theme === "dark" ? "라이트모드로 변경" : "다크모드로 변경"}
+            </span>
+          </div>
+        </div>
         <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-12 items-start max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           {/* 좌측 */}
           <div>
@@ -472,7 +533,7 @@ export default function MainPage() {
 
       {/* FEATURES */}
       <Reveal>
-      <section className="py-20">
+      <section className="py-20 bg-bg-alt">
         <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <SectionHead
             eyebrow="WHAT QAIMA DOES"
@@ -517,7 +578,7 @@ export default function MainPage() {
 
       {/* WORKFLOW */}
       <Reveal>
-      <section className="py-20 bg-bg-sunk">
+      <section className="py-20">
         <div className="px-8 sm:px-12 lg:px-16 max-w-[1400px] mx-auto">
           <SectionHead
             eyebrow="HOW IT WORKS"
@@ -553,7 +614,7 @@ export default function MainPage() {
 
       {/* DATA SOURCES */}
       <Reveal>
-      <section className="py-20">
+      <section className="py-20 bg-bg-alt">
         <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <SectionHead
             eyebrow="DATA YOU CAN TRUST"
@@ -595,9 +656,9 @@ export default function MainPage() {
               <div className="text-xs font-mono tracking-widest text-white/70 font-semibold mb-4">
                 START FREE · 신용카드 불필요
               </div>
-              <h2 className="text-3xl sm:text-4xl lg:text-[44px] m-0 text-white font-bold tracking-tighter leading-[1.15]">
-                지금 분석을 시작하세요.<br />
-                가입하면 토큰 5개를 드립니다.
+              <h2 className="text-3xl sm:text-4xl lg:text-[44px] m-0 text-white font-bold tracking-tighter leading-tight">
+                <span className="block">지금 분석을 시작하세요.</span>
+                <span className="block mt-3">가입하면 토큰 5개를 드립니다.</span>
               </h2>
               <p className="text-base text-white/80 mt-5 mb-9 max-w-[540px] leading-relaxed">
                 첫 분석은 무료입니다. 토큰을 다 쓰면 그때 결제하세요. 강제 유료화·자동 결제는 없습니다.
@@ -612,12 +673,19 @@ export default function MainPage() {
                     <path d="M5 12h14M13 5l7 7-7 7" />
                   </svg>
                 </button>
-                <button
-                  onClick={() => navigate("/login")}
-                  className="bg-transparent text-white border border-white/30 rounded-xl px-6 py-3.5 text-[15px] font-medium cursor-pointer hover:bg-white/10 transition-colors"
-                >
-                  로그인
-                </button>
+                {!isLoggedIn() && (
+                  <button
+                    onClick={() => {
+                      // 메인에서 로그인하면 로그인 후 메인으로 돌아오게 한다
+                      // (지정 안 하면 LoginPage 기본값이 /feature/1).
+                      sessionStorage.setItem("qaima_redirect", "/main");
+                      navigate("/login");
+                    }}
+                    className="bg-transparent text-white border border-white/30 rounded-xl px-6 py-3.5 text-[15px] font-medium cursor-pointer hover:bg-white/10 transition-colors"
+                  >
+                    로그인
+                  </button>
+                )}
               </div>
             </div>
           </div>
