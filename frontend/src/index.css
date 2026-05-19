@@ -10,6 +10,7 @@
   --color-bg: 255 255 255; /* #FFFFFF — pure white (Naver) */
   --color-bg-soft: 250 250 250; /* #FAFAFA */
   --color-bg-sunk: 245 246 247; /* #F5F6F7 — Naver section dividers */
+  --color-bg-alt: 234 236 239; /* #EAECEF — 섹션 교차 배경(흰색과 또렷이 구분) */
   --color-surface: 255 255 255;
   --color-surface-2: 248 249 250;
 
@@ -59,6 +60,7 @@
   --color-bg: 14 14 16;
   --color-bg-soft: 20 20 22;
   --color-bg-sunk: 24 24 27;
+  --color-bg-alt: 30 30 34; /* 섹션 교차 배경(다크에서도 또렷이 구분) */
   --color-surface: 32 32 36;
   --color-surface-2: 48 48 53;
 
