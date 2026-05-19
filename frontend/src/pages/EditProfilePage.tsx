@@ -1,23 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Lock, ShieldCheck } from "lucide-react";
+import { User } from "lucide-react";
+import { getMyProfile, updateMyProfile } from "../api/user";
+import { getApiErrorMessage } from "../utils/errorMessage";
+import { setUser } from "../api/userStore";
 
 const inputClass =
   "w-full px-4 py-3 rounded-lg bg-bg-sunk border border-line text-ink placeholder:text-ink-4 text-sm outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-colors disabled:opacity-60 disabled:cursor-not-allowed";
 
 const labelClass = "block text-sm font-medium text-ink-2 mb-1.5";
 
-// 비밀번호 규칙 — 회원가입과 동일
-const validatePassword = (value: string) => {
-  if (value.length < 8) return "비밀번호가 너무 짧습니다.";
-  if (value.length > 12) return "비밀번호는 최대 12자리입니다.";
-  const hasNumber = /[0-9]/.test(value);
-  const hasLetter = /[a-zA-Z]/.test(value);
-  const hasSpecial = /[^0-9a-zA-Z]/.test(value);
-  if (!hasNumber || !hasLetter || !hasSpecial) {
-    return "비밀번호에는 숫자, 영어, 특수문자가 모두 하나씩 포함되어야 합니다.";
-  }
-  return "";
+// 생년월일은 백엔드에 6자리 문자열(YYMMDD)로 저장된다. 세기 추정 없이 그대로 표기.
+const formatBirthdate = (v: string): string => {
+  if (/^\d{6}$/.test(v)) return `${v.slice(0, 2)}.${v.slice(2, 4)}.${v.slice(4, 6)}`;
+  return v || "-";
 };
 
 function Card({
@@ -52,66 +48,80 @@ function Card({
 export default function EditProfilePage() {
   const navigate = useNavigate();
 
-  // 데모 환경: 기존 값으로 프리필 (실제 프로필 API 미연동)
-  const [name, setName] = useState("홍길동");
-  const [phone, setPhone] = useState("01012345678");
-  const email = "honggildong123@naver.com"; // 아이디는 변경 불가
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // 비밀번호 입력란은 항상 비워둔 채 시작한다
-  const [newPassword, setNewPassword] = useState("");
-  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
-  // 저장하려면 본인 확인용 현재 비밀번호를 반드시 1회 입력해야 한다
-  const [currentPassword, setCurrentPassword] = useState("");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState(""); // 아이디 = 이메일, 변경 불가
+  const [birthdate, setBirthdate] = useState(""); // 변경 불가
 
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handlePhoneChange = (v: string) =>
-    setPhone(v.replace(/[^0-9]/g, ""));
+  // 초기 변경 감지를 위해 원본 값을 보관
+  const [initial, setInitial] = useState({ name: "", phone: "" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    let alive = true;
+    getMyProfile()
+      .then((p) => {
+        if (!alive) return;
+        setName(p.name ?? "");
+        setPhone(p.phone ?? "");
+        setEmail(p.email ?? "");
+        setBirthdate(p.birthdate ?? "");
+        setInitial({ name: p.name ?? "", phone: p.phone ?? "" });
+      })
+      .catch((e) => {
+        if (alive) setLoadError(getApiErrorMessage(e, "내 정보를 불러오지 못했습니다."));
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const handlePhoneChange = (v: string) => setPhone(v.replace(/[^0-9]/g, ""));
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError(null);
 
-    if (!name.trim()) {
-      alert("이름을 입력해주세요.");
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setSaveError("이름을 입력해주세요.");
       return;
     }
-    if (phone.length < 9) {
-      alert("전화번호를 정확히 입력해주세요.");
+    if (phone && phone.length < 9) {
+      setSaveError("전화번호를 정확히 입력해주세요.");
       return;
     }
 
-    const wantsPasswordChange =
-      newPassword.length > 0 || newPasswordConfirm.length > 0;
+    // 바뀐 필드만 전송 (백엔드는 보낸 필드만 반영)
+    const payload: { name?: string; phone?: string } = {};
+    if (trimmedName !== initial.name) payload.name = trimmedName;
+    if (phone !== initial.phone) payload.phone = phone;
 
-    if (wantsPasswordChange) {
-      const pwErr = validatePassword(newPassword);
-      if (pwErr) {
-        alert(pwErr);
-        return;
-      }
-      if (newPassword !== newPasswordConfirm) {
-        alert("새 비밀번호가 일치하지 않습니다.");
-        return;
-      }
-    }
-
-    // 타인이 함부로 변경하지 못하도록, 저장 시 현재 비밀번호를 1회 입력받는다
-    if (!currentPassword) {
-      alert("본인 확인을 위해 현재 비밀번호를 입력해주세요.");
+    if (Object.keys(payload).length === 0) {
+      navigate("/setting");
       return;
     }
 
     setSaving(true);
-    // 데모: 실제 저장 API 미연동 — 입력 검증 후 완료 처리
-    setTimeout(() => {
-      setSaving(false);
-      alert(
-        wantsPasswordChange
-          ? "개인정보와 비밀번호가 변경되었습니다."
-          : "개인정보가 변경되었습니다.",
-      );
+    try {
+      const updated = await updateMyProfile(payload);
+      // 헤더/설정 화면이 참조하는 사용자 캐시도 갱신
+      setUser({ email: updated.email, name: updated.name });
       navigate("/setting");
-    }, 400);
+    } catch (err) {
+      // phone 중복 시 백엔드: 400 "이미 사용 중인 전화번호입니다."
+      setSaveError(getApiErrorMessage(err, "개인정보 수정에 실패했습니다."));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -120,106 +130,76 @@ export default function EditProfilePage() {
         onSubmit={handleSubmit}
         className="qaima-stagger max-w-2xl mx-auto px-4 sm:px-6 py-5 sm:py-7 flex flex-col gap-5"
       >
-        {/* 헤더 */}
         <header>
           <h1 className="text-2xl sm:text-3xl font-bold text-ink tracking-tighter">
             개인정보 수정
           </h1>
         </header>
 
-        {/* 기본정보 */}
-        <Card icon={User} title="기본정보" desc="이름과 연락처를 수정할 수 있습니다">
-          <div>
-            <label className={labelClass}>아이디(이메일)</label>
-            <input className={inputClass} value={email} disabled />
-            <p className="mt-1.5 text-xs text-ink-3">
-              아이디로 사용되는 이메일은 변경할 수 없습니다.
-            </p>
-          </div>
-          <div>
-            <label className={labelClass}>이름</label>
-            <input
-              className={inputClass}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="이름"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>전화번호</label>
-            <input
-              className={inputClass}
-              value={phone}
-              onChange={(e) => handlePhoneChange(e.target.value)}
-              inputMode="numeric"
-              placeholder="전화번호 ( - 제외)"
-            />
-          </div>
-        </Card>
+        {loading ? (
+          <p className="text-sm text-ink-3 py-10 text-center animate-pulse">
+            내 정보를 불러오는 중...
+          </p>
+        ) : loadError ? (
+          <p className="text-sm text-danger py-10 text-center">{loadError}</p>
+        ) : (
+          <>
+            <Card
+              icon={User}
+              title="기본정보"
+              desc="이름과 연락처를 수정할 수 있습니다"
+            >
+              <div>
+                <label className={labelClass}>아이디(이메일)</label>
+                <input className={inputClass} value={email} disabled />
+                <p className="mt-1.5 text-xs text-ink-3">
+                  아이디로 사용되는 이메일은 변경할 수 없습니다.
+                </p>
+              </div>
+              <div>
+                <label className={labelClass}>생년월일</label>
+                <input
+                  className={inputClass}
+                  value={formatBirthdate(birthdate)}
+                  disabled
+                />
+              </div>
+              <div>
+                <label className={labelClass}>이름</label>
+                <input
+                  className={inputClass}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="이름"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>전화번호</label>
+                <input
+                  className={inputClass}
+                  value={phone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="전화번호 ( - 제외)"
+                />
+              </div>
+            </Card>
 
-        {/* 비밀번호 변경 */}
-        <Card
-          icon={Lock}
-          title="비밀번호 변경"
-          desc="변경하지 않으려면 비워두세요"
-        >
-          <div>
-            <label className={labelClass}>새 비밀번호</label>
-            <input
-              type="password"
-              className={inputClass}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              maxLength={12}
-              autoComplete="new-password"
-              placeholder="영문, 숫자, 특수문자 포함 8~12자"
-            />
-          </div>
-          <div>
-            <label className={labelClass}>새 비밀번호 확인</label>
-            <input
-              type="password"
-              className={inputClass}
-              value={newPasswordConfirm}
-              onChange={(e) => setNewPasswordConfirm(e.target.value)}
-              maxLength={12}
-              autoComplete="new-password"
-              placeholder="새 비밀번호 다시 입력"
-            />
-          </div>
-        </Card>
+            {saveError && (
+              <p className="text-sm text-danger">{saveError}</p>
+            )}
 
-        {/* 본인 확인 */}
-        <Card
-          icon={ShieldCheck}
-          title="본인 확인"
-          desc="타인의 무단 변경을 막기 위해 저장 시 현재 비밀번호가 필요합니다"
-        >
-          <div>
-            <label className={labelClass}>
-              현재 비밀번호 <span className="text-danger">*</span>
-            </label>
-            <input
-              type="password"
-              className={inputClass}
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              placeholder="현재 비밀번호를 입력하세요"
-            />
-          </div>
-        </Card>
-
-        {/* 액션 */}
-        <div className="flex items-center justify-end">
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            {saving ? "저장 중..." : "변경 저장"}
-          </button>
-        </div>
+            <div className="flex items-center justify-end">
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {saving ? "저장 중..." : "변경 저장"}
+              </button>
+            </div>
+          </>
+        )}
       </form>
     </div>
   );
