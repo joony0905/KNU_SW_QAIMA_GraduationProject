@@ -157,18 +157,18 @@ export default function FinancialDetailModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-[95vw] max-w-[900px] max-h-[85vh] flex flex-col shadow-xl"
+        className="bg-surface rounded-2xl w-[95vw] max-w-[900px] max-h-[85vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line">
           <div>
-            <h2 className="text-lg font-semibold text-zinc-900">재무제표 상세</h2>
-            <p className="text-sm text-zinc-500">{companyName}</p>
+            <h2 className="text-lg font-semibold text-ink">재무제표 상세</h2>
+            <p className="text-sm text-ink-3">{companyName}</p>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-700 text-xl leading-none p-1"
+            className="text-ink-4 hover:text-ink-2 text-xl leading-none p-1"
           >
             ✕
           </button>
@@ -183,7 +183,7 @@ export default function FinancialDetailModal({
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 tab === key
                   ? "bg-accent text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  : "bg-surface-2 text-ink-2 hover:bg-line"
               }`}
             >
               {PERIOD_CONFIG[key].label}
@@ -194,31 +194,31 @@ export default function FinancialDetailModal({
         {/* 본문 */}
         <div className="flex-1 overflow-auto px-6 py-4">
           {loading ? (
-            <p className="text-sm text-gray-500 py-10 text-center animate-pulse">
+            <p className="text-sm text-ink-3 py-10 text-center animate-pulse">
               재무제표를 불러오는 중...
             </p>
           ) : columns.length === 0 ? (
-            <p className="text-sm text-gray-500 py-10 text-center">
+            <p className="text-sm text-ink-3 py-10 text-center">
               해당 기간의 재무제표 데이터가 없습니다.
             </p>
           ) : (
             <div className="flex flex-col gap-6">
               {SECTIONS.map((section) => (
                 <div key={section.title}>
-                  <h3 className="text-base font-semibold text-zinc-800 mb-2">
+                  <h3 className="text-base font-semibold text-ink-2 mb-2">
                     <DictTerm term={section.title}>{section.title}</DictTerm>
                   </h3>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm border border-zinc-200 rounded-lg overflow-hidden">
+                    <table className="w-full text-sm border border-line rounded-lg overflow-hidden">
                       <thead>
-                        <tr className="bg-zinc-50">
-                          <th className="text-left px-3 py-2 font-medium text-zinc-600 sticky left-0 bg-zinc-50 min-w-[140px]">
+                        <tr className="bg-bg-sunk">
+                          <th className="text-left px-3 py-2 font-medium text-ink-3 sticky left-0 bg-bg-sunk min-w-[140px]">
                             항목
                           </th>
                           {columns.map((col) => (
                             <th
                               key={`${col.year}-${col.periodType}-${col.periodNo}`}
-                              className="text-right px-3 py-2 font-medium text-zinc-600 min-w-[90px] whitespace-nowrap"
+                              className="text-right px-3 py-2 font-medium text-ink-3 min-w-[90px] whitespace-nowrap"
                             >
                               {columnLabel(col)}
                             </th>
@@ -227,17 +227,17 @@ export default function FinancialDetailModal({
                       </thead>
                       <tbody>
                         {section.rows.map((row) => (
-                          <tr key={row.label} className="border-t border-zinc-100 hover:bg-zinc-50">
-                            <td className="px-3 py-2 sticky left-0 bg-white">
+                          <tr key={row.label} className="border-t border-line hover:bg-bg-soft">
+                            <td className="px-3 py-2 sticky left-0 bg-surface">
                               <DictTerm term={row.label}>
-                                <span className="font-medium text-zinc-800">{row.label}</span>
+                                <span className="font-medium text-ink-2">{row.label}</span>
                               </DictTerm>
-                              <span className="block text-xs text-zinc-400">{row.subtitle}</span>
+                              <span className="block text-xs text-ink-4">{row.subtitle}</span>
                             </td>
                             {columns.map((col) => (
                               <td
                                 key={`${col.year}-${col.periodType}-${col.periodNo}`}
-                                className="px-3 py-2 text-right text-zinc-900 font-medium whitespace-nowrap"
+                                className="px-3 py-2 text-right text-ink font-medium whitespace-nowrap"
                               >
                                 {row.format(col)}
                               </td>

@@ -1287,7 +1287,7 @@ export default function PortfolioMockPage() {
                   className="px-5 py-2.5 rounded-xl bg-accent text-white font-semibold text-sm
                              hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity tracking-tight"
                 >
-                  {loading ? "분석 중..." : "분석결과보기 →"}
+                  {loading ? "분석 중..." : "분석 결과 보기 →"}
                 </button>
               </div>
               {!loading && riskGamma === null && (
@@ -1989,13 +1989,6 @@ export default function PortfolioMockPage() {
                       const frontier = analysisResult.advanced?.frontier ?? [];
                       const graphReturn = (point: { expectedReturn?: number | null; displayExpectedReturn?: number | null }) =>
                         point.displayExpectedReturn ?? point.expectedReturn ?? 0;
-                      const returnTitle = (point: { expectedReturn?: number | null; displayExpectedReturn?: number | null; isDisplayCapped?: boolean }) => {
-                        const expected = point.expectedReturn ?? 0;
-                        const display = graphReturn(point);
-                        return point.isDisplayCapped
-                          ? `E[R] ${formatPct(expected)} · 표시 ${formatPct(display)}`
-                          : `E[R] ${formatPct(expected)}`;
-                      };
                       const markers = [
                         analysisResult.currentPortfolio,
                         ...analysisResult.basicPortfolios,

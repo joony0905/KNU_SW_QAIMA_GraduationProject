@@ -47,6 +47,28 @@ export const confirmEmailVerification = async (
   await api.post("/email/verification/confirm", { email, code });
 };
 
+// 아이디(가입 이메일) 찾기 — 이름 + 생년월일(6자리)로 조회.
+// phone 은 선택(동명이인·동일 생년월일 구분용). 백엔드가 숫자만 추출해 비교하므로
+// 하이픈이 섞여 있어도 된다. 화면 노출은 maskedEmail 사용 권장.
+export interface FindIdRequest {
+  name: string;
+  birthdate: string;
+  phone?: string;
+}
+
+export interface FindIdResponse {
+  email: string;
+  maskedEmail: string;
+}
+
+export const findLoginId = async (
+  payload: FindIdRequest
+): Promise<FindIdResponse> => {
+  const res = await api.post("/auth/find-id", payload);
+  // ApiResponse<FindIdResponseDto>
+  return res.data.data;
+};
+
 // 비밀번호 재설정 링크 발송 요청
 // 백엔드는 가입되지 않은 이메일이어도 200 OK 로 응답한다(이메일 enumeration 방지).
 // 60초 rate limit 이 걸려 있다.

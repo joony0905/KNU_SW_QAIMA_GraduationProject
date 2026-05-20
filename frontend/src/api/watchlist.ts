@@ -3,29 +3,20 @@ import { ENDPOINTS } from "./endpoints";
 import type { WatchlistItem } from "../types/watchlist";
 import type { ApiResponse } from "../types/common/api";
 
-// 백엔드에 워치리스트 생성/목록 조회 엔드포인트가 없고 컨트롤러가 userId=1 로
-// 고정돼 있어, 조회·추가에 필요한 watchlistId 를 기본값으로 고정한다.
-// 추후 백엔드가 "내 워치리스트" 조회를 제공하면 그 값으로 대체하면 된다.
-// .env 의 VITE_DEFAULT_WATCHLIST_ID 로 오버라이드 가능.
-export const DEFAULT_WATCHLIST_ID = Number(
-  import.meta.env.VITE_DEFAULT_WATCHLIST_ID ?? 1,
-);
-
-export const fetchWatchlist = async (
-  watchlistId: number
-): Promise<WatchlistItem[]> => {
+// 로그인 사용자(JWT) 기준 기본 워치리스트. 백엔드가 목록을 자동 생성하므로
+// 프론트에서 watchlistId 를 알 필요가 없다.
+export const fetchWatchlist = async (): Promise<WatchlistItem[]> => {
   const res = await api.get<ApiResponse<WatchlistItem[]>>(
-    ENDPOINTS.watchlist.getItems(watchlistId)
+    ENDPOINTS.watchlist.getMyItems
   );
   return res.data.data;
 };
 
 export const addWatchlistItem = async (payload: {
   stockId: number;
-  watchlistId: number;
 }): Promise<WatchlistItem> => {
   const res = await api.post<ApiResponse<WatchlistItem>>(
-    ENDPOINTS.watchlist.addItem,
+    ENDPOINTS.watchlist.addMyItem,
     payload
   );
   return res.data.data;
