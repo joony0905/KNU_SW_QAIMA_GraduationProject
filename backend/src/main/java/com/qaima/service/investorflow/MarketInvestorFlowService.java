@@ -37,7 +37,7 @@ public class MarketInvestorFlowService {
             LocalDate to
     ) {
         String safeMarketCode = normalizeMarketCode(marketCode);
-        String safeIndustryCode = normalizeIndustryCode(industryCode);
+        String safeIndustryCode = normalizeIndustryCode(safeMarketCode, industryCode);
         LocalDate end = to == null ? LocalDate.now(SEOUL) : to;
         LocalDate start = from == null ? end : from;
         if (start.isAfter(end)) {
@@ -53,7 +53,7 @@ public class MarketInvestorFlowService {
 
     public Mono<List<MarketInvestorFlow>> latestRows(String marketCode, String industryCode, int limit) {
         String safeMarketCode = normalizeMarketCode(marketCode);
-        String safeIndustryCode = normalizeIndustryCode(industryCode);
+        String safeIndustryCode = normalizeIndustryCode(safeMarketCode, industryCode);
         int safeLimit = Math.max(1, Math.min(limit, 365));
         return Blocking.call(() -> marketInvestorFlowRepository.findByMarketCodeAndIndustryCodeOrderByTradeDateDesc(
                 safeMarketCode,
@@ -159,9 +159,9 @@ public class MarketInvestorFlowService {
         return normalized;
     }
 
-    private String normalizeIndustryCode(String industryCode) {
+    private String normalizeIndustryCode(String marketCode, String industryCode) {
         return industryCode == null || industryCode.isBlank()
-                ? KisInvestorFlowClient.DEFAULT_MARKET_INDUSTRY_CODE
+                ? KisInvestorFlowClient.defaultMarketIndustryCode(marketCode)
                 : industryCode.trim();
     }
 

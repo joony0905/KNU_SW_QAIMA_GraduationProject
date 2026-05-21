@@ -57,7 +57,8 @@ DEFAULT_DB_NAME = os.getenv("DB_NAME", "qaima")
 
 SOURCE = "KIS"
 SOURCE_TR_ID = "FHPTJ04040000"
-DEFAULT_INDUSTRY_CODE = "0000"
+DEFAULT_KOSPI_INDUSTRY_CODE = "0001"
+DEFAULT_KOSDAQ_INDUSTRY_CODE = "1001"
 
 UPSERT_SQL = """
 INSERT INTO market_investor_flow (
@@ -177,7 +178,7 @@ class KisClient:
         params = {
             "FID_COND_MRKT_DIV_CODE": "U",
             "FID_INPUT_ISCD": industry_code,
-            "FID_INPUT_DATE_1": yyyymmdd(from_date),
+            "FID_INPUT_DATE_1": yyyymmdd(to_date),
             "FID_INPUT_ISCD_1": normalize_market_code(market_code),
             "FID_INPUT_DATE_2": yyyymmdd(to_date),
             "FID_INPUT_ISCD_2": industry_code,
@@ -198,7 +199,7 @@ class KisClient:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Load KIS market investor flow into market_investor_flow")
     parser.add_argument("--market-code", action="append", default=[], help="KSP or KSQ. Can be repeated. Default: both")
-    parser.add_argument("--industry-code", default=DEFAULT_INDUSTRY_CODE)
+    parser.add_argument("--industry-code", default=None)
     parser.add_argument("--from", dest="from_date", required=True, type=parse_iso_date)
     parser.add_argument("--to", dest="to_date", required=True, type=parse_iso_date)
     parser.add_argument("--sleep-ms", type=int, default=DEFAULT_SLEEP_MS)
@@ -220,6 +221,13 @@ def normalize_market_code(value: str) -> str:
     if normalized == "KOSDAQ":
         return "KSQ"
     return normalized
+
+
+def default_industry_code_for_market(market_code: str) -> str:
+    normalized = normalize_market_code(market_code)
+    if normalized == "KSQ":
+        return DEFAULT_KOSDAQ_INDUSTRY_CODE
+    return DEFAULT_KOSPI_INDUSTRY_CODE
 
 
 def parse_decimal(value: Any) -> Optional[Decimal]:
@@ -256,9 +264,11 @@ def connect_db() -> MySQLConnection:
     )
 
 
-def to_params(market_code: str, industry_code: str, row: dict, now_sql: str) -> Optional[Tuple]:
+def to_params(market_code: str, industry_code: str, row: dict, from_date: date, to_date: date, now_sql: str) -> Optional[Tuple]:
     trade_date = parse_kis_date(row.get("stck_bsop_date"))
     if trade_date is None:
+        return None
+    if trade_date < from_date or trade_date > to_date:
         return None
     return (
         market_code,
@@ -305,7 +315,6 @@ def main() -> None:
         raise SystemExit("--from must be before or equal to --to")
 
     market_codes = [normalize_market_code(code) for code in args.market_code] or ["KSP", "KSQ"]
-    industry_code = args.industry_code.strip() or DEFAULT_INDUSTRY_CODE
     kis = KisClient(
         app_key=required_env("KIS_APP_KEY", DEFAULT_KIS_APP_KEY),
         app_secret=required_env("KIS_APP_SECRET", DEFAULT_KIS_APP_SECRET),
@@ -314,9 +323,18 @@ def main() -> None:
     try:
         total = 0
         for market_code in market_codes:
+            industry_code = (
+                args.industry_code.strip()
+                if args.industry_code and args.industry_code.strip()
+                else default_industry_code_for_market(market_code)
+            )
             rows = kis.fetch_market_flow(market_code, industry_code, args.from_date, args.to_date)
             now_sql = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
-            params = [p for p in (to_params(market_code, industry_code, row, now_sql) for row in rows) if p is not None]
+            params = [
+                p
+                for p in (to_params(market_code, industry_code, row, args.from_date, args.to_date, now_sql) for row in rows)
+                if p is not None
+            ]
             saved = upsert_rows(conn, params)
             total += saved
             logger.info("marketCode=%s industryCode=%s rawRows=%d upserted=%d total=%d",
