@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
-import { Trash2, Plus, Info, ClipboardList, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Trash2, Plus, Info, ClipboardList, Sun, Moon, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import InvestLevelBadge from "../components/InvestLevelBadge";
+import { isLoggedIn } from "../utils/auth";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchCell from "../components/StockSearchCell";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
@@ -518,7 +520,16 @@ const holdingAllocationPieStyle = (allocations: HoldingAllocation[]) => {
 
 export default function PortfolioMockPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggle } = useTheme();
+  // 로그인 여부: Portfolio Manager 잠금 오버레이 + 분석 실행 가드에 사용.
+  // 토큰 상태는 마운트 시 한 번 평가하면 충분 — 로그인 후엔 /login → /feature/3 으로
+  // 다시 마운트되므로 자연스럽게 갱신된다.
+  const loggedIn = isLoggedIn();
+  const goLogin = () => {
+    sessionStorage.setItem("qaima_redirect", location.pathname + location.search);
+    navigate("/login");
+  };
   const [isOpen, setIsOpen] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<"국내" | "해외">("국내");
   const [selectedWindow, setSelectedWindow] = useState<AnalysisWindowPreset>(ANALYSIS_WINDOWS[1]);
@@ -562,6 +573,13 @@ export default function PortfolioMockPage() {
   }, []);
 
   useEffect(() => {
+    // 환율 조회는 인증이 필요한 엔드포인트라 비로그인 시 401 → apiClient 가
+    // 자동으로 /login 으로 보낸다. 비로그인 둘러보기를 허용하려면 호출 자체를 건너뛴다.
+    if (!loggedIn) {
+      setUsdKrwRate(null);
+      setExchangeRateError("");
+      return;
+    }
     let alive = true;
     fetchFeature2MacroRates()
       .then((res) => {
@@ -577,7 +595,7 @@ export default function PortfolioMockPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [loggedIn]);
 
   const commitRiskGamma = (v: number) => {
     const clamped = clampRiskGamma(v);
@@ -618,17 +636,12 @@ export default function PortfolioMockPage() {
   };
 
   // 국내 / 해외 각각의 포트폴리오 상태
-  const [domesticRows, setDomesticRows] = useState<HoldingRow[]>([
-    { id: 1, name: "삼성전자", stockCode: "005930", quantity: 125, avgPrice: 85000 },
-    { id: 2, name: "SK하이닉스", stockCode: "000660", quantity: 20, avgPrice: 500000 },
-    { id: 3, name: "NAVER", stockCode: "035420", quantity: 14, avgPrice: 250000 },
-  ]);
-
-  const [overseasRows, setOverseasRows] = useState<HoldingRow[]>([
-    { id: 1, name: "AAPL", stockCode: "AAPL", quantity: 10, avgPrice: 180 },
-    { id: 2, name: "MSFT", stockCode: "MSFT", quantity: 5, avgPrice: 400 },
-  ]);
-  const [domesticCash, setDomesticCash] = useState(1_000_000);
+  // 초기값은 빈 상태로 시작한다 — 시드 더미가 있으면 비로그인 사용자에게도 차트가 채워져
+  // "이건 누구 포트폴리오지?" 라는 혼란을 준다. 로그인 사용자의 저장된 포트폴리오를
+  // 서버에서 불러오는 로직은 백엔드에 해당 GET 엔드포인트가 생기면 여기에 붙인다.
+  const [domesticRows, setDomesticRows] = useState<HoldingRow[]>([]);
+  const [overseasRows, setOverseasRows] = useState<HoldingRow[]>([]);
+  const [domesticCash, setDomesticCash] = useState(0);
   const [overseasCash, setOverseasCash] = useState(0);
 
   // 현재 선택된 마켓에 맞는 rows / setter
@@ -745,6 +758,10 @@ export default function PortfolioMockPage() {
     Object.fromEntries(overlays.map((overlay) => [overlay, overlayCachePolicies[overlay] ?? "REUSE_AVAILABLE"]));
 
   const handleAnalyzeClick = async (skipOverlayPreview = false) => {
+    if (!loggedIn) {
+      goLogin();
+      return;
+    }
     const validRows = rows.filter((r) => r.name.trim() !== "");
     if (validRows.length === 0) {
       setErr("최소 1개 종목을 입력해주세요.");
@@ -1110,7 +1127,11 @@ export default function PortfolioMockPage() {
                       {holdingAllocations.length === 0 ? (
                         <div className="text-center sm:text-left">
                           <p className="text-sm font-medium text-ink-3">표시할 보유 비중이 없습니다</p>
-                          <p className="mt-1 text-xs text-ink-4">종목명, 수량, 평균단가를 입력하면 바로 반영됩니다.</p>
+                          <p className="mt-1 text-xs text-ink-4">
+                            {loggedIn
+                              ? "종목명, 수량, 평균단가를 입력하면 바로 반영됩니다."
+                              : "로그인 후 종목을 입력하면 비중이 표시됩니다."}
+                          </p>
                         </div>
                       ) : (
                         holdingAllocations.map((allocation) => (
@@ -1138,7 +1159,7 @@ export default function PortfolioMockPage() {
 
             {/* 오른쪽: Portfolio Manager */}
             <section className="w-full lg:flex-[1.4] flex flex-col gap-4">
-              <div className="w-full rounded-2xl bg-surface border border-line shadow-card">
+              <div className="relative w-full rounded-2xl bg-surface border border-line shadow-card">
                 <div className="px-6 pt-5 pb-3 flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-ink tracking-tight">Portfolio Manager</h2>
@@ -1235,6 +1256,30 @@ export default function PortfolioMockPage() {
                       </div>
                     </div>
 	                </div>
+
+                {/* 비로그인 잠금 오버레이: Portfolio Manager 영역 전체를 블러로 덮고 로그인 유도 */}
+                {!loggedIn && (
+                  <div className="absolute inset-0 z-20 rounded-2xl bg-surface/55 backdrop-blur-md flex flex-col items-center justify-center text-center px-6 py-8 gap-3">
+                    <div className="w-12 h-12 grid place-items-center rounded-full bg-accent-soft text-accent shadow-card">
+                      <Lock size={22} />
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-ink tracking-tight">
+                        로그인이 필요한 기능입니다
+                      </p>
+                      <p className="mt-1 text-sm text-ink-2 max-w-xs">
+                        포트폴리오 입력과 분석은 로그인 후 이용할 수 있습니다.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={goLogin}
+                      className="mt-1 px-5 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+                    >
+                      로그인하러 가기
+                    </button>
+                  </div>
+                )}
 	              </div>
 
             </section>
@@ -1421,8 +1466,12 @@ export default function PortfolioMockPage() {
               <p className="text-sm text-ink-3 mt-1">
                 변동성 · 분산 구조 · 효율성을 종합한 리포트
               </p>
-              {!loading && riskGamma === null && (
+              <InvestLevelBadge className="mt-2" />
+              {!loading && loggedIn && riskGamma === null && (
                 <p className="text-xs text-ink-4 mt-1.5">투자 성향 지수를 먼저 입력해주세요.</p>
+              )}
+              {!loading && !loggedIn && (
+                <p className="text-xs text-ink-4 mt-1.5">분석을 실행하려면 로그인이 필요합니다.</p>
               )}
               {err && <p className="text-xs text-danger mt-1.5">{err}</p>}
             </div>
@@ -1462,14 +1511,14 @@ export default function PortfolioMockPage() {
                 <button
                   type="button"
                   onClick={() => void handleAnalyzeClick()}
-                  disabled={loading || riskGamma === null}
+                  disabled={loading || (loggedIn && riskGamma === null)}
                   className="px-5 py-2.5 rounded-xl bg-accent text-white font-semibold text-sm
                              hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity tracking-tight"
                 >
                   {loading ? "분석 중..." : "분석 결과 보기 →"}
                 </button>
               </div>
-              {!loading && riskGamma === null && (
+              {!loading && loggedIn && riskGamma === null && (
                 <p className="text-xs text-ink-4">투자 성향 지수를 먼저 입력해주세요.</p>
               )}
               {err && <p className="text-xs text-danger">{err}</p>}
