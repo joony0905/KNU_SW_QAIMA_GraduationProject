@@ -79,6 +79,9 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
     List<Stock> findAllByOrderByStockCodeAsc();
 
     @EntityGraph(attributePaths = "exchange")
+    List<Stock> findByStockCodeIn(List<String> stockCodes);
+
+    @EntityGraph(attributePaths = "exchange")
     List<Stock> findByDartCorpCodeIsNotNullOrderByStockCodeAsc();
 
     @EntityGraph(attributePaths = "exchange")

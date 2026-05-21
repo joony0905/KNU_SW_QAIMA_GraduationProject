@@ -4,7 +4,6 @@ import StockInputBox from "./StockInputBox";
 import StockCard from "./StockCard";
 import { fetchFeaturedStocks } from "../api/featuredStock";
 import type { FeaturedStockDto, FeaturedStockTopic } from "../types/featuredStock";
-import { isLoggedIn } from "../utils/auth";
 
 interface StockItem {
   name: string;
@@ -20,15 +19,14 @@ type TopicConfig = { code: FeaturedStockTopic; label: string };
 
 const TOPIC_CONFIG: TopicConfig[] = [
   { code: "GAINERS",            label: "상승종목" },
-  { code: "NEAR_UPPER_LIMIT",   label: "상한가 임박종목" },
   { code: "LOSERS",             label: "하락종목" },
-  { code: "BROKE_UPPER_LIMIT",  label: "상한가 이탈종목" },
-  { code: "TOP_VOLUME",         label: "거래량 상위종목" },
+  { code: "NEAR_NEW_HIGH",      label: "신고가 근접 종목" },
+  { code: "NEAR_NEW_LOW",       label: "신저가 근접 종목" },
   { code: "TOP_TURNOVER",       label: "거래대금 상위종목" },
   { code: "VOLUME_SURGE",       label: "거래량 급등종목" },
 ];
 
-// 백엔드 미구현 시 노출되는 임시 데이터 (TopRankingReader 채워지면 자동으로 대체됨)
+// 특징주 조회 실패 시 노출되는 임시 데이터
 const FALLBACK_STOCKS: StockItem[] = [
   { name: "삼성전자",        symbol: "005930", exchange: "KOSPI", price: "72,800",  volume: "14,293,826", change: "+800",    changeRate: "+1.11%" },
   { name: "SK하이닉스",      symbol: "000660", exchange: "KOSPI", price: "189,500", volume: "8,124,310",  change: "+3,500",  changeRate: "+1.88%" },
@@ -100,24 +98,19 @@ export default function StockSearchBar({
     let cancelled = false;
 
     const load = async () => {
-      if (!isLoggedIn()) {
-        setStocks(FALLBACK_STOCKS);
-        return;
-      }
       setLoading(true);
       setHasError(false);
       try {
-        const data = await fetchFeaturedStocks(topic, 10);
+        const data = await fetchFeaturedStocks(topic, 30);
         if (cancelled) return;
         if (!Array.isArray(data) || data.length === 0) {
-          setStocks(FALLBACK_STOCKS);
-          setHasError(true);
+          setStocks([]);
           return;
         }
         setStocks(data.map(dtoToStockItem));
       } catch (e) {
         if (cancelled) return;
-        // 백엔드 엔드포인트 미구현 시 fallback 노출 (개발 단계용)
+        // KIS 순위 조회 실패 시 fallback 노출
         console.warn("특징주 조회 실패, fallback 사용:", e);
         setStocks(FALLBACK_STOCKS);
         setHasError(true);
@@ -143,6 +136,7 @@ export default function StockSearchBar({
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (cardRef.current?.contains(e.target as Node)) return;
+      if (topicRef.current?.contains(e.target as Node)) return;
       setIsOpen(false);
     };
     document.addEventListener("click", handler);
@@ -167,7 +161,10 @@ export default function StockSearchBar({
       {/* 특징주 카테고리 셀렉트 */}
       <div ref={topicRef} className="relative">
         <button
-          onClick={() => setIsTopicOpen((prev) => !prev)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsTopicOpen((prev) => !prev);
+          }}
           className={`inline-flex items-center gap-2 px-3.5 w-full h-full min-h-[54px] bg-surface border border-line shadow-card text-sm ${
             isTopicOpen ? "rounded-t-xl border-b-surface" : "rounded-xl"
           }`}
@@ -184,9 +181,11 @@ export default function StockSearchBar({
             {TOPIC_CONFIG.map((item) => (
               <button
                 key={item.code}
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setTopic(item.code);
                   setIsTopicOpen(false);
+                  setIsOpen(true);
                 }}
                 className={`w-full text-left px-3.5 py-2.5 text-sm hover:bg-bg-sunk last:rounded-b-xl ${
                   item.code === topic ? "text-accent font-semibold bg-accent-soft" : "text-ink"
@@ -248,6 +247,9 @@ export default function StockSearchBar({
                       특징주 데이터를 불러오지 못해 임시 데이터를 표시 중입니다.
                     </div>
                   )}
+                  <div className="px-3.5 py-2 bg-bg-sunk text-[10px] leading-relaxed text-ink-3 border-b border-line">
+                     ETF/KONEX 등 QAIMA 미지원 상품은 제외되어, <br></br>실제 증권사와 랭킹에 다소 차이가 있을 수 있습니다. <br></br> 장외 시간에는 최근 거래일 마감 기준으로 표시됩니다.
+                  </div>
                   {stocks.map((stock) => (
                     <div
                       key={stock.symbol}

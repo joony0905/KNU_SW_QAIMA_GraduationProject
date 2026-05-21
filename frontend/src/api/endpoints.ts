@@ -29,7 +29,7 @@ export const ENDPOINTS = {
     updateItem: (itemId: number) => `/watchlist/items/${itemId}`,
   },
   featuredStocks: {
-    getByTopic: (topic: string, limit = 10) =>
+    getByTopic: (topic: string, limit = 30) =>
       `/featured-stocks?topic=${topic}&limit=${limit}`,
   },
   analysis: {

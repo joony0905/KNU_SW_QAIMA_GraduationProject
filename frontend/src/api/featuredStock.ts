@@ -5,7 +5,7 @@ import type { FeaturedStockDto, FeaturedStockTopic } from "../types/featuredStoc
 
 export const fetchFeaturedStocks = async (
   topic: FeaturedStockTopic,
-  limit = 10,
+  limit = 30,
 ): Promise<FeaturedStockDto[]> => {
   const res = await api.get<ApiResponse<FeaturedStockDto[]>>(
     ENDPOINTS.featuredStocks.getByTopic(topic, limit),
