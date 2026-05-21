@@ -16,6 +16,7 @@ import SignupPage from "./pages/SignupPage";
 import SettingPage from "./pages/SettingPage";
 import EditProfilePage from "./pages/EditProfilePage";
 import SurveyPage from "./pages/SurveyPage";
+import InvestLevelSurveyPage from "./pages/InvestLevelSurveyPage";
 import { bootstrapAccessToken } from "./api/tokenStore";
 
 const API_BASE_URL = "http://localhost:8080/api/v1";
@@ -116,9 +117,7 @@ export default function App() {
         path="/feature/3"
         element={
           <MainLayout>
-            <RequireAuth>
-              <PortfolioMockPage />
-            </RequireAuth>
+            <PortfolioMockPage />
           </MainLayout>
         }
       />
@@ -151,6 +150,16 @@ export default function App() {
         element={
           <MainLayout>
             <SurveyPage />
+          </MainLayout>
+        }
+      />
+      <Route
+        path="/invest-level-survey"
+        element={
+          <MainLayout>
+            <RequireAuth>
+              <InvestLevelSurveyPage />
+            </RequireAuth>
           </MainLayout>
         }
       />
