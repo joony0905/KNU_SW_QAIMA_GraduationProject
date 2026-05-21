@@ -26,14 +26,11 @@ import {
 } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
 import { useDictionary } from "../components/DictContext";
-
-const INVEST_LEVELS = ["초급자", "중급자", "고급자"] as const;
-type InvestLevel = (typeof INVEST_LEVELS)[number];
-
-const toInvestLevel = (v: string | null | undefined): InvestLevel =>
-  (INVEST_LEVELS as readonly string[]).includes(v ?? "")
-    ? (v as InvestLevel)
-    : "초급자";
+import {
+  INVEST_LEVELS,
+  toInvestLevel,
+  type InvestLevel,
+} from "../utils/investLevel";
 
 const formatPhone = (v: string): string => {
   const d = (v ?? "").replace(/[^0-9]/g, "");
@@ -180,11 +177,15 @@ function SettingSelect<T extends string>({
 export default function SettingPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
-  const { glossaryHover, setGlossaryHover } = useDictionary();
+  const {
+    glossaryHover,
+    setGlossaryHover,
+    investLevel,
+    setInvestLevel,
+  } = useDictionary();
 
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [investLevel, setInvestLevel] = useState<InvestLevel>("초급자");
   const [savingPref, setSavingPref] = useState(false);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [wlLoading, setWlLoading] = useState(true);
@@ -227,7 +228,7 @@ export default function SettingPage() {
     return () => {
       alive = false;
     };
-  }, [setGlossaryHover]);
+  }, [setGlossaryHover, setInvestLevel]);
 
   // 투자레벨 = 백엔드 experience(자유 문자열). 선택 즉시 저장.
   const handleInvestLevelChange = async (next: InvestLevel) => {
@@ -344,6 +345,15 @@ export default function SettingPage() {
           icon={TrendingUp}
           title="투자레벨"
           desc="투자 설문 결과로 자동 설정되며, 직접 변경할 수 있습니다"
+          action={
+            <button
+              onClick={() => navigate("/invest-level-survey")}
+              className={ghostBtn}
+            >
+              <RotateCcw size={14} />
+              설문 다시하기
+            </button>
+          }
         >
           <SettingSelect
             value={investLevel}
