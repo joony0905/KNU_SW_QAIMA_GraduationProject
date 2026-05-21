@@ -101,7 +101,7 @@ def fetch_feature3_price_series(
         stock_code=data.get("stockCode") or stock_code,
         company_name=data.get("companyName") or company_name,
         requested_price_basis=requested_price_basis,
-        used_price_basis=data.get("usedPriceBasis") or "CLOSE",
+        used_price_basis=data.get("usedPriceBasis") or "RAW_CLOSE",
         source=_feature3_source(source),
         cache_status=data.get("cacheStatus") or _cache_status(source),
         expected_trading_day_count=expected,
@@ -190,7 +190,7 @@ def _unavailable_result(
         stock_code=stock_code,
         company_name=company_name,
         requested_price_basis=requested_price_basis,
-        used_price_basis="CLOSE",
+        used_price_basis="RAW_CLOSE",
         source="UNAVAILABLE",
         cache_status="MISS",
         expected_trading_day_count=lookback_trading_days,
@@ -211,12 +211,12 @@ def _unavailable_result(
 
 
 def _feature3_source(source: str) -> str:
-    return source if source in {"DB", "KIS", "MARKETSTACK", "MIXED", "EMPTY"} else "UNAVAILABLE"
+    return source if source in {"DB", "KIS", "YAHOO", "MARKETSTACK", "MIXED", "EMPTY"} else "UNAVAILABLE"
 
 
 def _cache_status(source: str) -> str:
     if source == "DB":
         return "HIT"
-    if source in {"KIS", "MARKETSTACK", "MIXED"}:
+    if source in {"KIS", "YAHOO", "MARKETSTACK", "MIXED"}:
         return "MISS"
     return "MISS"

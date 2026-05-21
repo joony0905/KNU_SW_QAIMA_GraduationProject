@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
+import java.util.Map;
 
 public record PortfolioAnalyzeRequestDto(
         Long portfolioId,
@@ -50,6 +51,7 @@ public record PortfolioAnalyzeRequestDto(
             Integer fetchCalendarDays,
             Integer annualizationFactor,
             String cachePolicy,
+            Map<String, String> overlayCachePolicies,
             List<String> selectedOverlays,
             Boolean includeFrontier,
             Boolean includeDiagnostics,

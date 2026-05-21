@@ -14,6 +14,7 @@ PortfolioType = Literal[
     "PSYCHOLOGICAL",
     "MIN_VOL",
     "MAX_SHARPE",
+    "RISK_ALLOCATION",
     "UTILITY_OPTIMAL",
     "THEORETICAL_UTILITY",
     "OVERLAY_BALANCED",
@@ -31,6 +32,7 @@ WarningSeverity = Literal["INFO", "WARN", "ERROR"]
 class Feature3HoldingRequest(BaseModel):
     stock_code: str = Field(min_length=1)
     company_name: str | None = None
+    exchange_code: str | None = None
     quantity: float = Field(gt=0)
     avg_price: float = Field(gt=0)
     current_price: float | None = Field(default=None, gt=0)
@@ -100,7 +102,7 @@ class Feature3Warning(BaseModel):
 
 class Feature3PricePolicy(BaseModel):
     requested: Literal["ADJUSTED_CLOSE", "CLOSE"]
-    used: Literal["ADJUSTED_CLOSE", "CLOSE"]
+    used: Literal["YAHOO_ADJ_CLOSE", "RAW_CLOSE", "YAHOO_ADJ_CLOSE_WITH_KIS_FALLBACK", "ADJUSTED_CLOSE", "CLOSE"]
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -134,8 +136,8 @@ class Feature3PriceSeriesQuality(BaseModel):
     stock_code: str
     company_name: str | None = None
     requested_price_basis: Literal["ADJUSTED_CLOSE", "CLOSE"]
-    used_price_basis: Literal["ADJUSTED_CLOSE", "CLOSE"]
-    source: Literal["DUMMY", "DB", "KIS", "MARKETSTACK", "MIXED", "EMPTY", "UNAVAILABLE", "CACHE"] = "DUMMY"
+    used_price_basis: Literal["YAHOO_ADJ_CLOSE", "RAW_CLOSE", "ADJUSTED_CLOSE", "CLOSE"]
+    source: Literal["DUMMY", "DB", "KIS", "YAHOO", "MARKETSTACK", "MIXED", "EMPTY", "UNAVAILABLE", "CACHE"] = "DUMMY"
     cache_status: Literal["HIT", "STALE", "MISS", "BYPASSED"] = "BYPASSED"
     expected_trading_day_count: int
     available_price_count: int
@@ -251,6 +253,10 @@ class Feature3AdvancedResult(BaseModel):
     correlation_matrix: dict | None = None
     frontier: list[dict] = Field(default_factory=list)
     expected_return_policy: dict | None = None
+    benchmark_policy: dict | None = None
+    capm_policy: dict | None = None
+    scl: dict | None = None
+    sml: dict | None = None
 
 
 class Feature3FreshnessOverlay(BaseModel):

@@ -233,6 +233,229 @@ button:focus-visible {
   }
 }
 
+/* 분석 리포트 전용: 내용 구조는 유지하고 결과 영역만 부드럽게 등장시킨다 */
+@keyframes qaima-report-in {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes qaima-report-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes qaima-feature2-scan {
+  0% {
+    opacity: 0;
+    transform: translateX(-24%);
+  }
+  28% {
+    opacity: 0.26;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(24%);
+  }
+}
+
+@keyframes qaima-report-pie-render {
+  0% {
+    opacity: 0;
+    clip-path: circle(18% at 50% 50%);
+    transform: rotate(-115deg) scale(0.9);
+    filter: saturate(0.85);
+  }
+  62% {
+    opacity: 1;
+    clip-path: circle(74% at 50% 50%);
+    transform: rotate(10deg) scale(1.035);
+    filter: saturate(1.08);
+  }
+  100% {
+    opacity: 1;
+    clip-path: circle(74% at 50% 50%);
+    transform: rotate(0deg) scale(1);
+    filter: saturate(1);
+  }
+}
+
+@keyframes qaima-report-pie-sweep {
+  0% {
+    opacity: 0.34;
+    transform: rotate(-160deg);
+  }
+  72% {
+    opacity: 0.18;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(120deg);
+  }
+}
+
+.qaima-report-enter {
+  animation: qaima-report-in 0.48s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+.qaima-feature2-report {
+  position: relative;
+}
+
+.qaima-feature2-report::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    rgb(var(--color-accent) / 0.08) 42%,
+    rgb(var(--color-accent) / 0.12) 50%,
+    transparent 62%
+  );
+  animation: qaima-feature2-scan 0.82s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.qaima-report-stagger > * {
+  animation: qaima-report-pop 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  will-change: opacity, transform;
+}
+
+.qaima-scroll-stagger > * {
+  opacity: 0;
+  transform: translateY(18px) scale(0.985);
+  transition:
+    opacity 0.5s cubic-bezier(0.22, 0.61, 0.36, 1),
+    transform 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.qaima-scroll-stagger > *.is-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.qaima-report-stagger > *:nth-child(1) {
+  animation-delay: 0.04s;
+}
+.qaima-report-stagger > *:nth-child(2) {
+  animation-delay: 0.08s;
+}
+.qaima-report-stagger > *:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.qaima-report-stagger > *:nth-child(4) {
+  animation-delay: 0.16s;
+}
+.qaima-report-stagger > *:nth-child(5) {
+  animation-delay: 0.2s;
+}
+.qaima-report-stagger > *:nth-child(6) {
+  animation-delay: 0.24s;
+}
+.qaima-report-stagger > *:nth-child(7) {
+  animation-delay: 0.28s;
+}
+.qaima-report-stagger > *:nth-child(n + 8) {
+  animation-delay: 0.32s;
+}
+
+.qaima-portfolio-report [aria-label*="파이차트"],
+.qaima-portfolio-report [aria-label*="비중 차트"] {
+  position: relative;
+  overflow: hidden;
+  opacity: 0;
+  clip-path: circle(18% at 50% 50%);
+  transform: rotate(-115deg) scale(0.9);
+  transform-origin: center;
+}
+
+.qaima-scroll-stagger > *.is-visible [aria-label*="파이차트"],
+.qaima-scroll-stagger > *.is-visible [aria-label*="비중 차트"] {
+  animation: qaima-report-pie-render 0.86s 0.24s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.qaima-portfolio-report [aria-label*="파이차트"]::after,
+.qaima-portfolio-report [aria-label*="비중 차트"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgb(255 255 255 / 0.54) 46deg,
+    transparent 94deg,
+    transparent 360deg
+  );
+  mix-blend-mode: screen;
+  opacity: 0;
+}
+
+.qaima-scroll-stagger > *.is-visible [aria-label*="파이차트"]::after,
+.qaima-scroll-stagger > *.is-visible [aria-label*="비중 차트"]::after {
+  animation: qaima-report-pie-sweep 0.86s 0.24s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.qaima-portfolio-report .text-\[10px\] {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.qaima-portfolio-report .text-\[11px\] {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.qaima-portfolio-report .text-xs {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.qaima-portfolio-report .text-sm {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.qaima-portfolio-report .text-base {
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qaima-report-enter,
+  .qaima-report-stagger > *,
+  .qaima-scroll-stagger > *,
+  .qaima-feature2-report::before,
+  .qaima-portfolio-report [aria-label*="파이차트"],
+  .qaima-portfolio-report [aria-label*="비중 차트"] {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .qaima-portfolio-report [aria-label*="파이차트"]::after,
+  .qaima-portfolio-report [aria-label*="비중 차트"]::after {
+    display: none !important;
+  }
+}
+
 /* 파이차트가 처음 뜰 때 회전하며 부풀어 오르는 동적 등장 */
 @keyframes qaima-pie-in {
   0% {

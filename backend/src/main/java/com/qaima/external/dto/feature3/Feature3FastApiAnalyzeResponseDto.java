@@ -74,18 +74,22 @@ public record Feature3FastApiAnalyzeResponseDto(
             Integer fetchCalendarDays,
             Integer annualizationFactor,
             Integer minObservations,
-            Double maxMissingRate
+            Double maxMissingRate,
+            Double maxCommonMissingRate
     ) {
         PortfolioAnalyzeResponseDto.DataPolicy toPublicDto() {
             return new PortfolioAnalyzeResponseDto.DataPolicy(
                     returnType, lookbackTradingDays, fetchCalendarDays, annualizationFactor,
-                    minObservations, maxMissingRate
+                    minObservations, maxMissingRate, maxCommonMissingRate
             );
         }
     }
 
     public record DataQuality(
             Integer expectedTradingDayCount,
+            Integer commonPriceCount,
+            Integer commonReturnSampleSize,
+            Double commonMissingRate,
             Integer includedHoldingCount,
             Integer excludedHoldingCount,
             List<PriceSeriesQuality> priceSeries,
@@ -94,6 +98,9 @@ public record Feature3FastApiAnalyzeResponseDto(
         PortfolioAnalyzeResponseDto.DataQuality toPublicDto() {
             return new PortfolioAnalyzeResponseDto.DataQuality(
                     expectedTradingDayCount,
+                    commonPriceCount,
+                    commonReturnSampleSize,
+                    commonMissingRate,
                     includedHoldingCount,
                     excludedHoldingCount,
                     priceSeries != null ? priceSeries.stream().map(PriceSeriesQuality::toPublicDto).toList() : List.of(),
@@ -269,7 +276,11 @@ public record Feature3FastApiAnalyzeResponseDto(
             CovarianceDiagnostics covarianceDiagnostics,
             Map<String, Object> correlationMatrix,
             List<Map<String, Object>> frontier,
-            Map<String, Object> expectedReturnPolicy
+            Map<String, Object> expectedReturnPolicy,
+            Map<String, Object> benchmarkPolicy,
+            Map<String, Object> capmPolicy,
+            Map<String, Object> scl,
+            Map<String, Object> sml
     ) {
         PortfolioAnalyzeResponseDto.AdvancedResult toPublicDto() {
             return new PortfolioAnalyzeResponseDto.AdvancedResult(
@@ -277,7 +288,11 @@ public record Feature3FastApiAnalyzeResponseDto(
                     covarianceDiagnostics != null ? covarianceDiagnostics.toPublicDto() : null,
                     correlationMatrix,
                     frontier != null ? frontier : List.of(),
-                    expectedReturnPolicy
+                    expectedReturnPolicy,
+                    benchmarkPolicy,
+                    capmPolicy,
+                    scl,
+                    sml
             );
         }
     }

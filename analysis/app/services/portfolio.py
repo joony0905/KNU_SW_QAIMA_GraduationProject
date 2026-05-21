@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import re
 
 import numpy as np
@@ -30,9 +30,12 @@ from app.models.feature3 import (
     ProfileType,
     RiskLevel,
 )
+from app.services.feature3_benchmark_data import Feature3BenchmarkSeriesResult, fetch_feature3_benchmark_series
 from app.services.feature3_price_data import Feature3PriceSeriesResult, fetch_feature3_price_series
 
+KST = timezone(timedelta(hours=9))
 MIN_OBSERVATIONS = 120
+CAPM_PARTIAL_MIN_SAMPLE = 60
 MAX_MISSING_RATE = 0.20
 MAX_COMMON_MISSING_RATE = 0.20
 MAX_ASSET_WEIGHT = 0.40
@@ -48,6 +51,10 @@ HISTORICAL_CONFIDENCE_SAMPLE_DAYS = 504
 VOLATILITY_CONFIDENCE_REFERENCE = 0.30
 VOLATILITY_PENALTY_MIN = 0.40
 MISSING_PENALTY_MIN = 0.50
+DEFAULT_CAPM_BENCHMARK_CODE = "00001"
+KOSDAQ_CAPM_BENCHMARK_CODE = "11001"
+KOSPI_EXCHANGE_CODES = {"KOSPI", "XKRX", "KRX", "STK", "KS"}
+KOSDAQ_EXCHANGE_CODES = {"KOSDAQ", "XKOS", "KQ", "KOSDAQ_GLOBAL"}
 
 
 def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
@@ -75,10 +82,21 @@ def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
         for result in price_results
         for warning in result.warnings
     ]
+    benchmark_selections, benchmark_selection_warnings = _benchmark_selections_for_holdings(req.holdings)
+    benchmark_results = _fetch_capm_benchmarks(
+        benchmark_codes={selection["benchmarkCode"] for selection in benchmark_selections.values()},
+        lookback_trading_days=req.options.lookback_trading_days,
+        fetch_calendar_days=req.options.fetch_calendar_days,
+    )
+    benchmark_warnings = [
+        warning
+        for result in benchmark_results.values()
+        for warning in result.warnings
+    ] + benchmark_selection_warnings
 
     # 현재 구현: 가격 시계열이 충분하면 실제 Ledoit-Wolf 기반 CURRENT 리스크를 계산한다.
     # 진행 예정: Phase 9에서 Feature1/2 overlay를 이 core 계산과 분리된 설명 레이어로 붙인다.
-    risk_context = _build_risk_context(req, price_results, risk_free_rate)
+    risk_context = _build_risk_context(req, price_results, risk_free_rate, benchmark_results, benchmark_selections)
     current = _compute_current_portfolio(req, price_results, target_volatility, risk_context, risk_free_rate)
     weights = current.weights
     current_volatility = current.volatility
@@ -130,6 +148,8 @@ def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
             price_warnings
             + _core_warning_if_dummy(current)
             + covariance_warnings
+            + (risk_context.get("capm_warnings") or [])
+            + benchmark_warnings
             + _excluded_holding_warnings(excluded_holdings)
             + candidate_warnings
             + advanced_warnings
@@ -139,11 +159,16 @@ def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
     risk_drivers = _build_risk_drivers(current, suitability)
 
     now = datetime.now(timezone.utc).isoformat()
+    price_policy_used = _portfolio_price_basis(req.options.price_basis, risk_context["eligible_results"], price_results)
+    price_policy_warnings = _warning_codes(price_warnings)
+    if price_policy_used == "YAHOO_ADJ_CLOSE_WITH_KIS_FALLBACK" and "MIXED_PRICE_BASIS_USED" not in price_policy_warnings:
+        price_policy_warnings.append("MIXED_PRICE_BASIS_USED")
+
     policy = Feature3PolicyEcho(
         price_policy=Feature3PricePolicy(
             requested=req.options.price_basis,
-            used="CLOSE" if any(result.used_price_basis == "CLOSE" for result in price_results) else req.options.price_basis,
-            warnings=_warning_codes(price_warnings),
+            used=price_policy_used,
+            warnings=price_policy_warnings,
         ),
         risk_profile=Feature3RiskProfileEcho(
             risk_tolerance_score=round(score, 4),
@@ -222,6 +247,10 @@ def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
             correlation_matrix=risk_context["correlation_matrix"],
             frontier=frontier,
             expected_return_policy=expected_return_policy,
+            benchmark_policy=risk_context.get("benchmark_policy"),
+            capm_policy=risk_context.get("capm_policy"),
+            scl=risk_context.get("scl"),
+            sml=risk_context.get("sml"),
         ),
         overlays=Feature3OverlayResult(
             overlay_signals=req.overlay_signals,
@@ -407,10 +436,75 @@ def _compute_current_portfolio(
     )
 
 
+def _benchmark_selections_for_holdings(holdings) -> tuple[dict[str, dict], list[Feature3Warning]]:
+    selections: dict[str, dict] = {}
+    warnings: list[Feature3Warning] = []
+    selected_codes: set[str] = set()
+    for holding in holdings:
+        stock_code = holding.stock_code
+        benchmark_code, reason, warning_code = _benchmark_code_for_exchange(holding.exchange_code)
+        selected_codes.add(benchmark_code)
+        selections[stock_code] = {
+            "stockCode": stock_code,
+            "exchangeCode": holding.exchange_code,
+            "benchmarkCode": benchmark_code,
+            "selectionReason": reason,
+        }
+        if warning_code:
+            warnings.append(Feature3Warning(
+                code=warning_code,
+                message="Holding exchange was unavailable; KOSPI benchmark proxy was selected for CAPM.",
+                user_message="상장시장 정보를 확인하지 못해 KOSPI 벤치마크를 대체 기준으로 사용합니다.",
+                severity="WARN",
+                target=stock_code,
+            ))
+    if len(selected_codes) > 1:
+        warnings.append(Feature3Warning(
+            code="MIXED_MARKET_BENCHMARKS_USED",
+            message="Portfolio holdings use more than one listing-market benchmark for CAPM.",
+            user_message="KOSPI/KOSDAQ 종목이 함께 있어 상장시장별 벤치마크로 CAPM을 계산합니다.",
+            severity="INFO",
+            target="advanced.benchmarkPolicy",
+        ))
+    return selections, warnings
+
+
+def _benchmark_code_for_exchange(exchange_code: str | None) -> tuple[str, str, str | None]:
+    normalized = _normalize_exchange_code(exchange_code)
+    if normalized in KOSDAQ_EXCHANGE_CODES:
+        return KOSDAQ_CAPM_BENCHMARK_CODE, "KOSDAQ_LISTING_MARKET", None
+    if normalized in KOSPI_EXCHANGE_CODES:
+        return DEFAULT_CAPM_BENCHMARK_CODE, "KOSPI_LISTING_MARKET", None
+    return DEFAULT_CAPM_BENCHMARK_CODE, "UNKNOWN_MARKET_KOSPI_PROXY", "UNKNOWN_MARKET_KOSPI_PROXY"
+
+
+def _normalize_exchange_code(exchange_code: str | None) -> str:
+    if not exchange_code:
+        return ""
+    return re.sub(r"[^A-Z0-9]", "", exchange_code.upper())
+
+
+def _fetch_capm_benchmarks(
+    benchmark_codes: set[str],
+    lookback_trading_days: int,
+    fetch_calendar_days: int,
+) -> dict[str, Feature3BenchmarkSeriesResult]:
+    results: dict[str, Feature3BenchmarkSeriesResult] = {}
+    for benchmark_code in sorted(benchmark_codes or {DEFAULT_CAPM_BENCHMARK_CODE}):
+        results[benchmark_code] = fetch_feature3_benchmark_series(
+            benchmark_code=benchmark_code,
+            lookback_trading_days=lookback_trading_days,
+            fetch_calendar_days=fetch_calendar_days,
+        )
+    return results
+
+
 def _build_risk_context(
     req: PortfolioAnalyzeRequest,
     price_results: list[Feature3PriceSeriesResult],
     risk_free_rate: float,
+    benchmark_results: dict[str, Feature3BenchmarkSeriesResult] | None = None,
+    benchmark_selections: dict[str, dict] | None = None,
 ) -> dict:
     eligible_results = [
         result
@@ -438,6 +532,11 @@ def _build_risk_context(
         "display_annual_mu": None,
         "is_display_capped_by_asset": None,
         "expected_return_estimation": None,
+        "benchmark_policy": _benchmark_policy_multi(benchmark_results or {}, benchmark_selections or {}, req.options.lookback_trading_days),
+        "capm_policy": _empty_capm_policy("UNAVAILABLE"),
+        "scl": None,
+        "sml": None,
+        "capm_warnings": [],
     }
     if not eligible_results:
         return {**empty, "fallback_reason": "NO_ELIGIBLE_HOLDINGS"}
@@ -469,6 +568,8 @@ def _build_risk_context(
         covariance_annual=covariance_annual,
         annualization_factor=req.options.annualization_factor,
         risk_free_rate=risk_free_rate,
+        benchmark_results=benchmark_results or {},
+        benchmark_selections=benchmark_selections or {},
     )
     annual_mu = expected_return_estimation["annual_mu"]
     raw_historical_annual_mu = expected_return_estimation["raw_historical_annual_mu"]
@@ -493,16 +594,23 @@ def _build_risk_context(
         "correlation_matrix": _correlation_matrix_payload(eligible_results, covariance_annual),
         "annual_mu": annual_mu,
         "raw_historical_annual_mu": raw_historical_annual_mu,
+        "historical_annual_mu": expected_return_estimation["historical_annual_mu"],
+        "capm_annual_mu": expected_return_estimation["capm_annual_mu"],
         "display_annual_mu": display_annual_mu,
         "is_display_capped_by_asset": is_display_capped_by_asset,
         "expected_return_estimation": expected_return_estimation["policy"],
+        "benchmark_policy": expected_return_estimation["benchmark_policy"],
+        "capm_policy": expected_return_estimation["capm_policy"],
+        "scl": expected_return_estimation["scl"],
+        "sml": expected_return_estimation["sml"],
+        "capm_warnings": expected_return_estimation["capm_warnings"],
     }
 
 
 def _common_dates(price_results: list[Feature3PriceSeriesResult]) -> list:
     common = None
     for result in price_results:
-        dates = {point.ts.date() for point in result.points}
+        dates = set(_close_by_trading_date(result.points))
         common = dates if common is None else common & dates
     return sorted(common or [])
 
@@ -514,7 +622,7 @@ def _common_missing_rate(expected_trading_day_count: int, common_price_count: in
 
 def _log_return_matrix(price_results: list[Feature3PriceSeriesResult], common_dates: list) -> np.ndarray:
     close_by_result = [
-        {point.ts.date(): point.close for point in result.points}
+        _close_by_trading_date(result.points)
         for result in price_results
     ]
     closes = np.array(
@@ -527,12 +635,38 @@ def _log_return_matrix(price_results: list[Feature3PriceSeriesResult], common_da
     return np.diff(np.log(closes), axis=0)
 
 
+def _trading_date(ts) -> object:
+    if ts is None:
+        return None
+    try:
+        if ts.tzinfo is None:
+            return ts.date()
+        return ts.astimezone(KST).date()
+    except Exception:
+        return None
+
+
+def _close_by_trading_date(points) -> dict:
+    by_date = {}
+    for point in sorted(
+        [point for point in points if point.close > 0 and np.isfinite(point.close)],
+        key=lambda item: item.ts,
+    ):
+        trading_date = _trading_date(point.ts)
+        if trading_date is None:
+            continue
+        by_date[trading_date] = point.close
+    return by_date
+
+
 def _estimate_expected_returns(
     returns_matrix: np.ndarray,
     eligible_results: list[Feature3PriceSeriesResult],
     covariance_annual: np.ndarray,
     annualization_factor: int,
     risk_free_rate: float,
+    benchmark_results: dict[str, Feature3BenchmarkSeriesResult] | None = None,
+    benchmark_selections: dict[str, dict] | None = None,
 ) -> dict:
     raw_historical_annual_mu = np.mean(returns_matrix, axis=0) * annualization_factor
     winsorized = np.apply_along_axis(
@@ -545,7 +679,8 @@ def _estimate_expected_returns(
         arr=returns_matrix,
     )
     winsorized_annual_mu = np.mean(winsorized, axis=0) * annualization_factor
-    annual_volatility = np.sqrt(np.maximum(np.diag(covariance_annual), 0.0))
+    optimizer_annual_volatility = np.sqrt(np.maximum(np.diag(covariance_annual), 0.0))
+    realized_annual_volatility = np.std(returns_matrix, axis=0, ddof=1) * np.sqrt(annualization_factor)
     sample_size = int(returns_matrix.shape[0])
     base_confidence = _clamp_float(
         sample_size / HISTORICAL_CONFIDENCE_SAMPLE_DAYS,
@@ -555,7 +690,7 @@ def _estimate_expected_returns(
     vol_penalty = np.array([
         _clamp_float(VOLATILITY_CONFIDENCE_REFERENCE / vol, VOLATILITY_PENALTY_MIN, 1.0)
         if vol > 1e-9 and np.isfinite(vol) else VOLATILITY_PENALTY_MIN
-        for vol in annual_volatility
+        for vol in optimizer_annual_volatility
     ], dtype=float)
     missing_penalty = np.array([
         _clamp_float(1.0 - result.missing_rate, MISSING_PENALTY_MIN, 1.0)
@@ -563,17 +698,31 @@ def _estimate_expected_returns(
     ], dtype=float)
     historical_confidence = np.clip(base_confidence * vol_penalty * missing_penalty, 0.0, HISTORICAL_CONFIDENCE_MAX)
     prior_return = risk_free_rate + EQUITY_RISK_PREMIUM
-    annual_mu = historical_confidence * winsorized_annual_mu + (1.0 - historical_confidence) * prior_return
+    historical_annual_mu = historical_confidence * winsorized_annual_mu + (1.0 - historical_confidence) * prior_return
+    capm_estimation = _estimate_capm_blended_returns(
+        eligible_results=eligible_results,
+        benchmark_results=benchmark_results or {},
+        benchmark_selections=benchmark_selections or {},
+        historical_annual_mu=historical_annual_mu,
+        historical_confidence=historical_confidence,
+        realized_annual_volatility=realized_annual_volatility,
+        optimizer_annual_volatility=optimizer_annual_volatility,
+        annualization_factor=annualization_factor,
+        risk_free_rate=risk_free_rate,
+    )
+    annual_mu = capm_estimation["blended_annual_mu"]
     display_annual_mu = np.clip(annual_mu, DISPLAY_EXPECTED_RETURN_CAP_LOWER, DISPLAY_EXPECTED_RETURN_CAP_UPPER)
     is_display_capped = np.abs(display_annual_mu - annual_mu) > 1e-12
 
     return {
         "annual_mu": annual_mu,
         "raw_historical_annual_mu": raw_historical_annual_mu,
+        "historical_annual_mu": historical_annual_mu,
+        "capm_annual_mu": capm_estimation["capm_annual_mu"],
         "display_annual_mu": display_annual_mu,
         "is_display_capped_by_asset": is_display_capped,
         "policy": {
-            "estimator": "SHRINKED_WINSORIZED_MEAN",
+            "estimator": "BLENDED_HISTORICAL_CAPM",
             "returnType": "LOG_RETURN",
             "annualizationFactor": annualization_factor,
             "winsorizeLowerQuantile": WINSORIZE_LOWER_QUANTILE,
@@ -587,12 +736,588 @@ def _estimate_expected_returns(
             "averageHistoricalConfidence": round(float(np.mean(historical_confidence)), 6),
             "averageVolPenalty": round(float(np.mean(vol_penalty)), 6),
             "averageMissingPenalty": round(float(np.mean(missing_penalty)), 6),
+            "capmFormula": "capmExpectedReturnAnnual = riskFreeRateAnnual + betaDaily * equityRiskPremiumAnnual",
+            "blendFormula": "blendedExpectedReturn = historicalWeight * historicalExpectedReturn + capmWeight * capmExpectedReturn",
+            "capmWeightFormula": capm_estimation["weight_formula"],
+            "capmSamplePolicy": {
+                "normalMinCommonSampleSize": MIN_OBSERVATIONS,
+                "partialMinCommonSampleSize": CAPM_PARTIAL_MIN_SAMPLE,
+                "belowPartialMin": "CAPM_EXCLUDED",
+            },
+            "benchmarkPolicy": capm_estimation["benchmark_policy"],
+            "assets": capm_estimation["assets"],
+            "averageCapmWeight": capm_estimation["average_capm_weight"],
+            "averageBlendConfidence": capm_estimation["average_confidence"],
             "displayCapLower": DISPLAY_EXPECTED_RETURN_CAP_LOWER,
             "displayCapUpper": DISPLAY_EXPECTED_RETURN_CAP_UPPER,
             "hasDisplayCappedAssets": bool(np.any(is_display_capped)),
             "warning": "EXPECTED_RETURN_ESTIMATION_UNSTABLE",
         },
+        "benchmark_policy": capm_estimation["benchmark_policy"],
+        "capm_policy": capm_estimation["capm_policy"],
+        "scl": capm_estimation["scl"],
+        "sml": capm_estimation["sml"],
+        "capm_warnings": capm_estimation["warnings"],
     }
+
+
+def _estimate_capm_blended_returns(
+    eligible_results: list[Feature3PriceSeriesResult],
+    benchmark_results: dict[str, Feature3BenchmarkSeriesResult],
+    benchmark_selections: dict[str, dict],
+    historical_annual_mu: np.ndarray,
+    historical_confidence: np.ndarray,
+    realized_annual_volatility: np.ndarray,
+    optimizer_annual_volatility: np.ndarray,
+    annualization_factor: int,
+    risk_free_rate: float,
+) -> dict:
+    asset_count = len(eligible_results)
+    capm_annual_mu = np.full(asset_count, np.nan, dtype=float)
+    blended_annual_mu = np.array(historical_annual_mu, dtype=float)
+    capm_weights = np.zeros(asset_count, dtype=float)
+    warnings: list[Feature3Warning] = []
+    asset_rows: list[dict] = []
+    scl_series: list[dict] = []
+    benchmark_policy = _benchmark_policy_multi(benchmark_results, benchmark_selections, 0)
+    weight_formula = (
+        "capmWeight = sampleFactor * benchmarkSourceFactor * benchmarkCoverageFactor "
+        "* rSquaredFactor * correlationFactor * volatilityReliabilityFactor; "
+        "historicalWeight = 1 - capmWeight"
+    )
+    market_returns_by_benchmark = {
+        code: _dated_log_returns(result.points)
+        for code, result in benchmark_results.items()
+    }
+
+    for idx, result in enumerate(eligible_results):
+        asset_warnings: list[str] = []
+        selection = _benchmark_selection_for_stock(result.stock_code, benchmark_selections)
+        benchmark_code = selection["benchmarkCode"]
+        benchmark_selection_reason = selection["selectionReason"]
+        benchmark_result = benchmark_results.get(benchmark_code)
+        benchmark_name = benchmark_result.benchmark_name if benchmark_result else None
+        benchmark_source = benchmark_result.source if benchmark_result else "UNAVAILABLE"
+        if benchmark_selection_reason == "UNKNOWN_MARKET_KOSPI_PROXY":
+            asset_warnings.append("UNKNOWN_MARKET_KOSPI_PROXY")
+        if benchmark_result is not None and any(warning.code == "BENCHMARK_FETCH_FAILED" for warning in benchmark_result.warnings):
+            asset_warnings.append("BENCHMARK_FETCH_FAILED_FOR_MARKET")
+        asset_returns = _dated_log_returns(result.points)
+        market_returns = market_returns_by_benchmark.get(benchmark_code, {})
+        common_dates = sorted(set(asset_returns) & set(market_returns))
+        common_sample_size = len(common_dates)
+        capm_expected_return: float | None = None
+        beta: float | None = None
+        daily_alpha: float | None = None
+        annual_alpha: float | None = None
+        correlation: float | None = None
+        r_squared: float | None = None
+        volatility_factor: float | None = None
+        confidence = 0.0
+        status = "EXCLUDED"
+
+        if not _benchmark_candidate_for_capm(benchmark_result):
+            asset_warnings.append("CAPM_DISABLED_BENCHMARK_UNAVAILABLE")
+        elif common_sample_size < CAPM_PARTIAL_MIN_SAMPLE:
+            asset_warnings.append("CAPM_COMMON_SAMPLE_INSUFFICIENT")
+        else:
+            asset_vector = np.array([asset_returns[date] for date in common_dates], dtype=float)
+            market_vector = np.array([market_returns[date] for date in common_dates], dtype=float)
+            market_variance = float(np.var(market_vector, ddof=1)) if common_sample_size > 1 else 0.0
+            if market_variance <= 1e-12 or not np.isfinite(market_variance):
+                asset_warnings.append("CAPM_BETA_UNAVAILABLE")
+            else:
+                covariance = float(np.cov(asset_vector, market_vector, ddof=1)[0, 1])
+                beta = covariance / market_variance
+                daily_alpha = float(np.mean(asset_vector) - beta * np.mean(market_vector))
+                annual_alpha = daily_alpha * annualization_factor
+                asset_std = float(np.std(asset_vector, ddof=1))
+                market_std = float(np.std(market_vector, ddof=1))
+                if asset_std > 1e-12 and market_std > 1e-12:
+                    correlation = float(np.corrcoef(asset_vector, market_vector)[0, 1])
+                    if np.isfinite(correlation):
+                        r_squared = correlation * correlation
+                if r_squared is None:
+                    asset_warnings.append("CAPM_CORRELATION_UNAVAILABLE")
+                elif r_squared < 0.10:
+                    asset_warnings.append("CAPM_LOW_R_SQUARED")
+
+                capm_expected_return = risk_free_rate + beta * EQUITY_RISK_PREMIUM
+                source_factor = _benchmark_source_factor(benchmark_result.source)
+                sample_factor = _capm_sample_factor(common_sample_size)
+                coverage_factor = _clamp_float(1.0 - benchmark_result.missing_rate, 0.50, 1.0)
+                r_squared_factor = _clamp_float((r_squared or 0.0) / 0.25, 0.20, 1.0)
+                correlation_factor = _clamp_float(abs(correlation or 0.0) / 0.60, 0.20, 1.0)
+                volatility_factor = (
+                    _clamp_float(VOLATILITY_CONFIDENCE_REFERENCE / realized_annual_volatility[idx], VOLATILITY_PENALTY_MIN, 1.0)
+                    if realized_annual_volatility[idx] > 1e-9 and np.isfinite(realized_annual_volatility[idx])
+                    else VOLATILITY_PENALTY_MIN
+                )
+                if volatility_factor < 0.75:
+                    asset_warnings.append("CAPM_HIGH_VOLATILITY")
+                confidence = _clamp_float(
+                    sample_factor * source_factor * coverage_factor * r_squared_factor * correlation_factor * volatility_factor,
+                    0.0,
+                    1.0,
+                )
+                capm_weights[idx] = confidence
+                historical_weight = 1.0 - capm_weights[idx]
+                blended_annual_mu[idx] = historical_weight * historical_annual_mu[idx] + capm_weights[idx] * capm_expected_return
+                capm_annual_mu[idx] = capm_expected_return
+                status = "APPLIED" if common_sample_size >= MIN_OBSERVATIONS else "PARTIAL"
+                if status == "PARTIAL":
+                    asset_warnings.append("CAPM_PARTIAL_LOW_COMMON_SAMPLE")
+                if confidence < 0.30:
+                    asset_warnings.append("BLENDED_RETURN_CONFIDENCE_LOW")
+
+                scl_series.append({
+                        "stockCode": result.stock_code,
+                        "companyName": result.company_name,
+                        "benchmarkCode": benchmark_code,
+                        "benchmarkName": benchmark_name,
+                        "benchmarkSource": benchmark_source,
+                        "benchmarkSelectionReason": benchmark_selection_reason,
+                    "line": {
+                        "dailyAlpha": _round_optional(daily_alpha),
+                        "annualAlpha": _round_optional(annual_alpha),
+                        "beta": _round_optional(beta),
+                    },
+                    "points": [
+                        {
+                            "date": date.isoformat(),
+                            "marketReturn": round(float(market_returns[date]), 6),
+                            "assetReturn": round(float(asset_returns[date]), 6),
+                        }
+                        for date in common_dates
+                    ],
+                })
+
+        historical_weight = 1.0 - capm_weights[idx]
+        asset_rows.append(_capm_asset_row(
+            result=result,
+            benchmark_code=benchmark_code,
+            benchmark_name=benchmark_name,
+            benchmark_source=benchmark_source,
+            benchmark_selection_reason=benchmark_selection_reason,
+            benchmark_mode=benchmark_policy.get("mode"),
+            historical_expected_return=historical_annual_mu[idx],
+            capm_expected_return=capm_expected_return,
+            blended_expected_return=blended_annual_mu[idx],
+            historical_weight=historical_weight,
+            capm_weight=capm_weights[idx],
+            confidence=confidence,
+            status=status,
+            warnings=asset_warnings,
+            beta=beta,
+            daily_alpha=daily_alpha,
+            annual_alpha=annual_alpha,
+            correlation=correlation,
+            r_squared=r_squared,
+            common_sample_size=common_sample_size,
+            historical_confidence=historical_confidence[idx],
+            realized_annual_volatility=realized_annual_volatility[idx],
+            optimizer_annual_volatility=optimizer_annual_volatility[idx],
+            volatility_reliability_factor=volatility_factor,
+        ))
+
+    if benchmark_policy.get("mode") == "MULTI_BENCHMARK":
+        warnings.append(Feature3Warning(
+            code="MIXED_MARKET_BENCHMARKS_USED",
+            message="CAPM used listing-market benchmarks by asset.",
+            user_message="상장시장별 벤치마크를 분리해 CAPM을 계산했습니다.",
+            severity="INFO",
+            target="advanced.benchmarkPolicy",
+        ))
+    warnings.extend(_capm_asset_warnings(asset_rows))
+    return _capm_payload(
+        benchmark_policy=benchmark_policy,
+        capm_annual_mu=np.nan_to_num(capm_annual_mu, nan=0.0),
+        blended_annual_mu=blended_annual_mu,
+        capm_weights=capm_weights,
+        asset_rows=asset_rows,
+        scl_series=scl_series,
+        risk_free_rate=risk_free_rate,
+        weight_formula=weight_formula,
+        warnings=warnings,
+    )
+
+
+def _capm_payload(
+    benchmark_policy: dict,
+    capm_annual_mu: np.ndarray,
+    blended_annual_mu: np.ndarray,
+    capm_weights: np.ndarray,
+    asset_rows: list[dict],
+    scl_series: list[dict],
+    risk_free_rate: float,
+    weight_formula: str,
+    warnings: list[Feature3Warning],
+) -> dict:
+    applied = [row for row in asset_rows if row["status"] in {"APPLIED", "PARTIAL"}]
+    benchmark_items = benchmark_policy.get("benchmarks") if isinstance(benchmark_policy, dict) else []
+    groups = []
+    for item in benchmark_items if isinstance(benchmark_items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        code = item.get("benchmarkCode")
+        group_rows = [row for row in asset_rows if row.get("benchmarkCode") == code]
+        group_applied = [row for row in group_rows if row["status"] in {"APPLIED", "PARTIAL"}]
+        max_beta = max([abs(float(row.get("beta") or 0.0)) for row in group_applied] + [1.0])
+        line_betas = [-max_beta, 0.0, max_beta]
+        groups.append({
+            "benchmarkCode": code,
+            "benchmarkName": item.get("benchmarkName"),
+            "source": item.get("source"),
+            "availablePriceCount": item.get("availablePriceCount"),
+            "missingRate": item.get("missingRate"),
+            "capmCandidate": item.get("capmCandidate"),
+            "warnings": item.get("warnings") or [],
+            "line": _sml_line(line_betas, risk_free_rate),
+            "assets": _sml_assets(group_rows),
+        })
+    if not groups:
+        max_beta = max([abs(float(row.get("beta") or 0.0)) for row in applied] + [1.0])
+        groups.append({
+            "benchmarkCode": benchmark_policy.get("benchmarkCode") if isinstance(benchmark_policy, dict) else DEFAULT_CAPM_BENCHMARK_CODE,
+            "benchmarkName": benchmark_policy.get("benchmarkName") if isinstance(benchmark_policy, dict) else None,
+            "source": benchmark_policy.get("source") if isinstance(benchmark_policy, dict) else "UNAVAILABLE",
+            "line": _sml_line([-max_beta, 0.0, max_beta], risk_free_rate),
+            "assets": _sml_assets(asset_rows),
+        })
+    primary_group = groups[0]
+    sml = {
+        "mode": benchmark_policy.get("mode", "SINGLE_BENCHMARK") if isinstance(benchmark_policy, dict) else "SINGLE_BENCHMARK",
+        "summary": {
+            "riskFreeRate": risk_free_rate,
+            "equityRiskPremium": EQUITY_RISK_PREMIUM,
+            "returnUnit": "ANNUAL",
+            "lineFormula": "expectedReturn = riskFreeRate + beta * equityRiskPremium",
+            "equityRiskPremiumPolicy": "SHARED_POLICY_VALUE",
+        },
+        "line": primary_group.get("line") or [],
+        "assets": _sml_assets(asset_rows),
+        "groups": groups,
+    }
+    return {
+        "capm_annual_mu": capm_annual_mu,
+        "blended_annual_mu": blended_annual_mu,
+        "average_capm_weight": round(float(np.mean(capm_weights)) if capm_weights.size else 0.0, 6),
+        "average_confidence": round(float(np.mean([row["confidence"] for row in asset_rows])) if asset_rows else 0.0, 6),
+        "assets": asset_rows,
+        "benchmark_policy": benchmark_policy,
+        "capm_policy": {
+            "status": "AVAILABLE" if applied else "DISABLED",
+            "model": "CAPM",
+            "returnUnit": "ANNUAL",
+            "betaReturnUnit": "DAILY_LOG_RETURN",
+            "alphaFields": ["dailyAlpha", "annualAlpha"],
+            "riskFreeRate": risk_free_rate,
+            "equityRiskPremium": EQUITY_RISK_PREMIUM,
+            "weightFormula": weight_formula,
+            "weightsSumToOne": True,
+            "appliedAssetCount": len(applied),
+            "partialAssetCount": sum(1 for row in asset_rows if row["status"] == "PARTIAL"),
+            "excludedAssetCount": sum(1 for row in asset_rows if row["status"] == "EXCLUDED"),
+            "warnings": _warning_codes(warnings),
+        },
+        "scl": {
+            "summary": {
+                "model": "Security Characteristic Line",
+                "x": "benchmarkDailyLogReturn",
+                "y": "assetDailyLogReturn",
+                "alphaUnit": "DAILY_AND_ANNUAL",
+                "assetCount": len(asset_rows),
+            },
+            "assets": [
+                {
+                    "stockCode": row["stockCode"],
+                    "companyName": row.get("companyName"),
+                    "benchmarkCode": row.get("benchmarkCode"),
+                    "benchmarkName": row.get("benchmarkName"),
+                    "benchmarkSource": row.get("benchmarkSource"),
+                    "beta": row.get("beta"),
+                    "dailyAlpha": row.get("dailyAlpha"),
+                    "annualAlpha": row.get("annualAlpha"),
+                    "rSquared": row.get("rSquared"),
+                    "correlation": row.get("correlation"),
+                    "commonSampleSize": row.get("commonSampleSize"),
+                    "status": row.get("status"),
+                    "warnings": row.get("warnings") or [],
+                }
+                for row in asset_rows
+            ],
+            "series": scl_series,
+        },
+        "sml": sml,
+        "warnings": warnings,
+        "weight_formula": weight_formula,
+    }
+
+
+def _sml_line(line_betas: list[float], risk_free_rate: float) -> list[dict]:
+    return [
+        {
+            "beta": round(float(beta), 6),
+            "expectedReturn": round(float(risk_free_rate + beta * EQUITY_RISK_PREMIUM), 6),
+        }
+        for beta in line_betas
+    ]
+
+
+def _sml_assets(asset_rows: list[dict]) -> list[dict]:
+    return [
+        {
+            "stockCode": row["stockCode"],
+            "companyName": row.get("companyName"),
+            "benchmarkCode": row.get("benchmarkCode"),
+            "benchmarkName": row.get("benchmarkName"),
+            "benchmarkSource": row.get("benchmarkSource"),
+            "beta": row.get("beta"),
+            "historicalExpectedReturn": row.get("historicalExpectedReturn"),
+            "capmExpectedReturn": row.get("capmExpectedReturn"),
+            "blendedExpectedReturn": row.get("blendedExpectedReturn"),
+            "capmWeight": row.get("capmWeight"),
+            "status": row.get("status"),
+        }
+        for row in asset_rows
+    ]
+
+
+def _capm_asset_row(
+    result: Feature3PriceSeriesResult,
+    historical_expected_return: float,
+    capm_expected_return: float | None,
+    blended_expected_return: float,
+    historical_weight: float,
+    capm_weight: float,
+    confidence: float,
+    status: str,
+    warnings: list[str],
+    benchmark_code: str | None = None,
+    benchmark_name: str | None = None,
+    benchmark_source: str | None = None,
+    benchmark_selection_reason: str | None = None,
+    benchmark_mode: str | None = None,
+    beta: float | None = None,
+    daily_alpha: float | None = None,
+    annual_alpha: float | None = None,
+    correlation: float | None = None,
+    r_squared: float | None = None,
+    common_sample_size: int = 0,
+    historical_confidence: float | None = None,
+    realized_annual_volatility: float | None = None,
+    optimizer_annual_volatility: float | None = None,
+    volatility_reliability_factor: float | None = None,
+) -> dict:
+    return {
+        "stockCode": result.stock_code,
+        "companyName": result.company_name,
+        "benchmarkCode": benchmark_code,
+        "benchmarkName": benchmark_name,
+        "benchmarkSource": benchmark_source,
+        "benchmarkSelectionReason": benchmark_selection_reason,
+        "benchmarkMode": benchmark_mode,
+        "historicalExpectedReturn": round(float(historical_expected_return), 6),
+        "capmExpectedReturn": _round_optional(capm_expected_return),
+        "blendedExpectedReturn": round(float(blended_expected_return), 6),
+        "historicalWeight": round(float(historical_weight), 6),
+        "capmWeight": round(float(capm_weight), 6),
+        "confidence": round(float(confidence), 6),
+        "historicalConfidence": _round_optional(historical_confidence),
+        "beta": _round_optional(beta),
+        "dailyAlpha": _round_optional(daily_alpha),
+        "annualAlpha": _round_optional(annual_alpha),
+        "correlation": _round_optional(correlation),
+        "rSquared": _round_optional(r_squared),
+        "commonSampleSize": int(common_sample_size),
+        "annualVolatility": _round_optional(realized_annual_volatility),
+        "realizedAnnualVolatility": _round_optional(realized_annual_volatility),
+        "optimizerAnnualVolatility": _round_optional(optimizer_annual_volatility),
+        "volatilityReliabilityFactor": _round_optional(volatility_reliability_factor),
+        "status": status,
+        "warnings": list(dict.fromkeys(warnings)),
+    }
+
+
+def _benchmark_policy(benchmark_result: Feature3BenchmarkSeriesResult | None, fallback_expected: int) -> dict:
+    if benchmark_result is None:
+        return {
+            "benchmarkCode": DEFAULT_CAPM_BENCHMARK_CODE,
+            "benchmarkName": None,
+            "source": "UNAVAILABLE",
+            "benchmarkAvailable": False,
+            "expectedTradingDayCount": fallback_expected,
+            "availablePriceCount": 0,
+            "missingRate": 1.0,
+            "capmCandidate": False,
+            "candidateRule": "source in DB,KIS_BACKFILLED or source DB_INSUFFICIENT with availablePriceCount > 0",
+            "warnings": ["CAPM_DISABLED_BENCHMARK_UNAVAILABLE"],
+        }
+    return {
+        "benchmarkCode": benchmark_result.benchmark_code,
+        "benchmarkName": benchmark_result.benchmark_name,
+        "source": benchmark_result.source,
+        "benchmarkAvailable": benchmark_result.benchmark_available,
+        "expectedTradingDayCount": benchmark_result.expected_trading_day_count,
+        "availablePriceCount": benchmark_result.available_price_count,
+        "missingRate": round(float(benchmark_result.missing_rate), 6),
+        "capmCandidate": _benchmark_candidate_for_capm(benchmark_result),
+        "candidateRule": "source in DB,KIS_BACKFILLED or source DB_INSUFFICIENT with availablePriceCount > 0",
+        "warnings": _warning_codes(benchmark_result.warnings),
+    }
+
+
+def _benchmark_policy_multi(
+    benchmark_results: dict[str, Feature3BenchmarkSeriesResult],
+    benchmark_selections: dict[str, dict],
+    fallback_expected: int,
+) -> dict:
+    holding_counts: dict[str, int] = {}
+    warnings: list[str] = []
+    for selection in benchmark_selections.values():
+        code = selection.get("benchmarkCode") or DEFAULT_CAPM_BENCHMARK_CODE
+        holding_counts[code] = holding_counts.get(code, 0) + 1
+        if selection.get("selectionReason") == "UNKNOWN_MARKET_KOSPI_PROXY":
+            warnings.append("UNKNOWN_MARKET_KOSPI_PROXY")
+    if len(holding_counts) > 1:
+        warnings.append("MIXED_MARKET_BENCHMARKS_USED")
+
+    benchmark_items = []
+    for code in sorted(holding_counts or {DEFAULT_CAPM_BENCHMARK_CODE: 0}):
+        item = _benchmark_policy(benchmark_results.get(code), fallback_expected)
+        item["benchmarkCode"] = item.get("benchmarkCode") or code
+        item["holdingCount"] = holding_counts.get(code, 0)
+        if not item.get("capmCandidate"):
+            item_warnings = list(item.get("warnings") or [])
+            if "CAPM_DISABLED_BENCHMARK_UNAVAILABLE" not in item_warnings:
+                item_warnings.append("CAPM_DISABLED_BENCHMARK_UNAVAILABLE")
+            item["warnings"] = item_warnings
+        benchmark_items.append(item)
+        warnings.extend(item.get("warnings") or [])
+
+    primary = benchmark_items[0] if benchmark_items else _benchmark_policy(None, fallback_expected)
+    return {
+        "mode": "MULTI_BENCHMARK" if len(benchmark_items) > 1 else "SINGLE_BENCHMARK",
+        "primaryBenchmarkCode": primary.get("benchmarkCode"),
+        "primaryBenchmarkName": primary.get("benchmarkName"),
+        "benchmarks": benchmark_items,
+        "warnings": list(dict.fromkeys(warnings)),
+        # Backward-compatible top-level fields for existing DTO/UI paths.
+        "benchmarkCode": primary.get("benchmarkCode"),
+        "benchmarkName": primary.get("benchmarkName"),
+        "source": primary.get("source"),
+        "benchmarkAvailable": primary.get("benchmarkAvailable"),
+        "expectedTradingDayCount": primary.get("expectedTradingDayCount"),
+        "availablePriceCount": primary.get("availablePriceCount"),
+        "missingRate": primary.get("missingRate"),
+        "capmCandidate": primary.get("capmCandidate"),
+        "candidateRule": primary.get("candidateRule"),
+    }
+
+
+def _benchmark_selection_for_stock(stock_code: str, benchmark_selections: dict[str, dict]) -> dict:
+    selection = benchmark_selections.get(stock_code)
+    if selection:
+        return selection
+    return {
+        "stockCode": stock_code,
+        "exchangeCode": None,
+        "benchmarkCode": DEFAULT_CAPM_BENCHMARK_CODE,
+        "selectionReason": "UNKNOWN_MARKET_KOSPI_PROXY",
+    }
+
+
+def _empty_capm_policy(status: str) -> dict:
+    return {
+        "status": status,
+        "model": "CAPM",
+        "returnUnit": "ANNUAL",
+        "weightsSumToOne": True,
+    }
+
+
+def _benchmark_candidate_for_capm(benchmark_result: Feature3BenchmarkSeriesResult | None) -> bool:
+    if benchmark_result is None or len(benchmark_result.points) < 2:
+        return False
+    if benchmark_result.source in {"DB", "KIS_BACKFILLED"}:
+        return True
+    return benchmark_result.source == "DB_INSUFFICIENT" and benchmark_result.available_price_count > 0
+
+
+def _benchmark_source_factor(source: str) -> float:
+    if source in {"DB", "KIS_BACKFILLED"}:
+        return 1.0
+    if source == "DB_INSUFFICIENT":
+        return 0.75
+    return 0.0
+
+
+def _capm_sample_factor(common_sample_size: int) -> float:
+    if common_sample_size < CAPM_PARTIAL_MIN_SAMPLE:
+        return 0.0
+    if common_sample_size < MIN_OBSERVATIONS:
+        return _clamp_float(common_sample_size / MIN_OBSERVATIONS, 0.35, 0.64)
+    return _clamp_float(common_sample_size / 252.0, 0.65, 1.0)
+
+
+def _dated_log_returns(points) -> dict:
+    close_by_date = _close_by_trading_date(points)
+    ordered = sorted(close_by_date.items(), key=lambda item: item[0])
+    returns = {}
+    for previous, current in zip(ordered, ordered[1:]):
+        try:
+            previous_date, previous_close = previous
+            current_date, current_close = current
+            returns[current_date] = float(np.log(current_close / previous_close))
+        except Exception:
+            continue
+    return returns
+
+
+def _capm_asset_warnings(asset_rows: list[dict]) -> list[Feature3Warning]:
+    warning_messages = {
+        "UNKNOWN_MARKET_KOSPI_PROXY": "Holding exchange was unknown, so KOSPI was used as a CAPM proxy benchmark.",
+        "BENCHMARK_FETCH_FAILED_FOR_MARKET": "Selected listing-market benchmark fetch failed.",
+        "CAPM_DISABLED_BENCHMARK_UNAVAILABLE": "Selected benchmark was unavailable for CAPM.",
+        "MIXED_MARKET_BENCHMARKS_USED": "Multiple listing-market benchmarks were used for CAPM.",
+        "CAPM_COMMON_SAMPLE_INSUFFICIENT": "Common asset/benchmark return sample was too short for CAPM.",
+        "CAPM_PARTIAL_LOW_COMMON_SAMPLE": "CAPM was partially applied with fewer than 120 common return samples.",
+        "CAPM_BETA_UNAVAILABLE": "Market return variance was too low to estimate beta.",
+        "CAPM_CORRELATION_UNAVAILABLE": "Correlation could not be estimated for CAPM diagnostics.",
+        "CAPM_LOW_R_SQUARED": "CAPM explanatory power was low for this asset.",
+        "CAPM_HIGH_VOLATILITY": "Asset volatility reduced CAPM blend confidence.",
+        "BLENDED_RETURN_CONFIDENCE_LOW": "Blended expected return confidence was low.",
+    }
+    user_messages = {
+        "UNKNOWN_MARKET_KOSPI_PROXY": "상장시장 정보를 확인하지 못해 KOSPI를 대체 벤치마크로 사용했습니다.",
+        "BENCHMARK_FETCH_FAILED_FOR_MARKET": "선택된 시장 벤치마크를 가져오지 못해 해당 종목의 CAPM 반영을 제한했습니다.",
+        "CAPM_DISABLED_BENCHMARK_UNAVAILABLE": "선택된 시장 벤치마크 데이터를 사용할 수 없어 CAPM을 제외했습니다.",
+        "MIXED_MARKET_BENCHMARKS_USED": "상장시장별 벤치마크를 분리해 CAPM을 계산했습니다.",
+        "CAPM_COMMON_SAMPLE_INSUFFICIENT": "시장 벤치마크와 종목의 공통 수익률 표본이 부족해 CAPM을 제외했습니다.",
+        "CAPM_PARTIAL_LOW_COMMON_SAMPLE": "공통 수익률 표본이 120개 미만이라 CAPM을 낮은 비중으로만 반영했습니다.",
+        "CAPM_BETA_UNAVAILABLE": "시장 변동 표본이 충분하지 않아 beta를 계산하지 못했습니다.",
+        "CAPM_CORRELATION_UNAVAILABLE": "시장과 종목 수익률의 상관 설명력을 계산하지 못했습니다.",
+        "CAPM_LOW_R_SQUARED": "시장수익률이 이 종목 수익률을 설명하는 정도가 낮아 CAPM 반영 비중을 낮췄습니다.",
+        "CAPM_HIGH_VOLATILITY": "종목 변동성이 높아 CAPM 반영 비중을 낮췄습니다.",
+        "BLENDED_RETURN_CONFIDENCE_LOW": "기대수익률 혼합 신뢰도가 낮아 해석에 주의가 필요합니다.",
+    }
+    warnings: list[Feature3Warning] = []
+    for row in asset_rows:
+        for code in row.get("warnings") or []:
+            warnings.append(Feature3Warning(
+                code=code,
+                message=warning_messages.get(code, code),
+                user_message=user_messages.get(code),
+                severity="WARN",
+                target=row["stockCode"],
+            ))
+    return warnings
+
+
+def _round_optional(value: float | None) -> float | None:
+    if value is None or not np.isfinite(value):
+        return None
+    return round(float(value), 6)
 
 
 def _covariance_matrix(returns_matrix: np.ndarray, requested_model: str) -> tuple[np.ndarray, str, float | None]:
@@ -1016,8 +1741,8 @@ def _advanced_mean_variance_outputs(
     risk_free_rate: float,
     max_cash_weight: float,
 ) -> tuple[list[Feature3PortfolioResult], list[dict], dict, list[Feature3Warning]]:
-    # Advanced 검증용으로 shrinked winsorized mean 기반 frontier/utility point를 계산한다.
-    # 진행 예정: mu estimator가 추가되면 expected_return_policy에 estimator와 warning을 더 상세히 남긴다.
+    # Advanced 검증용 frontier/utility point는 risk_context["annual_mu"]를 사용한다.
+    # 2-B 이후 이 값은 historical/CAPM confidence 기반 blended expected return이다.
     eligible_results = risk_context["eligible_results"]
     covariance_annual = risk_context["covariance_annual"]
     annual_mu = risk_context.get("annual_mu")
@@ -1027,14 +1752,14 @@ def _advanced_mean_variance_outputs(
     warnings = [
         Feature3Warning(
             code="EXPECTED_RETURN_ESTIMATION_UNSTABLE",
-            message="Advanced mean-variance outputs use historical mean returns, which are unstable.",
-            user_message="고급 검증의 기대수익률은 과거 수익률을 장기 기대수익률 쪽으로 수축한 추정값이라 실제 수익 예측으로 해석하면 안 됩니다.",
+            message="Advanced mean-variance outputs use blended historical/CAPM expected returns, which are estimates.",
+            user_message="고급 검증의 기대수익률은 과거 수익률과 CAPM 추정치를 데이터 신뢰도에 따라 혼합한 값이라 실제 수익 예측으로 해석하면 안 됩니다.",
             severity="WARN",
             target="advanced.expectedReturnPolicy",
         )
     ]
     if not req.options.include_frontier and req.options.view_mode != "ADVANCED":
-        return [], [], _expected_return_policy("HISTORICAL_MEAN"), []
+        return [], [], _expected_return_policy("BLENDED_HISTORICAL_CAPM", risk_free_rate, req, risk_context), []
 
     asset_count = len(eligible_results)
     gamma = req.risk_profile.risk_aversion_gamma or (10 - 9 * req.risk_profile.risk_tolerance_score)
@@ -1074,7 +1799,7 @@ def _advanced_mean_variance_outputs(
         target_volatility,
         risk_free_rate,
     )
-    utility_weights = _user_risk_allocation_weights(
+    risk_allocation_weights = _user_risk_allocation_weights(
         max_sharpe_risky_weights,
         annual_mu,
         covariance_annual,
@@ -1082,9 +1807,32 @@ def _advanced_mean_variance_outputs(
         gamma,
         max_cash_weight,
     )
+    risk_allocation = _portfolio_from_weight_vector(
+        "RISK_ALLOCATION",
+        "CAL Risk Allocation",
+        eligible_results,
+        risk_allocation_weights,
+        covariance_annual,
+        mu_with_cash,
+        raw_mu_with_cash,
+        display_mu_with_cash,
+        target_volatility,
+        risk_free_rate,
+    )
+    risk_allocation.user_description = (
+        "최대샤프 위험자산 포트폴리오와 무위험자산을 조합하고, 사용자 위험회피도와 현금 한도에 따라 위험자산 비중을 조절한 포트폴리오입니다."
+    )
+    utility_weights = _utility_optimal_weights(
+        annual_mu,
+        covariance_annual,
+        risk_free_rate,
+        gamma,
+        max_cash_weight,
+        asset_count,
+    )
     utility = _portfolio_from_weight_vector(
         "UTILITY_OPTIMAL",
-        "User Risk Allocation",
+        "Utility Optimal",
         eligible_results,
         utility_weights,
         covariance_annual,
@@ -1093,6 +1841,9 @@ def _advanced_mean_variance_outputs(
         display_mu_with_cash,
         target_volatility,
         risk_free_rate,
+    )
+    utility.user_description = (
+        "현재 현금 한도, 레버리지 금지, 종목별 비중 제한 안에서 U = E[R] - 0.5 * gamma * variance를 직접 최대화한 포트폴리오입니다."
     )
     theoretical_utility = _theoretical_utility_portfolio(
         req,
@@ -1117,9 +1868,10 @@ def _advanced_mean_variance_outputs(
     return [
         min_vol,
         max_sharpe,
+        risk_allocation,
         utility,
         *([theoretical_utility] if theoretical_utility is not None else []),
-    ], frontier, _expected_return_policy("SHRINKED_WINSORIZED_MEAN", risk_free_rate, req, risk_context), warnings
+    ], frontier, _expected_return_policy("BLENDED_HISTORICAL_CAPM", risk_free_rate, req, risk_context), warnings
 
 
 def _expected_return_policy(
@@ -1128,7 +1880,7 @@ def _expected_return_policy(
     req: PortfolioAnalyzeRequest | None = None,
     risk_context: dict | None = None,
 ) -> dict:
-    if status == "SHRINKED_WINSORIZED_MEAN" and risk_context is not None:
+    if status == "BLENDED_HISTORICAL_CAPM" and risk_context is not None:
         policy = dict(risk_context.get("expected_return_estimation") or {})
         policy["status"] = "AVAILABLE"
         return policy
@@ -1175,13 +1927,13 @@ def _overlay_adjusted_outputs(
     selected_types = {signal.overlay_type for signal in signals}
     variants = []
     if len(selected_types) >= 2:
-        variants.append(("OVERLAY_BALANCED", "보조 관측 균형 시나리오", selected_types, 0.18))
+        variants.append(("OVERLAY_BALANCED", "보조 관측 균형 시나리오", selected_types, 0.35))
     if "fundamentals" in selected_types:
-        variants.append(("QUALITY_TILT", "종목 건강도 시나리오", {"fundamentals"}, 0.18))
+        variants.append(("QUALITY_TILT", "종목 건강도 시나리오", {"fundamentals"}, 0.35))
     if "technical" in selected_types:
-        variants.append(("MOMENTUM_AWARE", "기술 흐름 시나리오", {"technical"}, 0.10))
+        variants.append(("MOMENTUM_AWARE", "기술 흐름 시나리오", {"technical"}, 0.25))
     if "news" in selected_types:
-        variants.append(("NEWS_GUARDED", "뉴스 리스크 시나리오", {"news"}, 0.12))
+        variants.append(("NEWS_GUARDED", "뉴스 리스크 시나리오", {"news"}, 0.25))
     diversification_types = selected_types & {"industry", "correlation"}
     if diversification_types:
         variants.append(("DIVERSIFICATION_TILT", "분산 보강 시나리오", diversification_types, _diversification_strength(diversification_types)))
@@ -1194,8 +1946,8 @@ def _overlay_adjusted_outputs(
             overlay_types,
             strength,
             risk_context,
-            half_turnover_budget=0.09,
-            single_delta_cap=0.035,
+            half_turnover_budget=0.15,
+            single_delta_cap=0.07,
         )
         portfolio = _portfolio_from_weight_vector(
             portfolio_type,
@@ -1322,10 +2074,10 @@ def _apply_overlay_tilt(
 
 def _diversification_strength(overlay_types: set[str]) -> float:
     if overlay_types == {"industry"}:
-        return 0.22
+        return 0.35
     if overlay_types == {"correlation"}:
-        return 0.16
-    return 0.18
+        return 0.35
+    return 0.35
 
 
 def _effective_overlay_score(signal: Feature3OverlaySignal) -> float:
@@ -1662,6 +2414,57 @@ def _user_risk_allocation_weights(
     return np.concatenate([risky_weights * risky_allocation, np.array([cash_weight])])
 
 
+def _utility_optimal_weights(
+    annual_mu: np.ndarray,
+    covariance_annual: np.ndarray,
+    risk_free_rate: float,
+    gamma: float,
+    max_cash_weight: float,
+    asset_count: int,
+) -> np.ndarray:
+    dimension = asset_count + 1
+    covariance_with_cash = _with_cash_covariance(covariance_annual)
+    mu_with_cash = np.concatenate([annual_mu, np.array([risk_free_rate])])
+    x0 = np.full(dimension, 1.0 / dimension, dtype=float)
+    x0[-1] = min(max_cash_weight, max(0.0, x0[-1]))
+    risky_budget = 1.0 - x0[-1]
+    x0[:asset_count] = risky_budget / asset_count
+    bounds = [(0.0, _risky_max_weight(asset_count)) for _ in range(asset_count)] + [(0.0, max_cash_weight)]
+
+    def objective(weights: np.ndarray) -> float:
+        expected_return = float(mu_with_cash @ weights)
+        variance = float(weights.T @ covariance_with_cash @ weights)
+        utility = expected_return - 0.5 * max(1.0, gamma) * variance
+        return -utility
+
+    constraints = [{"type": "eq", "fun": lambda weights: float(np.sum(weights) - 1.0)}]
+    try:
+        from scipy.optimize import minimize
+
+        result = minimize(
+            objective,
+            x0,
+            method="SLSQP",
+            bounds=bounds,
+            constraints=constraints,
+            options={"maxiter": 500, "ftol": 1e-12},
+        )
+        if result.success and _weights_satisfy_constraints(result.x, asset_count, max_cash_weight):
+            weights = np.clip(result.x, 0.0, None)
+            return weights / float(np.sum(weights))
+    except Exception:
+        pass
+
+    return _user_risk_allocation_weights(
+        _max_sharpe_weights(annual_mu, covariance_annual, risk_free_rate, asset_count),
+        annual_mu,
+        covariance_annual,
+        risk_free_rate,
+        gamma,
+        max_cash_weight,
+    )
+
+
 def _unconstrained_risky_allocation(
     risky_weights: np.ndarray,
     annual_mu: np.ndarray,
@@ -1706,6 +2509,8 @@ def _theoretical_utility_portfolio(
     )
     min_risky_allocation = max(0.0, 1.0 - _resolved_max_cash_weight(req, gamma))
 
+    if risky_allocation <= 0.000001:
+        return None
     if min_risky_allocation - 0.000001 <= risky_allocation <= 1.000001:
         return None
 
@@ -1931,14 +2736,21 @@ def _greedy_return_extreme_weights(annual_mu: np.ndarray, asset_count: int, asce
 
 
 def _upper_envelope(points: list[dict]) -> list[dict]:
-    ordered = sorted(points, key=lambda point: (point["volatility"], point["expectedReturn"]))
+    best_by_volatility: dict[float, dict] = {}
+    for point in points:
+        volatility_key = round(float(point["volatility"]), 4)
+        previous = best_by_volatility.get(volatility_key)
+        if previous is None or point["expectedReturn"] > previous["expectedReturn"]:
+            best_by_volatility[volatility_key] = point
+
+    ordered = sorted(best_by_volatility.values(), key=lambda point: (point["volatility"], -point["expectedReturn"]))
     envelope: list[dict] = []
     best_return = -float("inf")
     for point in ordered:
         expected_return = point["expectedReturn"]
-        if expected_return >= best_return - 1e-6:
+        if expected_return > best_return + 1e-6:
             envelope.append(point)
-            best_return = max(best_return, expected_return)
+            best_return = expected_return
     deduped: list[dict] = []
     seen = set()
     for point in envelope:
@@ -2422,6 +3234,26 @@ def _excluded_holding_warnings(excluded_holdings: list[Feature3ExcludedHolding])
 
 def _warning_codes(warnings: list[Feature3Warning]) -> list[str]:
     return list(dict.fromkeys(warning.code for warning in warnings if warning.code))
+
+
+def _portfolio_price_basis(
+    requested_price_basis: str,
+    eligible_results: list[Feature3PriceSeriesResult],
+    all_results: list[Feature3PriceSeriesResult],
+) -> str:
+    if requested_price_basis != "ADJUSTED_CLOSE":
+        return "RAW_CLOSE"
+
+    basis_values = {
+        result.used_price_basis
+        for result in (eligible_results or all_results)
+        if result.used_price_basis in {"YAHOO_ADJ_CLOSE", "RAW_CLOSE"}
+    }
+    if basis_values == {"YAHOO_ADJ_CLOSE"}:
+        return "YAHOO_ADJ_CLOSE"
+    if basis_values == {"YAHOO_ADJ_CLOSE", "RAW_CLOSE"}:
+        return "YAHOO_ADJ_CLOSE_WITH_KIS_FALLBACK"
+    return "RAW_CLOSE"
 
 
 def _dedupe_warnings(warnings: list[Feature3Warning]) -> list[Feature3Warning]:

@@ -5,7 +5,9 @@ import type { ApiResponse } from "../types/common/api";
 
 export type Feature3ProfileType = "CONSERVATIVE" | "NEUTRAL" | "AGGRESSIVE";
 export type Feature3RiskLevel = "LOW" | "MID" | "HIGH";
-export type Feature3PortfolioType = "CURRENT" | "STABLE" | "BALANCED" | "AGGRESSIVE" | "PSYCHOLOGICAL" | "MIN_VOL" | "MAX_SHARPE" | "UTILITY_OPTIMAL" | "THEORETICAL_UTILITY" | "OVERLAY_BALANCED" | "QUALITY_TILT" | "MOMENTUM_AWARE" | "NEWS_GUARDED" | "DIVERSIFICATION_TILT";
+export type Feature3PortfolioType = "CURRENT" | "STABLE" | "BALANCED" | "AGGRESSIVE" | "PSYCHOLOGICAL" | "MIN_VOL" | "MAX_SHARPE" | "RISK_ALLOCATION" | "UTILITY_OPTIMAL" | "THEORETICAL_UTILITY" | "OVERLAY_BALANCED" | "QUALITY_TILT" | "MOMENTUM_AWARE" | "NEWS_GUARDED" | "DIVERSIFICATION_TILT";
+export type Feature3PricePolicyUsed = "YAHOO_ADJ_CLOSE" | "RAW_CLOSE" | "YAHOO_ADJ_CLOSE_WITH_KIS_FALLBACK" | "ADJUSTED_CLOSE" | "CLOSE";
+export type Feature3SeriesUsedPriceBasis = "YAHOO_ADJ_CLOSE" | "RAW_CLOSE" | "ADJUSTED_CLOSE" | "CLOSE";
 
 export type PortfolioHoldingRequest = {
   stockCode: string;
@@ -41,6 +43,7 @@ export type PortfolioAnalyzeRequest = {
     fetchCalendarDays?: number;
     annualizationFactor?: number;
     cachePolicy?: "CORE_ONLY" | "REUSE_AVAILABLE" | "REFRESH_MISSING_ONLY" | "FORCE_REFRESH";
+    overlayCachePolicies?: Record<string, "REUSE_AVAILABLE" | "FORCE_REFRESH">;
     selectedOverlays?: string[];
     includeFrontier?: boolean;
     includeDiagnostics?: boolean;
@@ -55,6 +58,7 @@ export type Feature3OverlayCachePreviewRequest = {
   stockCodes?: string[];
   selectedOverlays: string[];
   cachePolicy?: "CORE_ONLY" | "REUSE_AVAILABLE" | "REFRESH_MISSING_ONLY" | "FORCE_REFRESH";
+  overlayCachePolicies?: Record<string, "REUSE_AVAILABLE" | "FORCE_REFRESH">;
 };
 
 export type Feature3OverlayCachePreviewResponse = {
@@ -63,10 +67,14 @@ export type Feature3OverlayCachePreviewResponse = {
   totalCredit: number;
   overlays: Array<{
     overlayType: string;
-    cacheStatus: "HIT" | "STALE" | "MISS";
+    cacheStatus: "HIT" | "STALE" | "MISS" | "AVAILABLE" | "UNAVAILABLE";
     additionalCredit: number;
     userConfirmationRequired: boolean;
     userMessage: string;
+    sourceCacheStatus?: "HIT" | "MISS" | "AVAILABLE" | "UNAVAILABLE";
+    cacheAsOf?: string | null;
+    timezone?: string | null;
+    policySelectable?: boolean;
   }>;
   userMessage: string;
 };
@@ -124,11 +132,116 @@ export type Feature3PortfolioResult = {
   userDescription?: string | null;
 };
 
+export type Feature3BenchmarkPolicy = {
+  mode?: "SINGLE_BENCHMARK" | "MULTI_BENCHMARK" | string;
+  primaryBenchmarkCode?: string | null;
+  primaryBenchmarkName?: string | null;
+  benchmarkCode?: string | null;
+  benchmarkName?: string | null;
+  source?: "DB" | "KIS_BACKFILLED" | "DB_INSUFFICIENT" | "DB_STALE" | "UNAVAILABLE" | string;
+  benchmarkAvailable?: boolean;
+  expectedTradingDayCount?: number;
+  availablePriceCount?: number;
+  missingRate?: number;
+  capmCandidate?: boolean;
+  candidateRule?: string;
+  warnings?: string[];
+  holdingCount?: number;
+  benchmarks?: Feature3BenchmarkPolicy[];
+};
+
+export type Feature3CapmAsset = {
+  stockCode: string;
+  companyName?: string | null;
+  benchmarkCode?: string | null;
+  benchmarkName?: string | null;
+  benchmarkSource?: string | null;
+  benchmarkSelectionReason?: string | null;
+  benchmarkMode?: string | null;
+  historicalExpectedReturn?: number | null;
+  capmExpectedReturn?: number | null;
+  blendedExpectedReturn?: number | null;
+  historicalWeight?: number | null;
+  capmWeight?: number | null;
+  confidence?: number | null;
+  beta?: number | null;
+  dailyAlpha?: number | null;
+  annualAlpha?: number | null;
+  correlation?: number | null;
+  rSquared?: number | null;
+  commonSampleSize?: number | null;
+  annualVolatility?: number | null;
+  realizedAnnualVolatility?: number | null;
+  optimizerAnnualVolatility?: number | null;
+  volatilityReliabilityFactor?: number | null;
+  status?: "APPLIED" | "PARTIAL" | "EXCLUDED" | string;
+  warnings?: string[];
+};
+
+export type Feature3SclSeries = {
+  stockCode: string;
+  companyName?: string | null;
+  benchmarkCode?: string | null;
+  benchmarkName?: string | null;
+  benchmarkSource?: string | null;
+  benchmarkSelectionReason?: string | null;
+  line?: {
+    dailyAlpha?: number | null;
+    annualAlpha?: number | null;
+    beta?: number | null;
+  } | null;
+  points?: Array<{
+    date?: string;
+    marketReturn: number;
+    assetReturn: number;
+  }>;
+};
+
+export type Feature3CapmPolicy = {
+  status?: "AVAILABLE" | "DISABLED" | "UNAVAILABLE" | string;
+  model?: string;
+  returnUnit?: string;
+  betaReturnUnit?: string;
+  alphaFields?: string[];
+  riskFreeRate?: number;
+  equityRiskPremium?: number;
+  weightFormula?: string;
+  weightsSumToOne?: boolean;
+  appliedAssetCount?: number;
+  partialAssetCount?: number;
+  excludedAssetCount?: number;
+  warnings?: string[];
+};
+
+export type Feature3Scl = {
+  summary?: Record<string, unknown>;
+  assets?: Feature3CapmAsset[];
+  series?: Feature3SclSeries[];
+};
+
+export type Feature3Sml = {
+  mode?: "SINGLE_BENCHMARK" | "MULTI_BENCHMARK" | string;
+  summary?: Record<string, unknown>;
+  line?: Array<{ beta: number; expectedReturn: number }>;
+  assets?: Feature3CapmAsset[];
+  groups?: Array<{
+    benchmarkCode?: string | null;
+    benchmarkName?: string | null;
+    source?: string | null;
+    availablePriceCount?: number | null;
+    missingRate?: number | null;
+    capmCandidate?: boolean | null;
+    warnings?: string[];
+    line?: Array<{ beta: number; expectedReturn: number }>;
+    assets?: Feature3CapmAsset[];
+  }>;
+};
+
 export type PortfolioAnalyzeResponse = {
   policy: {
     pricePolicy: {
       requested: "ADJUSTED_CLOSE" | "CLOSE";
-      used: "ADJUSTED_CLOSE" | "CLOSE";
+      used: Feature3PricePolicyUsed;
       warnings: string[];
     };
     riskProfile: {
@@ -157,7 +270,7 @@ export type PortfolioAnalyzeResponse = {
         stockCode: string;
         companyName?: string | null;
         requestedPriceBasis: "ADJUSTED_CLOSE" | "CLOSE";
-        usedPriceBasis: "ADJUSTED_CLOSE" | "CLOSE";
+        usedPriceBasis: Feature3SeriesUsedPriceBasis;
         source: string;
         cacheStatus: string;
         expectedTradingDayCount: number;
@@ -222,7 +335,17 @@ export type PortfolioAnalyzeResponse = {
       isDisplayCapped?: boolean;
       sharpeRatio?: number | null;
     }>;
-    expectedReturnPolicy?: Record<string, unknown> | null;
+    expectedReturnPolicy?: (Record<string, unknown> & {
+      assets?: Feature3CapmAsset[];
+      averageCapmWeight?: number;
+      averageBlendConfidence?: number;
+      capmWeightFormula?: string;
+      blendFormula?: string;
+    }) | null;
+    benchmarkPolicy?: Feature3BenchmarkPolicy | null;
+    capmPolicy?: Feature3CapmPolicy | null;
+    scl?: Feature3Scl | null;
+    sml?: Feature3Sml | null;
   } | null;
   overlays?: {
     insightCards: Array<{

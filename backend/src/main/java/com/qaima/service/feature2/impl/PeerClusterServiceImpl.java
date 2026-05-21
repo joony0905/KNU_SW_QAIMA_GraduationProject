@@ -43,6 +43,22 @@ public class PeerClusterServiceImpl implements PeerClusterService {
             int maxLag,
             int displayLimit
     ) {
+        return getPeerCluster(industryId, anchorStockCode, freq, window, from, to, peerCount, maxLag, displayLimit, false);
+    }
+
+    @Override
+    public Mono<PeerClusterResult> getPeerCluster(
+            Long industryId,
+            String anchorStockCode,
+            Freq freq,
+            int window,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            int peerCount,
+            int maxLag,
+            int displayLimit,
+            boolean forceRefresh
+    ) {
         if (industryId == null) {
             return Mono.just(PeerClusterResult.empty(
                     Feat2WarningCode.PEER_CLUSTER_INDUSTRY_ID_MISSING.name()
@@ -57,11 +73,13 @@ public class PeerClusterServiceImpl implements PeerClusterService {
 
         String cacheKey = buildCacheKey(industryId, anchorStockCode, freq, window, from, to, peerCount, maxLag, displayLimit);
 
-        return getFromCache(cacheKey)
+        Mono<PeerClusterResult> cacheMono = forceRefresh ? Mono.empty() : getFromCache(cacheKey)
                 .onErrorResume(e -> {
                     log.warn("[PeerCluster] cache read failed. fallback to FastAPI. key={}", cacheKey, e);
                     return Mono.empty();
-                })
+                });
+
+        return cacheMono
                 .flatMap(cached -> {
                     log.info("[PeerCluster] cache hit key={}", cacheKey);
                     return Mono.just(cached);
@@ -108,6 +126,31 @@ public class PeerClusterServiceImpl implements PeerClusterService {
                                 );
                             });
                 }));
+    }
+
+    @Override
+    public Mono<SourceCacheInspection> inspectPeerClusterCache(
+            Long industryId,
+            String anchorStockCode,
+            Freq freq,
+            int window,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            int peerCount,
+            int maxLag,
+            int displayLimit
+    ) {
+        if (industryId == null || anchorStockCode == null || anchorStockCode.isBlank()) {
+            return Mono.just(new SourceCacheInspection(false, null));
+        }
+        String cacheKey = buildCacheKey(industryId, anchorStockCode, freq, window, from, to, peerCount, maxLag, displayLimit);
+        return getFromCache(cacheKey)
+                .map(result -> new SourceCacheInspection(
+                        result.getPeerCluster() != null,
+                        result.getPeerCluster() != null ? result.getPeerCluster().getAsOf() : null
+                ))
+                .defaultIfEmpty(new SourceCacheInspection(false, null))
+                .onErrorReturn(new SourceCacheInspection(false, null));
     }
 
     private String buildCacheKey(

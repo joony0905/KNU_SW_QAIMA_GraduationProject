@@ -26,4 +26,35 @@ public interface PeerClusterService {
             int maxLag,
             int displayLimit
     );
+
+    Mono<PeerClusterResult> getPeerCluster(
+            Long industryId,
+            String anchorStockCode,
+            Freq freq,
+            int window,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            int peerCount,
+            int maxLag,
+            int displayLimit,
+            boolean forceRefresh
+    );
+
+    Mono<SourceCacheInspection> inspectPeerClusterCache(
+            Long industryId,
+            String anchorStockCode,
+            Freq freq,
+            int window,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            int peerCount,
+            int maxLag,
+            int displayLimit
+    );
+
+    record SourceCacheInspection(
+            boolean hit,
+            OffsetDateTime cacheAsOf
+    ) {
+    }
 }

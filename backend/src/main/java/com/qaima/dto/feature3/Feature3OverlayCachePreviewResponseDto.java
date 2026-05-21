@@ -14,7 +14,11 @@ public record Feature3OverlayCachePreviewResponseDto(
             String cacheStatus,
             Integer additionalCredit,
             Boolean userConfirmationRequired,
-            String userMessage
+            String userMessage,
+            String sourceCacheStatus,
+            String cacheAsOf,
+            String timezone,
+            Boolean policySelectable
     ) {
     }
 }

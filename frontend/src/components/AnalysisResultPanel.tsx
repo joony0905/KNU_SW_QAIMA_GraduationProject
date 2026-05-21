@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AnalysisExplainSection, AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import type { PeerItem } from "../types/feature2";
 import { Download, Maximize2 } from "lucide-react";
@@ -340,7 +340,6 @@ const expandWarningLines = (notes: string[]): string[] =>
 export default function AnalysisResultPanel({
   result,
   loading,
-  loadingStage,
   err,
   showAnalyzeButton,
   onAnalyze,
@@ -354,10 +353,62 @@ export default function AnalysisResultPanel({
   layout = "full",
 }: AnalysisResultPanelProps) {
   const isPanel = layout === "panel";
+  const reportRef = useRef<HTMLDivElement | null>(null);
   const [macroChartMode, setMacroChartMode] = useState<MacroChartMode>("exchange");
   const explainSections = result?.explain?.sections ?? null;
   const overallExplain = result?.explain?.overall ?? null;
   const warningNotes = expandWarningLines(mapWarningsToNotes(result?.warnings));
+  const isFeature2Report = Boolean(
+    result?.metrics?.peerCluster
+      || result?.metrics?.macroRates
+      || result?.metrics?.macroRatesSeries?.series?.length
+      || result?.metrics?.investorFlow
+      || result?.metrics?.newsSentimentSummary
+      || result?.metrics?.shortSellingSeries?.length
+      || result?.metrics?.baseRateTrendSummary,
+  );
+  const reportAnimationKey = result
+    ? [
+        result.metrics?.stock?.stockCode ?? "report",
+        isFeature2Report ? "feature2" : "feature1",
+        result.metrics?.shortSelling?.reportDate ?? "",
+        result.metrics?.newsSentimentSummary?.summaryDate ?? "",
+        result.explain?.text?.slice(0, 24) ?? "",
+      ].join(":")
+    : "empty";
+
+  useEffect(() => {
+    const reportNode = reportRef.current;
+    if (!reportNode || !result) return;
+
+    const sections = Array.from(reportNode.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement,
+    );
+
+    sections.forEach((section, index) => {
+      section.classList.remove("is-visible");
+      section.style.transitionDelay = `${Math.min(index * 55, 320)}ms`;
+    });
+
+    if (typeof IntersectionObserver === "undefined") {
+      sections.forEach((section) => section.classList.add("is-visible"));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.08, rootMargin: "0px 0px -12% 0px" },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [reportAnimationKey, result]);
 
   // --- 래퍼 클래스 ---
   const wrapperClass = isPanel
@@ -436,12 +487,8 @@ export default function AnalysisResultPanel({
 
       {/* 로딩 문구 */}
       {loading && (
-        <div className="flex flex-col items-center gap-3 text-ink-3">
-          <div className="h-10 w-10 rounded-full border-4 border-accent-soft border-t-accent animate-spin" />
-          <p className="text-sm sm:text-base font-medium">분석 중입니다...</p>
-          <p className="text-xs sm:text-sm text-ink-3">
-            {loadingStage ?? "분석 데이터를 준비하고 있습니다."}
-          </p>
+        <div className="w-full rounded-2xl border-2 flex items-center justify-center py-24 bg-bg-sunk border-line">
+          <p className="text-base animate-pulse text-ink-3">분석 중입니다...</p>
         </div>
       )}
 
@@ -450,7 +497,11 @@ export default function AnalysisResultPanel({
 
       {/* 분석 결과 카드 */}
       {result && (
-        <div className="w-[90%] max-w-4xl bg-surface rounded-2xl shadow-sm border border-line p-4 sm:p-6 flex flex-col gap-4">
+        <div
+          key={reportAnimationKey}
+          ref={reportRef}
+          className={`${isFeature2Report ? "qaima-feature2-report " : ""}qaima-report-enter qaima-scroll-stagger w-[90%] max-w-4xl bg-surface rounded-2xl shadow-sm border border-line p-4 sm:p-6 flex flex-col gap-4`}
+        >
           {result.metrics?.stock && (
             <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
               <p className="text-xs sm:text-sm font-medium text-ink-3">분석 종목</p>

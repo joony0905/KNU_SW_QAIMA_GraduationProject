@@ -2,7 +2,6 @@ package com.qaima.service.feature3;
 
 import com.qaima.domain.CandleSource;
 import com.qaima.domain.Freq;
-import com.qaima.domain.PriceOhlcv;
 import com.qaima.dto.feature3.Feature3PriceSeriesResponseDto;
 import com.qaima.service.candle.CandleLoadResult;
 import com.qaima.service.candle.CandleLoadService;
@@ -26,11 +25,14 @@ public class Feature3PriceSeriesService {
 
     private static final String ADJUSTED_CLOSE = "ADJUSTED_CLOSE";
     private static final String CLOSE = "CLOSE";
+    private static final String RAW_CLOSE = "RAW_CLOSE";
+    private static final String YAHOO_ADJ_CLOSE = "YAHOO_ADJ_CLOSE";
     private static final String KRX_MARKET = "KRX";
 
     private final StockService stockService;
     private final CandleLoadService candleLoadService;
     private final TradingCalendarService tradingCalendarService;
+    private final YahooFeature3PriceProvider yahooFeature3PriceProvider;
 
     public Mono<Feature3PriceSeriesResponseDto> getPriceSeries(
             String stockCode,
@@ -49,23 +51,62 @@ public class Feature3PriceSeriesService {
                     String market = marketCode(stock);
                     LocalDate latestTradingDay = tradingCalendarService.latestTradingDay(ZonedDateTime.now(ZoneOffset.UTC), market);
                     int expectedTradingDays = Math.max(1, Math.min(lookback, countTradingDays(from.toLocalDate(), latestTradingDay, market)));
-                    return candleLoadService.loadForFeature3(stock, Freq.ONE_D, from, to, expectedTradingDays)
-                                .map(result -> toResponse(
-                                        stock.getStockCode(),
-                                        stock.getCompanyName(),
+                    if (!ADJUSTED_CLOSE.equals(requested)) {
+                        return loadRawClose(stock, requested, expectedTradingDays, from, to, List.of(), false);
+                    }
+                    return yahooFeature3PriceProvider.fetchAdjustedClose(stock, from, to, expectedTradingDays)
+                            .flatMap(yahooResult -> {
+                                if (yahooResult.useYahoo()) {
+                                    return Mono.just(toYahooResponse(
+                                            stock.getStockCode(),
+                                            stock.getCompanyName(),
+                                            requested,
+                                            expectedTradingDays,
+                                            yahooResult
+                                    ));
+                                }
+                                return loadRawClose(
+                                        stock,
                                         requested,
                                         expectedTradingDays,
-                                        result
-                                ));
+                                        from,
+                                        to,
+                                        yahooResult.warnings(),
+                                        true
+                                );
+                            });
                 });
     }
 
-    private Feature3PriceSeriesResponseDto toResponse(
+    private Mono<Feature3PriceSeriesResponseDto> loadRawClose(
+            com.qaima.domain.Stock stock,
+            String requestedPriceBasis,
+            int expectedTradingDayCount,
+            OffsetDateTime from,
+            OffsetDateTime to,
+            List<Feature3PriceSeriesResponseDto.Warning> upstreamWarnings,
+            boolean adjustedFallback
+    ) {
+        return candleLoadService.loadForFeature3(stock, Freq.ONE_D, from, to, expectedTradingDayCount)
+                .map(result -> toRawResponse(
+                        stock.getStockCode(),
+                        stock.getCompanyName(),
+                        requestedPriceBasis,
+                        expectedTradingDayCount,
+                        result,
+                        upstreamWarnings,
+                        adjustedFallback
+                ));
+    }
+
+    private Feature3PriceSeriesResponseDto toRawResponse(
             String stockCode,
             String companyName,
             String requestedPriceBasis,
             int expectedTradingDayCount,
-            CandleLoadResult result
+            CandleLoadResult result,
+            List<Feature3PriceSeriesResponseDto.Warning> upstreamWarnings,
+            boolean adjustedFallback
     ) {
         List<Feature3PriceSeriesResponseDto.PricePoint> points = result.getCandles().stream()
                 .filter(Objects::nonNull)
@@ -84,44 +125,88 @@ public class Feature3PriceSeriesService {
 
         int available = points.size();
         double missingRate = Math.max(0.0, 1.0 - ((double) available / Math.max(expectedTradingDayCount, 1)));
-        List<Feature3PriceSeriesResponseDto.Warning> warnings = buildWarnings(
+        List<Feature3PriceSeriesResponseDto.Warning> warnings = buildRawWarnings(
                 stockCode,
                 requestedPriceBasis,
                 result.getSource(),
                 available,
-                expectedTradingDayCount
+                expectedTradingDayCount,
+                upstreamWarnings,
+                adjustedFallback
         );
 
         return new Feature3PriceSeriesResponseDto(
                 stockCode,
                 companyName,
                 requestedPriceBasis,
-                CLOSE,
-                feature3Source(result.getSource()),
+                RAW_CLOSE,
+                adjustedFallback ? "KIS" : rawFeature3Source(result.getSource()),
                 cacheStatus(result.getSource()),
                 expectedTradingDayCount,
                 available,
                 round(missingRate),
-                ADJUSTED_CLOSE.equals(requestedPriceBasis),
+                adjustedFallback,
                 points,
                 warnings
         );
     }
 
-    private List<Feature3PriceSeriesResponseDto.Warning> buildWarnings(
+    private Feature3PriceSeriesResponseDto toYahooResponse(
+            String stockCode,
+            String companyName,
+            String requestedPriceBasis,
+            int expectedTradingDayCount,
+            YahooFeature3PriceProvider.Result result
+    ) {
+        List<Feature3PriceSeriesResponseDto.PricePoint> points = result.points().stream()
+                .map(point -> new Feature3PriceSeriesResponseDto.PricePoint(
+                        point.ts().toString(),
+                        point.close().doubleValue()
+                ))
+                .toList();
+
+        return new Feature3PriceSeriesResponseDto(
+                stockCode,
+                companyName,
+                requestedPriceBasis,
+                YAHOO_ADJ_CLOSE,
+                "YAHOO",
+                "MISS",
+                expectedTradingDayCount,
+                points.size(),
+                round(result.missingRate()),
+                false,
+                points,
+                result.warnings()
+        );
+    }
+
+    private List<Feature3PriceSeriesResponseDto.Warning> buildRawWarnings(
             String stockCode,
             String requestedPriceBasis,
             CandleSource source,
             int available,
-            int expected
+            int expected,
+            List<Feature3PriceSeriesResponseDto.Warning> upstreamWarnings,
+            boolean adjustedFallback
     ) {
         java.util.ArrayList<Feature3PriceSeriesResponseDto.Warning> warnings = new java.util.ArrayList<>();
+        if (upstreamWarnings != null) {
+            warnings.addAll(upstreamWarnings);
+        }
 
-        if (ADJUSTED_CLOSE.equals(requestedPriceBasis)) {
+        if (adjustedFallback) {
             warnings.add(new Feature3PriceSeriesResponseDto.Warning(
-                    "PRICE_ADJUSTMENT_UNAVAILABLE",
-                    "price_ohlcv currently stores close prices only, so Feature3 uses CLOSE instead of ADJUSTED_CLOSE.",
-                    "수정주가를 사용할 수 없어 종가 기준으로 계산합니다.",
+                    "ADJUSTED_CLOSE_FALLBACK_TO_RAW",
+                    "Yahoo adjusted close was unavailable or below the quality threshold, so Feature3 uses raw close for this stock.",
+                    "수정주가를 사용할 수 없어 원시 종가 기준으로 계산합니다.",
+                    "WARN",
+                    stockCode
+            ));
+            warnings.add(new Feature3PriceSeriesResponseDto.Warning(
+                    "RAW_CLOSE_USED_FOR_RISK_ENGINE",
+                    "Feature3 risk engine is using KIS raw close for this stock.",
+                    "원시 종가 기준으로 리스크 계산을 수행합니다.",
                     "INFO",
                     stockCode
             ));
@@ -181,8 +266,8 @@ public class Feature3PriceSeriesService {
         return KRX_MARKET;
     }
 
-    private String feature3Source(CandleSource source) {
-        if (source == null) {
+    private String rawFeature3Source(CandleSource source) {
+        if (source == CandleSource.EMPTY || source == null) {
             return "UNAVAILABLE";
         }
         return source.name();

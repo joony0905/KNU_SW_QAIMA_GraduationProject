@@ -45,12 +45,16 @@ public record PortfolioAnalyzeResponseDto(
             Integer fetchCalendarDays,
             Integer annualizationFactor,
             Integer minObservations,
-            Double maxMissingRate
+            Double maxMissingRate,
+            Double maxCommonMissingRate
     ) {
     }
 
     public record DataQuality(
             Integer expectedTradingDayCount,
+            Integer commonPriceCount,
+            Integer commonReturnSampleSize,
+            Double commonMissingRate,
             Integer includedHoldingCount,
             Integer excludedHoldingCount,
             List<PriceSeriesQuality> priceSeries,
@@ -165,7 +169,11 @@ public record PortfolioAnalyzeResponseDto(
             CovarianceDiagnostics covarianceDiagnostics,
             Map<String, Object> correlationMatrix,
             List<Map<String, Object>> frontier,
-            Map<String, Object> expectedReturnPolicy
+            Map<String, Object> expectedReturnPolicy,
+            Map<String, Object> benchmarkPolicy,
+            Map<String, Object> capmPolicy,
+            Map<String, Object> scl,
+            Map<String, Object> sml
     ) {
     }
 
