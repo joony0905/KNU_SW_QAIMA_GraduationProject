@@ -30,7 +30,8 @@ public class KisInvestorFlowClient {
     public static final String SOURCE = "KIS";
     public static final String DEFAULT_MARKET_DIV_CODE = "J";
     public static final String DEFAULT_MARKET_REQUEST_DIV_CODE = "U";
-    public static final String DEFAULT_MARKET_INDUSTRY_CODE = "0000";
+    public static final String DEFAULT_KOSPI_MARKET_INDUSTRY_CODE = "0001";
+    public static final String DEFAULT_KOSDAQ_MARKET_INDUSTRY_CODE = "1001";
 
     private static final DateTimeFormatter BASIC_DATE = DateTimeFormatter.BASIC_ISO_DATE;
 
@@ -123,7 +124,7 @@ public class KisInvestorFlowClient {
         }
         String normalizedMarketCode = marketCode.trim().toUpperCase();
         String normalizedIndustryCode = industryCode == null || industryCode.isBlank()
-                ? DEFAULT_MARKET_INDUSTRY_CODE
+                ? defaultMarketIndustryCode(normalizedMarketCode)
                 : industryCode.trim();
         final String endpoint = "inquire-investor-daily-by-market";
 
@@ -134,7 +135,7 @@ public class KisInvestorFlowClient {
                                     .path("/uapi/domestic-stock/v1/quotations/inquire-investor-daily-by-market")
                                     .queryParam("FID_COND_MRKT_DIV_CODE", DEFAULT_MARKET_REQUEST_DIV_CODE)
                                     .queryParam("FID_INPUT_ISCD", normalizedIndustryCode)
-                                    .queryParam("FID_INPUT_DATE_1", from.format(BASIC_DATE))
+                                    .queryParam("FID_INPUT_DATE_1", to.format(BASIC_DATE))
                                     .queryParam("FID_INPUT_ISCD_1", normalizedMarketCode)
                                     .queryParam("FID_INPUT_DATE_2", to.format(BASIC_DATE))
                                     .queryParam("FID_INPUT_ISCD_2", normalizedIndustryCode)
@@ -254,6 +255,13 @@ public class KisInvestorFlowClient {
             return String.format("%06d", Integer.parseInt(trimmed));
         }
         return trimmed;
+    }
+
+    public static String defaultMarketIndustryCode(String marketCode) {
+        if (marketCode != null && "KSQ".equalsIgnoreCase(marketCode.trim())) {
+            return DEFAULT_KOSDAQ_MARKET_INDUSTRY_CODE;
+        }
+        return DEFAULT_KOSPI_MARKET_INDUSTRY_CODE;
     }
 
     private String truncate(String value, int max) {

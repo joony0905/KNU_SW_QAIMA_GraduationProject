@@ -6,6 +6,8 @@ import com.qaima.common.ErrorException;
 import com.qaima.domain.Exchange;
 import com.qaima.domain.Freq;
 import com.qaima.domain.Stock;
+import com.qaima.dto.featuredstock.FeaturedStockDto;
+import com.qaima.dto.featuredstock.FeaturedStockTopic;
 import com.qaima.dto.kis.KisResponseDto;
 import com.qaima.dto.kis.KisSearchInfoResponseDto;
 import com.qaima.dto.kis.KisStatResponseDto;
@@ -261,6 +263,150 @@ public class KrStockClient {
     }
 
     /* =========================
+       4) 특징주/순위
+       ========================= */
+
+    public Mono<List<FeaturedStockDto>> fetchFeaturedStocks(FeaturedStockTopic topic, int limit) {
+        return switch (topic) {
+            case GAINERS -> fetchFluctuationRanking("0", limit);
+            case LOSERS -> fetchFluctuationRanking("1", limit);
+            case NEAR_NEW_HIGH -> fetchNearNewHighLowRanking("0", limit);
+            case NEAR_NEW_LOW -> fetchNearNewHighLowRanking("1", limit);
+            case TOP_TURNOVER -> fetchVolumeRanking("3", limit);
+            case VOLUME_SURGE -> fetchVolumeRanking("1", limit);
+        };
+    }
+
+    private Mono<List<FeaturedStockDto>> fetchVolumeRanking(String belongingClassCode, int limit) {
+        final String endpoint = "volume-rank";
+
+        return getAccessToken()
+                .flatMap(token -> {
+                    var spec = webClient.get()
+                            .uri(uriBuilder -> uriBuilder
+                                    .path("/uapi/domestic-stock/v1/quotations/volume-rank")
+                                    .queryParam("FID_COND_MRKT_DIV_CODE", "J")
+                                    .queryParam("FID_COND_SCR_DIV_CODE", "20171")
+                                    .queryParam("FID_INPUT_ISCD", "0000")
+                                    .queryParam("FID_DIV_CLS_CODE", "0")
+                                    .queryParam("FID_BLNG_CLS_CODE", belongingClassCode)
+                                    .queryParam("FID_TRGT_CLS_CODE", "111111111")
+                                    .queryParam("FID_TRGT_EXLS_CLS_CODE", "0000000000")
+                                    .queryParam("FID_INPUT_PRICE_1", "")
+                                    .queryParam("FID_INPUT_PRICE_2", "")
+                                    .queryParam("FID_VOL_CNT", "")
+                                    .build()
+                            )
+                            .header("authorization", token)
+                            .header("appkey", appKey)
+                            .header("appsecret", appSecret)
+                            .header("tr_id", "FHPST01710000")
+                            .header("custtype", "P")
+                            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                            .accept(MediaType.APPLICATION_JSON);
+
+                    return exchangeAndParse(spec, endpoint, KisVolumeRankResponse.class);
+                })
+                .map(raw -> {
+                    KisVolumeRankResponse parsed = raw.parsed();
+                    requireRtOk(parsed, endpoint, raw.rawBody());
+                    if (parsed.getOutput() == null) return List.<FeaturedStockDto>of();
+                    return parsed.getOutput().stream()
+                            .limit(limit)
+                            .map(this::toFeaturedStock)
+                            .toList();
+                });
+    }
+
+    private Mono<List<FeaturedStockDto>> fetchFluctuationRanking(String sortClassCode, int limit) {
+        final String endpoint = "fluctuation";
+
+        return getAccessToken()
+                .flatMap(token -> {
+                    var spec = webClient.get()
+                            .uri(uriBuilder -> uriBuilder
+                                    .path("/uapi/domestic-stock/v1/ranking/fluctuation")
+                                    .queryParam("fid_rsfl_rate2", "")
+                                    .queryParam("fid_cond_mrkt_div_code", "J")
+                                    .queryParam("fid_cond_scr_div_code", "20170")
+                                    .queryParam("fid_input_iscd", "0000")
+                                    .queryParam("fid_rank_sort_cls_code", sortClassCode)
+                                    .queryParam("fid_input_cnt_1", "0")
+                                    .queryParam("fid_prc_cls_code", "1")
+                                    .queryParam("fid_input_price_1", "")
+                                    .queryParam("fid_input_price_2", "")
+                                    .queryParam("fid_vol_cnt", "")
+                                    .queryParam("fid_trgt_cls_code", "0")
+                                    .queryParam("fid_trgt_exls_cls_code", "0")
+                                    .queryParam("fid_div_cls_code", "0")
+                                    .queryParam("fid_rsfl_rate1", "")
+                                    .build()
+                            )
+                            .header("authorization", token)
+                            .header("appkey", appKey)
+                            .header("appsecret", appSecret)
+                            .header("tr_id", "FHPST01700000")
+                            .header("custtype", "P")
+                            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                            .accept(MediaType.APPLICATION_JSON);
+
+                    return exchangeAndParse(spec, endpoint, KisFluctuationRankResponse.class);
+                })
+                .map(raw -> {
+                    KisFluctuationRankResponse parsed = raw.parsed();
+                    requireRtOk(parsed, endpoint, raw.rawBody());
+                    if (parsed.getOutput() == null) return List.<FeaturedStockDto>of();
+                    return parsed.getOutput().stream()
+                            .limit(limit)
+                            .map(this::toFeaturedStock)
+                            .toList();
+                });
+    }
+
+    private Mono<List<FeaturedStockDto>> fetchNearNewHighLowRanking(String priceClassCode, int limit) {
+        final String endpoint = "near-new-highlow";
+
+        return getAccessToken()
+                .flatMap(token -> {
+                    var spec = webClient.get()
+                            .uri(uriBuilder -> uriBuilder
+                                    .path("/uapi/domestic-stock/v1/ranking/near-new-highlow")
+                                    .queryParam("fid_aply_rang_vol", "0")
+                                    .queryParam("fid_cond_mrkt_div_code", "J")
+                                    .queryParam("fid_cond_scr_div_code", "20187")
+                                    .queryParam("fid_div_cls_code", "0")
+                                    .queryParam("fid_input_cnt_1", "0")
+                                    .queryParam("fid_input_cnt_2", "5")
+                                    .queryParam("fid_prc_cls_code", priceClassCode)
+                                    .queryParam("fid_input_iscd", "0000")
+                                    .queryParam("fid_trgt_cls_code", "0")
+                                    .queryParam("fid_trgt_exls_cls_code", "0")
+                                    .queryParam("fid_aply_rang_prc_1", "")
+                                    .queryParam("fid_aply_rang_prc_2", "")
+                                    .build()
+                            )
+                            .header("authorization", token)
+                            .header("appkey", appKey)
+                            .header("appsecret", appSecret)
+                            .header("tr_id", "FHPST01870000")
+                            .header("custtype", "P")
+                            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                            .accept(MediaType.APPLICATION_JSON);
+
+                    return exchangeAndParse(spec, endpoint, KisNearNewHighLowResponse.class);
+                })
+                .map(raw -> {
+                    KisNearNewHighLowResponse parsed = raw.parsed();
+                    requireRtOk(parsed, endpoint, raw.rawBody());
+                    if (parsed.getOutput() == null) return List.<FeaturedStockDto>of();
+                    return parsed.getOutput().stream()
+                            .limit(limit)
+                            .map(this::toFeaturedStock)
+                            .toList();
+                });
+    }
+
+    /* =========================
        Template
        ========================= */
 
@@ -363,9 +509,108 @@ public class KrStockClient {
         }
     }
 
+    @Getter
+    @Setter
+    public static class KisVolumeRankResponse implements KisRtHeader {
+        private String rt_cd;
+        private String msg_cd;
+        private String msg1;
+        private List<Row> output;
+
+        @Getter @Setter
+        public static class Row {
+            private String hts_kor_isnm;
+            private String mksc_shrn_iscd;
+            private String stck_prpr;
+            private String prdy_vrss_sign;
+            private String prdy_vrss;
+            private String prdy_ctrt;
+            private String acml_vol;
+        }
+    }
+
+    @Getter
+    @Setter
+    public static class KisFluctuationRankResponse implements KisRtHeader {
+        private String rt_cd;
+        private String msg_cd;
+        private String msg1;
+        private List<Row> output;
+
+        @Getter @Setter
+        public static class Row {
+            private String stck_shrn_iscd;
+            private String hts_kor_isnm;
+            private String stck_prpr;
+            private String prdy_vrss_sign;
+            private String prdy_vrss;
+            private String prdy_ctrt;
+            private String acml_vol;
+        }
+    }
+
+    @Getter
+    @Setter
+    public static class KisNearNewHighLowResponse implements KisRtHeader {
+        private String rt_cd;
+        private String msg_cd;
+        private String msg1;
+        private List<Row> output;
+
+        @Getter @Setter
+        public static class Row {
+            private String hts_kor_isnm;
+            private String mksc_shrn_iscd;
+            private String stck_prpr;
+            private String prdy_vrss_sign;
+            private String prdy_vrss;
+            private String prdy_ctrt;
+            private String acml_vol;
+        }
+    }
+
     /* =========================
        Mapping / Helpers
        ========================= */
+
+    private FeaturedStockDto toFeaturedStock(KisVolumeRankResponse.Row row) {
+        return new FeaturedStockDto(
+                null,
+                row.getMksc_shrn_iscd(),
+                row.getHts_kor_isnm(),
+                "KRX",
+                parseBig(row.getStck_prpr()),
+                parseBig(row.getAcml_vol()),
+                signedByKisSign(row.getPrdy_vrss(), row.getPrdy_vrss_sign()),
+                signedByKisSign(row.getPrdy_ctrt(), row.getPrdy_vrss_sign())
+        );
+    }
+
+    private FeaturedStockDto toFeaturedStock(KisFluctuationRankResponse.Row row) {
+        return new FeaturedStockDto(
+                null,
+                row.getStck_shrn_iscd(),
+                row.getHts_kor_isnm(),
+                "KRX",
+                parseBig(row.getStck_prpr()),
+                parseBig(row.getAcml_vol()),
+                signedByKisSign(row.getPrdy_vrss(), row.getPrdy_vrss_sign()),
+                signedByKisSign(row.getPrdy_ctrt(), row.getPrdy_vrss_sign())
+        );
+    }
+
+    private FeaturedStockDto toFeaturedStock(KisNearNewHighLowResponse.Row row) {
+        return new FeaturedStockDto(
+                null,
+                row.getMksc_shrn_iscd(),
+                row.getHts_kor_isnm(),
+                "KRX",
+                parseBig(row.getStck_prpr()),
+                parseBig(row.getAcml_vol()),
+                signedByKisSign(row.getPrdy_vrss(), row.getPrdy_vrss_sign()),
+                signedByKisSign(row.getPrdy_ctrt(), row.getPrdy_vrss_sign())
+        );
+    }
 
     private StockDto mapToStockDto(Stock s, KisStatResponseDto.Output o) {
         BigDecimal price = parseBig(o.getStck_prpr());
@@ -470,6 +715,17 @@ public class KrStockClient {
 
     private BigDecimal parseBigOrZero(String x) {
         return parseBig(x);
+    }
+
+    private BigDecimal signedByKisSign(String value, String signCode) {
+        BigDecimal parsed = parseBig(value);
+        if ("4".equals(signCode) || "5".equals(signCode)) {
+            return parsed.abs().negate();
+        }
+        if ("3".equals(signCode)) {
+            return BigDecimal.ZERO;
+        }
+        return parsed.abs();
     }
 
     private String truncate(String s, int max) {

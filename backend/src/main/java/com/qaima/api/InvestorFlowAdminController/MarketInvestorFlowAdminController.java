@@ -24,12 +24,12 @@ public class MarketInvestorFlowAdminController {
     private final MarketInvestorFlowService marketInvestorFlowService;
 
     // 시장 단위 투자자 수급을 기간 적재한다. marketCode는 KSP(코스피), KSQ(코스닥)를 사용한다.
-    // curl -X POST "http://localhost:8080/api/v1/admin/investor-flow/market/sync?marketCode=KSP&industryCode=0000&from=2026-04-01&to=2026-04-30"
-    // curl -X POST "http://localhost:8080/api/v1/admin/investor-flow/market/sync?marketCode=KSQ&industryCode=0000&from=2026-04-01&to=2026-04-30"
+    // curl -X POST "http://localhost:8080/api/v1/admin/investor-flow/market/sync?marketCode=KSP&from=2026-04-01&to=2026-04-30"
+    // curl -X POST "http://localhost:8080/api/v1/admin/investor-flow/market/sync?marketCode=KSQ&from=2026-04-01&to=2026-04-30"
     @PostMapping("/sync")
     public Mono<ApiResponse<MarketInvestorFlowSyncResult>> sync(
             @RequestParam(defaultValue = "KSP") String marketCode,
-            @RequestParam(defaultValue = KisInvestorFlowClient.DEFAULT_MARKET_INDUSTRY_CODE) String industryCode,
+            @RequestParam(required = false) String industryCode,
             @RequestParam
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam
@@ -43,7 +43,7 @@ public class MarketInvestorFlowAdminController {
     @GetMapping("/series")
     public Mono<ApiResponse<List<MarketInvestorFlowRow>>> series(
             @RequestParam(defaultValue = "KSP") String marketCode,
-            @RequestParam(defaultValue = KisInvestorFlowClient.DEFAULT_MARKET_INDUSTRY_CODE) String industryCode,
+            @RequestParam(required = false) String industryCode,
             @RequestParam(defaultValue = "30") int limit
     ) {
         return marketInvestorFlowService.latestRows(marketCode, industryCode, limit)

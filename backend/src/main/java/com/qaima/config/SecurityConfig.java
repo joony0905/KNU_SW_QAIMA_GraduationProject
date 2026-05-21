@@ -58,6 +58,7 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/test/ping").permitAll()
                         .pathMatchers("/api/v1/charts/**").permitAll()
                         .pathMatchers("/api/v1/stocks/**").permitAll()
+                        .pathMatchers("/api/v1/featured-stocks/**").permitAll()
                         .pathMatchers("/api/v1/feature3/market-data/**").permitAll()
                         .pathMatchers("/api/v1/feature2/peercluster/data").permitAll()
 
