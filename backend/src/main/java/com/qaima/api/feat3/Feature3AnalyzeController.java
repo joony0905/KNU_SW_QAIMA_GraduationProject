@@ -9,6 +9,7 @@ import com.qaima.dto.feature3.PortfolioAnalyzeRequestDto;
 import com.qaima.dto.feature3.PortfolioAnalyzeResponseDto;
 import com.qaima.external.AnalysisApiClient;
 import com.qaima.external.dto.feature3.Feature3FastApiAnalyzeRequestDto;
+import com.qaima.repository.StockRepository;
 import com.qaima.service.credit.CreditService;
 import com.qaima.service.feature3.Feature3OverlayService;
 import com.qaima.service.feature3.Feature3RiskFreeRateService;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 @RestController
 @RequiredArgsConstructor
@@ -37,6 +39,7 @@ public class Feature3AnalyzeController {
     private final Feature3RiskFreeRateService feature3RiskFreeRateService;
     private final CreditService creditService;
     private final StockMappingService stockMappingService;
+    private final StockRepository stockRepository;
 
     @PostMapping("/analysis")
     public Mono<ApiResponse<PortfolioAnalyzeResponseDto>> analyze(
@@ -187,7 +190,7 @@ public class Feature3AnalyzeController {
     private Mono<Feature3FastApiAnalyzeRequestDto.Holding> toFastApiHolding(PortfolioAnalyzeRequestDto.Holding holding) {
         String identifier = firstNonBlank(holding.stockCode(), holding.companyName());
         if (isDirectStockCode(identifier)) {
-            return Mono.just(toFastApiHolding(holding, identifier, holding.companyName()));
+            return toFastApiHolding(holding, identifier, holding.companyName());
         }
 
         // 현재 구현: 프론트가 companyName만 보내도 Spring의 StockMappingService로 FastAPI 전달 전 stockCode를 확정한다.
@@ -202,27 +205,44 @@ public class Feature3AnalyzeController {
                         mapping.getStockCode(),
                         firstNonBlank(holding.companyName(), mapping.getCompanyName())
                 ))
+                .flatMap(mono -> mono)
                 .onErrorResume(ex -> {
                     log.warn("[Feature3] stock mapping failed. identifier={}, companyName={}, cause={}",
                             identifier, holding.companyName(), ex.getMessage());
-                    return Mono.just(toFastApiHolding(holding, identifier, holding.companyName()));
+                    return toFastApiHolding(holding, identifier, holding.companyName());
                 });
     }
 
-    private Feature3FastApiAnalyzeRequestDto.Holding toFastApiHolding(
+    private Mono<Feature3FastApiAnalyzeRequestDto.Holding> toFastApiHolding(
             PortfolioAnalyzeRequestDto.Holding holding,
             String stockCode,
             String companyName
     ) {
-        return new Feature3FastApiAnalyzeRequestDto.Holding(
+        return resolveExchangeCode(stockCode)
+                .map(exchangeCode -> new Feature3FastApiAnalyzeRequestDto.Holding(
                 stockCode,
                 companyName,
                 holding.quantity(),
                 holding.avgPrice(),
                 holding.currentPrice(),
                 holding.currency() != null ? holding.currency() : "KRW",
-                holding.assetType() != null ? holding.assetType() : "EQUITY"
-        );
+                holding.assetType() != null ? holding.assetType() : "EQUITY",
+                exchangeCode != null && !exchangeCode.isBlank() ? exchangeCode : null
+        ));
+    }
+
+    private Mono<String> resolveExchangeCode(String stockCode) {
+        if (stockCode == null || stockCode.isBlank()) {
+            return Mono.just("");
+        }
+        return Mono.fromCallable(() -> stockRepository.findByStockCodeWithExchange(stockCode.trim())
+                        .map(stock -> stock.getExchange() != null ? stock.getExchange().getCode() : "")
+                        .orElse(""))
+                .subscribeOn(Schedulers.boundedElastic())
+                .onErrorResume(ex -> {
+                    log.warn("[Feature3] exchange lookup failed. stockCode={}, cause={}", stockCode, ex.getMessage());
+                    return Mono.just("");
+                });
     }
 
     private boolean isDirectStockCode(String value) {

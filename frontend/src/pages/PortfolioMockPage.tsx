@@ -113,8 +113,7 @@ const EXTRA_OPTIONS: AnalysisOption[] = [
     key: "correlation",
     label: "종목 분산 구조 반영",
     descriptions: [
-      "보유 종목끼리 실제로 얼마나 함께 움직였는지를 기준으로 분산 효과가 약한 구간을 반영합니다.",
-      "Peer corr은 같은 업종 내 동행 종목 참고 정보이며, 비중 조정에는 보유 종목 간 내부 상관관계를 사용합니다."
+      "내가 보유한 종목들 간의 실제 움직임을 기반으로 위험 집중도를 분석합니다.","또한, 보유 종목이 속한 산업군 내에 비슷한 흐름을 보이는 외부 종목들을 함께 참고합니다.",
     ],
   },
   {
@@ -135,13 +134,131 @@ const EXTRA_OPTIONS: AnalysisOption[] = [
   },
 ];
 
-import type { Feature3OverlayCachePreviewResponse, PortfolioAnalyzeResponse } from "../api/portfolio";
+import type { Feature3CapmAsset, Feature3OverlayCachePreviewResponse, Feature3SclSeries, PortfolioAnalyzeResponse } from "../api/portfolio";
 
 const formatPct = (value?: number | null, digits = 1): string =>
   `${(((value ?? 0) as number) * 100).toFixed(digits)}%`;
 
+const formatPctPoint = (value?: number | null, digits = 2): string => {
+  const numeric = (value ?? 0) as number;
+  const sign = numeric > 0 ? "+" : "";
+  return `${sign}${(numeric * 100).toFixed(digits)}%p`;
+};
+
 const formatKRW = (value?: number | null): string =>
   `${Math.round(value ?? 0).toLocaleString("ko-KR")}원`;
+
+const capmWeightReasons = (asset: Feature3CapmAsset): string[] => {
+  const warnings = new Set(asset.warnings ?? []);
+  const reasons: string[] = [];
+  if (warnings.has("CAPM_LOW_R_SQUARED") || (asset.rSquared !== null && asset.rSquared !== undefined && asset.rSquared < 0.1)) {
+    reasons.push("낮은 R²");
+  }
+  if (asset.correlation !== null && asset.correlation !== undefined && Math.abs(asset.correlation) < 0.3) {
+    reasons.push("낮은 correlation");
+  }
+  if (warnings.has("CAPM_COMMON_SAMPLE_INSUFFICIENT") || warnings.has("CAPM_PARTIAL_LOW_COMMON_SAMPLE") || (asset.commonSampleSize ?? 0) < 120) {
+    reasons.push("표본 부족");
+  }
+  if (warnings.has("CAPM_BETA_UNAVAILABLE")) {
+    reasons.push("beta 계산 불가");
+  }
+  if (
+    warnings.has("CAPM_HIGH_VOLATILITY")
+    || (asset.volatilityReliabilityFactor !== null && asset.volatilityReliabilityFactor !== undefined && asset.volatilityReliabilityFactor < 0.75)
+    || (asset.annualVolatility !== null && asset.annualVolatility !== undefined && asset.annualVolatility > 0.4)
+  ) {
+    reasons.push("높은 변동성");
+  }
+  if ((asset.capmWeight ?? 0) < 0.3 && reasons.length === 0) {
+    reasons.push("신뢰도 낮음");
+  }
+  return reasons.slice(0, 3);
+};
+
+const capmWeightReasonText = (asset: Feature3CapmAsset): string => {
+  const reasons = capmWeightReasons(asset);
+  if (!reasons.length) return "CAPM 품질 지표 양호";
+  return `${reasons.join(" · ")}으로 CAPM 반영 제한`;
+};
+
+const riskLevelLabel: Record<string, string> = {
+  LOW: "낮음",
+  MID: "보통",
+  HIGH: "높음",
+};
+
+const capmStatusLabel: Record<string, string> = {
+  AVAILABLE: "분석 가능",
+  DISABLED: "분석 제외",
+  UNAVAILABLE: "데이터 없음",
+};
+
+const capmAssetStatusLabel: Record<string, string> = {
+  APPLIED: "반영",
+  PARTIAL: "부분 반영",
+  EXCLUDED: "제외",
+};
+
+const benchmarkSourceLabel: Record<string, string> = {
+  DB: "저장 데이터",
+  KIS_BACKFILLED: "외부 데이터 보강",
+  DB_INSUFFICIENT: "저장 데이터 부족",
+  DB_STALE: "최신 데이터 아님",
+  UNAVAILABLE: "데이터 없음",
+};
+
+const pricePolicyLabel: Record<string, string> = {
+  YAHOO_ADJ_CLOSE: "수정종가",
+  RAW_CLOSE: "종가",
+  YAHOO_ADJ_CLOSE_WITH_KIS_FALLBACK: "수정주가 + 종가 보완",
+  ADJUSTED_CLOSE: "수정종가 요청",
+  CLOSE: "종가",
+};
+
+const covarianceModelLabel: Record<string, string> = {
+  LEDOIT_WOLF: "안정화 공분산",
+  SAMPLE_COVARIANCE: "표본 공분산",
+  SAMPLE: "표본 공분산",
+};
+
+const marketDataSourceLabel: Record<string, string> = {
+  DB: "저장 데이터",
+  KIS: "국내 시세",
+  YAHOO: "Yahoo 수정종가",
+  MARKETSTACK: "해외 시세",
+  MIXED: "혼합",
+  EMPTY: "데이터 없음",
+  UNAVAILABLE: "사용 불가",
+};
+
+const cacheStatusLabel: Record<string, string> = {
+  HIT: "재사용",
+  MISS: "새 조회",
+  STALE: "오래됨",
+  AVAILABLE: "사용 가능",
+  UNAVAILABLE: "확인 필요",
+  BYPASSED: "캐시 미사용",
+  REFRESHED: "갱신됨",
+};
+
+type OverlayCachePolicy = "REUSE_AVAILABLE" | "FORCE_REFRESH";
+type OverlayCachePolicyMap = Record<string, OverlayCachePolicy>;
+
+const overlayPreviewMessage = (message?: string | null): string => {
+  if (!message) return "";
+  return message;
+};
+
+const featureSourceLabel: Record<string, string> = {
+  CORE_RISK: "핵심 리스크",
+  FEATURE1: "기본 지표",
+  FEATURE2: "보조 관측",
+  FEATURE2_INDUSTRY: "업종 관측",
+  FEATURE2_PEERCLUSTER: "유사 종목 관측",
+  FEATURE2_NEWS: "뉴스 관측",
+  FEATURE3: "포트폴리오 분석",
+};
 
 type OverlayValueItem = {
   label: string;
@@ -342,6 +459,8 @@ const portfolioTypeLabel: Record<string, string> = {
   BALANCED: "균형형",
   AGGRESSIVE: "공격형",
   PSYCHOLOGICAL: "심리형",
+  RISK_ALLOCATION: "CAL 기반 위험배분",
+  UTILITY_OPTIMAL: "효용최대 포트폴리오",
   THEORETICAL_UTILITY: "이론적 효용접점",
   OVERLAY_BALANCED: "보조 관측 균형 시나리오",
   QUALITY_TILT: "품질 압력 시나리오",
@@ -368,6 +487,9 @@ const portfolioPieStyle = (weights: PortfolioAnalyzeResponse["currentPortfolio"]
     background: `conic-gradient(${segments.join(", ") || "#e5e7eb 0% 100%"})`,
   };
 };
+
+const weightMapByStock = (weights: PortfolioAnalyzeResponse["currentPortfolio"]["weights"]) =>
+  new Map(weights.map((weight) => [weight.stockCode, weight.weight]));
 
 type HoldingAllocation = {
   id: number;
@@ -591,17 +713,36 @@ export default function PortfolioMockPage() {
   const [analysisResult, setAnalysisResult] = useState<PortfolioAnalyzeResponse | null>(null);
   const [analysisTab, setAnalysisTab] = useState<"BASIC" | "ADVANCED">("BASIC");
   const [overlayPreview, setOverlayPreview] = useState<Feature3OverlayCachePreviewResponse | null>(null);
+  const [overlayCachePolicies, setOverlayCachePolicies] = useState<OverlayCachePolicyMap>({});
   const [frontierHover, setFrontierHover] = useState<FrontierHoverState | null>(null);
+  const [sclHover, setSclHover] = useState<FrontierHoverState | null>(null);
+  const [smlHover, setSmlHover] = useState<FrontierHoverState | null>(null);
+  const [selectedSclStockCode, setSelectedSclStockCode] = useState<string | null>(null);
+  const [selectedSmlBenchmarkCode, setSelectedSmlBenchmarkCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
   const [isModelOpen, setIsModelOpen] = useState(false);
   const modelRef = useRef<HTMLDivElement | null>(null);
+  const portfolioReportRef = useRef<HTMLDivElement | null>(null);
 
   const toggleExtraOption = (key: string) => {
     setOverlayPreview(null);
+    setOverlayCachePolicies({});
     setExtraOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   };
+
+  const overlayPreviewCredit = overlayPreview
+    ? overlayPreview.coreCredit + overlayPreview.overlays.reduce((sum, overlay) => {
+        if (overlay.policySelectable && overlay.cacheStatus === "HIT" && overlayCachePolicies[overlay.overlayType] === "FORCE_REFRESH") {
+          return sum + 1;
+        }
+        return sum + (overlay.additionalCredit ?? 0);
+      }, 0)
+    : 0;
+
+  const overlayPolicyPayload = (overlays: string[]): OverlayCachePolicyMap =>
+    Object.fromEntries(overlays.map((overlay) => [overlay, overlayCachePolicies[overlay] ?? "REUSE_AVAILABLE"]));
 
   const handleAnalyzeClick = async (skipOverlayPreview = false) => {
     const validRows = rows.filter((r) => r.name.trim() !== "");
@@ -625,12 +766,16 @@ export default function PortfolioMockPage() {
           stockCodes: validRows.map((row) => row.stockCode ?? row.name.trim()),
           selectedOverlays: selectedOptions,
           cachePolicy: "REUSE_AVAILABLE",
+          overlayCachePolicies: overlayPolicyPayload(selectedOptions),
         });
         setOverlayPreview(preview);
-          return;
+        setOverlayCachePolicies(Object.fromEntries(
+          preview.overlays
+            .filter((overlay) => overlay.policySelectable !== false)
+            .map((overlay) => [overlay.overlayType, "REUSE_AVAILABLE" as const]),
+        ));
+        return;
       }
-      // 현재 구현: Feature3 core risk는 항상 실행하고, 선택 옵션은 추후 overlay/cache preview로 연결한다.
-      // 진행 예정: 선택 옵션별 Redis cache 상태와 credit preview 모달을 분석 요청 전에 표시한다.
       const analysisWindow = selectedWindow;
       const result = await fetchPortfolioAnalysis({
         holdings: validRows.map((r) => ({
@@ -659,6 +804,7 @@ export default function PortfolioMockPage() {
           fetchCalendarDays: analysisWindow.fetchCalendarDays,
           annualizationFactor: 252,
           cachePolicy: "REUSE_AVAILABLE",
+          overlayCachePolicies: overlayPolicyPayload(selectedOptions),
           selectedOverlays: selectedOptions,
           includeFrontier: true,
           includeDiagnostics: true,
@@ -716,6 +862,39 @@ export default function PortfolioMockPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isModelOpen]);
+
+  useEffect(() => {
+    const reportNode = portfolioReportRef.current;
+    if (!reportNode || !analysisResult) return;
+
+    const sections = Array.from(reportNode.children).filter(
+      (child): child is HTMLElement => child instanceof HTMLElement,
+    );
+
+    sections.forEach((section, index) => {
+      section.classList.remove("is-visible");
+      section.style.transitionDelay = `${Math.min(index * 55, 320)}ms`;
+    });
+
+    if (typeof IntersectionObserver === "undefined") {
+      sections.forEach((section) => section.classList.add("is-visible"));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.18, rootMargin: "0px 0px -28% 0px" },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [analysisResult, analysisTab]);
 
   // 공통: 현재 마켓의 rows 조작
   const handleAddRow = () => {
@@ -1302,12 +1481,12 @@ export default function PortfolioMockPage() {
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div>
                   <h3 className="text-base font-bold text-ink">추가 분석 비용 확인</h3>
-                  <p className="mt-1 text-sm text-ink-3">{overlayPreview.userMessage}</p>
+                  <p className="mt-1 text-sm text-ink-3">{overlayPreviewMessage(overlayPreview.userMessage)}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-ink-4">예상 차감</p>
                   <p className="text-2xl font-bold font-mono tabular text-ink">
-                    {overlayPreview.totalCredit} credit
+                    {overlayPreviewCredit} credit
                   </p>
                 </div>
               </div>
@@ -1316,11 +1495,59 @@ export default function PortfolioMockPage() {
                   <div key={overlay.overlayType} className="rounded-xl bg-bg-sunk border border-line p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-bold text-ink">{overlay.overlayType}</p>
-                      <span className="text-xs font-bold text-ink-4">{overlay.cacheStatus}</span>
+                      <span className="text-xs font-bold text-ink-4">{cacheStatusLabel[overlay.cacheStatus ?? ""] ?? overlay.cacheStatus}</span>
                     </div>
-                    <p className="mt-1 text-xs text-ink-3">{overlay.userMessage}</p>
+                    <p className="mt-1 text-xs text-ink-3">{overlayPreviewMessage(overlay.userMessage)}</p>
+                    <p className="mt-2 text-[11px] text-ink-4">
+                      {overlay.cacheStatus === "MISS"
+                        ? "새 분석 후 기준 시각이 기록됩니다"
+                        : overlay.cacheAsOf
+                          ? overlayCachePolicies[overlay.overlayType] === "FORCE_REFRESH"
+                            ? `기존 기준: ${overlay.cacheAsOf} · 새로 갱신 예정`
+                            : overlay.cacheStatus === "AVAILABLE"
+                              ? `기준: ${overlay.cacheAsOf}`
+                              : `최근 결과 기준: ${overlay.cacheAsOf}`
+                          : overlay.cacheStatus === "AVAILABLE"
+                            ? "기준: 현재 등록된 산업 분류"
+                            : "기준 시각 확인 전"}
+                    </p>
+                    {overlay.policySelectable !== false && overlay.cacheStatus === "HIT" && (
+                      <div className="mt-3 grid grid-cols-1 gap-1.5">
+                        {[
+                          { value: "REUSE_AVAILABLE" as const, label: "최근 결과 사용해서 분석" },
+                          { value: "FORCE_REFRESH" as const, label: "새로 분석하기" },
+                        ].map((option) => {
+                          const checked = (overlayCachePolicies[overlay.overlayType] ?? "REUSE_AVAILABLE") === option.value;
+                          return (
+                            <label
+                              key={`${overlay.overlayType}-${option.value}`}
+                              className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold cursor-pointer transition-colors ${
+                                checked
+                                  ? "border-accent bg-accent-soft text-accent"
+                                  : "border-line bg-surface text-ink-3 hover:border-accent/40"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  setOverlayCachePolicies((prev) => ({
+                                    ...prev,
+                                    [overlay.overlayType]: option.value,
+                                  }));
+                                }}
+                                className="h-3.5 w-3.5 rounded border-line accent-accent"
+                              />
+                              <span>{option.label}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                     <p className="mt-2 text-xs font-mono tabular text-ink-4">
-                      +{overlay.additionalCredit} credit
+                      +{overlay.policySelectable !== false && overlay.cacheStatus === "HIT" && overlayCachePolicies[overlay.overlayType] === "FORCE_REFRESH"
+                        ? 1
+                        : overlay.additionalCredit} credit
                     </p>
                   </div>
                 ))}
@@ -1360,7 +1587,7 @@ export default function PortfolioMockPage() {
 
           {/* 3.1 핵심 요약 카드 */}
           {analysisResult && (
-            <section className="w-full flex flex-col gap-5">
+            <section className="qaima-portfolio-report qaima-report-enter w-full flex flex-col gap-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <h2 className="text-lg font-bold text-ink tracking-tight">분석 결과</h2>
                 <div className="inline-flex self-start sm:self-auto rounded-xl bg-bg-sunk border border-line p-1">
@@ -1389,7 +1616,7 @@ export default function PortfolioMockPage() {
                 </div>
               </div>
 
-              {analysisTab === "BASIC" && <div className="flex flex-col gap-5">
+              {analysisTab === "BASIC" && <div ref={portfolioReportRef} className="qaima-scroll-stagger flex flex-col gap-5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* 카드 1: 위험 수준 */}
                 <div className="rounded-2xl p-5 flex flex-col gap-3 bg-surface border border-line shadow-card">
@@ -1412,7 +1639,7 @@ export default function PortfolioMockPage() {
                           : "bg-danger/10 text-danger"
                     }`}
                   >
-                    {analysisResult.summary.riskLevel}
+                    {riskLevelLabel[analysisResult.summary.riskLevel] ?? analysisResult.summary.riskLevel}
                   </span>
                 </div>
 
@@ -1510,7 +1737,7 @@ export default function PortfolioMockPage() {
                                     : "bg-danger/10 text-danger"
                               }`}
                             >
-                              {portfolio.riskLevel}
+                              {riskLevelLabel[portfolio.riskLevel] ?? portfolio.riskLevel}
                             </span>
                           </div>
 
@@ -1566,7 +1793,8 @@ export default function PortfolioMockPage() {
 	                  if (type === "CURRENT") return "현재 포트폴리오";
 	                  if (type === "MIN_VOL") return "변동성 최소안";
 	                  if (type === "MAX_SHARPE") return "위험 대비 수익 우수안";
-	                  if (type === "UTILITY_OPTIMAL") return "현재 조건 최적안";
+	                  if (type === "RISK_ALLOCATION") return "CAL 기반 위험배분";
+	                  if (type === "UTILITY_OPTIMAL") return "효용최대안";
 	                  if (type === "THEORETICAL_UTILITY") return label ?? "목표 투자안";
 	                  return label ?? type;
 	                };
@@ -1578,7 +1806,7 @@ export default function PortfolioMockPage() {
 	                  : formatKRW(theoreticalPortfolio?.additionalRequiredCash);
 	                const portfolioCards = [
 	                  analysisResult.currentPortfolio,
-	                  ...["MIN_VOL", "MAX_SHARPE", "UTILITY_OPTIMAL"]
+	                  ...["MIN_VOL", "MAX_SHARPE", "RISK_ALLOCATION", "UTILITY_OPTIMAL"]
                     .map((type) => analysisResult.advanced?.candidatePortfolios.find((portfolio) => portfolio.type === type))
                     .filter((portfolio): portfolio is NonNullable<typeof portfolio> => Boolean(portfolio)),
                 ];
@@ -1715,6 +1943,137 @@ export default function PortfolioMockPage() {
 	                );
 	              })()}
 
+              {(() => {
+                const benchmark = analysisResult.advanced?.benchmarkPolicy;
+                const capm = analysisResult.advanced?.capmPolicy;
+                const expectedPolicy = analysisResult.advanced?.expectedReturnPolicy;
+                const capmAssets = ((expectedPolicy?.assets ?? analysisResult.advanced?.scl?.assets ?? []) as Feature3CapmAsset[]);
+                if (!benchmark && !capm && !capmAssets.length) return null;
+                const averageCapmWeight = typeof expectedPolicy?.averageCapmWeight === "number" ? expectedPolicy.averageCapmWeight : 0;
+                const averageBlendConfidence = typeof expectedPolicy?.averageBlendConfidence === "number" ? expectedPolicy.averageBlendConfidence : 0;
+                const appliedCount = (capm?.appliedAssetCount ?? 0) + (capm?.partialAssetCount ?? 0);
+                const excludedCount = capm?.excludedAssetCount ?? 0;
+                const aiSummary = analysisResult.explain?.sections?.efficiencyAnalysis?.summary;
+                const plainSummary = aiSummary
+                  ?.replaceAll("CAPM", "시장 기준")
+                  .replaceAll("historical", "과거 흐름")
+                  .replaceAll("Historical", "과거 흐름")
+                  .replaceAll("blended expected return", "최종 기대 흐름")
+                  .replaceAll("blendedExpectedReturn", "최종 기대 흐름")
+                  .replaceAll("blended E[R]", "최종 기대 흐름")
+                  .replaceAll("E[R]", "기대 흐름")
+                  .replaceAll("SCL/SML", "시장 민감도 진단");
+                return (
+                  <section className="rounded-2xl p-5 bg-surface border border-line shadow-card">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-bold text-ink">시장 기준 분석</h3>
+                        <p className="mt-1 text-sm leading-relaxed text-ink-3">
+                          과거 가격 흐름과 시장 기준 흐름을 함께 반영해 최종 기대 흐름이 어떻게 잡혔는지 확인합니다.
+                        </p>
+                      </div>
+                      <span className="rounded-md border border-line bg-bg-sunk px-2 py-1 text-[11px] font-mono text-ink-3">
+                        {capmStatusLabel[capm?.status ?? "UNAVAILABLE"] ?? capm?.status ?? "데이터 없음"}
+                      </span>
+                    </div>
+
+                    {plainSummary ? (
+                      <div className="mt-3 rounded-xl bg-bg-sunk border border-line p-4">
+                        <p className="text-xs leading-relaxed text-ink-3">{plainSummary}</p>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
+                      <div className="rounded-lg bg-bg-sunk border border-line p-3">
+                        <p className="text-[11px] text-ink-4">벤치마크</p>
+                        <p className="mt-1 text-sm font-bold text-ink">{benchmark?.benchmarkName ?? benchmark?.benchmarkCode ?? "-"}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-4">{benchmarkSourceLabel[benchmark?.source ?? ""] ?? "-"} · 결측 {formatPct(benchmark?.missingRate)}</p>
+                      </div>
+                      <div className="rounded-lg bg-bg-sunk border border-line p-3">
+                        <p className="text-[11px] text-ink-4">반영된 종목</p>
+                        <p className="mt-1 text-sm font-mono font-bold text-ink">{appliedCount}개</p>
+                        <p className="mt-0.5 text-[11px] text-ink-4">제외 {excludedCount}개 · 부분 {capm?.partialAssetCount ?? 0}개</p>
+                      </div>
+                      <div className="rounded-lg bg-bg-sunk border border-line p-3">
+                        <p className="text-[11px] text-ink-4">시장 기준 반영 비중</p>
+                        <p className="mt-1 text-sm font-mono font-bold text-ink">{formatPct(averageCapmWeight)}</p>
+                        <div className="mt-2 h-2 rounded-full bg-surface overflow-hidden">
+                          <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, averageCapmWeight * 100))}%` }} />
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-bg-sunk border border-line p-3">
+                        <p className="text-[11px] text-ink-4">평균 신뢰도</p>
+                        <p className="mt-1 text-sm font-mono font-bold text-ink">{formatPct(averageBlendConfidence)}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-4">낮을수록 과거 흐름 중심</p>
+                      </div>
+                    </div>
+
+                    {capmAssets.length ? (
+                      <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
+                        <div className="rounded-lg bg-bg-sunk border border-line p-3">
+                          <h4 className="text-xs font-bold text-ink">종목별 최종 기대 흐름</h4>
+                          <div className="mt-3 flex flex-col gap-3">
+                            {capmAssets.slice(0, 8).map((asset) => {
+                              const capmWeight = Math.min(1, Math.max(0, asset.capmWeight ?? 0));
+                              const historicalWeight = Math.min(1, Math.max(0, asset.historicalWeight ?? (1 - capmWeight)));
+                              return (
+                                <div key={`capm-basic-bar-${asset.stockCode}`}>
+                                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                                    <span className="font-semibold text-ink truncate">{asset.companyName ?? asset.stockCode}</span>
+                                    <span className="font-mono tabular text-ink-4">
+                                      과거 {formatPct(historicalWeight, 0)} · 시장 {formatPct(capmWeight, 0)}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 flex h-2 rounded-full bg-surface overflow-hidden">
+                                    <div className="h-full bg-slate-400" style={{ width: `${historicalWeight * 100}%` }} />
+                                    <div className="h-full bg-accent" style={{ width: `${capmWeight * 100}%` }} />
+                                  </div>
+                                  <div className="mt-1 grid grid-cols-3 gap-2 text-[10px] text-ink-4">
+                                    <span>과거 흐름 {formatPct(asset.historicalExpectedReturn)}</span>
+                                    <span>시장 기준 {asset.capmExpectedReturn !== null && asset.capmExpectedReturn !== undefined ? formatPct(asset.capmExpectedReturn) : "-"}</span>
+                                    <span className="text-ink">최종 {formatPct(asset.blendedExpectedReturn)}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg bg-bg-sunk border border-line p-3">
+                          <h4 className="text-xs font-bold text-ink">종목별 결과 요약</h4>
+                          <div className="mt-2 overflow-x-auto">
+                            <table className="w-full min-w-[460px] text-left text-[11px]">
+                              <thead className="text-ink-4">
+                                <tr>
+                                  <th className="py-2 pr-3">종목</th>
+                                  <th className="py-2 pr-3">시장 반영</th>
+                                  <th className="py-2 pr-3">최종 기대 흐름</th>
+                                  <th className="py-2 pr-3">상태</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {capmAssets.slice(0, 8).map((asset) => (
+                                  <tr key={`capm-basic-table-${asset.stockCode}`} className="border-t border-line text-ink-3">
+                                    <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
+                                    <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.capmWeight)}</td>
+                                    <td className="py-2 pr-3 font-mono tabular text-ink">{formatPct(asset.blendedExpectedReturn)}</td>
+                                    <td className="py-2 pr-3">{capmAssetStatusLabel[asset.status ?? ""] ?? "-"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <p className="mt-3 rounded-lg bg-bg-sunk border border-line px-3 py-2 text-[11px] leading-relaxed text-ink-4">
+                      시장 기준 분석은 종목이 시장 흐름과 얼마나 같이 움직였는지 참고해 최종 기대 흐름을 보정한 결과입니다. 예상 수익률 보장이나 추천 비중으로 해석하지 않습니다.
+                    </p>
+                  </section>
+                );
+              })()}
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="rounded-2xl p-5 bg-surface border border-line shadow-card">
                   <h3 className="text-base font-bold text-ink">위험 기여도</h3>
@@ -1748,7 +2107,7 @@ export default function PortfolioMockPage() {
                       <div key={driver.code} className="rounded-xl bg-bg-sunk border border-line p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-bold text-ink">{driver.title}</p>
-                          <span className="text-[11px] font-bold text-ink-4">{driver.source}</span>
+                          <span className="text-[11px] font-bold text-ink-4">{featureSourceLabel[driver.source] ?? driver.source}</span>
                         </div>
                         <p className="mt-1 text-xs leading-relaxed text-ink-3">{driver.description}</p>
                       </div>
@@ -1761,11 +2120,11 @@ export default function PortfolioMockPage() {
                 <section className="rounded-2xl p-5 bg-surface border border-line shadow-card">
                   <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
                     <div>
-                      <h3 className="text-base font-bold text-ink">보조 관측 시나리오</h3>
-                      <p className="mt-1 text-sm leading-relaxed text-ink-3">
-                        core risk 최적화 결과를 대체하지 않고, 선택한 보조 관측에서 어떤 확대·축소·분산 압력이 관측되는지 보여주는 시뮬레이션입니다.
-                        Peer corr은 참고 정보로 표시하며, 분산 리스크는 위험 기여도를 우선 기준으로 봅니다.
-                      </p>
+	                      <h3 className="text-base font-bold text-ink">보조 관측 시나리오</h3>
+	                      <p className="mt-1 text-sm leading-relaxed text-ink-3">
+	                        핵심 리스크 최적화 결과를 대체하지 않는 보조 관측 기반 민감도 분석입니다.
+	                        선택한 보조 관측이 현재 구성의 확대·축소·분산 판단에 미치는 영향을 보여주며, 투자 추천 비중이나 수익률 최적해로 해석하지 않습니다.
+	                      </p>
                     </div>
                     <span className="text-xs font-mono tabular text-ink-4">
                       signals {analysisResult.overlays.overlaySignals?.length ?? 0}
@@ -1806,16 +2165,22 @@ export default function PortfolioMockPage() {
                     {renderExplainSection(analysisResult.explain?.sections?.overlayObservations)}
                   </div>
 
-                  <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-                    {analysisResult.overlays.adjustedPortfolios.map((portfolio) => (
-                      <div key={portfolio.type} className="rounded-xl bg-bg-sunk border border-line p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-bold text-ink">{portfolioTypeLabel[portfolio.type] ?? portfolio.label}</p>
-                            <p className="mt-1 text-xs leading-relaxed text-ink-3">{portfolio.userDescription}</p>
-                          </div>
-                          <span className="text-[11px] font-bold text-ink-4">{portfolio.riskLevel}</span>
-                        </div>
+	                  <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+	                    {analysisResult.overlays.adjustedPortfolios.map((portfolio) => {
+                        const baseWeights = weightMapByStock(analysisResult.currentPortfolio.weights);
+                        const maxAbsDelta = Math.max(
+                          ...portfolio.weights.map((weight) => Math.abs(weight.weight - (baseWeights.get(weight.stockCode) ?? 0))),
+                          0,
+                        );
+                        return (
+	                      <div key={portfolio.type} className="rounded-xl bg-bg-sunk border border-line p-4">
+	                        <div className="flex items-start justify-between gap-3">
+	                          <div>
+	                            <p className="text-sm font-bold text-ink">{portfolioTypeLabel[portfolio.type] ?? portfolio.label}</p>
+	                            <p className="mt-1 text-xs leading-relaxed text-ink-3">{portfolio.userDescription}</p>
+	                          </div>
+	                          <span className="text-[11px] font-bold text-ink-4">{riskLevelLabel[portfolio.riskLevel] ?? portfolio.riskLevel}</span>
+	                        </div>
                         <div className="mt-4 flex items-center gap-3">
                           <div
                             className="w-16 h-16 rounded-full border border-line flex-shrink-0"
@@ -1824,26 +2189,39 @@ export default function PortfolioMockPage() {
                           />
                           <div className="min-w-0">
                             <p className="text-[11px] text-ink-4">변동성</p>
-                            <p className="text-lg font-bold font-mono tabular text-ink">{formatPct(portfolio.volatility)}</p>
-                            <p className="mt-0.5 text-[11px] font-mono tabular text-ink-4">
-                              압력 반영 예시
-                            </p>
-                          </div>
-                        </div>
-                        <div className="mt-4 flex flex-col gap-1.5">
-                          {portfolio.weights.map((weight) => (
-                            <div key={`${portfolio.type}-${weight.stockCode}`} className="flex items-center gap-2">
-                              <span className="w-20 truncate text-xs text-ink-3">{weight.companyName ?? weight.stockCode}</span>
-                              <div className="flex-1 h-2 rounded-full bg-surface overflow-hidden">
-                                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, weight.weight * 100))}%` }} />
-                              </div>
-                                  <span className="w-12 text-right text-xs font-mono tabular text-ink-4">{formatPct(weight.weight, 0)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+	                            <p className="text-lg font-bold font-mono tabular text-ink">{formatPct(portfolio.volatility)}</p>
+	                            <p className="mt-0.5 text-[11px] font-mono tabular text-ink-4">
+	                              최대 변화 {formatPctPoint(maxAbsDelta)}
+	                            </p>
+	                          </div>
+	                        </div>
+	                        <div className="mt-4 flex flex-col gap-1.5">
+	                          {portfolio.weights.map((weight) => {
+                              const baseWeight = baseWeights.get(weight.stockCode) ?? 0;
+                              const delta = weight.weight - baseWeight;
+                              const deltaClass = Math.abs(delta) < 0.0005
+                                ? "text-ink-4"
+                                : delta > 0
+                                  ? "text-success"
+                                  : "text-danger";
+                              return (
+	                            <div key={`${portfolio.type}-${weight.stockCode}`} className="flex items-center gap-2">
+	                              <span className="w-20 truncate text-xs text-ink-3">{weight.companyName ?? weight.stockCode}</span>
+	                              <div className="flex-1 h-2 rounded-full bg-surface overflow-hidden">
+	                                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, weight.weight * 100))}%` }} />
+	                              </div>
+	                              <div className="w-[118px] text-right font-mono tabular">
+	                                <p className="text-[11px] text-ink-3">{formatPct(baseWeight)} → {formatPct(weight.weight)}</p>
+	                                <p className={`text-[10px] ${deltaClass}`}>{formatPctPoint(delta)}</p>
+	                              </div>
+	                            </div>
+	                            );
+                            })}
+	                        </div>
+	                      </div>
+	                    );
+                      })}
+	                  </div>
 
                   <div className="mt-5">
                     {renderExplainSection(analysisResult.explain?.sections?.portfolioComparison)}
@@ -1889,7 +2267,7 @@ export default function PortfolioMockPage() {
 
               {analysisResult.warnings.length > 0 && (
                 <div className="rounded-2xl p-4 bg-warn/10 border border-warn/20">
-                  <p className="text-sm font-bold text-ink">데이터 확인 필요</p>
+                  <p className="text-sm font-bold text-ink">참고해주세요</p>
                   <div className="mt-2 flex flex-col gap-1">
                     {analysisResult.warnings.slice(0, 4).map((warning) => (
                       <p key={`${warning.code}-${warning.target ?? "global"}`} className="text-xs text-ink-3">
@@ -1902,7 +2280,7 @@ export default function PortfolioMockPage() {
 
               </div>}
 
-              {analysisTab === "ADVANCED" && <div className="rounded-2xl p-5 bg-surface border border-line shadow-card">
+              {analysisTab === "ADVANCED" && <div ref={portfolioReportRef} className="qaima-scroll-stagger rounded-2xl p-5 bg-surface border border-line shadow-card">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-bold text-ink">분석 진단</h3>
@@ -1917,7 +2295,7 @@ export default function PortfolioMockPage() {
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
                     <p className="text-xs text-ink-4">가격 시계열 기준</p>
                     <p className="mt-1 text-sm font-bold text-ink">
-                      {analysisResult.policy.pricePolicy.used}
+                      {pricePolicyLabel[analysisResult.policy.pricePolicy.used] ?? analysisResult.policy.pricePolicy.used}
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
@@ -1938,7 +2316,7 @@ export default function PortfolioMockPage() {
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
                     <p className="text-xs text-ink-4">공분산 추정 모형</p>
                     <p className="mt-1 text-sm font-bold text-ink">
-                      {analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? "-"}
+                      {covarianceModelLabel[analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? ""] ?? analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? "-"}
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
@@ -1951,6 +2329,476 @@ export default function PortfolioMockPage() {
                     </p>
                   </div>
                 </div>
+
+                {(() => {
+                  const benchmark = analysisResult.advanced?.benchmarkPolicy;
+                  const capm = analysisResult.advanced?.capmPolicy;
+                  const expectedPolicy = analysisResult.advanced?.expectedReturnPolicy;
+                  const capmAssets = ((expectedPolicy?.assets ?? analysisResult.advanced?.scl?.assets ?? []) as Feature3CapmAsset[]);
+                  const sclSeries = (analysisResult.advanced?.scl?.series ?? []) as Feature3SclSeries[];
+                  const selectableSclSeries = sclSeries.filter((series) => (series.points?.length ?? 0) > 1);
+                  const fallbackSclSeries = selectableSclSeries[0] ?? null;
+                  const activeSclSeries = (
+                    selectedSclStockCode
+                      ? selectableSclSeries.find((series) => series.stockCode === selectedSclStockCode)
+                      : null
+                  ) ?? fallbackSclSeries;
+                  const activeSclAsset = activeSclSeries
+                    ? capmAssets.find((asset) => asset.stockCode === activeSclSeries.stockCode)
+                    : null;
+                  const sclPoints = activeSclSeries?.points ?? [];
+                  const sclLine = activeSclSeries?.line;
+                  const smlGroups = analysisResult.advanced?.sml?.groups ?? [];
+                  const activeSmlGroup = (
+                    selectedSmlBenchmarkCode
+                      ? smlGroups.find((group) => group.benchmarkCode === selectedSmlBenchmarkCode)
+                      : null
+                  ) ?? smlGroups[0] ?? null;
+                  const smlLine = activeSmlGroup?.line ?? analysisResult.advanced?.sml?.line ?? [];
+                  const smlAssets = ((activeSmlGroup?.assets ?? analysisResult.advanced?.sml?.assets ?? capmAssets) as Feature3CapmAsset[]);
+                  const primaryBenchmark = benchmark?.benchmarks?.[0] ?? benchmark;
+                  if (!benchmark && !capm && !capmAssets.length) return null;
+                  const betaValues = [
+                    ...smlLine.map((point) => point.beta),
+                    ...smlAssets.map((asset) => asset.beta).filter((value): value is number => value !== null && value !== undefined),
+                  ];
+                  const returnValues = [
+                    ...smlLine.map((point) => point.expectedReturn),
+                    ...smlAssets
+                      .flatMap((asset) => [asset.capmExpectedReturn, asset.historicalExpectedReturn, asset.blendedExpectedReturn])
+                      .filter((value): value is number => value !== null && value !== undefined),
+                  ];
+                  const minBeta = Math.min(...betaValues, -1);
+                  const maxBeta = Math.max(...betaValues, 1);
+                  const minReturn = Math.min(...returnValues, -0.1);
+                  const maxReturn = Math.max(...returnValues, 0.1);
+                  const betaPad = Math.max((maxBeta - minBeta) * 0.12, 0.2);
+                  const returnPad = Math.max((maxReturn - minReturn) * 0.18, 0.03);
+                  const chartMinBeta = minBeta - betaPad;
+                  const chartMaxBeta = maxBeta + betaPad;
+                  const chartMinReturn = minReturn - returnPad;
+                  const chartMaxReturn = maxReturn + returnPad;
+                  const smlX = (beta: number) => 44 + ((beta - chartMinBeta) / Math.max(chartMaxBeta - chartMinBeta, 0.0001)) * 292;
+                  const smlY = (ret: number) => 168 - ((ret - chartMinReturn) / Math.max(chartMaxReturn - chartMinReturn, 0.0001)) * 128;
+                  const toSmlBeta = (svgX: number) => chartMinBeta + ((Math.min(336, Math.max(44, svgX)) - 44) / 292) * (chartMaxBeta - chartMinBeta);
+                  const toSmlReturn = (svgY: number) => chartMaxReturn - ((Math.min(168, Math.max(40, svgY)) - 40) / 128) * (chartMaxReturn - chartMinReturn);
+                  const smlPath = smlLine.length
+                    ? smlLine
+                        .sort((a, b) => a.beta - b.beta)
+                        .map((point, index) => `${index === 0 ? "M" : "L"} ${smlX(point.beta).toFixed(1)} ${smlY(point.expectedReturn).toFixed(1)}`)
+                        .join(" ")
+                    : "";
+                  const sclMarketValues = sclPoints.map((point) => point.marketReturn).filter(Number.isFinite);
+                  const sclAssetValues = sclPoints.map((point) => point.assetReturn).filter(Number.isFinite);
+                  const sclMinXRaw = Math.min(...sclMarketValues, -0.01);
+                  const sclMaxXRaw = Math.max(...sclMarketValues, 0.01);
+                  const sclMinYRaw = Math.min(...sclAssetValues, -0.01);
+                  const sclMaxYRaw = Math.max(...sclAssetValues, 0.01);
+                  const sclPadX = Math.max((sclMaxXRaw - sclMinXRaw) * 0.12, 0.005);
+                  const sclPadY = Math.max((sclMaxYRaw - sclMinYRaw) * 0.12, 0.005);
+                  const sclMinX = sclMinXRaw - sclPadX;
+                  const sclMaxX = sclMaxXRaw + sclPadX;
+                  const sclMinY = sclMinYRaw - sclPadY;
+                  const sclMaxY = sclMaxYRaw + sclPadY;
+                  const sclX = (value: number) => 44 + ((value - sclMinX) / Math.max(sclMaxX - sclMinX, 0.0001)) * 292;
+                  const sclY = (value: number) => 168 - ((value - sclMinY) / Math.max(sclMaxY - sclMinY, 0.0001)) * 128;
+                  const toSclMarket = (svgX: number) => sclMinX + ((Math.min(336, Math.max(44, svgX)) - 44) / 292) * (sclMaxX - sclMinX);
+                  const toSclAsset = (svgY: number) => sclMaxY - ((Math.min(168, Math.max(40, svgY)) - 40) / 128) * (sclMaxY - sclMinY);
+                  const regressionY = (marketReturn: number) => (sclLine?.dailyAlpha ?? 0) + (sclLine?.beta ?? 0) * marketReturn;
+                  const sclRegressionPath = activeSclSeries && sclLine?.beta !== null && sclLine?.beta !== undefined
+                    ? `M ${sclX(sclMinXRaw).toFixed(1)} ${sclY(regressionY(sclMinXRaw)).toFixed(1)} L ${sclX(sclMaxXRaw).toFixed(1)} ${sclY(regressionY(sclMaxXRaw)).toFixed(1)}`
+                    : "";
+                  const handleSmallChartHover = (
+                    event: MouseEvent<SVGSVGElement>,
+                    setter: (value: FrontierHoverState | null) => void,
+                  ) => {
+                    const svg = event.currentTarget;
+                    const matrix = svg.getScreenCTM();
+                    if (!matrix) return;
+                    const point = svg.createSVGPoint();
+                    point.x = event.clientX;
+                    point.y = event.clientY;
+                    const svgPoint = point.matrixTransform(matrix.inverse());
+                    setter({
+                      x: Math.min(336, Math.max(44, svgPoint.x)),
+                      y: Math.min(168, Math.max(40, svgPoint.y)),
+                    });
+                  };
+                  const sclHoverMarket = sclHover ? toSclMarket(sclHover.x) : null;
+                  const sclHoverAsset = sclHover ? toSclAsset(sclHover.y) : null;
+                  const smlHoverBeta = smlHover ? toSmlBeta(smlHover.x) : null;
+                  const smlHoverReturn = smlHover ? toSmlReturn(smlHover.y) : null;
+                  return (
+                    <div className="mt-4 rounded-xl bg-bg-sunk border border-line p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-bold text-ink">CAPM · SCL · SML 기대수익률 혼합</h4>
+                          <p className="mt-1 text-xs leading-relaxed text-ink-4">
+                            최적화 입력 E[R]은 과거 흐름 추정값과 CAPM 기대수익률을 표본수·벤치마크 품질·설명력 기반 신뢰도로 혼합한 값입니다.
+                          </p>
+                        </div>
+                        <span className="rounded-md border border-line bg-surface px-2 py-1 text-[11px] font-mono text-ink-3">
+                          {capmStatusLabel[capm?.status ?? "UNAVAILABLE"] ?? capm?.status ?? "데이터 없음"}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
+                        <div className="rounded-lg bg-surface border border-line p-2">
+                          <p className="text-[11px] text-ink-4">벤치마크</p>
+                          <p className="mt-1 text-xs font-bold text-ink">
+                            {benchmark?.mode === "MULTI_BENCHMARK"
+                              ? `상장시장별 ${benchmark.benchmarks?.length ?? 0}개`
+                              : primaryBenchmark?.benchmarkName ?? primaryBenchmark?.benchmarkCode ?? "-"}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-ink-4">
+                            {benchmark?.mode ?? "SINGLE_BENCHMARK"} · {benchmarkSourceLabel[primaryBenchmark?.source ?? ""] ?? "-"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-surface border border-line p-2">
+                          <p className="text-[11px] text-ink-4">벤치마크 결측률</p>
+                          <p className="mt-1 text-xs font-mono font-bold text-ink">{formatPct(primaryBenchmark?.missingRate)}</p>
+                          <p className="mt-0.5 text-[11px] text-ink-4">
+                            {primaryBenchmark?.availablePriceCount ?? 0}/{primaryBenchmark?.expectedTradingDayCount ?? 0}
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-surface border border-line p-2">
+                          <p className="text-[11px] text-ink-4">CAPM 반영 종목</p>
+                          <p className="mt-1 text-xs font-mono font-bold text-ink">
+                            {(capm?.appliedAssetCount ?? 0) + (capm?.partialAssetCount ?? 0)}개
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-ink-4">
+                            제외 {capm?.excludedAssetCount ?? 0}개
+                          </p>
+                        </div>
+                        <div className="rounded-lg bg-surface border border-line p-2">
+                          <p className="text-[11px] text-ink-4">평균 CAPM 반영 비중</p>
+                          <p className="mt-1 text-xs font-mono font-bold text-ink">
+                            {formatPct(typeof expectedPolicy?.averageCapmWeight === "number" ? expectedPolicy.averageCapmWeight : 0)}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-ink-4">
+                            신뢰도 {formatPct(typeof expectedPolicy?.averageBlendConfidence === "number" ? expectedPolicy.averageBlendConfidence : 0)}
+                          </p>
+                        </div>
+                      </div>
+                      {capmAssets.length ? (
+                        <div className="mt-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h5 className="text-xs font-bold text-ink">최종 E[R]</h5>
+                            <p className="text-[11px] text-ink-4">
+                              과거 흐름 E[R]과 CAPM E[R]을 신뢰도 기반 반영 비중으로 혼합합니다.
+                            </p>
+                          </div>
+                          <div className="mt-2 overflow-x-auto">
+                          <table className="w-full min-w-[900px] text-left text-[11px]">
+                            <thead className="text-ink-4">
+                              <tr>
+                                <th className="py-2 pr-3">종목</th>
+                                <th className="py-2 pr-3">벤치마크</th>
+                                <th className="py-2 pr-3">상태</th>
+                                <th className="py-2 pr-3">표본</th>
+                                <th className="py-2 pr-3">β</th>
+                                <th className="py-2 pr-3">연율 α</th>
+                                <th className="py-2 pr-3">R²</th>
+                                <th className="py-2 pr-3">과거 흐름 E[R]</th>
+                                <th className="py-2 pr-3">CAPM E[R]</th>
+                                <th className="py-2 pr-3">최종 E[R]</th>
+                                <th className="py-2 pr-3">CAPM 반영 비중</th>
+                                <th className="py-2 pr-3">낮은 비중 근거</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {capmAssets.map((asset) => (
+                                <tr key={`capm-${asset.stockCode}`} className="border-t border-line text-ink-3">
+                                  <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
+                                  <td className="py-2 pr-3">{asset.benchmarkName ?? asset.benchmarkCode ?? "-"}</td>
+                                  <td className="py-2 pr-3">{capmAssetStatusLabel[asset.status ?? ""] ?? "-"}</td>
+                                  <td className="py-2 pr-3 font-mono tabular">{asset.commonSampleSize ?? 0}</td>
+                                  <td className="py-2 pr-3 font-mono tabular">{asset.beta?.toFixed(3) ?? "-"}</td>
+                                  <td className="py-2 pr-3 font-mono tabular">{asset.annualAlpha !== null && asset.annualAlpha !== undefined ? formatPct(asset.annualAlpha) : "-"}</td>
+                                  <td className="py-2 pr-3 font-mono tabular">{asset.rSquared?.toFixed(3) ?? "-"}</td>
+                                  <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.historicalExpectedReturn)}</td>
+                                  <td className="py-2 pr-3 font-mono tabular">{asset.capmExpectedReturn !== null && asset.capmExpectedReturn !== undefined ? formatPct(asset.capmExpectedReturn) : "-"}</td>
+                                  <td className="py-2 pr-3 font-mono tabular text-ink">{formatPct(asset.blendedExpectedReturn)}</td>
+                                  <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.capmWeight)}</td>
+                                  <td className="py-2 pr-3">{capmWeightReasonText(asset)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          </div>
+                        </div>
+                      ) : null}
+                      {capmAssets.length ? (
+                        <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
+                          <div className="rounded-lg bg-surface border border-line p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <h5 className="text-xs font-bold text-ink">SCL 진단</h5>
+                              <span className="text-[10px] text-ink-4">α: 일간 / 연율 구분 표시</span>
+                            </div>
+                            {selectableSclSeries.length ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {selectableSclSeries.map((series) => {
+                                  const selected = activeSclSeries?.stockCode === series.stockCode;
+                                  return (
+                                    <button
+                                      key={`scl-tab-${series.stockCode}`}
+                                      type="button"
+                                      onClick={() => setSelectedSclStockCode(series.stockCode)}
+                                      className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
+                                        selected
+                                          ? "border-accent bg-accent text-white"
+                                          : "border-line bg-bg-sunk text-ink-3 hover:border-accent/50 hover:text-ink"
+                                      }`}
+                                    >
+                                      {series.companyName ?? capmAssets.find((asset) => asset.stockCode === series.stockCode)?.companyName ?? series.stockCode}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                            {activeSclSeries ? (
+                              <div className="mt-2 rounded-lg bg-bg-sunk border border-line p-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <p className="text-[11px] font-bold text-ink">
+                                      {activeSclSeries.companyName ?? activeSclAsset?.companyName ?? activeSclSeries.stockCode}
+                                    </p>
+                                    <p className="mt-0.5 text-[10px] text-ink-4">
+                                      {activeSclSeries.benchmarkName ?? activeSclAsset?.benchmarkName ?? activeSclSeries.benchmarkCode ?? activeSclAsset?.benchmarkCode ?? "벤치마크"} 기준 · 종목 수익률 = 일간 α + β × 벤치마크 수익률
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 text-[10px] font-mono tabular text-ink-4">
+                                    <span>β {sclLine?.beta?.toFixed(3) ?? "-"}</span>
+                                    <span>일간 α {sclLine?.dailyAlpha !== null && sclLine?.dailyAlpha !== undefined ? formatPct(sclLine.dailyAlpha, 3) : "-"}</span>
+                                    <span>R² {activeSclAsset?.rSquared?.toFixed(3) ?? "-"}</span>
+                                  </div>
+                                </div>
+                                <svg
+                                  viewBox="0 0 360 198"
+                                  className="mt-2 h-52 w-full cursor-crosshair"
+                                  role="img"
+                                  aria-label="Security Characteristic Line regression chart"
+                                  onMouseMove={(event) => handleSmallChartHover(event, setSclHover)}
+                                  onMouseLeave={() => setSclHover(null)}
+                                >
+                                  <line x1="44" y1="168" x2="336" y2="168" stroke="currentColor" className="text-line" />
+                                  <line x1="44" y1="168" x2="44" y2="40" stroke="currentColor" className="text-line" />
+                                  <line x1={sclX(0)} y1="40" x2={sclX(0)} y2="168" stroke="#cbd5e1" strokeDasharray="3 4" />
+                                  <line x1="44" y1={sclY(0)} x2="336" y2={sclY(0)} stroke="#cbd5e1" strokeDasharray="3 4" />
+                                  <text x="336" y="158" textAnchor="end" className="fill-ink-4 text-[10px]">벤치마크 수익률</text>
+                                  <text x="44" y="24" className="fill-ink-4 text-[10px]">종목 수익률</text>
+                                  {!sclHover && (
+                                    <g>
+                                      <text x="44" y="184" className="fill-ink-4 text-[9px]">{formatPct(sclMinX)}</text>
+                                      <text x="336" y="184" textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(sclMaxX)}</text>
+                                      <text x="38" y={sclY(sclMinY)} textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(sclMinY)}</text>
+                                      <text x="38" y={sclY(sclMaxY)} textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(sclMaxY)}</text>
+                                    </g>
+                                  )}
+                                  {sclRegressionPath && <path d={sclRegressionPath} fill="none" stroke="#dc2626" strokeWidth="2.4" strokeLinecap="round" />}
+                                  {sclPoints.slice(-180).map((point, index) => (
+                                    <circle
+                                      key={`scl-scatter-${activeSclSeries.stockCode}-${point.date ?? index}`}
+                                      cx={sclX(point.marketReturn)}
+                                      cy={sclY(point.assetReturn)}
+                                      r="2.3"
+                                      fill="#2563eb"
+                                      opacity="0.42"
+                                    />
+                                  ))}
+                                  {sclHover && sclHoverMarket !== null && sclHoverAsset !== null && (
+                                    <g pointerEvents="none">
+                                      <line x1={sclHover.x} y1="40" x2={sclHover.x} y2="168" stroke="#64748b" strokeDasharray="3 3" opacity="0.7" />
+                                      <line x1="44" y1={sclHover.y} x2="336" y2={sclHover.y} stroke="#64748b" strokeDasharray="3 3" opacity="0.7" />
+                                      <rect x={Math.min(236, Math.max(50, sclHover.x - 50))} y="170" width="100" height="20" rx="5" fill="#111827" opacity="0.92" />
+                                      <text x={Math.min(290, Math.max(96, sclHover.x))} y="184" textAnchor="middle" className="fill-white text-[10px] font-mono">
+                                        벤치 {formatPct(sclHoverMarket, 2)}
+                                      </text>
+                                      <rect x="0" y={Math.min(146, Math.max(42, sclHover.y - 10))} width="62" height="20" rx="5" fill="#111827" opacity="0.92" />
+                                      <text x="31" y={Math.min(160, Math.max(56, sclHover.y + 4))} textAnchor="middle" className="fill-white text-[9px] font-mono">
+                                        종목:{formatPct(sclHoverAsset, 1)}
+                                      </text>
+                                    </g>
+                                  )}
+                                </svg>
+                                <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-ink-4">
+                                  <span className="text-accent">파란 점: 공통 거래일 일간 로그수익률</span>
+                                  <span className="text-danger">빨간 선: SCL 회귀선</span>
+                                  <span>최근 {Math.min(180, sclPoints.length)}개 관측치 표시</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-2 rounded-lg bg-bg-sunk border border-line p-3 text-[11px] text-ink-4">
+                                SCL 회귀선을 그릴 공통 수익률 관측치가 부족합니다.
+                              </div>
+                            )}
+                            <div className="mt-2 overflow-x-auto">
+                              <table className="w-full min-w-[560px] text-left text-[11px]">
+                                <thead className="text-ink-4">
+                                  <tr>
+                                    <th className="py-2 pr-3">종목</th>
+                                    <th className="py-2 pr-3">β</th>
+                                    <th className="py-2 pr-3">일간 α</th>
+                                    <th className="py-2 pr-3">연율 α</th>
+                                    <th className="py-2 pr-3">R²</th>
+                                    <th className="py-2 pr-3">표본</th>
+                                    <th className="py-2 pr-3">상태</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {capmAssets.map((asset) => (
+                                    <tr key={`scl-${asset.stockCode}`} className="border-t border-line text-ink-3">
+                                      <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
+                                      <td className="py-2 pr-3 font-mono tabular">{asset.beta?.toFixed(3) ?? "-"}</td>
+                                      <td className="py-2 pr-3 font-mono tabular">{asset.dailyAlpha !== null && asset.dailyAlpha !== undefined ? formatPct(asset.dailyAlpha, 3) : "-"}</td>
+                                      <td className="py-2 pr-3 font-mono tabular">{asset.annualAlpha !== null && asset.annualAlpha !== undefined ? formatPct(asset.annualAlpha) : "-"}</td>
+                                      <td className="py-2 pr-3">
+                                        <div className="flex items-center gap-2">
+                                          <div className="h-1.5 w-16 rounded-full bg-bg-sunk overflow-hidden">
+                                            <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, (asset.rSquared ?? 0) * 100))}%` }} />
+                                          </div>
+                                          <span className="font-mono tabular">{asset.rSquared?.toFixed(3) ?? "-"}</span>
+                                        </div>
+                                      </td>
+                                      <td className="py-2 pr-3 font-mono tabular">{asset.commonSampleSize ?? 0}</td>
+                                      <td className="py-2 pr-3">{capmAssetStatusLabel[asset.status ?? ""] ?? "-"}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            <p className="mt-2 text-[11px] text-ink-4">
+                              SCL은 벤치마크 일간 로그수익률과 종목 일간 로그수익률의 관계를 요약한 보조 진단입니다.
+                            </p>
+                          </div>
+                          <div className="rounded-lg bg-surface border border-line p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <h5 className="text-xs font-bold text-ink">SML 진단</h5>
+                              <span className="text-[10px] text-ink-4">x: β · y: 연율 E[R]</span>
+                            </div>
+                            {smlGroups.length > 1 ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {smlGroups.map((group) => {
+                                  const selected = activeSmlGroup?.benchmarkCode === group.benchmarkCode;
+                                  return (
+                                    <button
+                                      key={`sml-group-${group.benchmarkCode ?? "unknown"}`}
+                                      type="button"
+                                      onClick={() => setSelectedSmlBenchmarkCode(group.benchmarkCode ?? null)}
+                                      className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
+                                        selected
+                                          ? "border-accent bg-accent text-white"
+                                          : "border-line bg-bg-sunk text-ink-3 hover:border-accent/50 hover:text-ink"
+                                      }`}
+                                    >
+                                      {group.benchmarkName ?? group.benchmarkCode ?? "벤치마크"}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
+                            {activeSmlGroup ? (
+                              <div className="mt-2 rounded-md bg-bg-sunk border border-line px-2 py-1 text-[10px] text-ink-4">
+                                {(activeSmlGroup.benchmarkName ?? activeSmlGroup.benchmarkCode ?? "벤치마크")} · {benchmarkSourceLabel[activeSmlGroup.source ?? ""] ?? activeSmlGroup.source ?? "-"} · {activeSmlGroup.availablePriceCount ?? 0}개 · 결측 {formatPct(activeSmlGroup.missingRate)}
+                              </div>
+                            ) : null}
+                            <svg
+                              viewBox="0 0 360 198"
+                              className="mt-2 h-52 w-full cursor-crosshair"
+                              role="img"
+                              aria-label="Security Market Line chart"
+                              onMouseMove={(event) => handleSmallChartHover(event, setSmlHover)}
+                              onMouseLeave={() => setSmlHover(null)}
+                            >
+                              <line x1="44" y1="168" x2="336" y2="168" stroke="currentColor" className="text-line" />
+                              <line x1="44" y1="168" x2="44" y2="40" stroke="currentColor" className="text-line" />
+                              <text x="336" y="158" textAnchor="end" className="fill-ink-4 text-[10px]">β</text>
+                              <text x="44" y="24" className="fill-ink-4 text-[10px]">연율 E[R]</text>
+                              {!smlHover && (
+                                <g>
+                                  <text x="44" y="184" className="fill-ink-4 text-[9px]">{chartMinBeta.toFixed(1)}</text>
+                                  <text x="336" y="184" textAnchor="end" className="fill-ink-4 text-[9px]">{chartMaxBeta.toFixed(1)}</text>
+                                  <text x="38" y={smlY(chartMinReturn)} textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(chartMinReturn)}</text>
+                                  <text x="38" y={smlY(chartMaxReturn)} textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(chartMaxReturn)}</text>
+                                </g>
+                              )}
+                              {smlPath && <path d={smlPath} fill="none" stroke="#2563eb" strokeWidth="2.4" strokeLinecap="round" />}
+                              {smlAssets.map((asset, index) => {
+                                if (asset.beta === null || asset.beta === undefined || asset.blendedExpectedReturn === null || asset.blendedExpectedReturn === undefined) return null;
+                                const xPoint = smlX(asset.beta);
+                                const yPoint = smlY(asset.blendedExpectedReturn);
+                                return (
+                                  <g key={`sml-point-${asset.stockCode}`}>
+                                    <circle cx={xPoint} cy={yPoint} r="4.5" fill={pieColorForIndex(index)} stroke="white" strokeWidth="1.5" />
+                                    <text x={xPoint + 6} y={yPoint - 6} className="fill-ink text-[9px] font-semibold">
+                                      {asset.companyName ?? asset.stockCode}
+                                    </text>
+                                  </g>
+                                );
+                              })}
+                              {smlHover && smlHoverBeta !== null && smlHoverReturn !== null && (
+                                <g pointerEvents="none">
+                                  <line x1={smlHover.x} y1="40" x2={smlHover.x} y2="168" stroke="#64748b" strokeDasharray="3 3" opacity="0.7" />
+                                  <line x1="44" y1={smlHover.y} x2="336" y2={smlHover.y} stroke="#64748b" strokeDasharray="3 3" opacity="0.7" />
+                                  <rect x={Math.min(266, Math.max(50, smlHover.x - 38))} y="170" width="76" height="20" rx="5" fill="#111827" opacity="0.92" />
+                                  <text x={Math.min(304, Math.max(88, smlHover.x))} y="184" textAnchor="middle" className="fill-white text-[10px] font-mono">
+                                    β {smlHoverBeta.toFixed(2)}
+                                  </text>
+                                  <rect x="0" y={Math.min(146, Math.max(42, smlHover.y - 10))} width="58" height="20" rx="5" fill="#111827" opacity="0.92" />
+                                  <text x="29" y={Math.min(160, Math.max(56, smlHover.y + 4))} textAnchor="middle" className="fill-white text-[9px] font-mono">
+                                    E[R]:{formatPct(smlHoverReturn, 0)}
+                                  </text>
+                                </g>
+                              )}
+                            </svg>
+                            <div className="mt-2 overflow-x-auto">
+                              <table className="w-full min-w-[520px] text-left text-[11px]">
+                                <thead className="text-ink-4">
+                                  <tr>
+                                    <th className="py-2 pr-3">종목</th>
+                                    <th className="py-2 pr-3">β</th>
+                                    <th className="py-2 pr-3">CAPM E[R]</th>
+                                    <th className="py-2 pr-3">과거 흐름 E[R]</th>
+                                    <th className="py-2 pr-3">최종 E[R]</th>
+                                    <th className="py-2 pr-3">CAPM 반영 비중</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {smlAssets.map((asset) => (
+                                    <tr key={`sml-${asset.stockCode}`} className="border-t border-line text-ink-3">
+                                      <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
+                                      <td className="py-2 pr-3 font-mono tabular">{asset.beta?.toFixed(3) ?? "-"}</td>
+                                      <td className="py-2 pr-3 font-mono tabular">{asset.capmExpectedReturn !== null && asset.capmExpectedReturn !== undefined ? formatPct(asset.capmExpectedReturn) : "-"}</td>
+                                      <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.historicalExpectedReturn)}</td>
+                                      <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.blendedExpectedReturn)}</td>
+                                      <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.capmWeight)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                            <p className="mt-2 text-[11px] text-ink-4">
+                              SML은 CAPM line 대비 종목 위치를 보는 보조 진단이며 예상 수익률 보장이나 추천 비중이 아닙니다.
+                            </p>
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="mt-2 rounded-lg bg-surface border border-line px-3 py-2 text-[11px] text-ink-3">
+                        <p className="text-ink">
+                          CAPM 반영 비중은 공통 표본 수, 벤치마크 품질, 결측률, R², correlation, 변동성 안정성을 함께 반영해 계산합니다.
+                        </p>
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-1.5">
+                          <p><span className="font-semibold text-ink">공통 표본</span>: 종목과 벤치마크의 공통 수익률 표본 수가 충분할수록 커집니다.</p>
+                          <p><span className="font-semibold text-ink">벤치마크 출처</span>: 저장 데이터 또는 외부 보강 데이터이면 높고, 저장 데이터가 부족하면 낮게 반영됩니다.</p>
+                          <p><span className="font-semibold text-ink">데이터 커버리지</span>: 벤치마크 결측률이 낮을수록 커집니다.</p>
+                          <p><span className="font-semibold text-ink">시장 설명력(R²)</span>: 시장수익률이 종목수익률을 설명하는 정도가 높을수록 커집니다.</p>
+                          <p><span className="font-semibold text-ink">상관관계(correlation)</span>: 종목과 벤치마크 수익률의 동행성이 강할수록 커집니다.</p>
+                          <p><span className="font-semibold text-ink">변동성 안정성</span>: 종목 변동성이 과도하게 높으면 CAPM 반영을 줄입니다.</p>
+                          <p><span className="font-semibold text-ink">과거 흐름 비중</span>: CAPM 신뢰도가 낮을수록 과거 흐름 추정값 비중이 커집니다.</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="mt-4 overflow-x-auto">
                   <table className="w-full min-w-[640px] text-left text-xs">
@@ -1969,8 +2817,8 @@ export default function PortfolioMockPage() {
                           <td className="py-2 pr-3 font-medium text-ink">{series.companyName ?? series.stockCode}</td>
                           <td className="py-2 pr-3 font-mono tabular">{series.availablePriceCount}</td>
                           <td className="py-2 pr-3 font-mono tabular">{formatPct(series.missingRate)}</td>
-                          <td className="py-2 pr-3">{series.source}</td>
-                          <td className="py-2 pr-3">{series.cacheStatus}</td>
+                          <td className="py-2 pr-3">{marketDataSourceLabel[series.source ?? ""] ?? series.source}</td>
+                          <td className="py-2 pr-3">{cacheStatusLabel[series.cacheStatus ?? ""] ?? series.cacheStatus}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1982,7 +2830,7 @@ export default function PortfolioMockPage() {
                     <div className="flex items-center justify-between gap-3">
                       <h4 className="text-sm font-bold text-ink">효율적 프론티어</h4>
                       <p className="text-xs text-ink-4">
-                        E[R]은 극단 수익률을 완화하고 장기 기대수익률 쪽으로 수축한 연율 추정값입니다.
+                        E[R]은 극단 수익률을 완화한 과거 흐름과 시장 기준 기대수익률을 신뢰도에 따라 가중한 연율 추정값입니다.
                       </p>
                     </div>
                     {(() => {
@@ -1995,7 +2843,7 @@ export default function PortfolioMockPage() {
                         ...(analysisResult.advanced?.candidatePortfolios ?? []),
                       ].filter((portfolio) => portfolio.expectedReturn !== null && portfolio.expectedReturn !== undefined);
                       const keyMarkers = markers.filter((portfolio) =>
-                        ["MIN_VOL", "MAX_SHARPE", "UTILITY_OPTIMAL", "THEORETICAL_UTILITY"].includes(portfolio.type),
+                        ["MIN_VOL", "MAX_SHARPE", "RISK_ALLOCATION", "UTILITY_OPTIMAL", "THEORETICAL_UTILITY"].includes(portfolio.type),
                       );
                       const utilityOptimal = markers.find((portfolio) => portfolio.type === "UTILITY_OPTIMAL") ?? null;
                       const theoreticalUtility = markers.find((portfolio) => portfolio.type === "THEORETICAL_UTILITY") ?? null;
@@ -2124,6 +2972,7 @@ export default function PortfolioMockPage() {
                         if (type === "CURRENT") return "#64748b";
                         if (type === "MAX_SHARPE") return "#16a34a";
                         if (type === "MIN_VOL") return "#2563eb";
+                        if (type === "RISK_ALLOCATION") return "#ea580c";
                         if (type === "UTILITY_OPTIMAL") return "#dc2626";
                         if (type === "THEORETICAL_UTILITY") return "#9333ea";
                         return "#f59e0b";
@@ -2131,7 +2980,8 @@ export default function PortfolioMockPage() {
                       const fallbackLabelOffset = (type: string, index: number) => {
                         if (type === "CURRENT") return { dx: 12, dy: -16, anchor: "start" as const };
                         if (type === "MAX_SHARPE") return { dx: 12, dy: 16, anchor: "start" as const };
-                        if (type === "UTILITY_OPTIMAL") return { dx: 12, dy: -2, anchor: "start" as const };
+                        if (type === "RISK_ALLOCATION") return { dx: 12, dy: 2, anchor: "start" as const };
+                        if (type === "UTILITY_OPTIMAL") return { dx: -12, dy: -18, anchor: "end" as const };
                         if (type === "THEORETICAL_UTILITY") return { dx: 12, dy: -18, anchor: "start" as const };
                         if (type === "MIN_VOL") return { dx: 12, dy: -8, anchor: "start" as const };
                         return { dx: 10, dy: index % 2 === 0 ? -10 : 16, anchor: "start" as const };
@@ -2140,7 +2990,7 @@ export default function PortfolioMockPage() {
                         new Map(
                           markers
                             .filter((portfolio) =>
-                              ["CURRENT", "MIN_VOL", "MAX_SHARPE", "UTILITY_OPTIMAL", "THEORETICAL_UTILITY"].includes(portfolio.type),
+                              ["CURRENT", "MIN_VOL", "MAX_SHARPE", "RISK_ALLOCATION", "UTILITY_OPTIMAL", "THEORETICAL_UTILITY"].includes(portfolio.type),
                             )
                             .map((portfolio) => [portfolio.type, portfolio]),
                         ).values(),
@@ -2245,7 +3095,7 @@ export default function PortfolioMockPage() {
                       const tooltipX = frontierHover ? bestTooltip.x : 0;
                       const tooltipY = frontierHover ? bestTooltip.y : 0;
                       const guideMarkers = visibleMarkers.filter((portfolio) =>
-                        ["MIN_VOL", "UTILITY_OPTIMAL"].includes(portfolio.type),
+                        ["MIN_VOL", "RISK_ALLOCATION", "UTILITY_OPTIMAL"].includes(portfolio.type),
                       );
                       const yAxisBadgeCenters = guideMarkers
                         .map((portfolio) => ({
@@ -2314,6 +3164,7 @@ export default function PortfolioMockPage() {
                         if (type === "CURRENT") return "현재 포트폴리오";
                         if (type === "MIN_VOL") return "최소분산 포트폴리오";
                         if (type === "MAX_SHARPE") return "최대샤프 포트폴리오";
+                        if (type === "RISK_ALLOCATION") return "CAL 기반 위험배분";
                         if (type === "UTILITY_OPTIMAL") return "효용최대 포트폴리오";
                         if (type === "THEORETICAL_UTILITY") return "이론적 효용접점";
                         return label ?? type;
@@ -2322,13 +3173,14 @@ export default function PortfolioMockPage() {
                         if (type === "CURRENT") return "현재";
                         if (type === "MIN_VOL") return "최소분산";
                         if (type === "MAX_SHARPE") return "최대샤프";
+                        if (type === "RISK_ALLOCATION") return "위험배분";
                         if (type === "UTILITY_OPTIMAL") return "효용최대";
                         if (type === "THEORETICAL_UTILITY") return "이론접점";
                         return type;
                       };
                       const portfolioPieCards = [
                         analysisResult.currentPortfolio,
-                        ...["MIN_VOL", "MAX_SHARPE", "UTILITY_OPTIMAL"]
+                        ...["MIN_VOL", "MAX_SHARPE", "RISK_ALLOCATION", "UTILITY_OPTIMAL"]
                           .map((type) => markers.find((portfolio) => portfolio.type === type))
                           .filter((portfolio): portfolio is NonNullable<typeof portfolio> => Boolean(portfolio)),
                       ];
@@ -2511,7 +3363,7 @@ export default function PortfolioMockPage() {
                                 <circle
                                   cx={x(portfolio.volatility)}
                                   cy={y(graphReturn(portfolio))}
-                                  r={activeMarker?.portfolio === portfolio ? 8 : portfolio.type === "UTILITY_OPTIMAL" ? 7 : 5}
+                                  r={activeMarker?.portfolio === portfolio ? 8 : ["RISK_ALLOCATION", "UTILITY_OPTIMAL"].includes(portfolio.type) ? 7 : 5}
                                   fill={markerColor(portfolio.type)}
                                   stroke="white"
                                   strokeWidth={activeMarker?.portfolio === portfolio ? "3" : "2"}
@@ -2568,6 +3420,7 @@ export default function PortfolioMockPage() {
 	                            <span className="text-success">녹색 점선 자본배분선(CAL)</span>
                             <span className="text-purple-600">보라 점선 투자자 무차별곡선</span>
                             <span className="text-success">최대샤프 포트폴리오</span>
+                            <span className="text-orange-600">CAL 기반 위험배분</span>
                             <span className="text-danger">효용최대 포트폴리오</span>
                             <span className="text-purple-600">이론적 효용접점</span>
                             <span className="text-accent">최소분산 포트폴리오</span>
@@ -2584,6 +3437,9 @@ export default function PortfolioMockPage() {
 	                              </p>
 	                              <p>
 	                                <span className="font-semibold text-success">최대샤프 포트폴리오</span>는 효율적 프론티어 위에서 (E[R] - r_f) / σ가 가장 큰 위험자산 조합입니다. 무위험자산과 이 점을 잇는 직선이 자본배분선(CAL)의 기준선입니다.
+	                              </p>
+	                              <p>
+	                                <span className="font-semibold text-orange-600">CAL 기반 위험배분</span>은 최대샤프 위험자산 조합에 무위험자산을 섞고, 위험회피계수 γ와 현금 한도에 따라 위험자산 비중을 조절한 배분입니다.
 	                              </p>
 	                              <p>
 	                                <span className="font-semibold text-danger">효용최대 포트폴리오</span>는 U = E[R] - 0.5 · γ · σ²를 최대화하는 배분입니다. 현재 현금 한도, 레버리지 금지, 종목별 비중 제한을 적용하므로 이론 접점이 제약 밖이면 가능한 경계점에 위치합니다.

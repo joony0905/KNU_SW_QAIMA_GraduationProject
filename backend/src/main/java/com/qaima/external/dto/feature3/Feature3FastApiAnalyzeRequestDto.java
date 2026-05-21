@@ -17,7 +17,8 @@ public record Feature3FastApiAnalyzeRequestDto(
             Double avgPrice,
             Double currentPrice,
             String currency,
-            String assetType
+            String assetType,
+            String exchangeCode
     ) {
     }
 

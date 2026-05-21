@@ -132,6 +132,16 @@ public class NewsSentimentService {
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
+    public Mono<NewsLoadResult> loadNews(Stock stock, boolean forceRefresh) {
+        return Mono.fromCallable(() -> loadNewsBlocking(stock, forceRefresh))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public Mono<NewsCacheInspection> inspectNewsCache(String stockCode) {
+        return Mono.fromCallable(() -> inspectNewsCacheBlocking(stockCode))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
     public Mono<NewsLoadResult> loadNewsByStockCode(String stockCode) {
         return Mono.fromCallable(() -> loadNewsByStockCodeBlocking(stockCode))
                 .subscribeOn(Schedulers.boundedElastic());
@@ -143,6 +153,10 @@ public class NewsSentimentService {
     }
 
     private NewsLoadResult loadNewsBlocking(Stock stock) {
+        return loadNewsBlocking(stock, false);
+    }
+
+    private NewsLoadResult loadNewsBlocking(Stock stock, boolean forceRefresh) {
         List<String> warnings = new ArrayList<>();
         if (stock == null || stock.getStockCode() == null || stock.getStockCode().isBlank()) {
             return NewsLoadResult.builder().newsList(List.of()).warnings(warnings).build();
@@ -152,8 +166,8 @@ public class NewsSentimentService {
             return NewsLoadResult.builder().newsList(List.of()).warnings(dedupeWarnings(warnings)).build();
         }
 
-        List<News> latestNews = getOrLoadLatestNews(stock.getStockCode(), stock.getCompanyName(), stock, warnings);
-        List<NewsItemDto> newsList = buildNewsList(latestNews, warnings, true, stock.getStockCode());
+        List<News> latestNews = getOrLoadLatestNews(stock.getStockCode(), stock.getCompanyName(), stock, warnings, forceRefresh);
+        List<NewsItemDto> newsList = buildNewsList(latestNews, warnings, true, stock.getStockCode(), forceRefresh);
         return NewsLoadResult.builder()
                 .newsList(newsList)
                 .warnings(dedupeWarnings(warnings))
@@ -189,6 +203,36 @@ public class NewsSentimentService {
                 .build();
     }
 
+    private NewsCacheInspection inspectNewsCacheBlocking(String stockCode) {
+        List<String> warnings = new ArrayList<>();
+        String listKey = buildNewsListCacheKeyByStock(stockCode);
+        CachedNewsListPayload cachedNewsList = readNewsListCache(listKey, warnings);
+        if (cachedNewsList == null || cachedNewsList.getItems() == null || cachedNewsList.getItems().isEmpty()) {
+            return new NewsCacheInspection(false, null);
+        }
+        OffsetDateTime latestPublishedAt = null;
+        for (CachedNewsListItem item : cachedNewsList.getItems()) {
+            if (item == null || item.getNewsId() == null) {
+                return new NewsCacheInspection(false, latestPublishedAt);
+            }
+            if (item.getPublishedAt() != null
+                    && (latestPublishedAt == null || item.getPublishedAt().isAfter(latestPublishedAt))) {
+                latestPublishedAt = item.getPublishedAt();
+            }
+            CachedNewsDetail detail = readDetailCache(item.getNewsId(), warnings);
+            CachedFocusTextValue focus = readFocusCache(item.getNewsId(), warnings);
+            CachedSentimentValue sentiment = readSentimentCache(item.getNewsId(), warnings);
+            if (detail == null
+                    || focus == null
+                    || focus.getFocusText() == null
+                    || focus.getFocusText().isBlank()
+                    || !isReusableSentiment(sentiment)) {
+                return new NewsCacheInspection(false, latestPublishedAt);
+            }
+        }
+        return new NewsCacheInspection(true, latestPublishedAt);
+    }
+
     private NewsDetailDto loadNewsDetailBlocking(Long newsId) {
         if (newsId == null) {
             throw new ResourceNotFoundException(NewsWarningCodes.DETAIL_NOT_FOUND);
@@ -220,14 +264,18 @@ public class NewsSentimentService {
     }
 
     private List<News> getOrLoadLatestNews(String stockCode, String query, Stock stock, List<String> warnings) {
+        return getOrLoadLatestNews(stockCode, query, stock, warnings, false);
+    }
+
+    private List<News> getOrLoadLatestNews(String stockCode, String query, Stock stock, List<String> warnings, boolean forceRefresh) {
         String listKey = buildNewsListCacheKeyByStock(stockCode);
-        CachedNewsListPayload cachedNewsList = readNewsListCache(listKey, warnings);
+        CachedNewsListPayload cachedNewsList = forceRefresh ? null : readNewsListCache(listKey, warnings);
         if (cachedNewsList != null && cachedNewsList.getItems() != null) {
             warnings.addAll(Optional.ofNullable(cachedNewsList.getWarnings()).orElseGet(List::of));
             return toNewsReferences(cachedNewsList.getItems());
         }
 
-        if (shouldRefreshNewsSource(stock, warnings)) {
+        if (forceRefresh || shouldRefreshNewsSource(stock, warnings)) {
             refreshNewsListSource(stock, warnings);
         }
         List<News> latestNews = loadLatestNewsEntities(stock);
@@ -535,12 +583,22 @@ public class NewsSentimentService {
             boolean includeSentiment,
             String stockCode
     ) {
+        return buildNewsList(latestNews, warnings, includeSentiment, stockCode, false);
+    }
+
+    private List<NewsItemDto> buildNewsList(
+            List<News> latestNews,
+            List<String> warnings,
+            boolean includeSentiment,
+            String stockCode,
+            boolean forceRefresh
+    ) {
         if (latestNews == null || latestNews.isEmpty()) {
             return List.of();
         }
 
         Map<Long, BigDecimal> sentimentScores = includeSentiment
-                ? resolveSentimentScores(latestNews, warnings, stockCode)
+                ? resolveSentimentScores(latestNews, warnings, stockCode, forceRefresh)
                 : Map.of();
         return latestNews.stream()
                 .sorted(Comparator.comparing(News::getPublishedAt, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -558,6 +616,10 @@ public class NewsSentimentService {
     }
 
     private Map<Long, BigDecimal> resolveSentimentScores(List<News> latestNews, List<String> warnings, String stockCode) {
+        return resolveSentimentScores(latestNews, warnings, stockCode, false);
+    }
+
+    private Map<Long, BigDecimal> resolveSentimentScores(List<News> latestNews, List<String> warnings, String stockCode, boolean forceRefresh) {
         Map<Long, BigDecimal> scores = new LinkedHashMap<>();
         List<NewsSentimentInput> toAnalyze = new ArrayList<>();
         Map<Long, News> pendingNewsById = new LinkedHashMap<>();
@@ -568,7 +630,7 @@ public class NewsSentimentService {
                 continue;
             }
 
-            SentimentResolution resolution = getOrAnalyzeSentiment(news, warnings, stockCode);
+            SentimentResolution resolution = getOrAnalyzeSentiment(news, warnings, stockCode, forceRefresh);
             if (resolution.score() != null) {
                 scores.put(news.getNewsId(), resolution.score());
                 continue;
@@ -585,20 +647,24 @@ public class NewsSentimentService {
     }
 
     private SentimentResolution getOrAnalyzeSentiment(News news, List<String> warnings, String stockCode) {
-        CachedSentimentValue cachedSentiment = readSentimentCache(news.getNewsId(), warnings);
-        if (isReusableSentiment(cachedSentiment)) {
+        return getOrAnalyzeSentiment(news, warnings, stockCode, false);
+    }
+
+    private SentimentResolution getOrAnalyzeSentiment(News news, List<String> warnings, String stockCode, boolean forceRefresh) {
+        CachedSentimentValue cachedSentiment = forceRefresh ? null : readSentimentCache(news.getNewsId(), warnings);
+        if (!forceRefresh && isReusableSentiment(cachedSentiment)) {
             CachedFocusTextValue cachedFocus = readFocusCache(news.getNewsId(), warnings);
             enqueueObservation(news, stockCode, cachedFocus, cachedSentiment.getSentimentScore());
             return SentimentResolution.cached(cachedSentiment.getSentimentScore());
         }
 
-        CachedFocusTextValue focusPayload = getOrLoadFocusText(news, warnings);
+        CachedFocusTextValue focusPayload = getOrLoadFocusText(news, warnings, forceRefresh);
         if (focusPayload == null || focusPayload.getFocusText() == null || focusPayload.getFocusText().isBlank()) {
             warnings.add(NewsWarningCodes.BODY_FETCH_FAILED_PREFIX + hashUrl(news.getUrl()));
             return SentimentResolution.unavailable();
         }
 
-        if (cachedSentiment == null) {
+        if (!forceRefresh && cachedSentiment == null) {
             Optional<SentimentResult> existingSentiment = sentimentResultRepository.findById(
                     new SentimentResultId(news.getNewsId(), sentimentModel)
             );
@@ -717,12 +783,16 @@ public class NewsSentimentService {
     }
 
     private CachedFocusTextValue getOrLoadFocusText(News news, List<String> warnings) {
-        CachedFocusTextValue cachedFocus = readFocusCache(news.getNewsId(), warnings);
-        if (cachedFocus != null && cachedFocus.getFocusText() != null && !cachedFocus.getFocusText().isBlank()) {
+        return getOrLoadFocusText(news, warnings, false);
+    }
+
+    private CachedFocusTextValue getOrLoadFocusText(News news, List<String> warnings, boolean forceRefresh) {
+        CachedFocusTextValue cachedFocus = forceRefresh ? null : readFocusCache(news.getNewsId(), warnings);
+        if (!forceRefresh && cachedFocus != null && cachedFocus.getFocusText() != null && !cachedFocus.getFocusText().isBlank()) {
             return cachedFocus;
         }
 
-        CachedNewsDetail detail = getOrLoadNewsDetail(news, warnings);
+        CachedNewsDetail detail = getOrLoadNewsDetail(news, warnings, forceRefresh);
         if (detail == null || detail.getBody() == null || detail.getBody().isBlank()) {
             return null;
         }
@@ -966,8 +1036,12 @@ public class NewsSentimentService {
     }
 
     private CachedNewsDetail getOrLoadNewsDetail(News news, List<String> warnings) {
-        CachedNewsDetail cachedDetail = readDetailCache(news.getNewsId(), warnings);
-        if (cachedDetail != null) {
+        return getOrLoadNewsDetail(news, warnings, false);
+    }
+
+    private CachedNewsDetail getOrLoadNewsDetail(News news, List<String> warnings, boolean forceRefresh) {
+        CachedNewsDetail cachedDetail = forceRefresh ? null : readDetailCache(news.getNewsId(), warnings);
+        if (!forceRefresh && cachedDetail != null) {
             return cachedDetail;
         }
         try {
@@ -1482,6 +1556,12 @@ public class NewsSentimentService {
     private record ScoredArticle(
             NaverNewsClient.NaverNewsArticle article,
             int score
+    ) {
+    }
+
+    public record NewsCacheInspection(
+            boolean hit,
+            OffsetDateTime cacheAsOf
     ) {
     }
 

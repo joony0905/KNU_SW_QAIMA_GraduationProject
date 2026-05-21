@@ -32,7 +32,9 @@ import com.qaima.service.feature2.resolver.Feature2StockResolver;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,6 +54,8 @@ public class Feature3OverlayService {
     private static final Duration FRESH_TTL = Duration.ofHours(24);
     private static final Duration STALE_TTL = Duration.ofDays(7);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final String TIMEZONE_LABEL = "KST";
+    private static final DateTimeFormatter CACHE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss");
 
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
@@ -72,8 +76,11 @@ public class Feature3OverlayService {
         }
 
         return Flux.fromIterable(overlays)
-                .flatMap(overlay -> cacheStatusForOverlay(overlay, stockCodes)
-                        .map(status -> toPreviewItem(overlay, status)))
+                .flatMap(overlay -> decideOverlayCache(
+                        overlay,
+                        stockCodes,
+                        cachePolicyForOverlay(req.overlayCachePolicies(), req.cachePolicy(), overlay)
+                ).map(this::toPreviewItem))
                 .collectList()
                 .map(items -> {
                     int overlayCredit = items.stream()
@@ -99,11 +106,12 @@ public class Feature3OverlayService {
         if (overlays.isEmpty()) {
             return Mono.just(1L);
         }
-        // 현재 구현: Core 1 credit + Redis HIT가 아닌 overlay 묶음당 1 credit을 실제 차감 기준으로 사용한다.
-        // 진행 예정: FORCE_REFRESH/REFRESH_MISSING_ONLY 정책별 차감 차이를 더 세분화한다.
         return Flux.fromIterable(overlays)
-                .flatMap(overlay -> cacheStatusForOverlay(overlay, stockCodes))
-                .map(status -> "HIT".equals(status) ? 0L : 1L)
+                .flatMap(overlay -> decideOverlayCache(
+                        overlay,
+                        stockCodes,
+                        cachePolicyForOverlay(req.options().overlayCachePolicies(), req.options().cachePolicy(), overlay)
+                ).map(OverlayCacheDecision::additionalCredit))
                 .reduce(1L, Long::sum);
     }
 
@@ -139,7 +147,11 @@ public class Feature3OverlayService {
         List<PortfolioAnalyzeRequestDto.Holding> holdings = req.holdings() != null ? req.holdings() : List.of();
         List<PortfolioAnalyzeRequestDto.Holding> targetHoldings = holdings.stream().limit(3).toList();
         return Flux.fromIterable(selected)
-                .flatMap(overlay -> loadOverlayForSignals(overlay, targetHoldings)
+                .flatMap(overlay -> loadOverlayForSignals(
+                        overlay,
+                        targetHoldings,
+                        cachePolicyForOverlay(req.options().overlayCachePolicies(), req.options().cachePolicy(), overlay)
+                )
                         .onErrorResume(ex -> {
                             log.warn("[Feature3Overlay] overlay signal load failed. overlay={}, cause={}",
                                     overlay, ex.getMessage(), ex);
@@ -153,93 +165,178 @@ public class Feature3OverlayService {
 
     private Mono<OverlayBundle> loadOverlayForSignals(
             String overlay,
-            List<PortfolioAnalyzeRequestDto.Holding> holdings
+            List<PortfolioAnalyzeRequestDto.Holding> holdings,
+            String cachePolicy
     ) {
         if (holdings.isEmpty()) {
             return Mono.just(fallbackBundle(overlay, "MISS"));
         }
         return Flux.fromIterable(holdings)
-                .flatMap(holding -> buildOverlayBundle(overlay, holding)
-                        .flatMap(bundle -> writeCard(overlay, holding.stockCode(), bundle.cards().get(0))
-                                .onErrorResume(ex -> {
-                                    log.warn("[Feature3Overlay] overlay cache write skipped. overlay={}, stockCode={}, cause={}",
-                                            overlay, holding.stockCode(), ex.getMessage());
-                                    return Mono.just(false);
-                                })
-                                .thenReturn(bundle)))
+                .flatMap(holding -> loadOverlayBundle(overlay, holding, cachePolicy))
                 .collectList()
                 .map(this::mergeBundles);
     }
 
-    private Mono<String> cacheStatusForOverlay(String overlay, List<String> stockCodes) {
-        if (stockCodes.isEmpty()) {
-            return Mono.just("MISS");
-        }
-        return Flux.fromIterable(stockCodes)
-                .flatMap(stockCode -> redisTemplate.hasKey(primaryFreshKey(overlay, stockCode))
-                        .flatMap(fresh -> {
-                            if (Boolean.TRUE.equals(fresh)) {
-                                return Mono.just("HIT");
-                            }
-                            return redisTemplate.hasKey(primaryStaleKey(overlay, stockCode))
-                                    .map(stale -> Boolean.TRUE.equals(stale) ? "STALE" : "MISS");
-                        })
-                        .onErrorReturn("MISS"))
-                .collectList()
-                .map(statuses -> {
-                    if (statuses.stream().allMatch("HIT"::equals)) {
-                        return "HIT";
-                    }
-                    if (statuses.stream().anyMatch(status -> status.equals("HIT") || status.equals("STALE"))) {
-                        return "STALE";
-                    }
-                    return "MISS";
-                });
+    private Mono<OverlayBundle> loadOverlayBundle(
+            String overlay,
+            PortfolioAnalyzeRequestDto.Holding holding,
+            String cachePolicy
+    ) {
+        return buildOverlayBundle(overlay, holding, cachePolicy);
     }
 
-    private Feature3OverlayCachePreviewResponseDto.OverlayCacheItem toPreviewItem(String overlay, String status) {
-        boolean needsRefresh = !"HIT".equals(status);
+    private Mono<OverlayCacheDecision> decideOverlayCache(String overlay, List<String> stockCodes, String cachePolicy) {
+        if ("industry".equals(overlay)) {
+            return inspectIndustryAvailability(stockCodes)
+                    .map(inspection -> new OverlayCacheDecision(
+                            overlay,
+                            inspection.hit() ? "AVAILABLE" : "UNAVAILABLE",
+                            0,
+                            false,
+                            inspection.hit()
+                                    ? "보유 종목의 업종 정보를 사용해 산업 집중도 관측을 반영합니다."
+                                    : "일부 종목의 업종 정보가 없어 산업 집중도 관측이 제한될 수 있습니다.",
+                            "현재 등록된 산업 분류",
+                            false
+                    ));
+        }
+        if ("FORCE_REFRESH".equals(cachePolicy)) {
+            return inspectSourceCache(overlay, stockCodes)
+                    .map(inspection -> new OverlayCacheDecision(
+                            overlay,
+                            inspection.hit() ? "HIT" : "MISS",
+                            1,
+                            inspection.hit(),
+                            inspection.hit()
+                                    ? "최근 결과가 있지만 새로 분석하도록 선택되어 1 credit이 추가됩니다."
+                                    : "새 분석 후 기준 시각이 기록됩니다.",
+                            inspection.cacheAsOf(),
+                            true
+                    ));
+        }
+        return inspectSourceCache(overlay, stockCodes)
+                .map(inspection -> new OverlayCacheDecision(
+                        overlay,
+                        inspection.hit() ? "HIT" : "MISS",
+                        inspection.hit() ? 0 : 1,
+                        inspection.hit(),
+                        inspection.hit()
+                                ? "기존 원천 데이터를 재사용할 수 있어 추가 credit이 필요하지 않습니다."
+                                : "원천 데이터가 부족해 새로 분석하며 1 credit이 추가됩니다.",
+                        inspection.cacheAsOf(),
+                        true
+                ));
+    }
+
+    private Feature3OverlayCachePreviewResponseDto.OverlayCacheItem toPreviewItem(OverlayCacheDecision decision) {
         return new Feature3OverlayCachePreviewResponseDto.OverlayCacheItem(
-                overlay,
-                status,
-                needsRefresh ? 1 : 0,
-                needsRefresh,
-                switch (status) {
-                    case "HIT" -> "최근 분석 캐시를 재사용할 수 있어 추가 credit이 필요하지 않습니다.";
-                    case "STALE" -> "이전 분석 캐시가 있으나 기준 시점이 오래되어 새로 분석할지 확인이 필요합니다.";
-                    default -> "캐시된 분석 결과가 없어 새 분석 시 1 credit이 추가됩니다.";
-                }
+                decision.overlayType(),
+                decision.status(),
+                decision.additionalCredit(),
+                decision.userConfirmationRequired(),
+                decision.userMessage(),
+                decision.status(),
+                decision.cacheAsOf(),
+                TIMEZONE_LABEL,
+                decision.policySelectable()
         );
     }
 
-    private Mono<OverlayBundle> loadOverlay(
-            String overlay,
-            List<PortfolioAnalyzeRequestDto.Holding> holdings
-    ) {
-        if (holdings.isEmpty()) {
-            return Mono.just(fallbackBundle(overlay, "MISS"));
+    private String cachePolicyForOverlay(Map<String, String> overlayPolicies, String fallbackPolicy, String overlay) {
+        if ("industry".equals(overlay)) {
+            return "REUSE_AVAILABLE";
         }
-        return Flux.fromIterable(holdings)
-                .flatMap(holding -> readCard(overlay, holding.stockCode())
-                        .map(card -> bundleFromCard(card, holding, card.description()))
-                        .switchIfEmpty(Mono.defer(() -> buildOverlayBundle(overlay, holding)))
-                        .flatMap(bundle -> writeCard(overlay, holding.stockCode(), bundle.cards().get(0))
-                                .onErrorResume(ex -> {
-                                    log.warn("[Feature3Overlay] overlay cache write skipped. overlay={}, stockCode={}, cause={}",
-                                            overlay, holding.stockCode(), ex.getMessage());
-                                    return Mono.just(false);
-                                })
-                                .thenReturn(bundle)))
+        String policy = overlayPolicies != null ? overlayPolicies.get(overlay) : null;
+        if (policy == null || policy.isBlank()) {
+            policy = fallbackPolicy;
+        }
+        return "FORCE_REFRESH".equals(policy) ? "FORCE_REFRESH" : "REUSE_AVAILABLE";
+    }
+
+    private Mono<SourceCacheInspection> inspectSourceCache(String overlay, List<String> stockCodes) {
+        if (stockCodes == null || stockCodes.isEmpty()) {
+            return Mono.just(new SourceCacheInspection(false, null));
+        }
+        return Flux.fromIterable(stockCodes)
+                .flatMap(stockCode -> inspectSourceCacheForStock(overlay, stockCode))
                 .collectList()
-                .map(this::mergeBundles);
+                .map(this::mergeInspections);
+    }
+
+    private Mono<SourceCacheInspection> inspectSourceCacheForStock(String overlay, String stockCode) {
+        if (usesFeature1(overlay)) {
+            return inspectFeature1MetricsCache(stockCode);
+        }
+        return switch (overlay) {
+            case "news" -> newsSentimentService.inspectNewsCache(stockCode)
+                    .map(cache -> new SourceCacheInspection(cache.hit(), formatCacheTime(cache.cacheAsOf())))
+                    .onErrorReturn(new SourceCacheInspection(false, null));
+            case "correlation" -> inspectPeerCache(stockCode);
+            default -> Mono.just(new SourceCacheInspection(false, null));
+        };
+    }
+
+    private Mono<SourceCacheInspection> inspectPeerCache(String stockCode) {
+        Feature2MetaDto meta = Feature2MetaDto.empty();
+        return resolveStockAndIndustry(stockCode, meta)
+                .flatMap(context -> peerClusterService.inspectPeerClusterCache(
+                        context.industry().industry().getIndustryId(),
+                        context.stock().stock().getStockCode(),
+                        Freq.ONE_D,
+                        252,
+                        null,
+                        null,
+                        8,
+                        5,
+                        8
+                ))
+                .map(cache -> new SourceCacheInspection(cache.hit(), formatCacheTime(cache.cacheAsOf())))
+                .defaultIfEmpty(new SourceCacheInspection(false, null))
+                .onErrorReturn(new SourceCacheInspection(false, null));
+    }
+
+    private Mono<SourceCacheInspection> inspectIndustryAvailability(List<String> stockCodes) {
+        if (stockCodes == null || stockCodes.isEmpty()) {
+            return Mono.just(new SourceCacheInspection(false, "현재 등록된 산업 분류"));
+        }
+        Feature2MetaDto meta = Feature2MetaDto.empty();
+        return Flux.fromIterable(stockCodes)
+                .flatMap(stockCode -> resolveStockAndIndustry(stockCode, meta)
+                        .map(context -> new SourceCacheInspection(true, "현재 등록된 산업 분류"))
+                        .defaultIfEmpty(new SourceCacheInspection(false, "현재 등록된 산업 분류"))
+                        .onErrorReturn(new SourceCacheInspection(false, "현재 등록된 산업 분류")))
+                .collectList()
+                .map(inspections -> new SourceCacheInspection(
+                        inspections.stream().allMatch(SourceCacheInspection::hit),
+                        "현재 등록된 산업 분류"
+                ));
+    }
+
+    private SourceCacheInspection mergeInspections(List<SourceCacheInspection> inspections) {
+        if (inspections == null || inspections.isEmpty()) {
+            return new SourceCacheInspection(false, null);
+        }
+        boolean allHit = inspections.stream().allMatch(SourceCacheInspection::hit);
+        String oldestAsOf = inspections.stream()
+                .map(SourceCacheInspection::cacheAsOf)
+                .filter(value -> value != null && !value.isBlank())
+                .sorted()
+                .findFirst()
+                .orElse(null);
+        return new SourceCacheInspection(allHit, oldestAsOf);
+    }
+
+    private Mono<OverlayBundle> buildOverlayBundle(String overlay, PortfolioAnalyzeRequestDto.Holding holding) {
+        return buildOverlayBundle(overlay, holding, "REUSE_AVAILABLE");
     }
 
     private Mono<OverlayBundle> buildOverlayBundle(
             String overlay,
-            PortfolioAnalyzeRequestDto.Holding holding
+            PortfolioAnalyzeRequestDto.Holding holding,
+            String cachePolicy
     ) {
         if (usesFeature1(overlay)) {
-            return loadFeature1Metrics(holding.stockCode())
+            return loadFeature1Metrics(holding.stockCode(), cachePolicy)
                     .map(cached -> "technical".equals(overlay)
                             ? technicalBundle(holding, cached.metrics(), cached.cacheStatus())
                             : feature1Bundle(holding, cached.metrics(), cached.cacheStatus()))
@@ -256,12 +353,12 @@ public class Feature3OverlayService {
                         holding.stockCode(), ex.getMessage(), ex);
                 return Mono.just(fallbackBundle(overlay, "MISS"));
             });
-            case "correlation" -> loadPeerClusterBundle(holding).onErrorResume(ex -> {
+            case "correlation" -> loadPeerClusterBundle(holding, cachePolicy).onErrorResume(ex -> {
                 log.warn("[Feature3Overlay] correlation overlay failed. stockCode={}, cause={}",
                         holding.stockCode(), ex.getMessage(), ex);
                 return Mono.just(fallbackBundle(overlay, "MISS"));
             });
-            case "news" -> loadNewsBundle(holding).onErrorResume(ex -> {
+            case "news" -> loadNewsBundle(holding, cachePolicy).onErrorResume(ex -> {
                 log.warn("[Feature3Overlay] news overlay failed. stockCode={}, cause={}",
                         holding.stockCode(), ex.getMessage(), ex);
                 return Mono.just(fallbackBundle(overlay, "MISS"));
@@ -270,28 +367,29 @@ public class Feature3OverlayService {
         };
     }
 
-    private Mono<CachedFeature1Metrics> loadFeature1Metrics(String stockCode) {
+    private Mono<CachedFeature1Metrics> loadFeature1Metrics(String stockCode, String cachePolicy) {
         LocalDate to = LocalDate.now(KST);
         LocalDate from = to.minusDays(370);
-        return readFeature1Metrics(stockCode)
-                .map(metrics -> new CachedFeature1Metrics(metrics, "HIT"))
-                .switchIfEmpty(Mono.defer(() -> featOneService.getFeatOneData(
+        Mono<CachedFeature1Metrics> freshCache = "FORCE_REFRESH".equals(cachePolicy)
+                ? Mono.empty()
+                : readFeature1MetricsPayload(stockCode).map(payload -> new CachedFeature1Metrics(payload.metrics(), "HIT"));
+        return freshCache.switchIfEmpty(Mono.defer(() -> featOneService.getFeatOneData(
+                        stockCode,
+                        Freq.ONE_D,
+                        from.toString(),
+                        to.toString(),
+                        "",
+                        false,
+                        null
+                )
+                .flatMap(result -> writeFeature1Metrics(
                                 stockCode,
-                                Freq.ONE_D,
-                                from.toString(),
-                                to.toString(),
-                                "",
-                                false,
-                                null
+                                result.getData() != null ? result.getData().getMetrics() : null
                         )
-                        .flatMap(result -> writeFeature1Metrics(
-                                        stockCode,
-                                        result.getData() != null ? result.getData().getMetrics() : null
-                                )
-                                .thenReturn(new CachedFeature1Metrics(
-                                        result.getData() != null ? result.getData().getMetrics() : null,
-                                        "MISS"
-                                )))));
+                        .thenReturn(new CachedFeature1Metrics(
+                                result.getData() != null ? result.getData().getMetrics() : null,
+                                "MISS"
+                        )))));
     }
 
     public Mono<Boolean> cacheFeature1Metrics(String stockCode, FeatOneAnalysisMetricsDto metrics) {
@@ -404,7 +502,7 @@ public class Feature3OverlayService {
                 .switchIfEmpty(Mono.just(fallbackBundle("industry", "MISS")));
     }
 
-    private Mono<OverlayBundle> loadPeerClusterBundle(PortfolioAnalyzeRequestDto.Holding holding) {
+    private Mono<OverlayBundle> loadPeerClusterBundle(PortfolioAnalyzeRequestDto.Holding holding, String cachePolicy) {
         Feature2MetaDto meta = Feature2MetaDto.empty();
         return resolveStockAndIndustry(holding.stockCode(), meta)
                 .flatMap(context -> peerClusterService.getPeerCluster(
@@ -416,17 +514,18 @@ public class Feature3OverlayService {
                                 null,
                                 8,
                                 5,
-                                8
+                                8,
+                                "FORCE_REFRESH".equals(cachePolicy)
                         )
                         .map(result -> peerClusterBundle(holding, result, "MISS"))
                         .switchIfEmpty(Mono.just(fallbackBundle("correlation", "MISS"))))
                 .switchIfEmpty(Mono.just(fallbackBundle("correlation", "MISS")));
     }
 
-    private Mono<OverlayBundle> loadNewsBundle(PortfolioAnalyzeRequestDto.Holding holding) {
+    private Mono<OverlayBundle> loadNewsBundle(PortfolioAnalyzeRequestDto.Holding holding, String cachePolicy) {
         Feature2MetaDto meta = Feature2MetaDto.empty();
         return resolveStock(holding.stockCode(), meta)
-                .flatMap(context -> newsSentimentService.loadNews(context.stock())
+                .flatMap(context -> newsSentimentService.loadNews(context.stock(), "FORCE_REFRESH".equals(cachePolicy))
                         .map(result -> newsBundle(holding, result, "MISS"))
                         .switchIfEmpty(Mono.just(fallbackBundle("news", "MISS"))))
                 .switchIfEmpty(Mono.just(fallbackBundle("news", "MISS")));
@@ -548,26 +647,17 @@ public class Feature3OverlayService {
         return new OverlayBundle(List.of(card), List.of(row), List.of(exposure(card, row)));
     }
 
-    private Mono<PortfolioAnalyzeResponseDto.OverlayInsightCard> readCard(String overlay, String stockCode) {
-        return redisTemplate.opsForValue()
-                .get(freshKey(overlay, stockCode))
-                .onErrorResume(ex -> {
-                    log.warn("[Feature3Overlay] overlay cache read skipped. overlay={}, stockCode={}, cause={}",
-                            overlay, stockCode, ex.getMessage());
-                    return Mono.empty();
-                })
-                .flatMap(json -> readCachedCard(json, "HIT"))
-                .switchIfEmpty(redisTemplate.opsForValue()
-                        .get(staleKey(overlay, stockCode))
-                        .onErrorResume(ex -> {
-                            log.warn("[Feature3Overlay] overlay stale cache read skipped. overlay={}, stockCode={}, cause={}",
-                                    overlay, stockCode, ex.getMessage());
-                            return Mono.empty();
-                        })
-                        .flatMap(json -> readCachedCard(json, "STALE")));
+    private Mono<SourceCacheInspection> inspectFeature1MetricsCache(String stockCode) {
+        return readFeature1MetricsPayload(stockCode)
+                .map(payload -> new SourceCacheInspection(
+                        payload.metrics() != null,
+                        feature1CacheAsOf(payload)
+                ))
+                .defaultIfEmpty(new SourceCacheInspection(false, null))
+                .onErrorReturn(new SourceCacheInspection(false, null));
     }
 
-    private Mono<FeatOneAnalysisMetricsDto> readFeature1Metrics(String stockCode) {
+    private Mono<CachedFeature1MetricsPayload> readFeature1MetricsPayload(String stockCode) {
         return redisTemplate.opsForValue()
                 .get(feature1MetricsFreshKey(stockCode))
                 .onErrorResume(ex -> {
@@ -577,9 +667,18 @@ public class Feature3OverlayService {
                 })
                 .flatMap(json -> {
                     try {
-                        return Mono.just(objectMapper.readValue(json, FeatOneAnalysisMetricsDto.class));
-                    } catch (Exception ex) {
+                        CachedFeature1MetricsPayload payload = objectMapper.readValue(json, CachedFeature1MetricsPayload.class);
+                        if (payload.metrics() != null) {
+                            return Mono.just(payload);
+                        }
                         return Mono.empty();
+                    } catch (Exception ex) {
+                        try {
+                            FeatOneAnalysisMetricsDto legacy = objectMapper.readValue(json, FeatOneAnalysisMetricsDto.class);
+                            return Mono.just(new CachedFeature1MetricsPayload(legacy, null));
+                        } catch (Exception ignored) {
+                            return Mono.empty();
+                        }
                     }
                 });
     }
@@ -589,45 +688,12 @@ public class Feature3OverlayService {
             return Mono.just(false);
         }
         try {
-            String json = objectMapper.writeValueAsString(metrics);
+            String json = objectMapper.writeValueAsString(new CachedFeature1MetricsPayload(metrics, OffsetDateTime.now(KST)));
             return redisTemplate.opsForValue().set(feature1MetricsFreshKey(stockCode), json, FRESH_TTL)
                     .then(redisTemplate.opsForValue().set(feature1MetricsStaleKey(stockCode), json, STALE_TTL))
                     .onErrorResume(ex -> {
                         log.warn("[Feature3Overlay] feature1 metrics cache write skipped. stockCode={}, cause={}",
                                 stockCode, ex.getMessage());
-                        return Mono.just(false);
-                    });
-        } catch (Exception ex) {
-            return Mono.just(false);
-        }
-    }
-
-    private Mono<PortfolioAnalyzeResponseDto.OverlayInsightCard> readCachedCard(String json, String cacheStatus) {
-        try {
-            PortfolioAnalyzeResponseDto.OverlayInsightCard cached =
-                    objectMapper.readValue(json, PortfolioAnalyzeResponseDto.OverlayInsightCard.class);
-            return Mono.just(new PortfolioAnalyzeResponseDto.OverlayInsightCard(
-                    cached.overlayType(),
-                    cached.title(),
-                    cached.description(),
-                    cached.severity(),
-                    cached.source(),
-                    cacheStatus,
-                    cached.affectedHoldings()
-            ));
-        } catch (Exception ex) {
-            return Mono.empty();
-        }
-    }
-
-    private Mono<Boolean> writeCard(String overlay, String stockCode, PortfolioAnalyzeResponseDto.OverlayInsightCard card) {
-        try {
-            String json = objectMapper.writeValueAsString(card);
-            return redisTemplate.opsForValue().set(freshKey(overlay, stockCode), json, FRESH_TTL)
-                    .then(redisTemplate.opsForValue().set(staleKey(overlay, stockCode), json, STALE_TTL))
-                    .onErrorResume(ex -> {
-                        log.warn("[Feature3Overlay] overlay cache write skipped. overlay={}, stockCode={}, cause={}",
-                                overlay, stockCode, ex.getMessage());
                         return Mono.just(false);
                     });
         } catch (Exception ex) {
@@ -650,23 +716,6 @@ public class Feature3OverlayService {
     private OverlayBundle fallbackBundle(String overlay, String cacheStatus) {
         PortfolioAnalyzeResponseDto.OverlayInsightCard card = fallbackCard(overlay, cacheStatus);
         return new OverlayBundle(List.of(card), List.of(), List.of(exposure(card, null)));
-    }
-
-    private OverlayBundle bundleFromCard(
-            PortfolioAnalyzeResponseDto.OverlayInsightCard card,
-            PortfolioAnalyzeRequestDto.Holding holding,
-            String value
-    ) {
-        PortfolioAnalyzeResponseDto.HoldingOverlayRow row = holdingRow(
-                holding,
-                card.overlayType(),
-                card.title(),
-                value,
-                card.severity(),
-                card.source(),
-                card.cacheStatus()
-        );
-        return new OverlayBundle(List.of(card), List.of(row), List.of(exposure(card, row)));
     }
 
     private OverlayBundle mergeBundles(List<OverlayBundle> bundles) {
@@ -967,22 +1016,6 @@ public class Feature3OverlayService {
         );
     }
 
-    private String freshKey(String overlay, String stockCode) {
-        return "feature3:overlay:fresh:" + normalize(overlay) + ":" + normalize(stockCode);
-    }
-
-    private String staleKey(String overlay, String stockCode) {
-        return "feature3:overlay:stale:" + normalize(overlay) + ":" + normalize(stockCode);
-    }
-
-    private String primaryFreshKey(String overlay, String stockCode) {
-        return usesFeature1(overlay) ? feature1MetricsFreshKey(stockCode) : freshKey(overlay, stockCode);
-    }
-
-    private String primaryStaleKey(String overlay, String stockCode) {
-        return usesFeature1(overlay) ? feature1MetricsStaleKey(stockCode) : staleKey(overlay, stockCode);
-    }
-
     private String feature1MetricsFreshKey(String stockCode) {
         return "feature1:metrics:fresh:" + normalize(stockCode);
     }
@@ -1036,9 +1069,49 @@ public class Feature3OverlayService {
         return value == null ? "-" : String.valueOf(value);
     }
 
+    private String feature1CacheAsOf(CachedFeature1MetricsPayload payload) {
+        if (payload == null) {
+            return null;
+        }
+        if (payload.metrics() != null && payload.metrics().getAsOf() != null && !payload.metrics().getAsOf().isBlank()) {
+            return payload.metrics().getAsOf();
+        }
+        return formatCacheTime(payload.cachedAt());
+    }
+
+    private String formatCacheTime(OffsetDateTime timestamp) {
+        if (timestamp == null) {
+            return null;
+        }
+        return timestamp.atZoneSameInstant(KST).format(CACHE_TIME_FORMATTER) + " " + TIMEZONE_LABEL;
+    }
+
     private record CachedFeature1Metrics(
             FeatOneAnalysisMetricsDto metrics,
             String cacheStatus
+    ) {
+    }
+
+    private record CachedFeature1MetricsPayload(
+            FeatOneAnalysisMetricsDto metrics,
+            OffsetDateTime cachedAt
+    ) {
+    }
+
+    private record SourceCacheInspection(
+            boolean hit,
+            String cacheAsOf
+    ) {
+    }
+
+    private record OverlayCacheDecision(
+            String overlayType,
+            String status,
+            int additionalCredit,
+            boolean userConfirmationRequired,
+            String userMessage,
+            String cacheAsOf,
+            boolean policySelectable
     ) {
     }
 
