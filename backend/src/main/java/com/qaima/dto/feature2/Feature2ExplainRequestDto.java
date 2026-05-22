@@ -20,5 +20,6 @@ public class Feature2ExplainRequestDto {
     private Freq freq;
     private Integer window;
     private String llmVendor;
+    private String investLevel;
     private Feature2ExplainMetricsDto metrics;
 }

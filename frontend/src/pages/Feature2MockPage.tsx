@@ -53,6 +53,7 @@ import DictTerm from "../components/DictTerm";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { formatKstOffsetDateTime, shiftKstDays, shiftKstMonths } from "../utils/kst";
 import { refreshTokenBalance } from "../api/billingStore";
+import { useDictionary } from "../components/DictContext";
 
 const getColorClassByNumber = (n: number | null) => {
   if (n === null || !Number.isFinite(n)) return "text-flat";
@@ -267,6 +268,7 @@ const isMacroRatesEmpty = (data: Feature2MacroRates | null | undefined) =>
 export default function Feature2MockPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
+  const { investLevel } = useDictionary();
   const searchRequestIdRef = useRef(0);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
@@ -927,6 +929,7 @@ export default function Feature2MockPage() {
           llmVendor,
           analysisDateRange.from,
           analysisDateRange.to,
+          investLevel,
         ),
         fetchFeature2ShortSellingSeries(mainStock.symbol, selectedWindow),
         fetchFeature2BaseRateSeries(Math.max(selectedWindow, 365)),
@@ -1259,10 +1262,11 @@ export default function Feature2MockPage() {
               <p className="text-sm text-ink-3 mt-1">
                 기준금리 · 산업지수 · 공매도 · 유사종목을 종합한 리포트
               </p>
-              <InvestLevelBadge className="mt-2" />
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <div ref={modelRef} className="relative">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-shrink-0">
+              <InvestLevelBadge />
+              <div className="flex items-center gap-3">
+                <div ref={modelRef} className="relative">
                 <button
                   onClick={() => setIsModelOpen((prev) => !prev)}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-line text-sm"
@@ -1290,15 +1294,16 @@ export default function Feature2MockPage() {
                     ))}
                   </div>
                 )}
-              </div>
-              <button
+                </div>
+                <button
                 onClick={handleAnalyzeClick}
                 disabled={loading}
                 className="px-5 py-2.5 rounded-xl bg-accent text-white font-semibold text-sm
                            hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight"
               >
                 분석 결과 보기 →
-              </button>
+                </button>
+              </div>
             </div>
           </section>
         )}

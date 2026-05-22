@@ -12,6 +12,7 @@ from app.services.llm.base import LLMClient
 from app.models.feature1 import Feature1Request, Feature1Metrics, FinancialPointItem
 from app.models.feature2 import Feature2ExplainRequest
 from app.services.llm.feature2_prompt import build_feature2_prompt
+from app.services.llm.invest_level import invest_level_prompt
 
 
 # v1 사용
@@ -172,6 +173,7 @@ class GeminiClient(LLMClient):
             "5) 데이터가 비거나 약하면 그 한계를 보수적으로 표현\n\n"
             "6) 키 이름은 반드시 sections.price_flow / sections.market_snapshot / sections.indicators / sections.financial_timeline / overall 을 정확히 유지\n"
             "7) 키를 번역하거나 camelCase로 바꾸지 말 것\n\n"
+            f"{invest_level_prompt(req.invest_level)}\n"
 
             "출력 JSON 스키마:\n"
             "{"

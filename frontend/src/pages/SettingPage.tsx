@@ -6,7 +6,7 @@ import {
   deleteWatchlistItem,
 } from "../api/watchlist";
 import type { WatchlistItem } from "../types/watchlist";
-import { getMyProfile, updateMyProfile } from "../api/user";
+import { getMyProfile, getMyRiskProfile, updateMyProfile, updateMyRiskProfile } from "../api/user";
 import type { MyProfile } from "../api/user";
 import { getApiErrorMessage } from "../utils/errorMessage";
 import {
@@ -31,6 +31,12 @@ import {
   toInvestLevel,
   type InvestLevel,
 } from "../utils/investLevel";
+import {
+  RISK_PROFILE_OPTIONS,
+  riskProfileOptionForGamma,
+  syncFeature3RiskDefaults,
+  type RiskProfileLabel,
+} from "../utils/riskProfile";
 
 const formatPhone = (v: string): string => {
   const d = (v ?? "").replace(/[^0-9]/g, "");
@@ -192,6 +198,8 @@ export default function SettingPage() {
   const [wlError, setWlError] = useState<string | null>(null);
   const [isEditingWatchlist, setIsEditingWatchlist] = useState(false);
   const [language, setLanguage] = useState<"한국어" | "English">("한국어");
+  const [riskProfileLabel, setRiskProfileLabel] = useState<RiskProfileLabel | "미설정">("미설정");
+  const [riskProfileError, setRiskProfileError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -214,12 +222,14 @@ export default function SettingPage() {
 
   useEffect(() => {
     let alive = true;
-    getMyProfile()
-      .then((p) => {
+    Promise.all([getMyProfile(), getMyRiskProfile()])
+      .then(([p, riskProfile]) => {
         if (!alive) return;
         setProfile(p);
         setInvestLevel(toInvestLevel(p.experience));
         setGlossaryHover(p.glossaryHover);
+        const option = riskProfileOptionForGamma(riskProfile.defaultRiskGamma);
+        setRiskProfileLabel(option?.label ?? "미설정");
       })
       .catch((e) => {
         if (alive)
@@ -239,6 +249,22 @@ export default function SettingPage() {
     } catch (e) {
       setInvestLevel(prev);
       alert(getApiErrorMessage(e, "투자레벨 저장에 실패했습니다."));
+    }
+  };
+
+  const handleRiskProfileChange = async (next: RiskProfileLabel | "미설정") => {
+    if (next === "미설정") return;
+    const option = RISK_PROFILE_OPTIONS.find((item) => item.label === next);
+    if (!option) return;
+    const prev = riskProfileLabel;
+    setRiskProfileLabel(next);
+    setRiskProfileError(null);
+    try {
+      await updateMyRiskProfile({ defaultRiskGamma: option.gamma });
+      syncFeature3RiskDefaults(option.gamma);
+    } catch (e) {
+      setRiskProfileLabel(prev);
+      setRiskProfileError(getApiErrorMessage(e, "투자성향 저장에 실패했습니다."));
     }
   };
 
@@ -366,7 +392,7 @@ export default function SettingPage() {
         <SettingCard
           icon={TrendingUp}
           title="투자성향"
-          desc="투자 설문 결과로 자동 설정되며, 설문을 다시 하면 변경됩니다"
+          desc="투자 설문 결과로 자동 설정되며, 직접 변경할 수 있습니다"
           action={
             <button onClick={() => navigate("/survey")} className={ghostBtn}>
               <RotateCcw size={14} />
@@ -374,8 +400,20 @@ export default function SettingPage() {
             </button>
           }
         >
-          <div className="inline-flex items-center px-3.5 py-2 rounded-lg bg-accent-soft text-accent text-sm font-semibold">
-            Aggressive · 수익 우선, 손실 감수
+          <div className="flex flex-col gap-2">
+            <SettingSelect
+              value={riskProfileLabel}
+              options={["미설정", ...RISK_PROFILE_OPTIONS.map((option) => option.label)] as const}
+              onChange={handleRiskProfileChange}
+            />
+            {riskProfileLabel !== "미설정" && (
+              <p className="text-xs text-ink-3">
+                {RISK_PROFILE_OPTIONS.find((option) => option.label === riskProfileLabel)?.description}
+              </p>
+            )}
+            {riskProfileError && (
+              <p className="text-sm text-danger">{riskProfileError}</p>
+            )}
           </div>
         </SettingCard>
 

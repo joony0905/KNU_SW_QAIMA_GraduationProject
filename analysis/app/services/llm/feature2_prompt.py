@@ -4,6 +4,7 @@ import json
 import logging
 
 from app.models.feature2 import Feature2ExplainRequest
+from app.services.llm.invest_level import invest_level_prompt
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ def build_feature2_prompt(req: Feature2ExplainRequest, compact: bool = False) ->
         "직접적인 투자 권유, 매수/매도 추천은 금지하세요.\n"
         "외부요인 관점에서 금리/국채/환율, 외국인·기관 수급, 공매도, 산업지수, 유사종목, 뉴스심리를 종합하세요.\n"
         "데이터가 부족한 항목은 부족하다고 보수적으로 표현하세요.\n\n"
+        f"{invest_level_prompt(req.invest_level)}\n"
         "작성 규칙:\n"
         "1) 각 섹션 summary는 해당 섹션 데이터만 근거로 1~2문장 작성\n"
         "2) sections.macro_environment는 기준금리, 국채, 환율이 위험자산/외국인 수급에 주는 압력을 설명\n"

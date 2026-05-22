@@ -13,6 +13,7 @@ from app.models.feature1 import Feature1Metrics, Feature1Request, FinancialPoint
 from app.models.feature2 import Feature2ExplainRequest
 from app.services.llm.base import LLMClient
 from app.services.llm.feature2_prompt import build_feature2_prompt
+from app.services.llm.invest_level import invest_level_prompt
 
 OPENAI_BASE_URL = "https://api.openai.com/v1/responses"
 DEFAULT_MODEL = "gpt-5-mini"
@@ -347,6 +348,7 @@ class OpenAIClient(LLMClient):
             "Write sectioned explanations in Korean.\n"
             "Each section must only use its own data.\n"
             "Keep wording concise and factual.\n\n"
+            f"{invest_level_prompt(req.invest_level)}\n"
             f"stock_code={metrics.stock_code}\n"
             "\n[PRICE_FLOW]\n"
             f"ohlcv_count={o.count}\n"

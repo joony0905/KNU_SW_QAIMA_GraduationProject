@@ -22,6 +22,15 @@ export interface MyProfileUpdate {
   glossaryHover?: boolean;
 }
 
+export interface MyRiskProfile {
+  defaultRiskGamma: number | null;
+  profileType: string | null;
+}
+
+export interface MyRiskProfileUpdate {
+  defaultRiskGamma: number;
+}
+
 export const getMyProfile = async (): Promise<MyProfile> => {
   const res = await api.get("/users/me");
   // ApiResponse<UserResponseDto>
@@ -32,5 +41,17 @@ export const updateMyProfile = async (
   payload: MyProfileUpdate
 ): Promise<MyProfile> => {
   const res = await api.patch("/users/me", payload);
+  return res.data.data;
+};
+
+export const getMyRiskProfile = async (): Promise<MyRiskProfile> => {
+  const res = await api.get("/users/me/risk-profile");
+  return res.data.data;
+};
+
+export const updateMyRiskProfile = async (
+  payload: MyRiskProfileUpdate
+): Promise<MyRiskProfile> => {
+  const res = await api.patch("/users/me/risk-profile", payload);
   return res.data.data;
 };

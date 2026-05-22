@@ -4,6 +4,7 @@ import java.util.List;
 
 public record Feature3FastApiAnalyzeRequestDto(
         Long portfolioId,
+        String investLevel,
         List<Holding> holdings,
         List<CashPosition> cashPositions,
         RiskProfile riskProfile,

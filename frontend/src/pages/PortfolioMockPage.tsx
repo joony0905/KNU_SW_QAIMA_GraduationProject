@@ -9,13 +9,25 @@ import { isLoggedIn } from "../utils/auth";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchCell from "../components/StockSearchCell";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
+import { useDictionary } from "../components/DictContext";
+import { getMyRiskProfile } from "../api/user";
 import { fetchPortfolioAnalysis, previewFeature3OverlayCache } from "../api/portfolio";
 import { fetchFeature2MacroRates } from "../api/feature2";
 import { getApiErrorMessage } from "../utils/errorMessage";
 import type { Feature2ExchangeRatePoint } from "../types/feature2";
-
-const RISK_GAMMA_STORAGE_KEY = "qaima_risk_gamma";
-const SURVEY_RESULT_STORAGE_KEY = "qaima_survey_result";
+import {
+  SURVEY_RESULT_STORAGE_KEY,
+  autoCashLimitForRiskScore,
+  clampCashLimit,
+  clampRiskGamma,
+  formatRiskGamma,
+  readStoredFeature3CashLimit,
+  readStoredFeature3CashLimitManual,
+  readStoredFeature3RiskGamma,
+  storeFeature3CashLimit,
+  storeFeature3RiskGamma,
+  syncFeature3RiskDefaults,
+} from "../utils/riskProfile";
 
 const LLM_VENDOR_OPTIONS = [
   "GPT-5.4",
@@ -40,26 +52,6 @@ const LLM_VENDOR_OPTIONS = [
   "Grok 3",
   "Grok 3 Mini",
 ] as const;
-
-const clampRiskGamma = (v: number): number => {
-  if (!Number.isFinite(v)) return 0;
-  if (v < 0) return 0;
-  if (v > 1) return 1;
-  return Math.round(v * 100) / 100;
-};
-
-const formatRiskGamma = (v: number): string => v.toFixed(2);
-
-const clampCashLimit = (v: number): number => {
-  if (!Number.isFinite(v)) return 0.2;
-  if (v < 0) return 0;
-  if (v > 1) return 1;
-  return Math.round(v * 100) / 100;
-};
-
-const autoCashLimitForRiskScore = (riskScore: number): number => {
-  return clampCashLimit(1 - clampRiskGamma(riskScore));
-};
 
 type AnalysisWindowPreset = {
   label: string;
@@ -522,6 +514,7 @@ export default function PortfolioMockPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggle } = useTheme();
+  const { investLevel } = useDictionary();
   // 로그인 여부: Portfolio Manager 잠금 오버레이 + 분석 실행 가드에 사용.
   // 토큰 상태는 마운트 시 한 번 평가하면 충분 — 로그인 후엔 /login → /feature/3 으로
   // 다시 마운트되므로 자연스럽게 갱신된다.
@@ -543,34 +536,60 @@ export default function PortfolioMockPage() {
   // 숫자 입력 필드의 표시값 (타이핑 도중 소수점 입력을 허용하기 위해 문자열로 관리)
   const [riskGammaInput, setRiskGammaInput] = useState<string>("");
   const [cashLimit, setCashLimit] = useState<number>(autoCashLimitForRiskScore(0.5));
+  const [cashLimitManual, setCashLimitManual] = useState(false);
 
   // 설문에서 복귀했으면(sessionStorage) 그 값을, 없으면 마지막 저장값(localStorage)을 초기값으로 사용
   useEffect(() => {
+    let alive = true;
+    const applyRiskGamma = (value: number, useStoredCash: boolean) => {
+      if (!alive) return;
+      const clamped = clampRiskGamma(value);
+      const storedCashLimit = useStoredCash ? readStoredFeature3CashLimit() : null;
+      const manual = useStoredCash ? readStoredFeature3CashLimitManual() : false;
+      setRiskGamma(clamped);
+      setRiskGammaInput(formatRiskGamma(clamped));
+      setCashLimit(storedCashLimit ?? autoCashLimitForRiskScore(clamped));
+      setCashLimitManual(manual && storedCashLimit !== null);
+    };
+
     const fromSurvey = sessionStorage.getItem(SURVEY_RESULT_STORAGE_KEY);
     if (fromSurvey !== null) {
       const parsed = Number(fromSurvey);
       if (Number.isFinite(parsed)) {
-        const clamped = clampRiskGamma(parsed);
-        setRiskGamma(clamped);
-        setRiskGammaInput(formatRiskGamma(clamped));
-        setCashLimit(autoCashLimitForRiskScore(clamped));
-        localStorage.setItem(RISK_GAMMA_STORAGE_KEY, String(clamped));
+        syncFeature3RiskDefaults(parsed);
+        applyRiskGamma(parsed, false);
       }
       sessionStorage.removeItem(SURVEY_RESULT_STORAGE_KEY);
-      return;
+      return () => {
+        alive = false;
+      };
     }
 
-    const saved = localStorage.getItem(RISK_GAMMA_STORAGE_KEY);
+    const saved = readStoredFeature3RiskGamma();
     if (saved !== null) {
-      const parsed = Number(saved);
-      if (Number.isFinite(parsed)) {
-        const clamped = clampRiskGamma(parsed);
-        setRiskGamma(clamped);
-        setRiskGammaInput(formatRiskGamma(clamped));
-        setCashLimit(autoCashLimitForRiskScore(clamped));
-      }
+      applyRiskGamma(saved, true);
+      return () => {
+        alive = false;
+      };
     }
-  }, []);
+
+    if (!loggedIn) {
+      return () => {
+        alive = false;
+      };
+    }
+
+    getMyRiskProfile()
+      .then((profile) => {
+        if (profile.defaultRiskGamma === null) return;
+        applyRiskGamma(profile.defaultRiskGamma, false);
+      })
+      .catch(() => {});
+
+    return () => {
+      alive = false;
+    };
+  }, [loggedIn]);
 
   useEffect(() => {
     // 환율 조회는 인증이 필요한 엔드포인트라 비로그인 시 401 → apiClient 가
@@ -601,8 +620,19 @@ export default function PortfolioMockPage() {
     const clamped = clampRiskGamma(v);
     setRiskGamma(clamped);
     setRiskGammaInput(formatRiskGamma(clamped));
-    setCashLimit(autoCashLimitForRiskScore(clamped));
-    localStorage.setItem(RISK_GAMMA_STORAGE_KEY, String(clamped));
+    storeFeature3RiskGamma(clamped);
+    if (!cashLimitManual) {
+      const nextCashLimit = autoCashLimitForRiskScore(clamped);
+      setCashLimit(nextCashLimit);
+      storeFeature3CashLimit(nextCashLimit, false);
+    }
+  };
+
+  const commitCashLimit = (v: number) => {
+    const clamped = clampCashLimit(v);
+    setCashLimit(clamped);
+    setCashLimitManual(true);
+    storeFeature3CashLimit(clamped, true);
   };
 
   const handleRiskGammaInputChange = (value: string) => {
@@ -619,7 +649,9 @@ export default function PortfolioMockPage() {
     if (Number.isFinite(parsed)) {
       const clamped = clampRiskGamma(parsed);
       setRiskGamma(clamped);
-      setCashLimit(autoCashLimitForRiskScore(clamped));
+      if (!cashLimitManual) {
+        setCashLimit(autoCashLimitForRiskScore(clamped));
+      }
     }
   };
 
@@ -795,6 +827,7 @@ export default function PortfolioMockPage() {
       }
       const analysisWindow = selectedWindow;
       const result = await fetchPortfolioAnalysis({
+        investLevel,
         holdings: validRows.map((r) => ({
           stockCode: r.stockCode ?? r.name.trim(),
           companyName: r.name.trim(),
@@ -1430,7 +1463,7 @@ export default function PortfolioMockPage() {
 	                        max={1}
 	                        step={0.01}
 	                        value={cashLimit}
-	                        onChange={(e) => setCashLimit(clampCashLimit(Number(e.target.value)))}
+	                        onChange={(e) => commitCashLimit(Number(e.target.value))}
 	                        className="w-full cursor-pointer accent-accent"
 	                      />
 	                      <div className="flex justify-between text-[11px] text-ink-3">
@@ -1466,7 +1499,6 @@ export default function PortfolioMockPage() {
               <p className="text-sm text-ink-3 mt-1">
                 변동성 · 분산 구조 · 효율성을 종합한 리포트
               </p>
-              <InvestLevelBadge className="mt-2" />
               {!loading && loggedIn && riskGamma === null && (
                 <p className="text-xs text-ink-4 mt-1.5">투자 성향 지수를 먼저 입력해주세요.</p>
               )}
@@ -1475,9 +1507,11 @@ export default function PortfolioMockPage() {
               )}
               {err && <p className="text-xs text-danger mt-1.5">{err}</p>}
             </div>
-            <div className="flex flex-col items-end gap-1 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                <div ref={modelRef} className="relative">
+            <div className="flex flex-col items-start sm:items-end gap-1 flex-shrink-0">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <InvestLevelBadge />
+                <div className="flex items-center gap-3">
+                  <div ref={modelRef} className="relative">
                   <button
                     type="button"
                     onClick={() => setIsModelOpen((prev) => !prev)}
@@ -1507,8 +1541,8 @@ export default function PortfolioMockPage() {
                       ))}
                     </div>
                   )}
-                </div>
-                <button
+                  </div>
+                  <button
                   type="button"
                   onClick={() => void handleAnalyzeClick()}
                   disabled={loading || (loggedIn && riskGamma === null)}
@@ -1516,7 +1550,8 @@ export default function PortfolioMockPage() {
                              hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity tracking-tight"
                 >
                   {loading ? "분석 중..." : "분석 결과 보기 →"}
-                </button>
+                  </button>
+                </div>
               </div>
               {!loading && loggedIn && riskGamma === null && (
                 <p className="text-xs text-ink-4">투자 성향 지수를 먼저 입력해주세요.</p>
@@ -2214,6 +2249,28 @@ export default function PortfolioMockPage() {
                     {renderExplainSection(analysisResult.explain?.sections?.overlayObservations)}
                   </div>
 
+                  {analysisResult.overlays.explanations?.length ? (
+                    <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      {analysisResult.overlays.explanations.map((item, index) => (
+                        <div key={`${item.overlayType}-${item.stockCode}-${index}`} className="rounded-xl bg-bg-sunk border border-line p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-semibold text-ink-4 truncate">
+                                {item.companyName ?? item.stockCode}
+                                {item.companyName && item.stockCode ? <span className="ml-1 font-mono tabular">({item.stockCode})</span> : null}
+                              </p>
+                              <p className="mt-0.5 text-sm font-bold text-ink">{item.title}</p>
+                            </div>
+                            <span className={`flex-shrink-0 text-xs font-mono tabular ${item.score >= 0 ? "text-success" : "text-danger"}`}>
+                              {item.score.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-xs leading-relaxed text-ink-3">{renderOverlayValue(item.overlayType, item.description)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
 	                  <div className="mt-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
 	                    {analysisResult.overlays.adjustedPortfolios.map((portfolio) => {
                         const baseWeights = weightMapByStock(analysisResult.currentPortfolio.weights);
@@ -2275,28 +2332,6 @@ export default function PortfolioMockPage() {
                   <div className="mt-5">
                     {renderExplainSection(analysisResult.explain?.sections?.portfolioComparison)}
                   </div>
-
-                  {analysisResult.overlays.explanations?.length ? (
-                    <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                      {analysisResult.overlays.explanations.slice(0, 8).map((item, index) => (
-                        <div key={`${item.overlayType}-${item.stockCode}-${index}`} className="rounded-xl bg-bg-sunk border border-line p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-[11px] font-semibold text-ink-4 truncate">
-                                {item.companyName ?? item.stockCode}
-                                {item.companyName && item.stockCode ? <span className="ml-1 font-mono tabular">({item.stockCode})</span> : null}
-                              </p>
-                              <p className="mt-0.5 text-sm font-bold text-ink">{item.title}</p>
-                            </div>
-                            <span className={`flex-shrink-0 text-xs font-mono tabular ${item.score >= 0 ? "text-success" : "text-danger"}`}>
-                              {item.score.toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="mt-1 text-xs leading-relaxed text-ink-3">{renderOverlayValue(item.overlayType, item.description)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
 
                   {analysisResult.explain?.sections?.finalJudgement ? (
                     <div className="mt-5">

@@ -368,6 +368,7 @@ public class Feature2AnalyzeService {
                 .freq(command.freq())
                 .window(command.window())
                 .llmVendor(command.llmVendor())
+                .investLevel(command.investLevel())
                 .metrics(explainMetrics)
                 .build();
 

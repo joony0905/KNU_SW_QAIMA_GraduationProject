@@ -12,6 +12,7 @@ public record Feature2Command(
         int peerCount,
         int maxLag,
         int displayLimit,
-        String llmVendor
+        String llmVendor,
+        String investLevel
 ) {
 }

@@ -12,6 +12,7 @@ import java.util.Map;
 
 public record PortfolioAnalyzeRequestDto(
         Long portfolioId,
+        String investLevel,
         @NotEmpty List<@Valid Holding> holdings,
         List<@Valid CashPosition> cashPositions,
         @Valid @NotNull RiskProfile riskProfile,

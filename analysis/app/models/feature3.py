@@ -85,6 +85,7 @@ class Feature3OverlaySignal(BaseModel):
 
 class PortfolioAnalyzeRequest(BaseModel):
     portfolio_id: int | None = None
+    invest_level: str | None = None
     holdings: list[Feature3HoldingRequest] = Field(min_length=1)
     cash_positions: list[Feature3CashPositionRequest] = Field(default_factory=list)
     risk_profile: Feature3RiskProfileRequest

@@ -187,9 +187,9 @@ const formatRelationBadge = (relation: PeerItem["relation"]) => {
 const correlationColorClass = (corr?: number | null): string => {
   if (corr == null || !Number.isFinite(corr)) return "text-ink-3";
   const abs = Math.abs(corr);
-  if (abs >= 0.7) return "text-red-600";
-  if (abs >= 0.5) return "text-orange-500";
-  if (abs >= 0.3) return "text-amber-500";
+  if (abs >= 0.7) return "text-red-600 dark:text-red-300";
+  if (abs >= 0.5) return "text-orange-500 dark:text-orange-300";
+  if (abs >= 0.3) return "text-amber-500 dark:text-amber-300";
   return "text-ink-3";
 };
 
@@ -233,25 +233,25 @@ const formatDisplayStatus = (peer: PeerItem): string => {
 const peerCardClass = (peer: PeerItem): string => {
   switch (peer.displayStatus) {
     case "SELECTED":
-      return "border-sky-300 bg-sky-50/70";
+      return "border-sky-300 bg-sky-50/70 dark:border-indigo-400/40 dark:bg-indigo-950/30 dark:shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)]";
     case "LOW_CORR":
-      return "border-line bg-bg-sunk opacity-75";
+      return "border-line bg-bg-sunk opacity-75 dark:border-line dark:bg-bg-sunk/70";
     case "DISPLAY_ONLY":
     case "RAW_ONLY":
     case "ADJUSTED_ONLY":
     case "FALLBACK_RAW":
-      return "border-line bg-surface";
+      return "border-line bg-surface dark:border-line-strong/70 dark:bg-surface-2/55";
     default:
-      return "border-line bg-surface";
+      return "border-line bg-surface dark:border-line-strong/70 dark:bg-surface-2/55";
   }
 };
 
 const relationColorClass = (relation: PeerItem["relation"]): string => {
   switch (relation) {
     case "LEADER":
-      return "text-green-600";
+      return "text-green-600 dark:text-emerald-300";
     case "FOLLOWER":
-      return "text-purple-600";
+      return "text-purple-600 dark:text-violet-300";
     case "COINCIDENT":
       return "text-ink";
     default:

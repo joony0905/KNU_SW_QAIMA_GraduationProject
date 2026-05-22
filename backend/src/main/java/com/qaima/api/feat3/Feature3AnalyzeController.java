@@ -107,6 +107,7 @@ public class Feature3AnalyzeController {
                     Feature3RiskFreeRateService.RiskFreeRate riskFree = tuple.getT2();
                     return new Feature3FastApiAnalyzeRequestDto(
                         req.portfolioId(),
+                        normalizeInvestLevel(req.investLevel()),
                         holdings,
                         req.cashPositions() != null
                                 ? req.cashPositions().stream()
@@ -152,6 +153,7 @@ public class Feature3AnalyzeController {
     ) {
         return new Feature3FastApiAnalyzeRequestDto(
                 request.portfolioId(),
+                request.investLevel(),
                 request.holdings(),
                 request.cashPositions(),
                 request.riskProfile(),
@@ -180,11 +182,22 @@ public class Feature3AnalyzeController {
                 .toList();
         return new PortfolioAnalyzeRequestDto(
                 original.portfolioId(),
+                original.investLevel(),
                 holdings,
                 original.cashPositions(),
                 original.riskProfile(),
                 original.options()
         );
+    }
+
+    private static String normalizeInvestLevel(String investLevel) {
+        if (investLevel == null || investLevel.isBlank()) {
+            return "초급자";
+        }
+        return switch (investLevel.trim()) {
+            case "초급자", "중급자", "고급자", "전문가" -> investLevel.trim();
+            default -> "초급자";
+        };
     }
 
     private Mono<Feature3FastApiAnalyzeRequestDto.Holding> toFastApiHolding(PortfolioAnalyzeRequestDto.Holding holding) {

@@ -61,6 +61,16 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/featured-stocks/**").permitAll()
                         .pathMatchers("/api/v1/feature3/market-data/**").permitAll()
                         .pathMatchers("/api/v1/feature2/peercluster/data").permitAll()
+                        .pathMatchers("/api/v1/feature2/news/**").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/base-rate").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/base-rate-series").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/macro-rates").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/macro-rates-series").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/industry-index").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/short-selling").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/short-selling-series").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/related-stocks").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/investor-flow").permitAll()
 
                         // 관리자
                         .pathMatchers("/api/v1/admin/**").hasRole("ADMIN")

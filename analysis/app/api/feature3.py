@@ -18,7 +18,7 @@ async def analyze(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
     try:
         response = analyze_portfolio(req)
         if req.options.include_llm_explain:
-            explain = await generate_feature3_explain(response, req.options.llm_vendor)
+            explain = await generate_feature3_explain(response, req.options.llm_vendor, req.invest_level)
             response.explain = explain if explain.text else deterministic_feature3_explain(response)
             response.warnings.extend(explain.warnings)
         else:

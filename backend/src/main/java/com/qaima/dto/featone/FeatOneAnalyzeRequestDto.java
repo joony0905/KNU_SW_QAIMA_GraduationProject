@@ -23,4 +23,6 @@ public class FeatOneAnalyzeRequestDto {
     private Boolean includeExplain;
 
     private String llmVendor;
+
+    private String investLevel;
 }

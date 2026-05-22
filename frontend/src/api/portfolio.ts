@@ -2,6 +2,7 @@
 import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
 import type { ApiResponse } from "../types/common/api";
+import type { InvestLevel } from "../utils/investLevel";
 
 export type Feature3ProfileType = "CONSERVATIVE" | "NEUTRAL" | "AGGRESSIVE";
 export type Feature3RiskLevel = "LOW" | "MID" | "HIGH";
@@ -26,6 +27,7 @@ export type PortfolioCashPositionRequest = {
 
 export type PortfolioAnalyzeRequest = {
   portfolioId?: number;
+  investLevel?: InvestLevel;
   holdings: PortfolioHoldingRequest[];
   cashPositions?: PortfolioCashPositionRequest[];
   riskProfile: {

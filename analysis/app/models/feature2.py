@@ -234,6 +234,7 @@ class Feature2ExplainRequest(BaseModel):
     freq: Optional[Freq] = None
     window: Optional[int] = None
     llm_vendor: Optional[str] = None
+    invest_level: Optional[str] = None
     metrics: Feature2ExplainMetrics = Field(default_factory=Feature2ExplainMetrics)
 
 

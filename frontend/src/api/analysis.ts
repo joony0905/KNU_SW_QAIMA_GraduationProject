@@ -4,6 +4,7 @@ import { ENDPOINTS } from "./endpoints";
 import type { AnalysisResponse, AnalysisResponseWire } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
 import { mapAnalysisWireToCamel } from "../mappers/analysisMapper";
+import type { InvestLevel } from "../utils/investLevel";
 
 export type Freq =
   | "ONE_MIN"
@@ -22,6 +23,7 @@ export type FeatOneAnalyzeRequest = {
   marketDivCode: string;
   includeExplain: boolean;
   llmVendor?: string;
+  investLevel?: InvestLevel;
 };
 
 export const fetchAnalysis = async (
@@ -37,6 +39,7 @@ export const fetchAnalysis = async (
       marketDivCode: req.marketDivCode,
       includeExplain: req.includeExplain,
       llmVendor: req.llmVendor,
+      investLevel: req.investLevel,
     }
   );
 

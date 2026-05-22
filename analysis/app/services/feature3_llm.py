@@ -7,6 +7,7 @@ import os
 import httpx
 
 from app.models.feature3 import Feature3ExplainResult, Feature3Warning, PortfolioAnalyzeResponse
+from app.services.llm.invest_level import invest_level_prompt
 
 log = logging.getLogger(__name__)
 
@@ -86,8 +87,9 @@ def _int_env(name: str, default: int) -> int:
 async def generate_feature3_explain(
     response: PortfolioAnalyzeResponse,
     vendor: str | None,
+    invest_level: str | None = None,
 ) -> Feature3ExplainResult:
-    prompt = _prompt(response)
+    prompt = _prompt(response, invest_level)
     normalized_vendor = _normalize_vendor(vendor)
     log.info(
         "[feature3][llm] start requested_vendor=%s normalized_vendor=%s prompt_chars=%s overlays=%s adjusted_portfolios=%s",
@@ -336,12 +338,13 @@ def _openai_response_schema() -> dict:
     }
 
 
-def _prompt(response: PortfolioAnalyzeResponse) -> str:
+def _prompt(response: PortfolioAnalyzeResponse, invest_level: str | None = None) -> str:
     payload = {
         "sectionData": _explain_context(response),
     }
     return (
         "Feature3 포트폴리오 리스크 분석 결과를 일반 사용자에게 설명한다.\n"
+        f"{invest_level_prompt(invest_level)}"
         "금지: 공분산, Ledoit-Wolf, 감마, 효용함수 같은 내부 수학 용어를 먼저 쓰지 않는다.\n"
         "반드시 제공된 JSON의 숫자와 경고만 사용한다. 새 숫자, 새 종목, 새 원인은 만들지 않는다.\n"
         "sectionData만 근거로 사용한다.\n"

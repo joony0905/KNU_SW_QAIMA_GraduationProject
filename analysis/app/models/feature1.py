@@ -132,6 +132,7 @@ class Feature1Request(BaseModel):
     market_snapshot: Optional[MarketSnapshotMetrics] = None
     include_explain: bool = False
     llm_vendor: Optional[str] = None
+    invest_level: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 

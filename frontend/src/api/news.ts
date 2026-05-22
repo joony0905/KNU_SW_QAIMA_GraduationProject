@@ -9,6 +9,7 @@ export const fetchNewsByStock = async (
 ): Promise<NewsItemDto[]> => {
   const res = await api.get<ApiResponse<NewsItemDto[]>>(
     ENDPOINTS.news.listByStock(stockCode, limit),
+    { _skipAuthRedirect: true },
   );
   return res.data.data;
 };

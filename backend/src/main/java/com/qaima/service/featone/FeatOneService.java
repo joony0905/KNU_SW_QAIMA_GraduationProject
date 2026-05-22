@@ -97,7 +97,8 @@ public class FeatOneService {
             String to,
             String marketDivCode,
             Boolean includeExplain,
-            String llmVendor
+            String llmVendor,
+            String investLevel
     ) {
         if (stockCode == null || stockCode.isBlank()
                 || freq == null
@@ -146,15 +147,16 @@ public class FeatOneService {
                     MarketSnapshotDto marketSnapshot = tuple.getT4().orElse(null);
 
                     FeatOneRequestDto requestDto =
-                            buildFeatOneRequestDto(stock, freq, from, to, candles, financials, marketSnapshot, includeExplain, llmVendor);
+                            buildFeatOneRequestDto(stock, freq, from, to, candles, financials, marketSnapshot, includeExplain, llmVendor, investLevel);
 
-                    log.info("[FeatOneService][analysis-request] stockCode={}, freq={}, ohlcvSize={}, financialsSize={}, includeExplain={}, llmVendor={}",
+                    log.info("[FeatOneService][analysis-request] stockCode={}, freq={}, ohlcvSize={}, financialsSize={}, includeExplain={}, llmVendor={}, investLevel={}",
                             requestDto.getStockCode(),
                             requestDto.getFreq(),
                             requestDto.getOhlcv() != null ? requestDto.getOhlcv().size() : 0,
                             requestDto.getFinancials() != null ? requestDto.getFinancials().size() : 0,
                             requestDto.getIncludeExplain(),
-                            requestDto.getLlmVendor());
+                            requestDto.getLlmVendor(),
+                            requestDto.getInvestLevel());
 
                     return analysisApiClient.requestStockAnalysis(requestDto)
                             .map(response -> {
@@ -430,7 +432,8 @@ public class FeatOneService {
             List<Financial> financials,
             MarketSnapshotDto marketSnapshot,
             Boolean includeExplain,
-            String llmVendor
+            String llmVendor,
+            String investLevel
     ) {
         List<OhlcvItemDto> ohlcvDtos =
                 mergeCandles(candles, null).stream()
@@ -461,7 +464,18 @@ public class FeatOneService {
                 .marketSnapshot(toFeatOneMarketSnapshot(marketSnapshot, stock))
                 .includeExplain(explain)
                 .llmVendor(llmVendor)
+                .investLevel(normalizeInvestLevel(investLevel))
                 .build();
+    }
+
+    private static String normalizeInvestLevel(String investLevel) {
+        if (investLevel == null || investLevel.isBlank()) {
+            return "초급자";
+        }
+        return switch (investLevel.trim()) {
+            case "초급자", "중급자", "고급자", "전문가" -> investLevel.trim();
+            default -> "초급자";
+        };
     }
 
     private String toKisMarketDivCode(Exchange exchange) {

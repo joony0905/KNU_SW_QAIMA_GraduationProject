@@ -107,9 +107,7 @@ export default function App() {
         path="/feature/2"
         element={
           <MainLayout>
-            <RequireAuth>
-              <Feature2MockPage />
-            </RequireAuth>
+            <Feature2MockPage />
           </MainLayout>
         }
       />

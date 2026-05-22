@@ -2,9 +2,13 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
-
-const RISK_GAMMA_STORAGE_KEY = "qaima_risk_gamma";
-const SURVEY_RESULT_STORAGE_KEY = "qaima_survey_result";
+import { updateMyRiskProfile } from "../api/user";
+import { isLoggedIn } from "../utils/auth";
+import { getApiErrorMessage } from "../utils/errorMessage";
+import {
+  SURVEY_RESULT_STORAGE_KEY,
+  syncFeature3RiskDefaults,
+} from "../utils/riskProfile";
 
 // 원본 문서 기준 총점 최댓값. Q4(파생상품 경험)는 informational 항목으로 점수 산정에서 제외.
 const MAX_SCORE = 72;
@@ -284,6 +288,8 @@ export default function SurveyPage() {
   const [answers, setAnswers] = useState<Answers>({});
   const [result, setResult] = useState<ScoreResult | null>(null);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement | null>(null);
   const formTopRef = useRef<HTMLDivElement | null>(null);
 
@@ -327,10 +333,21 @@ export default function SurveyPage() {
     }, 50);
   };
 
-  const handleApply = () => {
+  const handleApply = async () => {
     if (!result) return;
+    setApplying(true);
+    setApplyError(null);
+    try {
+      if (isLoggedIn()) {
+        await updateMyRiskProfile({ defaultRiskGamma: result.gamma });
+      }
+      syncFeature3RiskDefaults(result.gamma);
+    } catch (e) {
+      setApplyError(getApiErrorMessage(e, "투자성향 저장에 실패했습니다."));
+      setApplying(false);
+      return;
+    }
     sessionStorage.setItem(SURVEY_RESULT_STORAGE_KEY, String(result.gamma));
-    localStorage.setItem(RISK_GAMMA_STORAGE_KEY, String(result.gamma));
     navigate("/feature/3");
   };
 
@@ -565,18 +582,23 @@ export default function SurveyPage() {
               <button
                 type="button"
                 onClick={handleReset}
-                className="px-5 py-2.5 rounded-lg border border-line bg-surface text-sm font-medium text-ink-2 hover:bg-bg-soft transition-colors"
+                disabled={applying}
+                className="px-5 py-2.5 rounded-lg border border-line bg-surface text-sm font-medium text-ink-2 hover:bg-bg-soft transition-colors disabled:opacity-50"
               >
                 다시 응답하기
               </button>
               <button
                 type="button"
                 onClick={handleApply}
-                className="px-7 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent-ink transition-all"
+                disabled={applying}
+                className="px-7 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent-ink transition-all disabled:opacity-50"
               >
-                포트폴리오에 적용하기
+                {applying ? "저장 중..." : "포트폴리오에 적용하기"}
               </button>
             </div>
+            {applyError && (
+              <p className="text-sm text-danger">{applyError}</p>
+            )}
           </div>
         )}
       </div>

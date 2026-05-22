@@ -2,11 +2,18 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { getErrorMessage } from "../utils/errorMessage";
 import { clearAccessToken, getAccessToken, setAccessToken } from "./tokenStore";
 
+declare module "axios" {
+  export interface AxiosRequestConfig {
+    _skipAuthRedirect?: boolean;
+  }
+}
+
 const BASE_URL = "http://localhost:8080/api/v1"; // 나중에 실 서버 주소로 교체
 
 // 401 재시도 여부 추적용 플래그
 interface RetriableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
+  _skipAuthRedirect?: boolean;
 }
 
 const api = axios.create({
@@ -76,12 +83,14 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const status = error.response?.status;
     const originalRequest = error.config as RetriableRequestConfig | undefined;
+    const skipAuthRedirect = Boolean(originalRequest?._skipAuthRedirect);
 
     if (
       status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !isAuthEndpoint(originalRequest.url)
+      !isAuthEndpoint(originalRequest.url) &&
+      !skipAuthRedirect
     ) {
       originalRequest._retry = true;
       try {
@@ -91,7 +100,9 @@ api.interceptors.response.use(
         return api.request(originalRequest);
       } catch (refreshError) {
         clearAccessToken();
-        redirectToLogin();
+        if (!skipAuthRedirect) {
+          redirectToLogin();
+        }
         return Promise.reject(refreshError);
       }
     }
@@ -103,7 +114,7 @@ api.interceptors.response.use(
     const message = getErrorMessage(status, errorCode);
     console.error("API Error:", status, errorCode, message);
 
-    if (status === 401) {
+    if (status === 401 && !skipAuthRedirect) {
       // refresh 도 실패했거나 auth 엔드포인트 자체의 401
       clearAccessToken();
       redirectToLogin();

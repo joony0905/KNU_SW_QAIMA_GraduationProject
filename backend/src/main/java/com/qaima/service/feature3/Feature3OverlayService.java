@@ -380,7 +380,8 @@ public class Feature3OverlayService {
                         to.toString(),
                         "",
                         false,
-                        null
+                        null,
+                        "초급자"
                 )
                 .flatMap(result -> writeFeature1Metrics(
                                 stockCode,

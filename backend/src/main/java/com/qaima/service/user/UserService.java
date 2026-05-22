@@ -4,6 +4,8 @@ import com.qaima.common.Blocking;
 import com.qaima.domain.User;
 import com.qaima.dto.user.UserProfileUpdateRequestDto;
 import com.qaima.dto.user.UserResponseDto;
+import com.qaima.dto.user.UserRiskProfileDto;
+import com.qaima.dto.user.UserRiskProfileUpdateRequestDto;
 import com.qaima.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,19 @@ public class UserService {
 
     public Mono<UserResponseDto> getProfile(Long userId) {
         return loadUser(userId).map(UserResponseDto::new);
+    }
+
+    public Mono<UserRiskProfileDto> getRiskProfile(Long userId) {
+        return loadUser(userId).map(this::toRiskProfileDto);
+    }
+
+    public Mono<UserRiskProfileDto> updateRiskProfile(Long userId, UserRiskProfileUpdateRequestDto requestDto) {
+        return loadUser(userId)
+                .flatMap(user -> Blocking.call(() -> {
+                    user.setDefaultRiskGamma(requestDto.defaultRiskGamma());
+                    return userRepository.save(user);
+                }))
+                .map(this::toRiskProfileDto);
     }
 
     public Mono<UserResponseDto> updateProfile(Long userId, UserProfileUpdateRequestDto requestDto) {
@@ -51,6 +66,25 @@ public class UserService {
     private Mono<User> loadUser(Long userId) {
         return Blocking.call(() -> userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다.")));
+    }
+
+    private UserRiskProfileDto toRiskProfileDto(User user) {
+        return new UserRiskProfileDto(
+                user.getDefaultRiskGamma(),
+                riskProfileType(user.getDefaultRiskGamma())
+        );
+    }
+
+    private static String riskProfileType(java.math.BigDecimal gamma) {
+        if (gamma == null) {
+            return null;
+        }
+        double value = gamma.doubleValue();
+        if (value <= 0.20d) return "안정형";
+        if (value <= 0.40d) return "안정추구형";
+        if (value <= 0.60d) return "위험중립형";
+        if (value <= 0.80d) return "적극투자형";
+        return "공격투자형";
     }
 
     private static String normalizePhone(String value) {

@@ -16,6 +16,7 @@ import com.qaima.dto.feature2.Feature2MetricsDto;
 import com.qaima.dto.feature2.Feature2RelatedStockCardDto;
 import com.qaima.dto.feature2.Feature2ShortSellingSeriesPointDto;
 import com.qaima.dto.industry.IndustryIndexBlockDto;
+import com.qaima.external.KisInvestorFlowClient;
 import com.qaima.repository.BaseRateRepository;
 import com.qaima.repository.MarketInvestorFlowRepository;
 import com.qaima.repository.PriceOhlcvRepository;
@@ -814,11 +815,12 @@ public class Feature2CardService {
                 .toList();
 
         String marketCode = toInvestorMarketCode(stock);
+        String marketIndustryCode = marketCode == null ? null : KisInvestorFlowClient.defaultMarketIndustryCode(marketCode);
         List<MarketInvestorFlow> marketRows = marketCode == null
                 ? List.of()
                 : marketInvestorFlowRepository.findByMarketCodeAndIndustryCodeOrderByTradeDateDesc(
                                 marketCode,
-                                "0000",
+                                marketIndustryCode,
                                 PageRequest.of(0, limit)
                         )
                         .stream()

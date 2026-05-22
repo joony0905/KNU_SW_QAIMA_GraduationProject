@@ -3,6 +3,9 @@ export const ENDPOINTS = {
     login: "/auth/login",
     signup: "/auth/signup",
   },
+  users: {
+    riskProfile: "/users/me/risk-profile",
+  },
   stocks: {
     search: (query: string) => `/stocks/search?q=${encodeURIComponent(query)}`,
     getByCode: (stockCode: string) => `/stocks/code/${stockCode}`,

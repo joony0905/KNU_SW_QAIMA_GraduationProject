@@ -176,6 +176,12 @@ export default function Feature2ExternalFactorPanel({
   onSelectRelatedStock,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ExternalFactorTab>("summary");
+  const hasInvestorFlowData = Boolean(
+    investorFlow?.stockSummary
+      || investorFlow?.marketSummary
+      || investorFlow?.stockSeries?.length
+      || investorFlow?.marketSeries?.length,
+  );
   const krBaseRate = macroRates?.krBaseRate ?? baseRateMetrics ?? null;
   const usdKrw = macroRates?.usdKrw ?? null;
   const krBondYields = useMemo(
@@ -250,6 +256,17 @@ export default function Feature2ExternalFactorPanel({
               ? formatFlowAmount(investorFlow.stockSummary.combinedNetBuyValueMillionSum)
               : "데이터 없음"
           }
+        />
+        <MetricTile
+          label="시장 수급"
+          value={
+            investorFlowLoading
+              ? "조회중"
+              : investorFlow?.marketSummary
+                ? formatFlowAmount(investorFlow.marketSummary.combinedNetBuyValueMillionSum)
+                : "-"
+          }
+          sub={investorFlow?.marketCode ?? "시장 매핑 없음"}
         />
         <MetricTile
           label="유사종목 흐름"
@@ -371,28 +388,30 @@ export default function Feature2ExternalFactorPanel({
           {investorFlowError}
         </div>
       )}
-      {!investorFlowLoading && !investorFlowError && !investorFlow?.stockSummary && (
+      {!investorFlowLoading && !investorFlowError && !hasInvestorFlowData && (
         <div className="min-h-[360px] flex items-center justify-center text-sm text-ink-3 rounded-lg border border-line bg-bg-sunk">
           수급 데이터가 없습니다.
         </div>
       )}
-      {!investorFlowLoading && !investorFlowError && investorFlow?.stockSummary && (
+      {!investorFlowLoading && !investorFlowError && hasInvestorFlowData && investorFlow && (
         <>
           <div className="grid grid-cols-2 gap-2">
             <MetricTile
               label="외국인 누적"
-              value={formatFlowAmount(investorFlow.stockSummary.foreignNetBuyValueMillionSum)}
-              sub={`${investorFlow.stockSummary.pointCount}거래일`}
+              value={formatFlowAmount(investorFlow.stockSummary?.foreignNetBuyValueMillionSum)}
+              sub={investorFlow.stockSummary ? `${investorFlow.stockSummary.pointCount}거래일` : "종목 데이터 없음"}
             />
             <MetricTile
               label="기관 누적"
-              value={formatFlowAmount(investorFlow.stockSummary.institutionNetBuyValueMillionSum)}
-              sub={investorFlowDirectionText(investorFlow.stockSummary.direction)}
+              value={formatFlowAmount(investorFlow.stockSummary?.institutionNetBuyValueMillionSum)}
+              sub={investorFlow.stockSummary ? investorFlowDirectionText(investorFlow.stockSummary.direction) : "종목 데이터 없음"}
             />
             <MetricTile
               label="외국인+기관"
-              value={formatFlowAmount(investorFlow.stockSummary.combinedNetBuyValueMillionSum)}
-              sub={`${formatDate(investorFlow.stockSummary.startDate)} ~ ${formatDate(investorFlow.stockSummary.endDate)}`}
+              value={formatFlowAmount(investorFlow.stockSummary?.combinedNetBuyValueMillionSum)}
+              sub={investorFlow.stockSummary
+                ? `${formatDate(investorFlow.stockSummary.startDate)} ~ ${formatDate(investorFlow.stockSummary.endDate)}`
+                : "종목 데이터 없음"}
             />
             <MetricTile
               label="시장 수급"
@@ -404,10 +423,12 @@ export default function Feature2ExternalFactorPanel({
               sub={investorFlow.marketCode ?? "시장 매핑 없음"}
             />
           </div>
-          <div>
-            <p className="mb-2 text-sm font-semibold text-ink">종목 외국인/기관 순매수</p>
-            <InvestorFlowTrendChart points={investorFlow.stockSeries ?? []} height={210} />
-          </div>
+          {investorFlow.stockSeries?.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-semibold text-ink">종목 외국인/기관 순매수</p>
+              <InvestorFlowTrendChart points={investorFlow.stockSeries} height={210} />
+            </div>
+          )}
           {investorFlow.marketSeries?.length > 0 && (
             <div>
               <p className="mb-2 text-sm font-semibold text-ink">시장 외국인/기관 순매수</p>
