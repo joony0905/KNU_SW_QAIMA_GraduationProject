@@ -3,11 +3,11 @@ package com.qaima.mapper;
 import com.qaima.domain.Freq;
 import com.qaima.domain.PriceOhlcv;
 import com.qaima.dto.candle.CandleDto;
+import com.qaima.service.candle.CandleTimePolicy;
 
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,8 +15,6 @@ import java.util.Map;
 import java.util.Objects;
 
 public class CandleMapper {
-
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private CandleMapper() {}
 
@@ -84,13 +82,13 @@ public class CandleMapper {
         OffsetDateTime ts = entity.getId().getTs();
         if (entity.getId().getFreq() != Freq.ONE_D) return ts;
 
-        LocalDate tradingDay = ts.atZoneSameInstant(KST).toLocalDate();
-        return tradingDay.atStartOfDay(KST).toOffsetDateTime();
+        LocalDate tradingDay = CandleTimePolicy.tradingDate(ts, CandleTimePolicy.DEFAULT_TRADING_ZONE);
+        return tradingDay.atStartOfDay(CandleTimePolicy.DEFAULT_TRADING_ZONE).toOffsetDateTime();
     }
 
     private static String logicalKey(PriceOhlcv entity) {
         if (entity.getId().getFreq() == Freq.ONE_D) {
-            LocalDate tradingDay = entity.getId().getTs().atZoneSameInstant(KST).toLocalDate();
+            LocalDate tradingDay = CandleTimePolicy.tradingDate(entity.getId().getTs(), CandleTimePolicy.DEFAULT_TRADING_ZONE);
             return entity.getId().getStockId() + "|" + entity.getId().getFreq() + "|" + tradingDay;
         }
 

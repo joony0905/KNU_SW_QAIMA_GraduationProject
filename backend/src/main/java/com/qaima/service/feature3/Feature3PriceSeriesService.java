@@ -5,6 +5,7 @@ import com.qaima.domain.Freq;
 import com.qaima.dto.feature3.Feature3PriceSeriesResponseDto;
 import com.qaima.service.candle.CandleLoadResult;
 import com.qaima.service.candle.CandleLoadService;
+import com.qaima.service.candle.CandleTimePolicy;
 import com.qaima.service.stock.StockService;
 import com.qaima.service.tradingcalendar.TradingCalendarService;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Comparator;
@@ -60,6 +62,7 @@ public class Feature3PriceSeriesService {
                                     return Mono.just(toYahooResponse(
                                             stock.getStockCode(),
                                             stock.getCompanyName(),
+                                            CandleTimePolicy.tradingZone(stock),
                                             requested,
                                             expectedTradingDays,
                                             yahooResult
@@ -91,6 +94,7 @@ public class Feature3PriceSeriesService {
                 .map(result -> toRawResponse(
                         stock.getStockCode(),
                         stock.getCompanyName(),
+                        CandleTimePolicy.tradingZone(stock),
                         requestedPriceBasis,
                         expectedTradingDayCount,
                         result,
@@ -102,6 +106,7 @@ public class Feature3PriceSeriesService {
     private Feature3PriceSeriesResponseDto toRawResponse(
             String stockCode,
             String companyName,
+            ZoneId tradingZone,
             String requestedPriceBasis,
             int expectedTradingDayCount,
             CandleLoadResult result,
@@ -115,7 +120,11 @@ public class Feature3PriceSeriesService {
                 .filter(price -> price.getClose().signum() > 0)
                 .sorted(Comparator.comparing(price -> price.getId().getTs()))
                 .map(price -> new Feature3PriceSeriesResponseDto.PricePoint(
-                        price.getId().getTs().toString(),
+                        CandleTimePolicy.canonicalTs(
+                                price.getId().getTs(),
+                                Freq.ONE_D,
+                                tradingZone
+                        ).toString(),
                         price.getClose().doubleValue()
                 ))
                 .toList();
@@ -154,13 +163,14 @@ public class Feature3PriceSeriesService {
     private Feature3PriceSeriesResponseDto toYahooResponse(
             String stockCode,
             String companyName,
+            ZoneId tradingZone,
             String requestedPriceBasis,
             int expectedTradingDayCount,
             YahooFeature3PriceProvider.Result result
     ) {
         List<Feature3PriceSeriesResponseDto.PricePoint> points = result.points().stream()
                 .map(point -> new Feature3PriceSeriesResponseDto.PricePoint(
-                        point.ts().toString(),
+                        CandleTimePolicy.canonicalTs(point.ts(), Freq.ONE_D, tradingZone).toString(),
                         point.close().doubleValue()
                 ))
                 .toList();
