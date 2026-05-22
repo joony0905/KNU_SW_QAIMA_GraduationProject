@@ -2,7 +2,6 @@ package com.qaima.service.featone;
 
 import com.qaima.common.ErrorCode;
 import com.qaima.common.ErrorException;
-import com.qaima.domain.Exchange;
 import com.qaima.domain.Financial;
 import com.qaima.domain.Freq;
 import com.qaima.domain.PeriodType;
@@ -28,8 +27,7 @@ import com.qaima.dto.ohlcv.PriceOhlcvDto;
 import com.qaima.dto.stock.MarketSnapshotDto;
 import com.qaima.dto.indicator.IndicatorBundleDto;
 import com.qaima.external.AnalysisApiClient;
-import com.qaima.external.GlobalStockClient;
-import com.qaima.external.KrStockClient;
+import com.qaima.external.StockClient;
 import com.qaima.repository.FinancialRepository;
 import com.qaima.repository.PriceOhlcvRepository;
 import com.qaima.service.stock.MarketSnapshotService;
@@ -85,9 +83,7 @@ public class FeatOneService {
     private final MarketSnapshotService marketSnapshotService;
     private final TradingCalendarService tradingCalendarService;
 
-    // Feature1은 직접 KIS/Marketstack을 사용
-    private final KrStockClient krStockClient;
-    private final GlobalStockClient globalStockClient;
+    private final StockClient stockClient;
     private final AnalysisApiClient analysisApiClient;
 
     public Mono<FeatOneResult> getFeatOneData(
@@ -121,7 +117,7 @@ public class FeatOneService {
         Mono<Stock> stockMono = stockService.getOrCreateStockByCode(stockCode).cache();
 
         Mono<List<PriceOhlcv>> candlesMono = stockMono.flatMap(stock ->
-                loadCandlesWithFallback(stock, freq, fromDt, toDt, marketDivCode)
+                loadCandlesWithFallback(stock, freq, fromDt, toDt)
         );
 
         Mono<List<Financial>> financialsMono = stockMono.flatMap(stock ->
@@ -195,8 +191,8 @@ public class FeatOneService {
 
     /**
      * 1) DB 조회
-     * 2) 비어있으면 KIS 호출
-     * 3) KIS가 http/biz/market_closed 실패면 Marketstack 폴백
+     * 2) 비어있거나 최신 거래일이 빠져 있으면 KIS 호출
+     * 3) 외부 provider 라우팅은 StockClient가 담당
      * 4) decode는 내부 버그로 간주 → 그대로 throw
      * 5) 외부 데이터는 saveAll 후 반환
      */
@@ -204,13 +200,9 @@ public class FeatOneService {
             Stock stock,
             Freq freq,
             OffsetDateTime from,
-            OffsetDateTime to,
-            String marketDivCodeOverride
+            OffsetDateTime to
     ) {
         String stockCode = stock.getStockCode();
-        String marketDivCode = (marketDivCodeOverride != null && !marketDivCodeOverride.isBlank())
-                ? marketDivCodeOverride
-                : toKisMarketDivCode(stock.getExchange());
 
         return Mono.fromCallable(() -> priceOhlcvRepository.findRange(stockCode, freq, from, to))
                 .subscribeOn(Schedulers.boundedElastic())
@@ -231,33 +223,14 @@ public class FeatOneService {
                             latestTradingDay(),
                             latestLocalDate(existing));
 
-                    Mono<List<PriceOhlcvDto>> fromKis =
-                            krStockClient.fetchCandles(stockCode, marketDivCode, freq, from, to);
-
-                    Mono<List<PriceOhlcvDto>> fromGlobal =
-                            fromKis.onErrorResume(ErrorException.class, e -> {
-                                // decode는 숨기지 말고 터뜨림 (내부 버그/DTO 불일치)
-                                if (e.getErrorCode() == ErrorCode.KIS_DECODE_ERROR) {
-                                    return Mono.error(e);
-                                }
-
-                                // http/biz/market_closed는 글로벌 폴백 허용
-                                if (e.getErrorCode() == ErrorCode.KIS_HTTP_ERROR
-                                        || e.getErrorCode() == ErrorCode.KIS_BIZ_ERROR
-                                        || e.getErrorCode() == ErrorCode.KIS_MARKET_CLOSED) {
-                                    return globalStockClient.fetchCandlesByMkstackCode(stockCode, freq, from, to);
-                                }
-
-                                return Mono.error(e);
-                            });
-
-                    return fromGlobal.flatMap(dtoList -> {
-                        if (dtoList == null || dtoList.isEmpty()) {
+                    return stockClient.fetchCandles(stock, freq, from, to)
+                            .flatMap(result -> {
+                        if (result.getCandles() == null || result.getCandles().isEmpty()) {
                             return Mono.just(existing);
                         }
 
                         return Mono.fromCallable(() -> {
-                                    List<PriceOhlcv> entities = dtoList.stream()
+                                    List<PriceOhlcv> entities = result.getCandles().stream()
                                             .map(dto -> toPriceOhlcvEntity(stock, freq, dto))
                                             .collect(Collectors.toList());
 
@@ -475,15 +448,6 @@ public class FeatOneService {
         return switch (investLevel.trim()) {
             case "초급자", "중급자", "고급자", "전문가" -> investLevel.trim();
             default -> "초급자";
-        };
-    }
-
-    private String toKisMarketDivCode(Exchange exchange) {
-        return switch (exchange.getCode()) {
-            case "KOSPI" -> "J";
-            case "KOSDAQ" -> "J";
-            case "KONEX" -> "J";
-            default -> "B";
         };
     }
 

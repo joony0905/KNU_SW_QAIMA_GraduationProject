@@ -355,6 +355,12 @@ export default function Feature2MockPage() {
     setChartError(null);
 
     try {
+      const toDate = new Date(toIso);
+      const absoluteMin = shiftKstDays(
+        Number.isNaN(toDate.getTime()) ? new Date() : toDate,
+        -MAX_HISTORY_DAYS,
+      );
+
       const response = await fetchCandles(
         stockCode,
         "ONE_D",
@@ -367,7 +373,7 @@ export default function Feature2MockPage() {
         response.data,
         fromIso,
         toIso,
-        fromIso,
+        formatKstOffsetDateTime(absoluteMin),
         allowedDayKeys,
       );
     } catch (e: unknown) {

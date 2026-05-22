@@ -21,6 +21,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -31,9 +32,11 @@ public class StockApiClient implements StockClient {
 
     private final KrStockClient krClient;
     private final GlobalStockClient globalClient;
+    private final YahooFinancePriceClient yahooClient;
 
     private static final Duration KIS_TIMEOUT = Duration.ofSeconds(3);
     private static final Duration MARKETSTACK_TIMEOUT = Duration.ofSeconds(4);
+    private static final Duration YAHOO_TIMEOUT = Duration.ofSeconds(4);
 
     /* =========================
        StockDto (realtime/quote)
@@ -179,24 +182,135 @@ public class StockApiClient implements StockClient {
         final String canonical = canonicalizeStockCode(stock.getStockCode());
         final String marketDivCode = toKisMarketDivCode(stock.getExchange());
         final String mkstackCode = mkstackCodeOf(canonical);
+        final List<String> yahooSymbols = yahooSymbolsOf(canonical, stock.getExchange());
 
-        Mono<List<PriceOhlcvDto>> fromKis = krClient
+        return fetchCandlesFromKis(canonical, marketDivCode, freq, from, to)
+                .map(list -> new CandleFetchResult(list, CandleSource.KIS))
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[CANDLE] KIS unavailable/empty -> Marketstack fallback. stockCode={}, freq={}, from={}, to={}",
+                            canonical, freq, from, to);
+                    return fetchCandlesFromMarketstack(mkstackCode, freq, from, to)
+                            .map(list -> new CandleFetchResult(list, CandleSource.MARKETSTACK));
+                }))
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[CANDLE] Marketstack unavailable/empty -> Yahoo fallback. stockCode={}, freq={}, symbols={}",
+                            canonical, freq, yahooSymbols);
+                    return fetchCandlesFromYahoo(yahooSymbols, freq, from, to)
+                            .map(list -> new CandleFetchResult(list, CandleSource.YAHOO));
+                }))
+                .switchIfEmpty(Mono.just(new CandleFetchResult(List.of(), CandleSource.EMPTY)));
+    }
+
+    private Mono<List<PriceOhlcvDto>> fetchCandlesFromKis(
+            String canonical,
+            String marketDivCode,
+            Freq freq,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        return krClient
                 .fetchCandles(canonical, marketDivCode, freq, from, to)
+                .doOnSubscribe(s -> log.info("[CANDLE] KIS fetch start. stockCode={}, freq={}, from={}, to={}",
+                        canonical, freq, from, to))
                 .timeout(KIS_TIMEOUT)
+                .filter(this::hasCandles)
+                .doOnNext(list -> log.info("[CANDLE] KIS fetch success. stockCode={}, freq={}, rows={}",
+                        canonical, freq, list.size()))
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[CANDLE] KIS returned empty candles. stockCode={}, freq={}", canonical, freq);
+                    return Mono.empty();
+                }))
                 .onErrorResume(ErrorException.class, e -> {
                     if (e.getErrorCode() == ErrorCode.KIS_DECODE_ERROR) return Mono.error(e);
+                    log.warn("[CANDLE] KIS fetch failed -> provider fallback. stockCode={}, freq={}, code={}, msg={}",
+                            canonical, freq, e.getErrorCode().code(), safe(e.getMessage()));
                     return Mono.empty();
                 })
-                .onErrorResume(ex -> Mono.empty());
+                .onErrorResume(ex -> {
+                    log.warn("[CANDLE] KIS fetch failed -> provider fallback. stockCode={}, freq={}, cause={}",
+                            canonical, freq, safe(ex.getMessage()));
+                    return Mono.empty();
+                });
+    }
 
-        Mono<List<PriceOhlcvDto>> fromGlobal = globalClient
+    private Mono<List<PriceOhlcvDto>> fetchCandlesFromMarketstack(
+            String mkstackCode,
+            Freq freq,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        if (freq != Freq.ONE_D) {
+            log.warn("[CANDLE] Marketstack fallback skipped. reason=EOD_ONLY symbol={}, freq={}", mkstackCode, freq);
+            return Mono.empty();
+        }
+
+        return globalClient
                 .fetchCandlesByMkstackCode(mkstackCode, freq, from, to)
+                .doOnSubscribe(s -> log.info("[CANDLE] Marketstack fetch start. symbol={}, freq={}, from={}, to={}",
+                        mkstackCode, freq, from, to))
                 .timeout(MARKETSTACK_TIMEOUT)
-                .onErrorResume(ex -> Mono.empty());
+                .filter(this::hasCandles)
+                .doOnNext(list -> log.info("[CANDLE] Marketstack fetch success. symbol={}, freq={}, rows={}",
+                        mkstackCode, freq, list.size()))
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[CANDLE] Marketstack returned empty candles. symbol={}, freq={}", mkstackCode, freq);
+                    return Mono.empty();
+                }))
+                .onErrorResume(ex -> {
+                    log.warn("[CANDLE] Marketstack fetch failed. symbol={}, freq={}, cause={}",
+                            mkstackCode, freq, safe(ex.getMessage()));
+                    return Mono.empty();
+                });
+    }
 
-        return fromKis.map(list -> new CandleFetchResult(list, CandleSource.KIS))
-                .switchIfEmpty(fromGlobal.map(list -> new CandleFetchResult(list, CandleSource.MARKETSTACK)))
-                .switchIfEmpty(Mono.just(new CandleFetchResult(List.of(), CandleSource.EMPTY)));
+    private Mono<List<PriceOhlcvDto>> fetchCandlesFromYahoo(
+            List<String> symbols,
+            Freq freq,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        if (freq != Freq.ONE_D) {
+            log.warn("[CANDLE] Yahoo fallback skipped. reason=EOD_ONLY symbols={}, freq={}", symbols, freq);
+            return Mono.empty();
+        }
+        if (symbols == null || symbols.isEmpty()) {
+            return Mono.empty();
+        }
+
+        Mono<List<PriceOhlcvDto>> chain = Mono.empty();
+        for (String symbol : symbols) {
+            chain = chain.switchIfEmpty(Mono.defer(() -> fetchCandlesFromYahooSymbol(symbol, freq, from, to)));
+        }
+        return chain;
+    }
+
+    private Mono<List<PriceOhlcvDto>> fetchCandlesFromYahooSymbol(
+            String symbol,
+            Freq freq,
+            OffsetDateTime from,
+            OffsetDateTime to
+    ) {
+        return yahooClient
+                .fetchCandles(symbol, freq, from, to)
+                .doOnSubscribe(s -> log.info("[CANDLE] Yahoo fetch start. symbol={}, freq={}, from={}, to={}",
+                        symbol, freq, from, to))
+                .timeout(YAHOO_TIMEOUT)
+                .filter(this::hasCandles)
+                .doOnNext(list -> log.info("[CANDLE] Yahoo fetch success. symbol={}, freq={}, rows={}",
+                        symbol, freq, list.size()))
+                .switchIfEmpty(Mono.defer(() -> {
+                    log.warn("[CANDLE] Yahoo returned empty candles. symbol={}, freq={}", symbol, freq);
+                    return Mono.empty();
+                }))
+                .onErrorResume(ex -> {
+                    log.warn("[CANDLE] Yahoo fetch failed. symbol={}, freq={}, cause={}",
+                            symbol, freq, safe(ex.getMessage()));
+                    return Mono.empty();
+                });
+    }
+
+    private boolean hasCandles(List<PriceOhlcvDto> candles) {
+        return candles != null && !candles.isEmpty();
     }
 
     /* ========================= helpers ========================= */
@@ -213,6 +327,27 @@ public class StockApiClient implements StockClient {
         String c = canonical.trim().toUpperCase();
         if (c.matches("^[0-9]{6}$")) return c + ".XKRX";
         return c;
+    }
+
+    private List<String> yahooSymbolsOf(String canonical, Exchange exchange) {
+        if (canonical == null) return List.of();
+        String c = canonical.trim().toUpperCase();
+        if (!c.matches("^[0-9]{6}$")) {
+            return List.of(c);
+        }
+
+        String exchangeCode = exchange != null ? exchange.getCode() : null;
+        if ("KOSDAQ".equalsIgnoreCase(exchangeCode)) {
+            return List.of(c + ".KQ");
+        }
+        if ("KOSPI".equalsIgnoreCase(exchangeCode) || "KONEX".equalsIgnoreCase(exchangeCode)) {
+            return List.of(c + ".KS");
+        }
+
+        List<String> candidates = new ArrayList<>();
+        candidates.add(c + ".KS");
+        candidates.add(c + ".KQ");
+        return candidates;
     }
 
     private String toKisMarketDivCode(Exchange exchange) {
