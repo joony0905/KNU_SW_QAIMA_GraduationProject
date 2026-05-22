@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
+import InvestLevelBadge from "../components/InvestLevelBadge";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchBar from "../components/StockSearchBar";
 import FeatureIntro from "../components/FeatureIntro";
@@ -1258,6 +1259,7 @@ export default function Feature2MockPage() {
               <p className="text-sm text-ink-3 mt-1">
                 기준금리 · 산업지수 · 공매도 · 유사종목을 종합한 리포트
               </p>
+              <InvestLevelBadge className="mt-2" />
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
               <div ref={modelRef} className="relative">

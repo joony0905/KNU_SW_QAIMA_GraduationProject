@@ -8,6 +8,7 @@ import qaimaLogo from "../assets/qaima-final.png";
 import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import { useRef, useEffect, useState } from "react";
 import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
+import InvestLevelBadge from "../components/InvestLevelBadge";
 import StockSearchBar from "../components/StockSearchBar";
 import FeatureIntro from "../components/FeatureIntro";
 import { type IndicatorSection } from "../mocks/financialIndicators";
@@ -1168,6 +1169,7 @@ export default function StocksMockPage() {
                   <p className="text-sm text-ink-3 mt-1">
                     가격 흐름 · 재무 시계열 · 보조지표를 종합한 리포트
                   </p>
+                  <InvestLevelBadge className="mt-2" />
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <div ref={modelRef} className="relative">
