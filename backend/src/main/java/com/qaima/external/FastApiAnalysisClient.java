@@ -12,12 +12,15 @@ import com.qaima.dto.featone.FeatOneAnalysisExplainSectionDto;
 import com.qaima.dto.featone.FeatOneAnalysisExplainSectionsDto;
 import com.qaima.dto.featone.FeatOneAnalysisMetricsDto;
 import com.qaima.dto.featone.FeatOneFinancialSeriesDto;
+import com.qaima.dto.featone.FeatOneInternalAnalysisRequestDto;
 import com.qaima.dto.featone.FeatOneMarketSnapshotDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
 import com.qaima.dto.feature2.Feature2ExplainRequestDto;
 import com.qaima.dto.feature2.Feature2ExplainResponseDto;
+import com.qaima.dto.feature2.Feature2InternalAnalysisRequestDto;
 import com.qaima.external.dto.feature3.Feature3FastApiAnalyzeRequestDto;
 import com.qaima.external.dto.feature3.Feature3FastApiAnalyzeResponseDto;
+import com.qaima.external.dto.feature3.Feature3InternalAnalysisRequestDto;
 import com.qaima.dto.indicator.IndicatorBundleDto;
 import com.qaima.dto.indicator.IndicatorSpecDto;
 import com.qaima.dto.ohlcv.OhlcvSummaryDto;
@@ -63,103 +66,76 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
 
     @Override
     public Mono<FeatOneAnalysisResponseDto> requestStockAnalysis(FeatOneRequestDto request) {
-        JsonNode snakePayloadNode = toSnakeCaseNode(request);
-        String requestBody = snakePayloadNode.toString();
-        log.info("[FastApiAnalysisClient][request] url=/api/v1/analysis/feature1");
-        log.info("[FastApiAnalysisClient][request] body={}", requestBody);
-
-        return webClient.post()
-                .uri("/api/v1/analysis/feature1")
-                .bodyValue(snakePayloadNode)
-                .exchangeToMono(resp -> {
-                    HttpStatusCode status = resp.statusCode();
-
-                    return resp.bodyToMono(String.class)
-                            .defaultIfEmpty("")
-                            .flatMap(body -> {
-                                if (status.isError()) {
-                                    log.error("[FastApiAnalysisClient][error] status={}", status.value());
-                                    log.error("[FastApiAnalysisClient][error] body={}", body);
-                                    return Mono.error(new RuntimeException("FASTAPI_HTTP_" + status.value()));
-                                }
-
-                                try {
-                                    log.info("[FastApiAnalysisClient][feature1] FastAPI raw response={}", body);
-                                    JsonNode root = objectMapper.readTree(body);
-                                    JsonNode payloadNode = extractPayload(root, "feature1");
-                                    log.info("[FastApiAnalysisClient][feature1] payload extract result={}", payloadNode);
-                                    Feature1InboundResponseDto inbound = snakeCaseResponseValue(payloadNode);
-                                    FeatOneAnalysisResponseDto dto = toResponseDto(inbound);
-                                    log.info("[FastApiAnalysisClient][feature1] DTO binding result={}", dto);
-                                    validateBoundResponse(dto, payloadNode);
-
-                                    dto.setWarnings(readWarnings(root, payloadNode));
-
-                                    log.info(
-                                            "[FastAPI->Spring][Feature1] metrics fields stockCode={}, asOf={}, ohlcvSummary?={}, financialSeries?={}, marketSnapshot?={}, indicatorSummary?={}, schemaVersion={}, indicators?={}",
-                                            dto.getMetrics() != null ? dto.getMetrics().getStockCode() : null,
-                                            dto.getMetrics() != null ? dto.getMetrics().getAsOf() : null,
-                                            dto.getMetrics() != null && dto.getMetrics().getOhlcvSummary() != null,
-                                            dto.getMetrics() != null && dto.getMetrics().getFinancialSeries() != null,
-                                            dto.getMetrics() != null && dto.getMetrics().getMarketSnapshot() != null,
-                                            dto.getMetrics() != null && dto.getMetrics().getIndicatorSummary() != null,
-                                            dto.getMetrics() != null ? dto.getMetrics().getSchemaVersion() : null,
-                                            dto.getMetrics() != null && dto.getMetrics().getIndicators() != null
-                                    );
-
-                                    return Mono.just(dto);
-                                } catch (Exception e) {
-                                    log.error("[FastAPI] decode failed. body={}", body, e);
-                                    return Mono.error(e);
-                                }
-                            });
+        return postForPayload("/feature1/analysis", FeatOneInternalAnalysisRequestDto.from(request), "feature1")
+                .flatMap(envelope -> {
+                    try {
+                        Feature1InboundResponseDto inbound = snakeCaseResponseValue(envelope.payloadNode());
+                        FeatOneAnalysisResponseDto dto = toResponseDto(inbound);
+                        validateBoundResponse(dto, envelope.payloadNode());
+                        dto.setWarnings(readWarnings(envelope.rootNode(), envelope.payloadNode()));
+                        log.info(
+                                "[FastAPI->Spring][Feature1] metrics fields stockCode={}, asOf={}, ohlcvSummary?={}, financialSeries?={}, marketSnapshot?={}, indicatorSummary?={}, schemaVersion={}, indicators?={}",
+                                dto.getMetrics() != null ? dto.getMetrics().getStockCode() : null,
+                                dto.getMetrics() != null ? dto.getMetrics().getAsOf() : null,
+                                dto.getMetrics() != null && dto.getMetrics().getOhlcvSummary() != null,
+                                dto.getMetrics() != null && dto.getMetrics().getFinancialSeries() != null,
+                                dto.getMetrics() != null && dto.getMetrics().getMarketSnapshot() != null,
+                                dto.getMetrics() != null && dto.getMetrics().getIndicatorSummary() != null,
+                                dto.getMetrics() != null ? dto.getMetrics().getSchemaVersion() : null,
+                                dto.getMetrics() != null && dto.getMetrics().getIndicators() != null
+                        );
+                        return Mono.just(dto);
+                    } catch (Exception e) {
+                        log.error("[FastApiAnalysisClient][feature1] decode failed. body={}", envelope.body(), e);
+                        return Mono.error(e);
+                    }
                 });
     }
 
     @Override
     public Mono<Feature2ExplainResponseDto> requestFeature2Explain(Feature2ExplainRequestDto request) {
-        JsonNode snakePayloadNode = toSnakeCaseNode(request);
-        log.info("[FastApiAnalysisClient][feature2-explain][request] body={}", snakePayloadNode);
-
-        return webClient.post()
-                .uri("/feature2/explain")
-                .bodyValue(snakePayloadNode)
-                .exchangeToMono(resp -> {
-                    HttpStatusCode status = resp.statusCode();
-                    return resp.bodyToMono(String.class)
-                            .defaultIfEmpty("")
-                            .flatMap(body -> {
-                                if (status.isError()) {
-                                    log.error("[FastApiAnalysisClient][feature2-explain][error] status={}, body={}",
-                                            status.value(), body);
-                                    return Mono.error(new RuntimeException("FASTAPI_FEATURE2_EXPLAIN_HTTP_" + status.value()));
-                                }
-
-                                try {
-                                    log.info("[FastApiAnalysisClient][feature2-explain] raw response={}", body);
-                                    JsonNode root = objectMapper.readTree(body);
-                                    JsonNode payloadNode = extractPayload(root, "feature2/explain");
-                                    Feature2ExplainResponseDto dto =
-                                            snakeCaseObjectMapper.treeToValue(payloadNode, Feature2ExplainResponseDto.class);
-                                    if (dto.getWarnings() == null) {
-                                        dto.setWarnings(readWarnings(root, payloadNode));
-                                    }
-                                    return Mono.just(dto);
-                                } catch (Exception e) {
-                                    log.error("[FastApiAnalysisClient][feature2-explain] decode failed. body={}", body, e);
-                                    return Mono.error(e);
-                                }
-                            });
+        return postForPayload("/feature2/analysis", Feature2InternalAnalysisRequestDto.from(request), "feature2/analysis")
+                .flatMap(envelope -> {
+                    try {
+                        Feature2ExplainResponseDto dto =
+                                snakeCaseObjectMapper.treeToValue(envelope.payloadNode(), Feature2ExplainResponseDto.class);
+                        if (dto.getWarnings() == null) {
+                            dto.setWarnings(readWarnings(envelope.rootNode(), envelope.payloadNode()));
+                        }
+                        return Mono.just(dto);
+                    } catch (Exception e) {
+                        log.error("[FastApiAnalysisClient][feature2-explain] decode failed. body={}", envelope.body(), e);
+                        return Mono.error(e);
+                    }
                 });
     }
 
     @Override
     public Mono<Feature3FastApiAnalyzeResponseDto> requestPortfolioAnalysis(Feature3FastApiAnalyzeRequestDto request) {
+        return postForPayload("/feature3/analysis", Feature3InternalAnalysisRequestDto.from(request), "feature3/analysis")
+                .flatMap(envelope -> {
+                    try {
+                        Feature3FastApiAnalyzeResponseDto dto =
+                                snakeCaseObjectMapper.treeToValue(envelope.payloadNode(), Feature3FastApiAnalyzeResponseDto.class);
+                        return Mono.just(dto);
+                    } catch (Exception e) {
+                        log.error("[FastApiAnalysisClient][feature3-analysis] decode failed. body={}", envelope.body(), e);
+                        return Mono.error(e);
+                    }
+                });
+    }
+
+    private Feature1InboundResponseDto snakeCaseResponseValue(JsonNode payloadNode) throws com.fasterxml.jackson.core.JsonProcessingException {
+        return snakeCaseObjectMapper.treeToValue(payloadNode, Feature1InboundResponseDto.class);
+    }
+
+    private Mono<FastApiPayloadEnvelope> postForPayload(String uri, Object request, String endpointName) {
         JsonNode snakePayloadNode = toSnakeCaseNode(request);
-        log.info("[FastApiAnalysisClient][feature3-analysis][request] body={}", snakePayloadNode);
+        String errorCodeEndpoint = endpointName.replace('/', '_').replace('-', '_').toUpperCase(java.util.Locale.ROOT);
+        log.info("[FastApiAnalysisClient][{}][request] uri={}, body={}", endpointName, uri, snakePayloadNode);
 
         return webClient.post()
-                .uri("/feature3/analysis")
+                .uri(uri)
                 .bodyValue(snakePayloadNode)
                 .exchangeToMono(resp -> {
                     HttpStatusCode status = resp.statusCode();
@@ -167,28 +143,25 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                             .defaultIfEmpty("")
                             .flatMap(body -> {
                                 if (status.isError()) {
-                                    log.error("[FastApiAnalysisClient][feature3-analysis][error] status={}, body={}",
-                                            status.value(), body);
-                                    return Mono.error(new RuntimeException("FASTAPI_FEATURE3_ANALYSIS_HTTP_" + status.value()));
+                                    log.error("[FastApiAnalysisClient][{}][error] status={}, body={}",
+                                            endpointName, status.value(), body);
+                                    return Mono.error(new RuntimeException("FASTAPI_" + errorCodeEndpoint + "_HTTP_" + status.value()));
                                 }
-
                                 try {
-                                    log.info("[FastApiAnalysisClient][feature3-analysis] raw response={}", body);
+                                    log.info("[FastApiAnalysisClient][{}] raw response={}", endpointName, body);
                                     JsonNode root = objectMapper.readTree(body);
-                                    JsonNode payloadNode = extractPayload(root, "feature3/analysis");
-                                    Feature3FastApiAnalyzeResponseDto dto =
-                                            snakeCaseObjectMapper.treeToValue(payloadNode, Feature3FastApiAnalyzeResponseDto.class);
-                                    return Mono.just(dto);
+                                    JsonNode payloadNode = extractPayload(root, endpointName);
+                                    log.info("[FastApiAnalysisClient][{}] payload extract result={}", endpointName, payloadNode);
+                                    return Mono.just(new FastApiPayloadEnvelope(root, payloadNode, body));
                                 } catch (Exception e) {
-                                    log.error("[FastApiAnalysisClient][feature3-analysis] decode failed. body={}", body, e);
+                                    log.error("[FastApiAnalysisClient][{}] payload decode failed. body={}", endpointName, body, e);
                                     return Mono.error(e);
                                 }
                             });
                 });
     }
 
-    private Feature1InboundResponseDto snakeCaseResponseValue(JsonNode payloadNode) throws com.fasterxml.jackson.core.JsonProcessingException {
-        return snakeCaseObjectMapper.treeToValue(payloadNode, Feature1InboundResponseDto.class);
+    private record FastApiPayloadEnvelope(JsonNode rootNode, JsonNode payloadNode, String body) {
     }
 
     private FeatOneAnalysisResponseDto toResponseDto(Feature1InboundResponseDto inbound) {
@@ -264,9 +237,12 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
             return null;
         }
         return FeatOneAnalysisExplainDto.builder()
+                .provider(inbound.getProvider())
+                .model(inbound.getModel())
                 .text(inbound.getText())
                 .sections(toExplainSectionsDto(inbound.getSections()))
                 .overall(toExplainOverallDto(inbound.getOverall()))
+                .warnings(inbound.getWarnings())
                 .build();
     }
 

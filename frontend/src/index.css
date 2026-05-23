@@ -419,9 +419,9 @@ button:focus-visible {
 .qaima-portfolio-report [aria-label*="비중 차트"] {
   position: relative;
   overflow: hidden;
-  opacity: 0;
-  clip-path: circle(18% at 50% 50%);
-  transform: rotate(-115deg) scale(0.9);
+  opacity: 1;
+  clip-path: circle(74% at 50% 50%);
+  transform: rotate(0deg) scale(1);
   transform-origin: center;
 }
 

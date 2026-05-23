@@ -5,6 +5,8 @@ import com.qaima.common.ErrorCode;
 import com.qaima.common.ErrorException;
 import com.qaima.dto.feature3.Feature3OverlayCachePreviewRequestDto;
 import com.qaima.dto.feature3.Feature3OverlayCachePreviewResponseDto;
+import com.qaima.dto.feature3.Feature3BenchmarkSeriesResponseDto;
+import com.qaima.dto.feature3.Feature3PriceSeriesResponseDto;
 import com.qaima.dto.feature3.PortfolioAnalyzeRequestDto;
 import com.qaima.dto.feature3.PortfolioAnalyzeResponseDto;
 import com.qaima.external.AnalysisApiClient;
@@ -12,10 +14,14 @@ import com.qaima.external.dto.feature3.Feature3FastApiAnalyzeRequestDto;
 import com.qaima.repository.StockRepository;
 import com.qaima.service.credit.CreditService;
 import com.qaima.service.feature3.Feature3OverlayService;
+import com.qaima.service.feature3.Feature3BenchmarkSeriesService;
+import com.qaima.service.feature3.Feature3PriceSeriesService;
 import com.qaima.service.feature3.Feature3RiskFreeRateService;
 import com.qaima.service.stock.StockMappingService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +42,8 @@ public class Feature3AnalyzeController {
 
     private final AnalysisApiClient analysisApiClient;
     private final Feature3OverlayService feature3OverlayService;
+    private final Feature3PriceSeriesService feature3PriceSeriesService;
+    private final Feature3BenchmarkSeriesService feature3BenchmarkSeriesService;
     private final Feature3RiskFreeRateService feature3RiskFreeRateService;
     private final CreditService creditService;
     private final StockMappingService stockMappingService;
@@ -101,10 +109,14 @@ public class Feature3AnalyzeController {
                 .flatMap(this::toFastApiHolding)
                 .collectList();
         Mono<Feature3RiskFreeRateService.RiskFreeRate> riskFreeMono = feature3RiskFreeRateService.resolve();
-        return Mono.zip(holdingsMono, riskFreeMono)
+        return holdingsMono.flatMap(holdings -> {
+            Mono<Feature3FastApiAnalyzeRequestDto.InputData> inputDataMono = loadInputData(holdings, options);
+            return Mono.zip(Mono.just(holdings), riskFreeMono, inputDataMono);
+        })
                 .map(tuple -> {
                     List<Feature3FastApiAnalyzeRequestDto.Holding> holdings = tuple.getT1();
                     Feature3RiskFreeRateService.RiskFreeRate riskFree = tuple.getT2();
+                    Feature3FastApiAnalyzeRequestDto.InputData inputData = tuple.getT3();
                     return new Feature3FastApiAnalyzeRequestDto(
                         req.portfolioId(),
                         normalizeInvestLevel(req.investLevel()),
@@ -142,7 +154,8 @@ public class Feature3AnalyzeController {
                                 riskFree.asOf(),
                                 options != null ? options.maxCashWeight() : null
                         ),
-                        List.of()
+                        List.of(),
+                        inputData
                 );
                 });
     }
@@ -158,8 +171,119 @@ public class Feature3AnalyzeController {
                 request.cashPositions(),
                 request.riskProfile(),
                 request.options(),
-                overlaySignals != null ? overlaySignals : List.of()
+                overlaySignals != null ? overlaySignals : List.of(),
+                withOverlaySignals(request.inputData(), overlaySignals)
         );
+    }
+
+    private Feature3FastApiAnalyzeRequestDto.InputData withOverlaySignals(
+            Feature3FastApiAnalyzeRequestDto.InputData inputData,
+            List<Feature3FastApiAnalyzeRequestDto.OverlaySignal> overlaySignals
+    ) {
+        List<Feature3FastApiAnalyzeRequestDto.OverlaySignal> normalizedSignals =
+                overlaySignals != null ? overlaySignals : List.of();
+        if (inputData == null) {
+            return new Feature3FastApiAnalyzeRequestDto.InputData(List.of(), List.of(), normalizedSignals);
+        }
+        return new Feature3FastApiAnalyzeRequestDto.InputData(
+                inputData.priceSeries() != null ? inputData.priceSeries() : List.of(),
+                inputData.benchmarkSeries() != null ? inputData.benchmarkSeries() : List.of(),
+                normalizedSignals
+        );
+    }
+
+    private Mono<Feature3FastApiAnalyzeRequestDto.InputData> loadInputData(
+            List<Feature3FastApiAnalyzeRequestDto.Holding> holdings,
+            PortfolioAnalyzeRequestDto.Options options
+    ) {
+        String priceBasis = options != null && options.priceBasis() != null ? options.priceBasis() : "ADJUSTED_CLOSE";
+        int lookbackTradingDays = options != null && options.lookbackTradingDays() != null ? options.lookbackTradingDays() : 252;
+        int fetchCalendarDays = options != null && options.fetchCalendarDays() != null ? options.fetchCalendarDays() : 370;
+
+        Mono<List<Feature3FastApiAnalyzeRequestDto.PriceSeries>> priceSeriesMono = Flux.fromIterable(holdings)
+                .flatMap(holding -> feature3PriceSeriesService
+                        .getPriceSeries(holding.stockCode(), priceBasis, lookbackTradingDays, fetchCalendarDays)
+                        .map(this::toFastApiPriceSeries))
+                .collectList();
+
+        Set<String> benchmarkCodes = holdings.stream()
+                .map(holding -> benchmarkCodeForExchange(holding.exchangeCode()))
+                .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+        Mono<List<Feature3FastApiAnalyzeRequestDto.BenchmarkSeries>> benchmarkSeriesMono = Flux.fromIterable(benchmarkCodes)
+                .flatMap(code -> feature3BenchmarkSeriesService
+                        .getBenchmarkSeries(code, lookbackTradingDays, fetchCalendarDays)
+                        .map(this::toFastApiBenchmarkSeries))
+                .collectList();
+
+        return Mono.zip(priceSeriesMono, benchmarkSeriesMono)
+                .map(tuple -> new Feature3FastApiAnalyzeRequestDto.InputData(tuple.getT1(), tuple.getT2(), List.of()));
+    }
+
+    private Feature3FastApiAnalyzeRequestDto.PriceSeries toFastApiPriceSeries(Feature3PriceSeriesResponseDto data) {
+        return new Feature3FastApiAnalyzeRequestDto.PriceSeries(
+                data.stockCode(),
+                data.companyName(),
+                data.requestedPriceBasis(),
+                data.usedPriceBasis(),
+                data.source(),
+                data.cacheStatus(),
+                data.expectedTradingDayCount(),
+                data.availablePriceCount(),
+                data.missingRate(),
+                data.fallbackUsed(),
+                data.data() != null
+                        ? data.data().stream().map(point -> new Feature3FastApiAnalyzeRequestDto.PricePoint(point.ts(), point.close())).toList()
+                        : List.of(),
+                data.warnings() != null
+                        ? data.warnings().stream().map(this::toFastApiWarning).toList()
+                        : List.of()
+        );
+    }
+
+    private Feature3FastApiAnalyzeRequestDto.BenchmarkSeries toFastApiBenchmarkSeries(Feature3BenchmarkSeriesResponseDto data) {
+        return new Feature3FastApiAnalyzeRequestDto.BenchmarkSeries(
+                data.benchmarkCode(),
+                data.benchmarkName(),
+                data.source(),
+                data.benchmarkAvailable(),
+                data.expectedTradingDayCount(),
+                data.availablePriceCount(),
+                data.missingRate(),
+                data.data() != null
+                        ? data.data().stream().map(point -> new Feature3FastApiAnalyzeRequestDto.PricePoint(point.ts(), point.close())).toList()
+                        : List.of(),
+                data.warnings() != null
+                        ? data.warnings().stream().map(this::toFastApiWarning).toList()
+                        : List.of()
+        );
+    }
+
+    private Feature3FastApiAnalyzeRequestDto.Warning toFastApiWarning(Feature3PriceSeriesResponseDto.Warning warning) {
+        return new Feature3FastApiAnalyzeRequestDto.Warning(
+                warning.code(),
+                warning.message(),
+                warning.userMessage(),
+                warning.severity(),
+                warning.target()
+        );
+    }
+
+    private Feature3FastApiAnalyzeRequestDto.Warning toFastApiWarning(Feature3BenchmarkSeriesResponseDto.Warning warning) {
+        return new Feature3FastApiAnalyzeRequestDto.Warning(
+                warning.code(),
+                warning.message(),
+                warning.userMessage(),
+                warning.severity(),
+                warning.target()
+        );
+    }
+
+    private String benchmarkCodeForExchange(String exchangeCode) {
+        String normalized = exchangeCode == null ? "" : exchangeCode.toUpperCase().replaceAll("[^A-Z0-9]", "");
+        if (List.of("KOSDAQ", "XKOS", "KQ", "KOSDAQGLOBAL").contains(normalized)) {
+            return "11001";
+        }
+        return "00001";
     }
 
     private PortfolioAnalyzeRequestDto withResolvedHoldings(

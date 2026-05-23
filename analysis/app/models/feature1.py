@@ -5,6 +5,7 @@ from datetime import date, datetime, timezone
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
+from app.models.common import ExplainOverall, ExplainResult, ExplainSection
 from app.models.indicator import IndicatorBundle
 
 
@@ -137,6 +138,61 @@ class Feature1Request(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
 
+class Feature1RequestContext(BaseModel):
+    feature: str = "FEATURE1"
+    request_id: Optional[str] = None
+    as_of: Optional[str] = None
+    invest_level: Optional[str] = None
+    llm_vendor: Optional[str] = None
+    include_llm_explain: bool = False
+
+
+class Feature1Subject(BaseModel):
+    stock_code: str
+    company_name: Optional[str] = None
+    exchange_code: Optional[str] = None
+    currency: Optional[str] = None
+
+
+class Feature1InputData(BaseModel):
+    ohlcv: List[OhlcvItem] = []
+    financials: List[FinancialPointItem] = []
+    market_context: Optional[MarketContext] = None
+    market_snapshot: Optional[MarketSnapshotMetrics] = None
+
+
+class Feature1AnalysisOptions(BaseModel):
+    freq: str
+    from_: Optional[date] = Field(default=None, alias="from")
+    to: Optional[date] = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class Feature1AnalysisRequest(BaseModel):
+    request_context: Feature1RequestContext
+    subject: Feature1Subject
+    input_data: Feature1InputData
+    options: Feature1AnalysisOptions
+
+    model_config = ConfigDict(extra="forbid")
+
+    def to_feature1_request(self) -> Feature1Request:
+        return Feature1Request(
+            stock_code=self.subject.stock_code,
+            freq=self.options.freq,
+            from_=self.options.from_,
+            to=self.options.to,
+            ohlcv=self.input_data.ohlcv,
+            financials=self.input_data.financials,
+            market_context=self.input_data.market_context,
+            market_snapshot=self.input_data.market_snapshot,
+            include_explain=self.request_context.include_llm_explain,
+            llm_vendor=self.request_context.llm_vendor,
+            invest_level=self.request_context.invest_level,
+        )
+
+
 # ======================
 # Metrics / Analysis
 # ======================
@@ -156,10 +212,8 @@ class Feature1Metrics(BaseModel):
 # Explain / Warnings
 # ======================
 
-class Feature1ExplainSection(BaseModel):
-    summary: str
-    title: Optional[str] = None
-    bullets: List[str] = []
+class Feature1ExplainSection(ExplainSection):
+    pass
 
 
 class Feature1ExplainSections(BaseModel):
@@ -169,17 +223,13 @@ class Feature1ExplainSections(BaseModel):
     financial_timeline: Feature1ExplainSection
 
 
-class Feature1ExplainOverall(BaseModel):
-    summary: str
-    bullets: List[str] = []
-    risks: List[str] = []
-    conclusion: Optional[str] = None
+class Feature1ExplainOverall(ExplainOverall):
+    pass
 
 
-class Feature1Explain(BaseModel):
+class Feature1Explain(ExplainResult):
     sections: Feature1ExplainSections
     overall: Feature1ExplainOverall
-    text: Optional[str] = Field(default=None, description="LLM raw text")
 
 
 # ======================

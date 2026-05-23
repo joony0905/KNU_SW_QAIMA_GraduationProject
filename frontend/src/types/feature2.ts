@@ -1,4 +1,5 @@
 import type { NewsItemDto } from "./news";
+import type { AnalysisExplainSection } from "./analysisPanel";
 
 // --- 종목 메타 ---
 export interface StockMeta {
@@ -338,5 +339,24 @@ export interface Feature2Metrics {
 // --- Feature2 분석 응답 ---
 export interface Feature2AnalyzeResponse {
   metrics: Feature2Metrics | null;
-  explain: string | null;
+  explain: {
+    provider?: string | null;
+    model?: string | null;
+    text?: string | null;
+    sections?: {
+      macroEnvironment?: AnalysisExplainSection | null;
+      investorFlow?: AnalysisExplainSection | null;
+      shortSelling?: AnalysisExplainSection | null;
+      peerCluster?: AnalysisExplainSection | null;
+      newsSentiment?: AnalysisExplainSection | null;
+      crossSignal?: AnalysisExplainSection | null;
+    } | null;
+    overall?: {
+      summary?: string | null;
+      bullets?: string[] | null;
+      risks?: string[] | null;
+      conclusion?: string | null;
+    } | null;
+    warnings?: unknown[] | null;
+  } | null;
 }

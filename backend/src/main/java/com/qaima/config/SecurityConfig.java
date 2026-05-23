@@ -5,7 +5,9 @@ import com.qaima.common.ApiResponse;
 import com.qaima.security.JwtAuthFilter;
 import com.qaima.security.OAuth2LoginFailureHandler;
 import com.qaima.security.OAuth2LoginSuccessHandler;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -32,6 +34,16 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
     private final OAuth2LoginFailureHandler oAuth2LoginFailureHandler;
+
+    @Value("${qaima.cors.allowed-origin-patterns:http://localhost:5173,http://localhost:3000,https://localhost:5173,https://localhost:3000}")
+    private List<String> allowedOriginPatterns;
+
+    @PostConstruct
+    void validateCorsConfiguration() {
+        if (allowedOriginPatterns != null && allowedOriginPatterns.contains("*")) {
+            throw new IllegalStateException("qaima.cors.allowed-origin-patterns must not contain '*' when credentials are enabled");
+        }
+    }
 
     @Bean
     public SecurityWebFilterChain filterChain(ServerHttpSecurity http) {
@@ -102,13 +114,7 @@ public class SecurityConfig {
         // 쿠키/인증 쓰면 true 필요 (지금은 토큰 방식이어도 켜놔도 무방)
         config.setAllowCredentials(true);
 
-        // Vite(5173) / CRA(3000) 둘 다 허용
-        config.setAllowedOriginPatterns(List.of(
-                "http://localhost:5173",
-                "http://localhost:3000",
-                "https://localhost:5173",
-                "https://localhost:3000"
-        ));
+        config.setAllowedOriginPatterns(allowedOriginPatterns);
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

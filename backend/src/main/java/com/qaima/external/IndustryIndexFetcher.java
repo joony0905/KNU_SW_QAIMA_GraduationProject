@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.common.ErrorCode;
 import com.qaima.common.ErrorException;
 import com.qaima.domain.Freq;
+import com.qaima.service.batch.KisBatchRateLimiter;
 import com.qaima.service.feature2.IndustryIndexBar;
 import lombok.Getter;
 import lombok.Setter;
@@ -29,6 +30,7 @@ public class IndustryIndexFetcher {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final KisBatchRateLimiter rateLimiter;
 
     @Value("${kis.app-key}")
     private String appKey;
@@ -41,10 +43,12 @@ public class IndustryIndexFetcher {
 
     public IndustryIndexFetcher(
             @Qualifier("kisWebClient") WebClient webClient,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            KisBatchRateLimiter rateLimiter
     ) {
         this.webClient = webClient;
         this.objectMapper = objectMapper;
+        this.rateLimiter = rateLimiter;
     }
 
     /* =========================
@@ -62,18 +66,19 @@ public class IndustryIndexFetcher {
 
         log.info("[IndustryIndexFetcher][TOKEN] requesting new access token");
 
-        tokenMono = webClient.post()
-                .uri("/oauth2/tokenP")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(
-                        java.util.Map.of(
-                                "grant_type", "client_credentials",
-                                "appkey", appKey,
-                                "appsecret", appSecret
+        tokenMono = rateLimiter.acquireMono()
+                .then(webClient.post()
+                        .uri("/oauth2/tokenP")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .bodyValue(
+                                java.util.Map.of(
+                                        "grant_type", "client_credentials",
+                                        "appkey", appKey,
+                                        "appsecret", appSecret
+                                )
                         )
-                )
-                .retrieve()
-                .bodyToMono(KisTokenResponse.class)
+                        .retrieve()
+                        .bodyToMono(KisTokenResponse.class))
                 .map(resp -> {
                     if (resp == null || resp.getAccess_token() == null || resp.getAccess_token().isBlank()) {
                         throw new ErrorException(ErrorCode.KIS_BIZ_ERROR, "KIS token response is empty");
@@ -117,24 +122,25 @@ public class IndustryIndexFetcher {
 
         return getAccessToken()
                 .flatMap(token ->
-                        webClient.get()
-                                .uri(uriBuilder -> uriBuilder
-                                        .path("/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice")
-                                        .queryParam("FID_COND_MRKT_DIV_CODE", "U")
-                                        .queryParam("FID_INPUT_ISCD", iscd)
-                                        .queryParam("FID_INPUT_DATE_1", fromStr)
-                                        .queryParam("FID_INPUT_DATE_2", toStr)
-                                        .queryParam("FID_PERIOD_DIV_CODE", period)
-                                        .build()
-                                )
-                                .header("authorization", token)
-                                .header("appkey", appKey)
-                                .header("appsecret", appSecret)
-                                .header("tr_id", "FHKUP03500100")
-                                .header("custtype", "P")
-                                .accept(MediaType.APPLICATION_JSON)
-                                .retrieve()
-                                .bodyToMono(KisIndexResponse.class)
+                        rateLimiter.acquireMono()
+                                .then(webClient.get()
+                                        .uri(uriBuilder -> uriBuilder
+                                                .path("/uapi/domestic-stock/v1/quotations/inquire-daily-indexchartprice")
+                                                .queryParam("FID_COND_MRKT_DIV_CODE", "U")
+                                                .queryParam("FID_INPUT_ISCD", iscd)
+                                                .queryParam("FID_INPUT_DATE_1", fromStr)
+                                                .queryParam("FID_INPUT_DATE_2", toStr)
+                                                .queryParam("FID_PERIOD_DIV_CODE", period)
+                                                .build()
+                                        )
+                                        .header("authorization", token)
+                                        .header("appkey", appKey)
+                                        .header("appsecret", appSecret)
+                                        .header("tr_id", "FHKUP03500100")
+                                        .header("custtype", "P")
+                                        .accept(MediaType.APPLICATION_JSON)
+                                        .retrieve()
+                                        .bodyToMono(KisIndexResponse.class))
                 )
                 .doOnNext(resp -> logResponse(indexCode, freq, from, to, resp))
                 .map(resp -> {

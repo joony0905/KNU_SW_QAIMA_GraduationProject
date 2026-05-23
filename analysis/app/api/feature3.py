@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from app.models.feature3 import PortfolioAnalyzeRequest, PortfolioAnalyzeResponse
+from app.models.feature3 import Feature3AnalysisRequest, PortfolioAnalyzeResponse
 from app.services.feature3_llm import deterministic_feature3_explain, generate_feature3_explain
 from app.services.portfolio import analyze_portfolio
 
@@ -14,11 +14,16 @@ router = APIRouter(prefix="/feature3", tags=["feature3"])
 
 
 @router.post("/analysis", response_model=PortfolioAnalyzeResponse)
-async def analyze(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
+async def analyze(req: Feature3AnalysisRequest) -> PortfolioAnalyzeResponse:
+    portfolio_req = req.to_portfolio_request()
     try:
-        response = analyze_portfolio(req)
-        if req.options.include_llm_explain:
-            explain = await generate_feature3_explain(response, req.options.llm_vendor, req.invest_level)
+        response = analyze_portfolio(portfolio_req)
+        if portfolio_req.options.include_llm_explain:
+            explain = await generate_feature3_explain(
+                response,
+                portfolio_req.options.llm_vendor,
+                portfolio_req.invest_level,
+            )
             response.explain = explain if explain.text else deterministic_feature3_explain(response)
             response.warnings.extend(explain.warnings)
         else:

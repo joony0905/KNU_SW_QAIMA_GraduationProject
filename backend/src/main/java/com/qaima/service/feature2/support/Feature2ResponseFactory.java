@@ -1,5 +1,6 @@
 package com.qaima.service.feature2.support;
 
+import com.qaima.dto.common.AnalysisExplainDto;
 import com.qaima.dto.feature2.Feature2AnalyzeResponseDto;
 import com.qaima.dto.feature2.Feature2MetaDto;
 import com.qaima.dto.feature2.Feature2MetricsDto;
@@ -16,7 +17,7 @@ public class Feature2ResponseFactory {
         return success(metrics, meta, null);
     }
 
-    public Feature2AnalyzeResponseDto success(Feature2MetricsDto metrics, Feature2MetaDto meta, String explain) {
+    public Feature2AnalyzeResponseDto success(Feature2MetricsDto metrics, Feature2MetaDto meta, AnalysisExplainDto explain) {
         List<String> dedupedWarnings = meta.getWarnings() == null
                 ? List.of()
                 : new ArrayList<>(new LinkedHashSet<>(meta.getWarnings()));

@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 
 from app.models.feature1 import (
+    Feature1AnalysisRequest,
     Feature1Request,
     Feature1Response,
     Feature1Metrics,
@@ -28,7 +29,7 @@ from app.services.llm_client import analyze_feature1 as analyze_feature1_llm
 
 
 router = APIRouter(
-    prefix="/api/v1/analysis",
+    prefix="/feature1",
     tags=["feature1"],
 )
 
@@ -326,7 +327,6 @@ def build_indicator_summary(indicators: IndicatorBundle, last_close: float | Non
         f"STO14_3_3: k={_fmt_num(stoch_k)}, d={_fmt_num(stoch_d)}, zone={stoch_zone}, k_minus_d={_fmt_num(k_minus_d)}",
     ])
 
-@router.post("/feature1", response_model=Feature1Response)
 async def analyze_stock(req: Feature1Request) -> Feature1Response:
     """
     QAIMA Feature1 (payload-only response contract)
@@ -439,3 +439,8 @@ async def analyze_stock(req: Feature1Request) -> Feature1Response:
         explain=explain,
         warnings=deduped_warnings,
     )
+
+
+@router.post("/analysis", response_model=Feature1Response)
+async def analyze_stock_contract(req: Feature1AnalysisRequest) -> Feature1Response:
+    return await analyze_stock(req.to_feature1_request())

@@ -1,6 +1,10 @@
 analysis:
   base-url: "http://localhost:8000"
 
+qaima:
+  cors:
+    allowed-origin-patterns: ${QAIMA_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://localhost:3000,https://localhost:5173,https://localhost:3000}
+
 fred:
   base-url: "https://api.stlouisfed.org"
   api-key: ${FRED_API_KEY:}
@@ -45,6 +49,35 @@ opendart:
   sync:
     enabled: true
     daily-cron: "0 10 3 * * *"
+
+kis-batch:
+  rate-limit:
+    # KIS API policy: stay below 15 requests/sec. Use 10/sec as the operational safety ceiling.
+    max-requests-per-second: 10
+  industry-index-ohlcv:
+    enabled: true
+    daily-cron: "0 10 18 * * MON-FRI"
+    lookback-days: 1095
+    refresh-tail-days: 10
+    limit: 0
+  market-investor-flow:
+    enabled: true
+    daily-cron: "0 30 16 * * MON-FRI"
+    lookback-days: 30
+    refresh-tail-days: 10
+    retry:
+      max-attempts: 2
+      delay-ms: 2000
+  stock-investor-flow:
+    enabled: true
+    daily-cron: "0 0 19 * * MON-FRI"
+    lookback-days: 30
+    refresh-tail-days: 10
+    limit: 300
+    sleep-ms: 300
+    retry:
+      max-attempts: 2
+      delay-ms: 2000
 
 spring:
   profiles:

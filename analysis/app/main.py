@@ -18,6 +18,11 @@ log = logging.getLogger(__name__)
 #앱 시작 시 .env 로드 (로컬 개발용)
 load_dotenv()
 
+
+def _csv_env(name: str, default: str = "") -> list[str]:
+    raw = os.getenv(name, default)
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
 app = FastAPI(
     title="QAIMA Analysis API",
     version="0.0.1",
@@ -36,10 +41,16 @@ async def warmup_news_sentiment_model() -> None:
     log.info("starting news sentiment local model warm-up")
     start_local_model_warmup()
 
-# 개발 단계니 일단 전체 허용함. 나중에 세팅ㄱ
+cors_allowed_origins = _csv_env(
+    "QAIMA_CORS_ALLOWED_ORIGINS",
+    "http://localhost:5173,http://localhost:3000",
+)
+if "*" in cors_allowed_origins:
+    raise RuntimeError("QAIMA_CORS_ALLOWED_ORIGINS must not contain '*' when credentials are enabled")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # 나중에 Spring 도메인으로 제한
+    allow_origins=cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

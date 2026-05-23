@@ -58,8 +58,9 @@ class OpenAIClient(LLMClient):
                     "모든 분석은 제공된 데이터만 사용\n"
                     "외부 지식 사용 금지\n"
                     "일방적인 데이터 나열 금지, 데이터 기반 설명 사용\n"
-                    "데이터 기반 내용은 확정적 표현 사용"
-                    "데이터 근거로 간접적인 전망 제시 필수\n" 
+                    "데이터 기반 내용은 수치 근거를 함께 제시\n"
+                    "제공된 데이터가 같은 방향을 가리키면 조건부 전망이나 간접 인사이트를 제시\n"
+                    "엇갈린 데이터는 상충 신호로 해석하고 무엇을 추가로 점검할지 설명\n"
                     "직접적인 투자 권유/매수·매도 추천 금지\n"
                     "overall.summary는 모든 데이터를 종합한 의견\n"
                     "[분석 절차]\n"
@@ -67,7 +68,7 @@ class OpenAIClient(LLMClient):
                     "1. 섹션별 제공된 데이터들의 핵심 파악\n"
                     "2. 수치 수준 또는 변화 방향 판단\n"
                     "3. 의미 해석\n"
-                    "4. 1~2문장으로 요약\n"
+                    "4. 투자자가 점검할 간접 인사이트를 1개 포함해 1~2문장으로 요약\n"
                     "[해석 기준 예시]\n"
                     "성장률 > 0 → 성장\n"
                     "ROE 높음 → 수익성 우수\n"
@@ -218,6 +219,14 @@ class OpenAIClient(LLMClient):
             "input": build_feature2_prompt(req, compact=compact),
             "max_output_tokens": min(self.max_output_tokens, 1200 if compact else 2200),
             "reasoning": {"effort": "low"},
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "feature2_explain",
+                    "strict": True,
+                    "schema": self._build_feature2_response_schema(),
+                },
+            },
         }
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -347,8 +356,11 @@ class OpenAIClient(LLMClient):
         return (
             "Write sectioned explanations in Korean.\n"
             "Each section must only use its own data.\n"
-            "Keep wording concise and factual.\n\n"
+            "Keep wording concise, factual, and insight-oriented.\n"
+            "When price, valuation, indicators, and financial data align, explain the indirect signal they suggest.\n"
+            "When they conflict, explain the tension as a check point instead of stopping at a cautious disclaimer.\n\n"
             f"{invest_level_prompt(req.invest_level)}\n"
+            "Return sections with title, summary, bullets keys and overall with summary, bullets, risks, conclusion keys.\n"
             f"stock_code={metrics.stock_code}\n"
             "\n[PRICE_FLOW]\n"
             f"ohlcv_count={o.count}\n"
@@ -416,9 +428,11 @@ class OpenAIClient(LLMClient):
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
+                    "title": {"type": "string"},
                     "summary": {"type": "string"},
+                    "bullets": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["summary"],
+                "required": ["title", "summary", "bullets"],
             }
 
         return {
@@ -446,9 +460,64 @@ class OpenAIClient(LLMClient):
                     "additionalProperties": False,
                     "properties": {
                         "summary": {"type": "string"},
+                        "bullets": {"type": "array", "items": {"type": "string"}},
+                        "risks": {"type": "array", "items": {"type": "string"}},
                         "conclusion": {"type": "string"},
                     },
-                    "required": ["summary", "conclusion"],
+                    "required": ["summary", "bullets", "risks", "conclusion"],
+                },
+            },
+            "required": ["sections", "overall"],
+        }
+
+    @staticmethod
+    def _build_feature2_response_schema() -> dict:
+        def section_schema() -> dict:
+            return {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "bullets": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["title", "summary", "bullets"],
+            }
+
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "sections": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "macro_environment": section_schema(),
+                        "investor_flow": section_schema(),
+                        "short_selling": section_schema(),
+                        "peer_cluster": section_schema(),
+                        "news_sentiment": section_schema(),
+                        "cross_signal": section_schema(),
+                    },
+                    "required": [
+                        "macro_environment",
+                        "investor_flow",
+                        "short_selling",
+                        "peer_cluster",
+                        "news_sentiment",
+                        "cross_signal",
+                    ],
+                },
+                "overall": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "summary": {"type": "string"},
+                        "bullets": {"type": "array", "items": {"type": "string"}},
+                        "risks": {"type": "array", "items": {"type": "string"}},
+                        "conclusion": {"type": ["string", "null"]},
+                    },
+                    "required": ["summary", "bullets", "risks", "conclusion"],
                 },
             },
             "required": ["sections", "overall"],

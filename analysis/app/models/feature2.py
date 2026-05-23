@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional, Literal
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from app.models.common import ExplainResult
+
 
 Freq = Literal["ONE_D", "ONE_W"]  # MVP: ONE_D 권장, 미지원 시 경고 후 대체 처리
 
@@ -238,8 +240,60 @@ class Feature2ExplainRequest(BaseModel):
     metrics: Feature2ExplainMetrics = Field(default_factory=Feature2ExplainMetrics)
 
 
+class Feature2RequestContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    feature: str = "FEATURE2"
+    request_id: Optional[str] = None
+    as_of: Optional[str] = None
+    invest_level: Optional[str] = None
+    llm_vendor: Optional[str] = None
+    include_llm_explain: bool = True
+
+
+class Feature2Subject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stock_code: str
+    company_name: Optional[str] = None
+    exchange_code: Optional[str] = None
+    currency: Optional[str] = None
+
+
+class Feature2InputData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metrics: Feature2ExplainMetrics = Field(default_factory=Feature2ExplainMetrics)
+
+
+class Feature2AnalysisOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    freq: Optional[Freq] = None
+    window: Optional[int] = None
+
+
+class Feature2AnalysisRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_context: Feature2RequestContext
+    subject: Feature2Subject
+    input_data: Feature2InputData
+    options: Feature2AnalysisOptions = Field(default_factory=Feature2AnalysisOptions)
+
+    def to_explain_request(self) -> Feature2ExplainRequest:
+        return Feature2ExplainRequest(
+            stock_code=self.subject.stock_code,
+            freq=self.options.freq,
+            window=self.options.window,
+            llm_vendor=self.request_context.llm_vendor,
+            invest_level=self.request_context.invest_level,
+            metrics=self.input_data.metrics,
+        )
+
+
 class Feature2ExplainResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    explain: Optional[str] = None
+    explain: Optional[ExplainResult] = None
     warnings: List[str] = Field(default_factory=list)

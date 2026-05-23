@@ -6,6 +6,7 @@ import com.qaima.domain.BaseRate;
 import com.qaima.domain.Exchange;
 import com.qaima.domain.ShortSelling;
 import com.qaima.domain.Stock;
+import com.qaima.dto.common.AnalysisExplainDto;
 import com.qaima.dto.feature2.Feature2AnalyzeRequestDto;
 import com.qaima.dto.feature2.Feature2AnalyzeResponseDto;
 import com.qaima.dto.feature2.Feature2ExplainMetricsDto;
@@ -111,12 +112,12 @@ public class Feature2AnalyzeService {
                                         .then(attachTrendSummaries(stockContext, command, meta, metrics))
                                         .then(attachNews(stockContext, meta, metrics))
                                         .then(Mono.defer(() -> loadExplain(command, meta, metrics)))
-                                        .defaultIfEmpty("")
                                         .map(explain -> responseFactory.success(
                                                 metrics,
                                                 meta,
-                                                explain.isBlank() ? null : explain
-                                        ));
+                                                explain
+                                        ))
+                                        .switchIfEmpty(Mono.fromSupplier(() -> responseFactory.success(metrics, meta)));
                             });
                 })
                 .onErrorResume(ex -> {
@@ -343,7 +344,7 @@ public class Feature2AnalyzeService {
                 .then();
     }
 
-    private Mono<String> loadExplain(
+    private Mono<AnalysisExplainDto> loadExplain(
             Feature2Command command,
             Feature2MetaDto meta,
             Feature2MetricsDto metrics
@@ -377,8 +378,8 @@ public class Feature2AnalyzeService {
                         .orElseGet(List::of)
                         .forEach(meta::addWarning))
                 .flatMap(response -> {
-                    String explain = response.getExplain();
-                    if (explain == null || explain.isBlank()) {
+                    AnalysisExplainDto explain = response.getExplain();
+                    if (explain == null) {
                         return Mono.empty();
                     }
                     return Mono.just(explain);

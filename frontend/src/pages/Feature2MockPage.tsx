@@ -191,62 +191,24 @@ interface RelatedStockDisplay {
 
 type Feature2PanelExplain = NonNullable<AnalysisPanelResult["explain"]>;
 
-const coerceExplainSection = (value: unknown, title: string) => {
-  if (!value || typeof value !== "object") return null;
-  const section = value as { summary?: unknown; bullets?: unknown };
-  const summary = typeof section.summary === "string" ? section.summary.trim() : "";
-  const bullets = Array.isArray(section.bullets)
-    ? section.bullets.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    : [];
-
-  if (!summary && bullets.length === 0) return null;
+const parseFeature2Explain = (explain?: Feature2AnalyzeResponse["explain"] | null): Feature2PanelExplain | null => {
+  if (!explain) return null;
+  const sections = explain.sections ?? {};
+  const overall = explain.overall ?? {};
   return {
-    title,
-    summary: summary || null,
-    bullets: bullets.length > 0 ? bullets : null,
+    provider: explain.provider ?? null,
+    model: explain.model ?? null,
+    text: overall.summary || explain.text || null,
+    sections: {
+      peerCluster: sections.peerCluster ?? null,
+      macroEnvironment: sections.macroEnvironment ?? null,
+      investorFlow: sections.investorFlow ?? null,
+      crossSignal: sections.crossSignal ?? null,
+      newsSentiment: sections.newsSentiment ?? null,
+      shortSelling: sections.shortSelling ?? null,
+    },
+    overall,
   };
-};
-
-const parseFeature2Explain = (raw?: string | null): Feature2PanelExplain | null => {
-  if (!raw?.trim()) return null;
-  try {
-    const parsed = JSON.parse(raw) as {
-      sections?: Record<string, unknown>;
-      overall?: { summary?: unknown; bullets?: unknown; risks?: unknown; conclusion?: unknown };
-    };
-    const sections = parsed.sections ?? {};
-    const overall = parsed.overall ?? {};
-    const overallSummary = typeof overall.summary === "string" ? overall.summary.trim() : "";
-    const conclusion = typeof overall.conclusion === "string" ? overall.conclusion.trim() : "";
-    const bullets = Array.isArray(overall.bullets)
-      ? overall.bullets.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-      : [];
-    const risks = Array.isArray(overall.risks)
-      ? overall.risks.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-      : [];
-
-    return {
-      text: overallSummary || raw,
-      sections: {
-        peerCluster: coerceExplainSection(sections.peer_cluster, "유사종목 반응구조 요약"),
-        macroEnvironment: coerceExplainSection(sections.macro_environment, "시장환경 요약"),
-        investorFlow: coerceExplainSection(sections.investor_flow, "수급 요약"),
-        crossSignal: coerceExplainSection(sections.cross_signal, "신호 조합 요약"),
-        newsSentiment: coerceExplainSection(sections.news_sentiment, "뉴스감성 요약"),
-        trendSummary: coerceExplainSection(sections.trend_summary, "기간추이 요약"),
-        baseRate: coerceExplainSection(sections.base_rate, "기준금리 추이 요약"),
-        shortSelling: coerceExplainSection(sections.short_selling, "공매도 추이 요약"),
-      },
-      overall: {
-        summary: overallSummary || null,
-        bullets: bullets.length > 0 ? bullets : null,
-        risks: risks.length > 0 ? risks : null,
-        conclusion: conclusion || null,
-      },
-    };
-  } catch {
-    return { text: raw };
-  }
 };
 
 const mapRelatedStocks = (rows: RelatedStockCard[]): RelatedStockDisplay[] =>

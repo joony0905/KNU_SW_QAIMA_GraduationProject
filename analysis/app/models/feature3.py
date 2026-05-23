@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.models.common import ExplainResult
+
 
 ProfileType = Literal["CONSERVATIVE", "NEUTRAL", "AGGRESSIVE"]
 PortfolioType = Literal[
@@ -83,6 +85,92 @@ class Feature3OverlaySignal(BaseModel):
     evidence: str | None = None
 
 
+class Feature3Warning(BaseModel):
+    code: str
+    message: str
+    user_message: str | None = None
+    severity: WarningSeverity = "INFO"
+    target: str | None = None
+
+
+class Feature3ProvidedPricePoint(BaseModel):
+    ts: str
+    close: float
+
+
+class Feature3ProvidedPriceSeries(BaseModel):
+    stock_code: str
+    company_name: str | None = None
+    requested_price_basis: str
+    used_price_basis: str = "RAW_CLOSE"
+    source: str = "DB"
+    cache_status: str = "BYPASSED"
+    expected_trading_day_count: int
+    available_price_count: int
+    missing_rate: float = 0.0
+    fallback_used: bool = False
+    data: list[Feature3ProvidedPricePoint] = Field(default_factory=list)
+    warnings: list[Feature3Warning] = Field(default_factory=list)
+
+
+class Feature3ProvidedBenchmarkSeries(BaseModel):
+    benchmark_code: str
+    benchmark_name: str | None = None
+    source: str = "SPRING_PROVIDED"
+    benchmark_available: bool = True
+    expected_trading_day_count: int
+    available_price_count: int
+    missing_rate: float = 0.0
+    data: list[Feature3ProvidedPricePoint] = Field(default_factory=list)
+    warnings: list[Feature3Warning] = Field(default_factory=list)
+
+
+class Feature3InputData(BaseModel):
+    price_series: list[Feature3ProvidedPriceSeries] = Field(default_factory=list)
+    benchmark_series: list[Feature3ProvidedBenchmarkSeries] = Field(default_factory=list)
+    overlay_signals: list[Feature3OverlaySignal] = Field(default_factory=list)
+
+
+class Feature3RequestContext(BaseModel):
+    feature: str = "FEATURE3"
+    request_id: str | None = None
+    as_of: str | None = None
+    invest_level: str | None = None
+    llm_vendor: str | None = None
+    include_llm_explain: bool = False
+
+
+class Feature3PortfolioInput(BaseModel):
+    portfolio_id: int | None = None
+    holdings: list[Feature3HoldingRequest] = Field(min_length=1)
+    cash_positions: list[Feature3CashPositionRequest] = Field(default_factory=list)
+    risk_profile: Feature3RiskProfileRequest
+
+
+class Feature3AnalysisRequest(BaseModel):
+    request_context: Feature3RequestContext
+    portfolio: Feature3PortfolioInput
+    input_data: Feature3InputData = Field(default_factory=Feature3InputData)
+    options: Feature3AnalyzeOptions = Field(default_factory=Feature3AnalyzeOptions)
+    overlay_signals: list[Feature3OverlaySignal] = Field(default_factory=list)
+
+    def to_portfolio_request(self) -> "PortfolioAnalyzeRequest":
+        options = self.options.model_copy()
+        options.include_llm_explain = self.request_context.include_llm_explain
+        if self.request_context.llm_vendor:
+            options.llm_vendor = self.request_context.llm_vendor
+        return PortfolioAnalyzeRequest(
+            portfolio_id=self.portfolio.portfolio_id,
+            invest_level=self.request_context.invest_level,
+            holdings=self.portfolio.holdings,
+            cash_positions=self.portfolio.cash_positions,
+            risk_profile=self.portfolio.risk_profile,
+            options=options,
+            overlay_signals=self.overlay_signals or self.input_data.overlay_signals,
+            input_data=self.input_data,
+        )
+
+
 class PortfolioAnalyzeRequest(BaseModel):
     portfolio_id: int | None = None
     invest_level: str | None = None
@@ -91,14 +179,7 @@ class PortfolioAnalyzeRequest(BaseModel):
     risk_profile: Feature3RiskProfileRequest
     options: Feature3AnalyzeOptions = Field(default_factory=Feature3AnalyzeOptions)
     overlay_signals: list[Feature3OverlaySignal] = Field(default_factory=list)
-
-
-class Feature3Warning(BaseModel):
-    code: str
-    message: str
-    user_message: str | None = None
-    severity: WarningSeverity = "INFO"
-    target: str | None = None
+    input_data: Feature3InputData = Field(default_factory=Feature3InputData)
 
 
 class Feature3PricePolicy(BaseModel):
@@ -310,12 +391,7 @@ class Feature3OverlayResult(BaseModel):
     explanations: list[dict] = Field(default_factory=list)
 
 
-class Feature3ExplainResult(BaseModel):
-    provider: str = "DETERMINISTIC"
-    model: str | None = None
-    text: str | None = None
-    sections: dict[str, dict] | None = None
-    overall: dict | None = None
+class Feature3ExplainResult(ExplainResult):
     warnings: list[Feature3Warning] = Field(default_factory=list)
 
 

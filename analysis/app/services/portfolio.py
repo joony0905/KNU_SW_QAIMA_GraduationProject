@@ -14,6 +14,8 @@ from app.models.feature3 import (
     Feature3Freshness,
     Feature3OverlayResult,
     Feature3OverlaySignal,
+    Feature3ProvidedBenchmarkSeries,
+    Feature3ProvidedPriceSeries,
     Feature3PolicyEcho,
     Feature3PortfolioResult,
     Feature3PricePolicy,
@@ -30,8 +32,8 @@ from app.models.feature3 import (
     ProfileType,
     RiskLevel,
 )
-from app.services.feature3_benchmark_data import Feature3BenchmarkSeriesResult, fetch_feature3_benchmark_series
-from app.services.feature3_price_data import Feature3PriceSeriesResult, fetch_feature3_price_series
+from app.services.feature3_benchmark_data import Feature3BenchmarkPoint, Feature3BenchmarkSeriesResult, fetch_feature3_benchmark_series
+from app.services.feature3_price_data import Feature3PricePoint, Feature3PriceSeriesResult, fetch_feature3_price_series
 
 KST = timezone(timedelta(hours=9))
 MIN_OBSERVATIONS = 120
@@ -67,8 +69,10 @@ def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
     low_target_volatility = round(max(target_volatility * 0.70, 0.06), 4)
     high_target_volatility = round(min(target_volatility * 1.35, 0.25), 4)
 
+    provided_price_results = _provided_price_results(req)
     price_results = [
-        fetch_feature3_price_series(
+        provided_price_results.get(holding.stock_code)
+        or fetch_feature3_price_series(
             stock_code=holding.stock_code,
             company_name=holding.company_name,
             requested_price_basis=req.options.price_basis,
@@ -83,11 +87,15 @@ def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
         for warning in result.warnings
     ]
     benchmark_selections, benchmark_selection_warnings = _benchmark_selections_for_holdings(req.holdings)
-    benchmark_results = _fetch_capm_benchmarks(
-        benchmark_codes={selection["benchmarkCode"] for selection in benchmark_selections.values()},
-        lookback_trading_days=req.options.lookback_trading_days,
-        fetch_calendar_days=req.options.fetch_calendar_days,
-    )
+    benchmark_codes = {selection["benchmarkCode"] for selection in benchmark_selections.values()}
+    benchmark_results = _provided_benchmark_results(req)
+    missing_benchmark_codes = benchmark_codes - set(benchmark_results.keys())
+    if missing_benchmark_codes:
+        benchmark_results.update(_fetch_capm_benchmarks(
+            benchmark_codes=missing_benchmark_codes,
+            lookback_trading_days=req.options.lookback_trading_days,
+            fetch_calendar_days=req.options.fetch_calendar_days,
+        ))
     benchmark_warnings = [
         warning
         for result in benchmark_results.values()
@@ -269,6 +277,83 @@ def analyze_portfolio(req: PortfolioAnalyzeRequest) -> PortfolioAnalyzeResponse:
             overlays=[],
         ),
     )
+
+
+def _provided_price_results(req: PortfolioAnalyzeRequest) -> dict[str, Feature3PriceSeriesResult]:
+    rows = req.input_data.price_series if req.input_data else []
+    return {
+        row.stock_code: _provided_price_result(row)
+        for row in rows
+        if row.stock_code
+    }
+
+
+def _provided_price_result(row: Feature3ProvidedPriceSeries) -> Feature3PriceSeriesResult:
+    points = [
+        point for point in (_provided_price_point(item) for item in row.data)
+        if point is not None
+    ]
+    return Feature3PriceSeriesResult(
+        stock_code=row.stock_code,
+        company_name=row.company_name,
+        requested_price_basis=row.requested_price_basis,
+        used_price_basis=row.used_price_basis,
+        source=row.source,
+        cache_status=row.cache_status,
+        expected_trading_day_count=row.expected_trading_day_count,
+        available_price_count=row.available_price_count,
+        missing_rate=row.missing_rate,
+        fallback_used=row.fallback_used,
+        points=points,
+        warnings=row.warnings,
+    )
+
+
+def _provided_price_point(row) -> Feature3PricePoint | None:
+    try:
+        return Feature3PricePoint(
+            ts=datetime.fromisoformat(str(row.ts).replace("Z", "+00:00")),
+            close=float(row.close),
+        )
+    except Exception:
+        return None
+
+
+def _provided_benchmark_results(req: PortfolioAnalyzeRequest) -> dict[str, Feature3BenchmarkSeriesResult]:
+    rows = req.input_data.benchmark_series if req.input_data else []
+    return {
+        row.benchmark_code: _provided_benchmark_result(row)
+        for row in rows
+        if row.benchmark_code
+    }
+
+
+def _provided_benchmark_result(row: Feature3ProvidedBenchmarkSeries) -> Feature3BenchmarkSeriesResult:
+    points = [
+        point for point in (_provided_benchmark_point(item) for item in row.data)
+        if point is not None
+    ]
+    return Feature3BenchmarkSeriesResult(
+        benchmark_code=row.benchmark_code,
+        benchmark_name=row.benchmark_name,
+        source=row.source,
+        benchmark_available=row.benchmark_available,
+        expected_trading_day_count=row.expected_trading_day_count,
+        available_price_count=row.available_price_count,
+        missing_rate=row.missing_rate,
+        points=points,
+        warnings=row.warnings,
+    )
+
+
+def _provided_benchmark_point(row) -> Feature3BenchmarkPoint | None:
+    try:
+        return Feature3BenchmarkPoint(
+            ts=datetime.fromisoformat(str(row.ts).replace("Z", "+00:00")),
+            close=float(row.close),
+        )
+    except Exception:
+        return None
 
 
 def _profile_type(score: float) -> ProfileType:
