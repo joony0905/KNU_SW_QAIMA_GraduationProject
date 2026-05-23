@@ -1,5 +1,6 @@
 package com.qaima.dto.user;
 
+import com.qaima.domain.InvestmentLevel;
 import com.qaima.domain.User;
 import lombok.Getter;
 
@@ -17,6 +18,7 @@ public class UserResponseDto {
     private String experience;
     private String status;
     private boolean glossaryHover;
+    private InvestmentLevel investmentLevel;
 
     public UserResponseDto(User user) {
         this.userId = user.getUserId();
@@ -29,5 +31,6 @@ public class UserResponseDto {
         this.experience = user.getExperience();
         this.status = user.getStatus();
         this.glossaryHover = user.isGlossaryHover();
+        this.investmentLevel = user.getInvestmentLevel();
     }
 }

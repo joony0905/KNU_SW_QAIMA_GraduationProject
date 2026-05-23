@@ -2,7 +2,9 @@ package com.qaima.domain;
 
 import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -74,6 +76,12 @@ public class User {
     @Column(nullable = false)
     @ColumnDefault("false")
     private boolean glossaryHover;
+
+    @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(nullable = false, length = 20)
+    @ColumnDefault("'BEGINNER'")
+    private InvestmentLevel investmentLevel = InvestmentLevel.BEGINNER;
 
     @Column(nullable = false)
     @ColumnDefault("5")
