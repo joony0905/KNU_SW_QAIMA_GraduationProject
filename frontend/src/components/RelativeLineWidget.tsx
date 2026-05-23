@@ -1,4 +1,5 @@
 import React, { memo, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   createChart,
   AreaSeries,
@@ -370,10 +371,10 @@ function RelativeLineWidget({
   const latestCoverage = latestCoveragePoint ? Number(latestCoveragePoint.value) : null;
 
   const coverageLabel = (coverage?: number | null) => {
-    if (coverage == null || !Number.isFinite(coverage)) return "coverage 확인 불가";
-    if (coverage >= 0.75) return "coverage 높음";
-    if (coverage >= 0.5) return "coverage 보통";
-    return "coverage 낮음";
+    if (coverage == null || !Number.isFinite(coverage)) return "반영률 확인 불가";
+    if (coverage >= 0.75) return "반영률 높음";
+    if (coverage >= 0.5) return "반영률 보통";
+    return "반영률 낮음";
   };
 
   const formatCoverage = (coverage?: number | null) => {
@@ -719,17 +720,17 @@ function RelativeLineWidget({
         <div className="px-1 pb-3 flex items-start justify-between gap-3 text-[11px] sm:text-xs text-zinc-500">
           <p className="leading-relaxed">
             선택 종목, 관련 산업지수, 유사 종목군 평균을 동일 기준일 0%로 환산해 비교합니다.
-            음영은 유사 종목군의 p20~p80 범위이며, 날짜별 peer coverage가 높을수록 진하게 표시됩니다.
-            낮은 coverage 구간은 표본이 줄어든 구간이라 참고 강도를 낮춰 해석해야 합니다.
+            음영은 유사 종목군의 p20~p80 범위이며, 날짜별 유사 종목 반영률이 높을수록 진하게 표시됩니다.
+            낮은 반영률 구간은 표본이 줄어든 구간이라 참고 강도를 낮춰 해석해야 합니다.
           </p>
           <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
-            최근 coverage {formatCoverage(latestCoverage)}
+            최근 반영률 {formatCoverage(latestCoverage)}
             {latestCoverageDayKey ? ` · ${latestCoverageDayKey}` : ""}
           </span>
           <div className="shrink-0">
             <button
               type="button"
-              aria-label="peer cluster 설명 보기"
+              aria-label="유사 종목군 설명 보기"
               aria-expanded={isInfoOpen}
               onClick={() => {
                 if (isInfoOpen) {
@@ -758,49 +759,49 @@ function RelativeLineWidget({
           <p>산업지수 {formatPct(dayMap.get(tooltipDayKey)?.value ?? null)}</p>
           <p>유사 평균 {formatPct(centroidDayMap.get(tooltipDayKey) ?? null)}</p>
           <p>p20 / p80 {formatPct(tooltipBand?.p20 ?? null)} / {formatPct(tooltipBand?.p80 ?? null)}</p>
-          <p>coverage {formatCoverage(tooltipCoverage)} · {coverageLabel(tooltipCoverage)}</p>
+          <p>반영률 {formatCoverage(tooltipCoverage)} · {coverageLabel(tooltipCoverage)}</p>
         </div>
       )}
-      {showPeerOverlay && isInfoOpen && (
+      {showPeerOverlay && isInfoOpen && createPortal(
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40"
+          className="qaima-modal-backdrop-in fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4"
           onClick={() => setIsInfoOpen(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl max-w-lg w-[90%] max-h-[70vh] flex flex-col overflow-hidden"
+            className="qaima-modal-pop-in bg-surface rounded-2xl border border-line shadow-pop max-w-lg w-full max-h-[70vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200">
-              <h2 className="text-lg font-semibold text-sky-600">Peer Cluster 설명</h2>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+              <h2 className="text-lg font-semibold text-accent">유사 종목군 설명</h2>
               <button
                 onClick={() => setIsInfoOpen(false)}
-                className="text-zinc-400 hover:text-zinc-700 text-xl leading-none"
+                className="text-ink-4 hover:text-ink-2 text-xl leading-none"
               >
                 &times;
               </button>
             </div>
 
             <div className="px-5 py-4 overflow-y-auto flex-1">
-              <p className="text-sm text-zinc-700 leading-relaxed">
+              <p className="text-sm text-ink-2 leading-relaxed">
                 선택 종목, 관련 산업지수, 유사 종목군 평균을 동일 기준일 0%로 환산해 비교합니다.
-                음영은 유사 종목군의 p20~p80 범위이며, 날짜별 peer coverage가 높을수록 더 진하게 표시됩니다.
+                음영은 유사 종목군의 p20~p80 범위이며, 날짜별 유사 종목 반영률이 높을수록 더 진하게 표시됩니다.
               </p>
-              <p className="mt-3 text-sm text-zinc-700 leading-relaxed">
-                coverage가 낮은 구간은 해당 날짜에 반영된 peer 수가 적다는 뜻이므로, 밴드폭과 중심선을 참고용으로 해석해야 합니다.
+              <p className="mt-3 text-sm text-ink-2 leading-relaxed">
+                반영률이 낮은 구간은 해당 날짜에 반영된 유사 종목 수가 적다는 뜻이므로, 밴드폭과 중심선을 참고용으로 해석해야 합니다.
               </p>
 
-              <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="mt-5 rounded-2xl border border-line bg-bg-sunk p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-zinc-900">현재 시점 값</h3>
-                  <span className="text-xs text-zinc-500">{activeDetailDayKey ?? "-"}</span>
+                  <h3 className="text-sm font-semibold text-ink">현재 시점 값</h3>
+                  <span className="text-xs text-ink-3">{activeDetailDayKey ?? "-"}</span>
                 </div>
 
                 <div className="mt-3">
-                  <label className="block text-xs text-zinc-500 mb-1">날짜 선택</label>
+                  <label className="block text-xs text-ink-3 mb-1">날짜 선택</label>
                   <select
                     value={activeDetailDayKey ?? ""}
                     onChange={(e) => setSelectedDetailDayKey(e.target.value || null)}
-                    className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-800 outline-none focus:border-sky-400"
+                    className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-accent"
                   >
                     {selectableDayKeys.map((dayKey) => (
                       <option key={dayKey} value={dayKey}>
@@ -811,93 +812,94 @@ function RelativeLineWidget({
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
-                    <p className="text-xs text-zinc-500">선택 종목</p>
-                    <p className="mt-1 text-sm font-semibold text-zinc-900">{formatPct(activeAnchorValue)}</p>
+                  <div className="rounded-xl border border-line bg-surface px-3 py-2">
+                    <p className="text-xs text-ink-3">선택 종목</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{formatPct(activeAnchorValue)}</p>
                   </div>
-                  <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
-                    <p className="text-xs text-zinc-500">산업 지수</p>
-                    <p className="mt-1 text-sm font-semibold text-zinc-900">{formatPct(activeIndustryValue)}</p>
+                  <div className="rounded-xl border border-line bg-surface px-3 py-2">
+                    <p className="text-xs text-ink-3">산업 지수</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{formatPct(activeIndustryValue)}</p>
                   </div>
-                  <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
-                    <p className="text-xs text-zinc-500">Peer centroid</p>
-                    <p className="mt-1 text-sm font-semibold text-zinc-900">{formatPct(activeCentroidValue)}</p>
+                  <div className="rounded-xl border border-line bg-surface px-3 py-2">
+                    <p className="text-xs text-ink-3">유사 종목군 평균</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{formatPct(activeCentroidValue)}</p>
                   </div>
-                  <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
-                    <p className="text-xs text-zinc-500">p20</p>
-                    <p className="mt-1 text-sm font-semibold text-zinc-900">{formatPct(activeBand?.p20 ?? null)}</p>
+                  <div className="rounded-xl border border-line bg-surface px-3 py-2">
+                    <p className="text-xs text-ink-3">p20</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{formatPct(activeBand?.p20 ?? null)}</p>
                   </div>
-                  <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
-                    <p className="text-xs text-zinc-500">p80</p>
-                    <p className="mt-1 text-sm font-semibold text-zinc-900">{formatPct(activeBand?.p80 ?? null)}</p>
+                  <div className="rounded-xl border border-line bg-surface px-3 py-2">
+                    <p className="text-xs text-ink-3">p80</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{formatPct(activeBand?.p80 ?? null)}</p>
                   </div>
-                  <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2">
-                    <p className="text-xs text-zinc-500">Peer coverage</p>
-                    <p className="mt-1 text-sm font-semibold text-zinc-900">{formatCoverage(activeCoverage)}</p>
-                    <p className="mt-0.5 text-[11px] text-zinc-400">{coverageLabel(activeCoverage)}</p>
+                  <div className="rounded-xl border border-line bg-surface px-3 py-2">
+                    <p className="text-xs text-ink-3">유사 종목 반영률</p>
+                    <p className="mt-1 text-sm font-semibold text-ink">{formatCoverage(activeCoverage)}</p>
+                    <p className="mt-0.5 text-[11px] text-ink-4">{coverageLabel(activeCoverage)}</p>
                   </div>
                 </div>
 
-                <p className="mt-3 text-xs text-zinc-500">
+                <p className="mt-3 text-xs text-ink-3">
                   여기서 날짜를 직접 선택해 해당 시점 기준 값을 확인할 수 있어요.
                 </p>
               </div>
 
-              <div className="mt-5 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <div className="mt-5 rounded-2xl border border-line bg-bg-sunk p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-zinc-900">반영된 유사 종목</h3>
-                  <span className="text-xs text-zinc-500">{overlayPeers?.length ?? 0}개</span>
+                  <h3 className="text-sm font-semibold text-ink">반영된 유사 종목</h3>
+                  <span className="text-xs text-ink-3">{overlayPeers?.length ?? 0}개</span>
                 </div>
 
                 {overlayPeers && overlayPeers.length > 0 ? (
-                  <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-zinc-200 bg-white">
+                  <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface">
                     {overlayPeers.map((peer, index) => (
                       <div
                         key={peer.stockCode}
-                        className={`px-3 py-3 ${index > 0 ? "border-t border-zinc-200" : ""}`}
+                        className={`px-3 py-3 ${index > 0 ? "border-t border-line" : ""}`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-zinc-900">{peer.companyName}</p>
-                            <p className="text-xs text-zinc-500">{peer.stockCode}</p>
+                            <p className="text-sm font-semibold text-ink">{peer.companyName}</p>
+                            <p className="text-xs text-ink-3">{peer.stockCode}</p>
                           </div>
-                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-700">
+                          <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-2">
                             {formatRelationLabel(peer.relation)}
                           </span>
                         </div>
-                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-zinc-600">
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-ink-3">
                           <div>
-                            <span className="text-zinc-400">동행 상관도</span>
-                            <p className="font-medium text-zinc-800">
+                            <span className="text-ink-4">동행 상관도</span>
+                            <p className="font-medium text-ink-2">
                               {formatScore(peer.adjustedCorrValid ? peer.adjustedCorr : peer.corr)}
                             </p>
-                            <p className="mt-0.5 text-[11px] text-zinc-400">{formatAdjustmentBasis(peer)}</p>
+                            <p className="mt-0.5 text-[11px] text-ink-4">{formatAdjustmentBasis(peer)}</p>
                           </div>
                           <div>
-                            <span className="text-zinc-400">유사도 점수</span>
-                            <p className="font-medium text-zinc-800">{formatScore(peer.peerScore ?? peer.score)}</p>
+                            <span className="text-ink-4">유사도 점수</span>
+                            <p className="font-medium text-ink-2">{formatScore(peer.peerScore ?? peer.score)}</p>
                           </div>
                           <div>
-                            <span className="text-zinc-400">시차</span>
-                            <p className="font-medium text-zinc-800">
+                            <span className="text-ink-4">시차</span>
+                            <p className="font-medium text-ink-2">
                               {peer.bestLag == null ? "-" : `${peer.bestLag}일`}
                             </p>
                           </div>
                           <div>
-                            <span className="text-zinc-400">평균 거래대금</span>
-                            <p className="font-medium text-zinc-800">{formatNumber(peer.avgTurnover)}</p>
+                            <span className="text-ink-4">평균 거래대금</span>
+                            <p className="font-medium text-ink-2">{formatNumber(peer.avgTurnover)}</p>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-3 text-sm text-zinc-500">반영된 유사 종목 정보가 없습니다.</p>
+                  <p className="mt-3 text-sm text-ink-3">반영된 유사 종목 정보가 없습니다.</p>
                 )}
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

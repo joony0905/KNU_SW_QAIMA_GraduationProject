@@ -233,6 +233,47 @@ button:focus-visible {
   }
 }
 
+@keyframes qaima-modal-backdrop-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes qaima-modal-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.qaima-modal-backdrop-in {
+  animation: qaima-modal-backdrop-in 0.2s ease-out both;
+}
+
+.qaima-modal-pop-in {
+  animation: qaima-modal-pop-in 0.32s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qaima-modal-backdrop-in,
+  .qaima-modal-pop-in {
+    animation: none !important;
+  }
+}
+
 /* 분석 리포트 전용: 내용 구조는 유지하고 결과 영역만 부드럽게 등장시킨다 */
 @keyframes qaima-report-in {
   0% {

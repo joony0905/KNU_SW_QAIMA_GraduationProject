@@ -33,8 +33,8 @@ export default function InvestLevelBadge({ className }: Props) {
       </button>
 
       {confirmOpen && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 px-4">
-          <div className="w-full max-w-sm rounded-2xl border border-line bg-surface p-5 shadow-pop">
+        <div className="qaima-modal-backdrop-in fixed inset-0 z-[100] flex items-center justify-center bg-black/45 px-4">
+          <div className="qaima-modal-pop-in w-full max-w-sm rounded-2xl border border-line bg-surface p-5 shadow-pop">
             <h3 className="text-base font-bold text-ink">투자 레벨 설문을 할까요?</h3>
             <p className="mt-2 text-sm leading-relaxed text-ink-3">
               투자 레벨에 맞춰 분석 보고서의 설명 방식이 조정돼요.

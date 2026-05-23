@@ -378,20 +378,20 @@ const renderPeerOverlayValue = (value: string): ReactNode => {
   const peers = value.split(" | ");
   const items = peers.map((part) => {
     if (part.startsWith("selectedPeers=")) {
-      return { label: "선택 peer", value: `${part.replace("selectedPeers=", "")}개`, tone: "muted" as const };
+      return { label: "선택 유사 종목", value: `${part.replace("selectedPeers=", "")}개`, tone: "muted" as const };
     }
     const [namePart, ...rest] = part.split(",");
     const metrics = parseMetricMap(rest.join(","));
     const corr = parseMetricMap(namePart).corr ?? namePart.split(" corr=")[1];
     const name = namePart.split(" corr=")[0];
-    const lag = metrics.lag ? ` · ${metrics.lag}일 lag` : "";
+    const lag = metrics.lag ? ` · ${metrics.lag}일 시차` : "";
     return {
       label: name,
-      value: `corr ${compactNumber(corr, 3) ?? "-"} · ${relationLabel(metrics.relation)}${lag}`,
+      value: `상관도 ${compactNumber(corr, 3) ?? "-"} · ${relationLabel(metrics.relation)}${lag}`,
       tone: Number(corr) >= 0.75 ? "warn" as const : "default" as const,
     };
   });
-  return renderValueItems(items, "Peer corr은 동행 종목 참고 정보이며 비중 조정에는 직접 사용하지 않습니다.");
+  return renderValueItems(items, "유사 종목 상관도는 동행 종목 참고 정보이며 비중 조정에는 직접 사용하지 않습니다.");
 };
 
 const renderOverlayValue = (overlayType: string, value?: string | null): ReactNode => {

@@ -43,6 +43,8 @@ interface Props {
   candles: Candle[];
   indicators?: IndicatorData | null;
   showSubPanes: boolean; // 분석 전, 분석 후
+  showIndicators?: boolean;
+  showMarkers?: boolean;
   onRequestMoreHistory?: () => void;
   markerMode?: MarkerMode;
 
@@ -288,6 +290,8 @@ function TradingViewWidget({
   candles,
   indicators,
   showSubPanes,
+  showIndicators = true,
+  showMarkers = true,
   onRequestMoreHistory,
   markerMode = "both",
   hoveredDayKey,
@@ -339,6 +343,7 @@ function TradingViewWidget({
   // sync guard
   const syncingCrosshairRef = useRef(false);
   const syncingRangeRef = useRef(false);
+  const subPaneSyncCleanupRef = useRef<(() => void) | null>(null);
 
   // pane ready tick
   const [subPaneReadyTick, setSubPaneReadyTick] = useState(0);
@@ -421,6 +426,27 @@ function TradingViewWidget({
 
   const paneBaseClass = "min-h-0 w-full";
 
+  const resizeChartToElement = (
+    chart: IChartApi | null,
+    element: HTMLDivElement | null,
+    minHeight = 60,
+  ) => {
+    if (!chart || !element) return;
+    const rect = element.getBoundingClientRect();
+    const width = Math.floor(rect.width || element.clientWidth || 600);
+    const height = Math.floor(rect.height || element.clientHeight || minHeight);
+    if (width < 80 || height < minHeight) return;
+    chart.applyOptions({ width, height });
+  };
+
+  const resizeChartsToLayout = () => {
+    resizeChartToElement(priceChartRef.current, priceElRef.current, 80);
+    if (showSubPanes) {
+      resizeChartToElement(stochChartRef.current, stochElRef.current, 60);
+      resizeChartToElement(volumeChartRef.current, volumeElRef.current, 60);
+    }
+  };
+
   /* =========================
      timeRange sync
   ========================= */
@@ -480,7 +506,9 @@ function TradingViewWidget({
     });
 
     try {
-      candleMarkersRef.current = createSeriesMarkers(candleSeries, []);
+      candleMarkersRef.current = createSeriesMarkers(candleSeries, [], {
+        autoScale: false,
+      });
     } catch (e) {
       console.warn("[markers] createSeriesMarkers failed:", e);
       candleMarkersRef.current = null;
@@ -553,6 +581,8 @@ function TradingViewWidget({
     if (!pc) return;
 
     if (!showSubPanes) {
+      subPaneSyncCleanupRef.current?.();
+      subPaneSyncCleanupRef.current = null;
       volumeReadyRef.current = false;
       stochReadyRef.current = false;
 
@@ -586,10 +616,15 @@ function TradingViewWidget({
         volumeSeriesRef.current = null;
       }
 
+      requestAnimationFrame(() => {
+        resizeChartToElement(priceChartRef.current, priceElRef.current, 80);
+      });
       return;
     }
 
+    let disposed = false;
     const rafId = requestAnimationFrame(() => {
+      if (disposed) return;
       let createdAny = false;
 
       if (!stochChartRef.current && stochElRef.current) {
@@ -680,6 +715,8 @@ function TradingViewWidget({
       const pc2 = priceChartRef.current;
       if (!pc2 || !stochChartRef.current || !volumeChartRef.current) return;
 
+      subPaneSyncCleanupRef.current?.();
+
       const unsubscribe = subscribeVisibleRangeChangeSafe(pc2, () => {
         if (syncingRangeRef.current) return;
         syncTimeRangeFromPrice();
@@ -708,9 +745,10 @@ function TradingViewWidget({
       };
 
       pc2.subscribeCrosshairMove(onPc);
+      resizeChartsToLayout();
       syncTimeRangeFromPrice();
 
-      return () => {
+      subPaneSyncCleanupRef.current = () => {
         try {
           unsubscribe();
         } catch {}
@@ -720,7 +758,12 @@ function TradingViewWidget({
       };
     });
 
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(rafId);
+      subPaneSyncCleanupRef.current?.();
+      subPaneSyncCleanupRef.current = null;
+    };
   }, [showSubPanes]);
 
   /* =========================
@@ -731,6 +774,7 @@ function TradingViewWidget({
     if (!wrap) return;
 
     const ro = new ResizeObserver(() => {
+      resizeChartsToLayout();
       if (showSubPanes) setSubPaneReadyTick((v) => v + 1);
     });
 
@@ -824,6 +868,8 @@ function TradingViewWidget({
     });
     emaSeriesRef.current.clear();
 
+    if (!showIndicators) return;
+
     const ema = indicators?.ema;
     if (!ema || Object.keys(ema).length === 0) return;
 
@@ -837,7 +883,7 @@ function TradingViewWidget({
       series.setData(data);
       emaSeriesRef.current.set(period, series);
     });
-  }, [indicators?.ema, candleTimeList]);
+  }, [showIndicators, indicators?.ema, candleTimeList]);
 
   /* =========================
      BB
@@ -853,6 +899,8 @@ function TradingViewWidget({
       } catch {}
     });
     bbSeriesRef.current = {};
+
+    if (!showIndicators) return;
 
     const bb = indicators?.bb20_2;
     if (!bb || bb.length === 0) return;
@@ -884,7 +932,7 @@ function TradingViewWidget({
     );
 
     bbSeriesRef.current = { upper, mid, lower };
-  }, [indicators?.bb20_2, candleTimeList]);
+  }, [showIndicators, indicators?.bb20_2, candleTimeList]);
 
   /* =========================
      STO
@@ -902,6 +950,8 @@ function TradingViewWidget({
     });
     stochSeriesRef.current = {};
     stochReadyRef.current = false;
+
+    if (!showIndicators) return;
 
     const st = indicators?.stoch14_3_3;
     if (!st || st.length === 0) return;
@@ -943,7 +993,7 @@ function TradingViewWidget({
 
     chart.timeScale().fitContent();
     syncTimeRangeFromPrice();
-  }, [showSubPanes, subPaneReadyTick, indicators?.stoch14_3_3, candleTimeList]);
+  }, [showSubPanes, subPaneReadyTick, showIndicators, indicators?.stoch14_3_3, candleTimeList]);
 
   /* =========================
      Markers
@@ -952,7 +1002,7 @@ function TradingViewWidget({
     const sm = candleMarkersRef.current;
     if (!sm) return;
 
-    if (!showSubPanes) {
+    if (!showMarkers) {
       try {
         sm.setMarkers([]);
       } catch {}
@@ -1231,7 +1281,7 @@ function TradingViewWidget({
       console.warn("[markers] setMarkers failed:", e);
     }
   }, [
-    showSubPanes,
+    showMarkers,
     candles,
     candleTimeList,
     indicators?.ema,

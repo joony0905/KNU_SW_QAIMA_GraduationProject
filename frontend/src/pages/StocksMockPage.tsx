@@ -7,7 +7,7 @@ import { PdfExportContext } from "../contexts/PdfExportContext";
 import qaimaLogo from "../assets/qaima-final.png";
 import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import { useRef, useEffect, useState } from "react";
-import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
+import { Star, Sun, Moon, ChevronDown, ChevronUp, LineChart, MapPin } from "lucide-react";
 import InvestLevelBadge from "../components/InvestLevelBadge";
 import StockSearchBar from "../components/StockSearchBar";
 import FeatureIntro from "../components/FeatureIntro";
@@ -224,6 +224,8 @@ export default function StocksMockPage() {
   const [indicatorData, setIndicatorData] = useState<IndicatorData | null>(
     null,
   );
+  const [showChartIndicators, setShowChartIndicators] = useState(true);
+  const [showChartMarkers, setShowChartMarkers] = useState(false);
 
   // 분석 요청 파라미터
   const [analysisFreq, setAnalysisFreq] = useState<
@@ -501,6 +503,8 @@ export default function StocksMockPage() {
     setFinancialTimeline(null);
     setPriceFlowSummary(null);
     setIndicatorData(null);
+    setShowChartIndicators(true);
+    setShowChartMarkers(false);
     setShowAnalyzeButton(true);
 
     // 기본 분석 기간: 최근 6개월
@@ -618,6 +622,8 @@ export default function StocksMockPage() {
     setFinancialTimeline(null);
     setPriceFlowSummary(null);
     setIndicatorData(null);
+    setShowChartIndicators(true);
+    setShowChartMarkers(false);
 
     if (!mainStock.symbol) {
       setErr("먼저 종목을 검색한 뒤 분석을 실행해주세요.");
@@ -688,6 +694,8 @@ export default function StocksMockPage() {
         stoch14_3_3: ind?.stoch14_3_3 ?? null,
         warnings: ind?.warnings ?? [],
       });
+      setShowChartIndicators(true);
+      setShowChartMarkers(false);
     } catch (e) {
       setErr(getApiErrorMessage(e, "분석 결과를 불러오지 못했습니다."));
     } finally {
@@ -1033,6 +1041,37 @@ export default function StocksMockPage() {
                 {/* 헤더와 차트 사이 divider */}
                 <div className="h-px bg-line" />
 
+                {indicatorData && (
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowChartIndicators((prev) => !prev)}
+                      aria-pressed={showChartIndicators}
+                      className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors ${
+                        showChartIndicators
+                          ? "border-accent bg-accent-soft text-accent-ink"
+                          : "border-line bg-surface text-ink-3 hover:bg-bg-sunk"
+                      }`}
+                    >
+                      <LineChart size={14} aria-hidden="true" />
+                      보조지표
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowChartMarkers((prev) => !prev)}
+                      aria-pressed={showChartMarkers}
+                      className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors ${
+                        showChartMarkers
+                          ? "border-accent bg-accent-soft text-accent-ink"
+                          : "border-line bg-surface text-ink-3 hover:bg-bg-sunk"
+                      }`}
+                    >
+                      <MapPin size={14} aria-hidden="true" />
+                      마커
+                    </button>
+                  </div>
+                )}
+
                 {/* 차트 영역 — sunken 제거, 같은 흰 배경 위에 차트 */}
                 <div className="flex-1 min-h-0 w-full flex items-stretch">
                     {chartLoading && (
@@ -1055,9 +1094,12 @@ export default function StocksMockPage() {
                       <div className="flex-1 min-h-0 w-full">
                         {/* TradingViewWidget 부모 높이를 100% 사용 */}
                         <TradingViewWidget
+                          key={showChartIndicators ? "chart-with-indicators" : "chart-price-only"}
                           candles={candles}
                           indicators={indicatorData}
-                          showSubPanes={Boolean(indicatorData)}
+                          showSubPanes={Boolean(indicatorData && showChartIndicators)}
+                          showIndicators={showChartIndicators}
+                          showMarkers={showChartMarkers}
                           markerMode="triple" // "sto_ema" | "bb_sto" | "both"
                           onRequestMoreHistory={handleRequestMoreHistory}
                         />

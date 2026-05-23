@@ -427,7 +427,7 @@ export default function MainPage() {
       tag: "FEATURE 02", title: "외부요인", en: "Macro & Context",
       desc: "산업 지수, 금리, 뉴스, 공매도, 유사 종목 — 한 종목을 둘러싼 외부 환경을 모두 모아 분석합니다.",
       visual: "radar" as const,
-      bullets: ["산업 peer cluster", "기준금리 시계열", "실시간 뉴스 큐레이션"],
+      bullets: ["산업 유사 종목군", "기준금리 시계열", "실시간 뉴스 큐레이션"],
       to: "/feature/2",
     },
     {
