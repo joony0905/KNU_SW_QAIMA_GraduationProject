@@ -1,0 +1,47 @@
+analysis:
+  base-url: "http://localhost:8000"
+
+qaima:
+  cors:
+    allowed-origin-patterns: ${QAIMA_CORS_ALLOWED_ORIGIN_PATTERNS:https://stockpt.ai.kr,https://www.stockpt.ai.kr}
+
+auth:
+  cookie:
+    refresh-token-name: qaima_refresh_token
+    path: "/api/v1/auth"
+    same-site: "Lax"
+    secure: true
+    http-only: true
+  oauth2:
+    success-redirect-url: "https://stockpt.ai.kr/login/oauth2/success"
+    failure-redirect-url: "https://stockpt.ai.kr/login"
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+  sql:
+    init:
+      mode: never
+
+  flyway:
+    enabled: false
+
+logging:
+  level:
+    reactor.netty.http.client: INFO
+    org.springframework.web.reactive.function.client: INFO
+    org.springframework: INFO
+    com.qaima: INFO
