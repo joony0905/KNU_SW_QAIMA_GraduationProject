@@ -55,6 +55,24 @@ export type PortfolioAnalyzeRequest = {
   };
 };
 
+export type SavedPortfolioHolding = {
+  stockCode: string;
+  stockName: string;
+  quantity: number;
+  averagePrice: number;
+};
+
+export type SavedPortfolio = {
+  portfolioId: number | null;
+  cashAmount: number;
+  holdings: SavedPortfolioHolding[];
+};
+
+export type SavePortfolioRequest = {
+  cashAmount: number;
+  holdings: SavedPortfolioHolding[];
+};
+
 export type Feature3OverlayCachePreviewRequest = {
   portfolioId?: number;
   stockCodes?: string[];
@@ -454,6 +472,23 @@ export const fetchPortfolioAnalysis = async (
 ): Promise<PortfolioAnalyzeResponse> => {
   const res = await api.post<ApiResponse<PortfolioAnalyzeResponse>>(
     ENDPOINTS.portfolio.analyze(),
+    req,
+  );
+  return res.data.data;
+};
+
+export const fetchMyDefaultPortfolio = async (): Promise<SavedPortfolio> => {
+  const res = await api.get<ApiResponse<SavedPortfolio>>(
+    ENDPOINTS.portfolio.myDefault(),
+  );
+  return res.data.data;
+};
+
+export const replaceMyDefaultPortfolio = async (
+  req: SavePortfolioRequest,
+): Promise<SavedPortfolio> => {
+  const res = await api.put<ApiResponse<SavedPortfolio>>(
+    ENDPOINTS.portfolio.myDefault(),
     req,
   );
   return res.data.data;

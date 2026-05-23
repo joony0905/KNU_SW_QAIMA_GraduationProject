@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import List, Optional
 
 from app.services.llm.factory import get_llm_client
@@ -106,6 +107,7 @@ async def analyze_feature2_explain(req: Feature2ExplainRequest) -> Feature2Expla
             ],
         )
         if explain is not None:
+            _sanitize_feature2_explain(explain)
             explain.text = text.strip()
         else:
             warnings.append("LLM_EXPLAIN_PARSE_FAILED")
@@ -125,6 +127,7 @@ async def analyze_feature2_explain(req: Feature2ExplainRequest) -> Feature2Expla
                 ],
             )
             if explain is not None:
+                _sanitize_feature2_explain(explain)
                 explain.text = compact_text.strip()
             else:
                 warnings.append("LLM_EXPLAIN_PARSE_FAILED")
@@ -144,6 +147,57 @@ async def analyze_feature2_explain(req: Feature2ExplainRequest) -> Feature2Expla
         explain=explain,
         warnings=list(dict.fromkeys(warnings)),
     )
+
+
+_FEATURE2_INTERNAL_TERM_REPLACEMENTS = [
+    (re.compile(r"\banchor_return_pct\b", re.IGNORECASE), "기준 종목 수익률"),
+    (re.compile(r"\banchor return pct\b", re.IGNORECASE), "기준 종목 수익률"),
+    (re.compile(r"\banchor_return\b", re.IGNORECASE), "기준 종목 수익률"),
+    (re.compile(r"\bpeer_cluster_summary\b", re.IGNORECASE), "유사종목 반응 요약"),
+    (re.compile(r"\btop_peers\b", re.IGNORECASE), "주요 유사종목"),
+    (re.compile(r"\bpeer_centroid\b", re.IGNORECASE), "유사종목 평균 흐름"),
+    (re.compile(r"\bpeer centroid\b", re.IGNORECASE), "유사종목 평균 흐름"),
+    (re.compile(r"\bcentroid\b", re.IGNORECASE), "평균 흐름"),
+    (re.compile(r"\bpeer_band\b", re.IGNORECASE), "유사종목 분포 범위"),
+    (re.compile(r"\bpeer band\b", re.IGNORECASE), "유사종목 분포 범위"),
+    (re.compile(r"\bpeer_coverage\b", re.IGNORECASE), "유사종목 데이터 커버리지"),
+    (re.compile(r"\bpeers\b", re.IGNORECASE), "유사종목"),
+    (re.compile(r"\bpeer\b", re.IGNORECASE), "유사종목"),
+    (re.compile(r"\braw_corr\b", re.IGNORECASE), "원시 상관계수"),
+    (re.compile(r"\badjusted_corr\b", re.IGNORECASE), "산업 조정 상관계수"),
+    (re.compile(r"\bbest_lag\b", re.IGNORECASE), "가장 뚜렷한 시차"),
+    (re.compile(r"\blead_lag_corr\b", re.IGNORECASE), "선행·후행 상관"),
+    (re.compile(r"\blag_confidence\b", re.IGNORECASE), "시차 신뢰도"),
+    (re.compile(r"\bdisplay_status\b", re.IGNORECASE), "표시 상태"),
+    (re.compile(r"\bCOINCIDENT\b", re.IGNORECASE), "동행"),
+    (re.compile(r"\bLEADER\b", re.IGNORECASE), "선행"),
+    (re.compile(r"\bFOLLOWER\b", re.IGNORECASE), "후행"),
+    (re.compile(r"\bRAW_ONLY\b", re.IGNORECASE), "원시 상관 기준"),
+    (re.compile(r"\bADJUSTED_ONLY\b", re.IGNORECASE), "산업 조정 기준"),
+    (re.compile(r"\bFALLBACK_RAW\b", re.IGNORECASE), "원시 상관 대체"),
+    (re.compile(r"\bSELECTED\b", re.IGNORECASE), "선정"),
+]
+
+
+def _sanitize_feature2_explain(explain: ExplainResult) -> None:
+    if explain.sections:
+        for section in explain.sections.values():
+            section.title = _sanitize_feature2_text(section.title)
+            section.summary = _sanitize_feature2_text(section.summary)
+            section.bullets = [_sanitize_feature2_text(item) for item in section.bullets]
+    if explain.overall:
+        explain.overall.summary = _sanitize_feature2_text(explain.overall.summary)
+        explain.overall.bullets = [_sanitize_feature2_text(item) for item in explain.overall.bullets]
+        explain.overall.risks = [_sanitize_feature2_text(item) for item in explain.overall.risks]
+        if explain.overall.conclusion:
+            explain.overall.conclusion = _sanitize_feature2_text(explain.overall.conclusion)
+
+
+def _sanitize_feature2_text(text: str) -> str:
+    sanitized = text
+    for pattern, replacement in _FEATURE2_INTERNAL_TERM_REPLACEMENTS:
+        sanitized = pattern.sub(replacement, sanitized)
+    return sanitized
 
 
 def _parse_explain_json(text: str) -> Optional[Feature1Explain]:

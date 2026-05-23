@@ -68,4 +68,4 @@ async def analysis(req: Feature2AnalysisRequest) -> Feature2ExplainResponse:
         return await analyze_feature2_explain(req.to_explain_request())
     except Exception as e:
         log.exception("feature2 analysis explain failed")
-        raise HTTPException(status_code=500, detail=f"FEATURE2_ANALYSIS_FAILED:{e.__class__.__name__}")
+        raise HTTPException(status_code=500, detail=f"FEATURE2_ANALYZE_FAILED:{e.__class__.__name__}")

@@ -3,6 +3,7 @@ import type { AnalysisExplainSection, AnalysisPanelResult, FinancialTimelineSect
 import type { PeerItem } from "../types/feature2";
 import { Download, Maximize2 } from "lucide-react";
 import DictTerm from "./DictTerm";
+import DictionaryText from "./DictionaryText";
 import FinancialTimelineChart from "./FinancialTimelineChart";
 import MarketSnapshotBars from "./MarketSnapshotBars";
 import IndicatorSnapshotCards from "./IndicatorSnapshotCards";
@@ -10,6 +11,8 @@ import PriceFlowBars from "./PriceFlowBars";
 import ShortSellingTrendChart from "./ShortSellingTrendChart";
 import InvestorFlowTrendChart from "./InvestorFlowTrendChart";
 import { MultiLineTrendChart } from "./Feature2TrendCharts";
+import { usePdfExportReveal } from "../contexts/PdfExportContext";
+import ReportHeader, { type ReportHeaderMeta } from "./ReportHeader";
 
 export const LLM_VENDOR_OPTIONS = [
   "GPT-5.4",
@@ -50,6 +53,7 @@ interface AnalysisResultPanelProps {
   financialTimeline?: FinancialTimelineSection | null;
   priceFlowSummary?: PriceFlowSummary | null;
   layout?: "full" | "panel";
+  reportMeta?: ReportHeaderMeta | null;
 }
 
 type ExplainSection = AnalysisExplainSection;
@@ -270,12 +274,16 @@ const renderExplainSection = (section?: ExplainSection | null) => {
         {section.title ?? "설명"}
       </h4>
       {section.summary ? (
-        <p className="mt-2 text-sm sm:text-base text-ink-2">{section.summary}</p>
+        <p className="mt-2 text-sm sm:text-base text-ink-2">
+          <DictionaryText text={section.summary} />
+        </p>
       ) : null}
       {section.bullets && section.bullets.length > 0 ? (
         <ul className="mt-2 list-disc list-inside text-sm sm:text-base text-ink-2 flex flex-col gap-1">
           {section.bullets.map((item, idx) => (
-            <li key={`${section.title ?? "section"}-${idx}`}>{item}</li>
+            <li key={`${section.title ?? "section"}-${idx}`}>
+              <DictionaryText text={item} />
+            </li>
           ))}
         </ul>
       ) : null}
@@ -351,13 +359,16 @@ export default function AnalysisResultPanel({
   financialTimeline = null,
   priceFlowSummary = null,
   layout = "full",
+  reportMeta = null,
 }: AnalysisResultPanelProps) {
   const isPanel = layout === "panel";
+  const pdfExporting = usePdfExportReveal();
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [macroChartMode, setMacroChartMode] = useState<MacroChartMode>("exchange");
   const explainSections = result?.explain?.sections ?? null;
   const overallExplain = result?.explain?.overall ?? null;
   const warningNotes = expandWarningLines(mapWarningsToNotes(result?.warnings));
+  const hasResult = Boolean(result);
   const isFeature2Report = Boolean(
     result?.metrics?.peerCluster
       || result?.metrics?.macroRates
@@ -376,10 +387,18 @@ export default function AnalysisResultPanel({
         result.explain?.text?.slice(0, 24) ?? "",
       ].join(":")
     : "empty";
+  const financialTimelineAnimationKey = financialTimeline
+    ? [
+        financialTimeline.period,
+        financialTimeline.points.length,
+        financialTimeline.points[0]?.label ?? "",
+        financialTimeline.points.at(-1)?.label ?? "",
+      ].join(":")
+    : "no-financial-timeline";
 
   useEffect(() => {
     const reportNode = reportRef.current;
-    if (!reportNode || !result) return;
+    if (!reportNode || !hasResult) return;
 
     const sections = Array.from(reportNode.children).filter(
       (child): child is HTMLElement => child instanceof HTMLElement,
@@ -389,6 +408,25 @@ export default function AnalysisResultPanel({
       section.classList.remove("is-visible");
       section.style.transitionDelay = `${Math.min(index * 55, 320)}ms`;
     });
+
+    if (pdfExporting) {
+      sections.forEach((section) => {
+        section.classList.add("is-visible");
+        section.style.transitionDelay = "0ms";
+      });
+      return;
+    }
+
+    const revealVisibleSections = () => {
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      sections.forEach((section) => {
+        if (section.classList.contains("is-visible")) return;
+        const rect = section.getBoundingClientRect();
+        if (rect.top < viewportHeight + 240 && rect.bottom > -240) {
+          section.classList.add("is-visible");
+        }
+      });
+    };
 
     if (typeof IntersectionObserver === "undefined") {
       sections.forEach((section) => section.classList.add("is-visible"));
@@ -403,12 +441,20 @@ export default function AnalysisResultPanel({
           observer.unobserve(entry.target);
         });
       },
-      { threshold: 0.08, rootMargin: "0px 0px -12% 0px" },
+      { threshold: 0.01, rootMargin: "240px 0px 240px 0px" },
     );
 
     sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, [reportAnimationKey, result]);
+    requestAnimationFrame(revealVisibleSections);
+
+    window.addEventListener("scroll", revealVisibleSections, { passive: true });
+    window.addEventListener("resize", revealVisibleSections);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", revealVisibleSections);
+      window.removeEventListener("resize", revealVisibleSections);
+    };
+  }, [hasResult, pdfExporting, reportAnimationKey, financialTimelineAnimationKey]);
 
   // --- 래퍼 클래스 ---
   const wrapperClass = isPanel
@@ -502,6 +548,8 @@ export default function AnalysisResultPanel({
           ref={reportRef}
           className={`${isFeature2Report ? "qaima-feature2-report " : ""}qaima-report-enter qaima-scroll-stagger w-[90%] max-w-4xl bg-surface rounded-2xl shadow-sm border border-line p-4 sm:p-6 flex flex-col gap-4`}
         >
+          <ReportHeader meta={reportMeta} />
+
           {result.metrics?.stock && (
             <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
               <p className="text-xs sm:text-sm font-medium text-ink-3">분석 종목</p>
@@ -611,7 +659,9 @@ export default function AnalysisResultPanel({
                 );
 
                 return (
-                  <div className="mt-3 max-h-[420px] overflow-y-auto rounded-lg border border-line bg-bg-sunk/60 p-3 pr-2">
+                  <div className={`mt-3 rounded-lg border border-line bg-bg-sunk/60 p-3 pr-2 ${
+                    pdfExporting ? "overflow-visible" : "max-h-[420px] overflow-y-auto"
+                  }`}>
                     <div className="flex flex-col gap-4">
                       <div>
                         <h4 className="text-sm font-semibold text-ink">핵심 유사 종목</h4>
@@ -641,7 +691,7 @@ export default function AnalysisResultPanel({
               </div>
               <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-ink-3">일 평균 점수</p>
+                  <p className="text-[11px] sm:text-xs text-ink-3">최근 평균 점수</p>
                   <p className={`text-lg font-bold ${result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore < -0.05 ? "text-blue-700" : result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore > 0.05 ? "text-rose-700" : "text-ink"}`}>
                     {formatSentimentScore(result.metrics.newsSentimentSummary.dailyAvgScore)}
                   </p>
@@ -665,7 +715,9 @@ export default function AnalysisResultPanel({
               {(result.metrics?.newsList?.length ?? 0) > 0 && (
                 <div className="mt-4">
                   <h4 className="text-sm font-semibold text-ink">감성 점수가 산출된 뉴스</h4>
-                  <div className="mt-2 max-h-[360px] divide-y divide-line overflow-y-auto rounded-lg border border-line bg-surface pr-1">
+                  <div className={`mt-2 divide-y divide-line rounded-lg border border-line bg-surface pr-1 ${
+                    pdfExporting ? "overflow-visible" : "max-h-[360px] overflow-y-auto"
+                  }`}>
                     {result.metrics?.newsList?.map((item, idx) => (
                       <a
                         key={item.newsId}
@@ -764,37 +816,67 @@ export default function AnalysisResultPanel({
               </div>
               {(result.metrics?.macroRatesSeries?.series?.length || result.metrics?.shortSellingSeries?.length) ? (
                 <div className="mt-3 flex flex-col gap-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {MACRO_CHART_OPTIONS.map((option) => (
-                      <button
-                        key={option.key}
-                        type="button"
-                        onClick={() => setMacroChartMode(option.key)}
-                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                          macroChartMode === option.key
-                            ? "bg-accent text-white"
-                            : "bg-bg-sunk text-ink-3 hover:bg-surface-2"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div>
-                    {macroChartMode === "shortSelling" ? (
-                      <ShortSellingTrendChart points={result.metrics?.shortSellingSeries ?? []} />
-                    ) : (
-                      <MultiLineTrendChart
-                        series={(result.metrics?.macroRatesSeries?.series ?? []).filter((item) => {
-                          if (macroChartMode === "exchange") return item.key === "USD_KRW";
-                          if (macroChartMode === "baseRate") return ["KR_BASE_RATE", "US_FED_FUNDS"].includes(item.key);
-                          if (macroChartMode === "domesticBond") return ["KR3Y", "KR10Y"].includes(item.key);
-                          return ["US2Y", "US5Y", "US10Y"].includes(item.key);
-                        })}
-                        height={macroChartMode === "exchange" ? 190 : 230}
-                      />
-                    )}
-                  </div>
+                  {pdfExporting ? (
+                    <div className="flex flex-col gap-4">
+                      {[
+                        { key: "exchange", label: "환율", seriesKeys: ["USD_KRW"], height: 190 },
+                        { key: "baseRate", label: "기준금리", seriesKeys: ["KR_BASE_RATE", "US_FED_FUNDS"], height: 230 },
+                        { key: "domesticBond", label: "국내국채", seriesKeys: ["KR3Y", "KR10Y"], height: 230 },
+                        { key: "usRates", label: "미국국채", seriesKeys: ["US2Y", "US5Y", "US10Y"], height: 230 },
+                      ].map((chart) => {
+                        const series = (result.metrics?.macroRatesSeries?.series ?? []).filter((item) =>
+                          chart.seriesKeys.includes(item.key),
+                        );
+                        if (series.length === 0) return null;
+                        return (
+                          <div key={chart.key} className="rounded-lg border border-line bg-bg-sunk/60 p-3">
+                            <h4 className="mb-2 text-sm font-semibold text-ink">{chart.label}</h4>
+                            <MultiLineTrendChart series={series} height={chart.height} />
+                          </div>
+                        );
+                      })}
+                      {(result.metrics?.shortSellingSeries?.length ?? 0) > 0 && (
+                        <div className="rounded-lg border border-line bg-bg-sunk/60 p-3">
+                          <h4 className="mb-2 text-sm font-semibold text-ink">공매도</h4>
+                          <ShortSellingTrendChart points={result.metrics?.shortSellingSeries ?? []} />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-wrap gap-1.5">
+                        {MACRO_CHART_OPTIONS.map((option) => (
+                          <button
+                            key={option.key}
+                            type="button"
+                            onClick={() => setMacroChartMode(option.key)}
+                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              macroChartMode === option.key
+                                ? "bg-accent text-white"
+                                : "bg-bg-sunk text-ink-3 hover:bg-surface-2"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        {macroChartMode === "shortSelling" ? (
+                          <ShortSellingTrendChart points={result.metrics?.shortSellingSeries ?? []} />
+                        ) : (
+                          <MultiLineTrendChart
+                            series={(result.metrics?.macroRatesSeries?.series ?? []).filter((item) => {
+                              if (macroChartMode === "exchange") return item.key === "USD_KRW";
+                              if (macroChartMode === "baseRate") return ["KR_BASE_RATE", "US_FED_FUNDS"].includes(item.key);
+                              if (macroChartMode === "domesticBond") return ["KR3Y", "KR10Y"].includes(item.key);
+                              return ["US2Y", "US5Y", "US10Y"].includes(item.key);
+                            })}
+                            height={macroChartMode === "exchange" ? 190 : 230}
+                          />
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : null}
               {renderExplainSection(explainSections?.macroEnvironment)}
@@ -907,7 +989,7 @@ export default function AnalysisResultPanel({
                   {overallExplain.summary ? (
                     <div>
                       <p className="font-medium text-ink">요약</p>
-                      <p>{overallExplain.summary}</p>
+                      <p><DictionaryText text={overallExplain.summary} /></p>
                     </div>
                   ) : null}
                   {overallExplain.bullets && overallExplain.bullets.length > 0 ? (
@@ -915,7 +997,9 @@ export default function AnalysisResultPanel({
                       <p className="font-medium text-ink">핵심 포인트</p>
                       <ul className="list-disc list-inside">
                         {overallExplain.bullets.map((item, idx) => (
-                          <li key={`overall-bullet-${idx}`}>{item}</li>
+                          <li key={`overall-bullet-${idx}`}>
+                            <DictionaryText text={item} />
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -925,7 +1009,9 @@ export default function AnalysisResultPanel({
                       <p className="font-medium text-ink">리스크</p>
                       <ul className="list-disc list-inside">
                         {overallExplain.risks.map((item, idx) => (
-                          <li key={`overall-risk-${idx}`}>{item}</li>
+                          <li key={`overall-risk-${idx}`}>
+                            <DictionaryText text={item} />
+                          </li>
                         ))}
                       </ul>
                     </div>
@@ -933,13 +1019,13 @@ export default function AnalysisResultPanel({
                   {overallExplain.conclusion ? (
                     <div>
                       <p className="font-medium text-ink">결론</p>
-                      <p>{overallExplain.conclusion}</p>
+                      <p><DictionaryText text={overallExplain.conclusion} /></p>
                     </div>
                   ) : null}
                 </div>
               ) : result.explain?.text?.trim() ? (
                 <p className="text-sm sm:text-base text-ink-2 whitespace-pre-wrap mt-2">
-                  {displayText}
+                  <DictionaryText text={displayText} />
                 </p>
               ) : null}
             </div>

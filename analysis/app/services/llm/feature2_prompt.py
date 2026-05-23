@@ -13,13 +13,14 @@ def build_feature2_prompt(req: Feature2ExplainRequest, compact: bool = False) ->
     metrics = req.metrics
     peer_summary = metrics.peer_cluster_summary or {}
     recent_news = metrics.recent_news or []
+    news_sentiment_summary = _llm_news_sentiment_summary(metrics.news_sentiment_summary)
     log.info(
         "[feature2][llm][prompt-input] stock_code=%s industry_index=%s peer_cluster_summary=%s top_peers=%s news_sentiment_summary=%s recent_news=%s",
         req.stock_code,
         metrics.industry_index is not None,
         metrics.peer_cluster_summary is not None,
         len(peer_summary.get("top_peers") or []) if isinstance(peer_summary, dict) else 0,
-        metrics.news_sentiment_summary is not None,
+        news_sentiment_summary is not None,
         len(recent_news),
     )
     payload = {
@@ -38,7 +39,7 @@ def build_feature2_prompt(req: Feature2ExplainRequest, compact: bool = False) ->
         "short_selling_trend_summary": metrics.short_selling_trend_summary,
         "industry_index": metrics.industry_index,
         "peer_cluster_summary": metrics.peer_cluster_summary,
-        "news_sentiment_summary": metrics.news_sentiment_summary,
+        "news_sentiment_summary": news_sentiment_summary,
         "recent_news": metrics.recent_news,
     }
 
@@ -52,6 +53,13 @@ def build_feature2_prompt(req: Feature2ExplainRequest, compact: bool = False) ->
         "데이터가 부족한 항목은 한계를 짧게 밝히되, 확인 가능한 신호 간 관계와 점검 포인트는 설명하세요.\n"
         "같은 방향의 신호는 신호 일관성으로, 반대 방향의 신호는 상충 또는 확인 필요 지점으로 해석하세요.\n\n"
         f"{invest_level_prompt(req.invest_level)}\n"
+        "사용자 설명 용어 규칙:\n"
+        "- 입력 JSON의 내부 필드명, snake_case 키, enum 값, 구현 변수명을 최종 설명에 그대로 쓰지 마세요.\n"
+        "- anchor_return_pct, peer, peer_cluster_summary, top_peers, peer_centroid, peer_band, peer_coverage, raw_corr, adjusted_corr, best_lag, lead_lag_corr, lag_confidence, display_status 같은 내부명은 금지합니다.\n"
+        "- COINCIDENT, LEADER, FOLLOWER, RAW_ONLY, ADJUSTED_ONLY, FALLBACK_RAW, SELECTED 같은 enum 값도 그대로 쓰지 마세요.\n"
+        "- 내부명은 의미 중심 한국어로 바꿔 쓰세요. 예: anchor_return_pct=기준 종목 수익률, peer_centroid=유사종목 평균 흐름, peer_band=유사종목 분포 범위, COINCIDENT=동행, LEADER=선행, FOLLOWER=후행.\n"
+        "- 'peer', 'peer centroid', 'peer band', 'anchor return pct' 같은 영문 직역 표현도 금지하고, '유사종목', '유사종목 평균 흐름', '유사종목 분포 범위', '기준 종목 수익률'처럼 작성하세요.\n"
+        "- JSON 출력 키 이름은 스키마를 위해 snake_case로 유지하되, title/summary/bullets/overall 값 안에는 내부 필드명을 쓰지 마세요.\n\n"
         "작성 규칙:\n"
         "1) 각 섹션은 title, summary, bullets 키를 포함하고 summary는 해당 섹션 데이터만 근거로 1~2문장 작성\n"
         "2) sections.macro_environment는 기준금리, 국채, 환율이 위험자산/외국인 수급에 주는 압력을 설명\n"
@@ -78,3 +86,25 @@ def build_feature2_prompt(req: Feature2ExplainRequest, compact: bool = False) ->
         "입력 데이터:\n"
         f"{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
+
+
+def _llm_news_sentiment_summary(summary: dict | None) -> dict | None:
+    if not isinstance(summary, dict):
+        return summary
+
+    out = dict(summary)
+    avg_score = _pop_first(out, "recentAvgScore", "recent_avg_score", "dailyAvgScore", "daily_avg_score")
+    news_count = _pop_first(out, "recentNewsCount", "recent_news_count", "dailyNewsCount", "daily_news_count")
+
+    if avg_score is not None:
+        out["recent_avg_score"] = avg_score
+    if news_count is not None:
+        out["recent_news_count"] = news_count
+    return out
+
+
+def _pop_first(data: dict, *keys: str):
+    for key in keys:
+        if key in data:
+            return data.pop(key)
+    return None

@@ -70,7 +70,7 @@ public class NewsSentimentService {
     private static final Duration NEWS_FOCUS_TTL = Duration.ofDays(7);
     private static final Duration NEWS_SENTIMENT_TTL = Duration.ofDays(7);
     private static final Duration REDIS_BLOCK_TIMEOUT = Duration.ofSeconds(2);
-    private static final int NEWS_FETCH_LIMIT = 15;
+    private static final int NEWS_FETCH_LIMIT = 30;
     private static final int NEWS_EXPORT_DISPLAY_LIMIT = 100;
     private static final int NEWS_FETCH_START = 1;
     private static final int NEWS_FETCH_STEP = 10;

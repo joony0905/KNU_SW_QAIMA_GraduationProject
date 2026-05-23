@@ -4,14 +4,22 @@ import axios from "axios";
 // 새로고침 시에는 App 부트스트랩 단계에서 /auth/refresh 로 다시 발급받는다.
 let accessToken: string | null = null;
 
+const notifyAuthChange = (): void => {
+  window.dispatchEvent(new Event("qaima:auth-change"));
+};
+
 export const setAccessToken = (token: string | null): void => {
+  const changed = accessToken !== token;
   accessToken = token;
+  if (changed) notifyAuthChange();
 };
 
 export const getAccessToken = (): string | null => accessToken;
 
 export const clearAccessToken = (): void => {
+  const changed = accessToken !== null;
   accessToken = null;
+  if (changed) notifyAuthChange();
 };
 
 // App 최초 마운트 시 RT 쿠키로 AT 복원 시도.

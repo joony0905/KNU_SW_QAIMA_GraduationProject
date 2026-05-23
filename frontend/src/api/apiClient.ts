@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { getErrorMessage } from "../utils/errorMessage";
+import { clientLog } from "../utils/clientLog";
 import { clearAccessToken, getAccessToken, setAccessToken } from "./tokenStore";
 
 declare module "axios" {
@@ -112,7 +113,7 @@ api.interceptors.response.use(
       | undefined;
     const errorCode = errorData?.errorCode ?? errorData?.errors?.[0]?.code;
     const message = getErrorMessage(status, errorCode);
-    console.error("API Error:", status, errorCode, message);
+    clientLog.error("API error", { status, errorCode, message });
 
     if (status === 401 && !skipAuthRedirect) {
       // refresh 도 실패했거나 auth 엔드포인트 자체의 401
@@ -120,8 +121,6 @@ api.interceptors.response.use(
       redirectToLogin();
     } else if (status === 403) {
       window.location.href = "/forbidden";
-    } else if (status === 500) {
-      console.error("서버 내부 오류가 발생했습니다.");
     }
 
     return Promise.reject(error);

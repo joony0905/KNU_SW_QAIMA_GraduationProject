@@ -235,7 +235,7 @@ public class CandleLoadService {
 
                     // DB 히트
                     if (dbCandles != null && !dbCandles.isEmpty()) {
-                        System.out.println("Candle DB히트");
+                        log.debug("[CandleLoad] DB hit. stockCode={}, freq={}, rows={}", stockCode, freq, dbCandles.size());
                         List<PriceOhlcv> asc = dbCandles.stream()
                                 .sorted(Comparator.comparing(p -> p.getId().getTs()))
                                 .toList();

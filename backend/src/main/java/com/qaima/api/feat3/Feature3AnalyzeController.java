@@ -17,6 +17,7 @@ import com.qaima.service.feature3.Feature3OverlayService;
 import com.qaima.service.feature3.Feature3BenchmarkSeriesService;
 import com.qaima.service.feature3.Feature3PriceSeriesService;
 import com.qaima.service.feature3.Feature3RiskFreeRateService;
+import com.qaima.service.report.AnalysisReportService;
 import com.qaima.service.stock.StockMappingService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -48,6 +49,7 @@ public class Feature3AnalyzeController {
     private final CreditService creditService;
     private final StockMappingService stockMappingService;
     private final StockRepository stockRepository;
+    private final AnalysisReportService analysisReportService;
 
     @PostMapping("/analysis")
     public Mono<ApiResponse<PortfolioAnalyzeResponseDto>> analyze(
@@ -74,7 +76,7 @@ public class Feature3AnalyzeController {
                                         resolvedReq,
                                         response
                                 ))
-                                .map(ApiResponse::success)
+                                .flatMap(response -> attachReportId(userId, resolvedReq, response, ApiResponse.success(response)))
                                 .onErrorResume(ex -> creditService.refundFeature3(
                                                 userId,
                                                 cost,
@@ -83,6 +85,27 @@ public class Feature3AnalyzeController {
                                         )
                                         .then(Mono.error(ex))));
                         }));
+    }
+
+    private Mono<ApiResponse<PortfolioAnalyzeResponseDto>> attachReportId(
+            Long userId,
+            PortfolioAnalyzeRequestDto request,
+            PortfolioAnalyzeResponseDto data,
+            ApiResponse<PortfolioAnalyzeResponseDto> response
+    ) {
+        if (data == null || response == null || response.getMeta() == null) {
+            return Mono.just(response);
+        }
+        return analysisReportService.createFeature3(userId, request, data)
+                .map(reportId -> {
+                    response.getMeta().setReportId(reportId);
+                    return response;
+                })
+                .onErrorResume(ex -> {
+                    log.warn("[Feature3] report snapshot save failed. userId={}, cause={}", userId, ex.getMessage(), ex);
+                    response.getMeta().addWarning("REPORT_SAVE_FAILED");
+                    return Mono.just(response);
+                });
     }
 
     @PostMapping("/overlay-cache/preview")

@@ -69,6 +69,27 @@ export default function FinancialTimelineChart({
   useEffect(() => {
     const node = rootRef.current;
     if (!node) return;
+    if (forceReveal) {
+      setHasAnimated(true);
+      return;
+    }
+
+    const revealIfVisible = () => {
+      const rect = node.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      if (rect.top < viewportHeight + 160 && rect.bottom > -160) {
+        setHasAnimated(true);
+        return true;
+      }
+      return false;
+    };
+
+    if (revealIfVisible()) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      setHasAnimated(true);
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -84,8 +105,14 @@ export default function FinancialTimelineChart({
     );
 
     observer.observe(node);
-    return () => observer.disconnect();
-  }, [points, period]);
+    window.addEventListener("scroll", revealIfVisible, { passive: true });
+    window.addEventListener("resize", revealIfVisible);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", revealIfVisible);
+      window.removeEventListener("resize", revealIfVisible);
+    };
+  }, [points, period, forceReveal]);
 
   if (!points.length) {
     return (

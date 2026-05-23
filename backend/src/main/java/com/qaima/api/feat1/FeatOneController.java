@@ -9,6 +9,7 @@ import com.qaima.service.credit.CreditService;
 import com.qaima.service.featone.FeatOneResult;
 import com.qaima.service.featone.FeatOneService;
 import com.qaima.service.feature3.Feature3OverlayService;
+import com.qaima.service.report.AnalysisReportService;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -31,6 +32,7 @@ public class FeatOneController {
     private final FeatOneService featOneService;
     private final CreditService creditService;
     private final Feature3OverlayService feature3OverlayService;
+    private final AnalysisReportService analysisReportService;
 
     @PostMapping("/analyze")
     public Mono<ApiResponse<FeatOneAnalysisResponseDto>> analyze(
@@ -59,10 +61,31 @@ public class FeatOneController {
                                         result.getData() != null ? result.getData().getMetrics() : null
                                 )
                                 .thenReturn(result))
-                        .map(this::toApiResponse)
+                        .flatMap(result -> attachReportId(userId, request, result.getData(), toApiResponse(result)))
                         .onErrorResume(ex -> creditService
-                                .refundFeature1(userId, referenceId, "FEATURE1_ANALYZE_FAILED")
+                                .refundFeature1(userId, referenceId, ErrorCode.FEATURE1_ANALYZE_FAILED.code())
                                 .thenReturn(feature1ErrorResponse(ex))));
+    }
+
+    private Mono<ApiResponse<FeatOneAnalysisResponseDto>> attachReportId(
+            Long userId,
+            FeatOneAnalyzeRequestDto request,
+            FeatOneAnalysisResponseDto data,
+            ApiResponse<FeatOneAnalysisResponseDto> response
+    ) {
+        if (data == null || response == null || response.getMeta() == null) {
+            return Mono.just(response);
+        }
+        return analysisReportService.createFeature1(userId, request, data)
+                .map(reportId -> {
+                    response.getMeta().setReportId(reportId);
+                    return response;
+                })
+                .onErrorResume(ex -> {
+                    log.warn("[Feature1] report snapshot save failed. userId={}, cause={}", userId, ex.getMessage(), ex);
+                    response.getMeta().addWarning("REPORT_SAVE_FAILED");
+                    return Mono.just(response);
+                });
     }
 
     private ApiResponse<FeatOneAnalysisResponseDto> toApiResponse(FeatOneResult result) {
@@ -80,8 +103,8 @@ public class FeatOneController {
 
     private ApiResponse<FeatOneAnalysisResponseDto> feature1ErrorResponse(Throwable ex) {
         return ApiResponse.internalError(
-                "FEATURE1_ANALYZE_FAILED",
-                "Feature1 analysis failed: " + safeMessage(ex.getMessage())
+                ErrorCode.FEATURE1_ANALYZE_FAILED.code(),
+                ErrorCode.FEATURE1_ANALYZE_FAILED.defaultMessage() + ": " + safeMessage(ex.getMessage())
         );
     }
 

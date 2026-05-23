@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
-import kakaoIcon from "../assets/kakaoicon.png";
 import naverIcon from "../assets/navericon.png";
 import googleIcon from "../assets/googleicon.png";
 import { login, startOAuth2Login, type SocialProvider } from "../api/auth";
@@ -169,16 +168,7 @@ export default function LoginPage() {
         </div>
 
         {/* 소셜 로그인 */}
-        <div className="grid grid-cols-3 gap-3">
-          <button
-            type="button"
-            onClick={() => startOAuth2Login("kakao")}
-            className="flex flex-col items-center gap-2 py-3 rounded-lg border border-line bg-surface hover:bg-bg-sunk transition-colors"
-          >
-            <img src={kakaoIcon} alt="카카오 로그인" className="w-9 h-9 rounded-full" />
-            <span className="text-[11px] font-medium text-ink-2">카카오</span>
-          </button>
-
+        <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
             onClick={() => startOAuth2Login("naver")}

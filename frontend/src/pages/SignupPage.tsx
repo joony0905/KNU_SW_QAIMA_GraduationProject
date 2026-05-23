@@ -12,7 +12,16 @@ const inlineActionBtn =
 const inlineSuccessBadge =
   "px-4 py-3 rounded-lg bg-success/15 text-success border border-success/30 text-sm font-semibold whitespace-nowrap flex items-center";
 
-const COUNTRY_OPTIONS = ["대한민국", "미국", "일본", "중국", "영국", "프랑스", "독일"];
+const COUNTRY_OPTIONS = ["대한민국", "미국", "일본", "중국", "영국", "프랑스", "독일","싱가포르", "홍콩", "캐나다", "호주", "기타"];
+const numericControlKeys = new Set([
+  "Backspace",
+  "Delete",
+  "Tab",
+  "ArrowLeft",
+  "ArrowRight",
+  "Home",
+  "End",
+]);
 
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -35,6 +44,8 @@ export default function SignupPage() {
   const [verificationSent, setVerificationSent] = useState(false);
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [signupLoading, setSignupLoading] = useState(false);
+  const [privacyAgreed, setPrivacyAgreed] = useState(false);
+  const [showPrivacyDetail, setShowPrivacyDetail] = useState(false);
 
   const [errors, setErrors] = useState({
     email: "",
@@ -57,8 +68,17 @@ export default function SignupPage() {
   const handleInputChange = (field: string, value: string) => {
     if (field === "phone") {
       value = value.replace(/[^0-9]/g, "");
+    } else if (field === "birthdate") {
+      value = value.replace(/[^0-9]/g, "").slice(0, 6);
+    } else if (field === "birthdateSecond") {
+      value = value.replace(/[^0-9]/g, "").slice(0, 1);
     }
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleNumericKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.ctrlKey || e.metaKey || numericControlKeys.has(e.key)) return;
+    if (!/^[0-9]$/.test(e.key)) e.preventDefault();
   };
 
   const validateEmail = (value: string) => {
@@ -153,6 +173,7 @@ export default function SignupPage() {
       case "name": return "이름";
       case "phone": return "연락처";
       case "birthdate": return "생년월일";
+      case "birthdateSecond": return "주민등록번호 뒷자리";
       case "country": return "국적";
       default: return "";
     }
@@ -183,7 +204,7 @@ export default function SignupPage() {
 
     const requiredOrder: Array<keyof typeof formData> = [
       "email", "verificationCode", "password", "passwordConfirm",
-      "name", "phone", "birthdate", "country",
+      "name", "phone", "birthdate", "birthdateSecond", "country",
     ];
 
     for (const field of requiredOrder) {
@@ -204,14 +225,21 @@ export default function SignupPage() {
       return;
     }
 
+    if (!privacyAgreed) {
+      alert("개인정보 수집 및 이용에 동의해야 회원가입이 가능합니다.");
+      return;
+    }
+
     setSignupLoading(true);
     try {
       await signup({
         email: formData.email,
         password: formData.password,
+        verificationCode: formData.verificationCode,
         name: formData.name,
         birthdate: formData.birthdate + formData.birthdateSecond,
         phone: formData.phone,
+        country: formData.country,
       });
       alert("회원가입이 완료되었습니다. 로그인해주세요.");
       navigate("/login");
@@ -360,22 +388,27 @@ export default function SignupPage() {
             <div className="flex gap-2 items-stretch">
               <input
                 type="text"
-                placeholder="생년월일 (6자리)"
+                placeholder="생년월일"
                 value={formData.birthdate}
                 onChange={(e) => handleInputChange("birthdate", e.target.value)}
+                onKeyDown={handleNumericKeyDown}
                 onBlur={() => handleBlur("birthdate")}
                 maxLength={6}
                 inputMode="numeric"
-                className={inputClass + " flex-1"}
+                pattern="[0-9]*"
+                className={inputClass + " min-w-0 flex-[1_1_0%]"}
               />
               <input
                 type="text"
+                placeholder="1"
                 value={formData.birthdateSecond}
                 onChange={(e) => handleInputChange("birthdateSecond", e.target.value)}
+                onKeyDown={handleNumericKeyDown}
                 onBlur={() => handleBlur("birthdate")}
                 maxLength={1}
                 inputMode="numeric"
-                className={inputClass + " w-[52px] text-center"}
+                pattern="[0-9]*"
+                className={inputClass + " !w-[52px] flex-none text-center"}
               />
               <div className="flex items-center text-ink-4 text-sm font-mono tabular tracking-widest select-none">
                 ······
@@ -417,6 +450,48 @@ export default function SignupPage() {
                     {country}
                   </button>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* 개인정보 수집 및 이용 동의 */}
+          <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
+            <div className="flex items-start gap-2">
+              <input
+                id="privacy-agreement"
+                type="checkbox"
+                checked={privacyAgreed}
+                onChange={(e) => setPrivacyAgreed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-line accent-accent"
+              />
+              <div className="flex-1">
+                <label htmlFor="privacy-agreement" className="text-sm text-ink">
+                  개인정보 수집 및 이용에 동의합니다.
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPrivacyDetail((prev) => !prev)}
+                  className="ml-2 text-xs font-medium text-accent hover:underline"
+                >
+                  자세히 보기
+                </button>
+              </div>
+            </div>
+            {showPrivacyDetail && (
+              <div className="mt-3 rounded-md border border-line bg-surface p-3 text-xs leading-5 text-ink-2">
+                <p className="font-semibold text-ink">개인정보 수집 및 이용 안내</p>
+                <p className="mt-2">
+                  QAIMA는 회원가입, 본인 확인, 서비스 제공, 이용 통계 분석 및 맞춤형 서비스 개선을 위해 개인정보를 수집·이용합니다.
+                </p>
+                <p className="mt-2">
+                  수집 항목: 이메일, 비밀번호, 이름, 전화번호, 생년월일, 성별, 국적, 접속 IP, 브라우저 정보, 서비스 이용 기록
+                </p>
+                <p className="mt-2">
+                  보유 및 이용 기간: 회원 탈퇴 시까지 보관하며, 관계 법령에 따라 보관이 필요한 정보는 해당 기간 동안 보관할 수 있습니다.
+                </p>
+                <p className="mt-2">
+                  동의를 거부할 수 있으나, 필수 개인정보 수집 및 이용에 동의하지 않을 경우 회원가입이 제한됩니다.
+                </p>
               </div>
             )}
           </div>

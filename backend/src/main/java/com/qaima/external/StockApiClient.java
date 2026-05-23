@@ -98,7 +98,7 @@ public class StockApiClient implements StockClient {
 
         if (canonical == null || canonical.isBlank()) {
             return Mono.just(ApiResponse.internalError(
-                    "INVALID_STOCK_CODE",
+                    ErrorCode.VALIDATION_ERROR.code(),
                     "[fetchTickerMeta] 종목코드가 비어있습니다."
             ));
         }
@@ -112,11 +112,11 @@ public class StockApiClient implements StockClient {
                     .timeout(MARKETSTACK_TIMEOUT)
                     .map(data -> ApiResponse.success(toStockMetaFromMarketstack(data, canonical)))
                     .switchIfEmpty(Mono.just(ApiResponse.internalError(
-                            "META_NOT_FOUND",
+                            ErrorCode.META_NOT_FOUND.code(),
                             "[fetchTickerMeta] 티커 메타 정보를 가져오지 못했습니다: " + canonical
                     )))
                     .onErrorResume(ex -> Mono.just(ApiResponse.internalError(
-                            "META_INTERNAL_ERROR",
+                            ErrorCode.INTERNAL_ERROR.code(),
                             safe(ex.getMessage())
                     )));
         }
@@ -163,11 +163,11 @@ public class StockApiClient implements StockClient {
         return fromKis.switchIfEmpty(fromGlobal)
                 .map(ApiResponse::success)
                 .switchIfEmpty(Mono.just(ApiResponse.internalError(
-                        "META_NOT_FOUND",
+                        ErrorCode.META_NOT_FOUND.code(),
                         "[fetchTickerMeta] 티커 메타 정보를 가져오지 못했습니다: " + canonical
                 )))
                 .onErrorResume(ex -> Mono.just(ApiResponse.internalError(
-                        "META_INTERNAL_ERROR",
+                        ErrorCode.INTERNAL_ERROR.code(),
                         safe(ex.getMessage())
                 )));
     }

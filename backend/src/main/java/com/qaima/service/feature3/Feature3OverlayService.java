@@ -630,7 +630,7 @@ public class Feature3OverlayService {
                 overlayTitle("news", holding),
                 newsList.isEmpty()
                         ? "뉴스 데이터가 부족합니다."
-                        : "Feature2 news sentiment 데이터를 core risk와 분리된 뉴스 흐름 참고 정보로 표시합니다.",
+                        : "최근 뉴스 최대 30개의 Feature2 news sentiment 데이터를 core risk와 분리된 뉴스 흐름 참고 정보로 표시합니다.",
                 severity,
                 "FEATURE2_NEWS",
                 cacheStatus,

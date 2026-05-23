@@ -12,7 +12,10 @@ public class UserResponseDto {
     private String name;
     private String phone;
     private String birthdate;
+    private String gender;
+    private String country;
     private String experience;
+    private String status;
     private boolean glossaryHover;
 
     public UserResponseDto(User user) {
@@ -21,7 +24,10 @@ public class UserResponseDto {
         this.name = user.getName();
         this.phone = user.getPhone();
         this.birthdate = user.getBirthdate();
+        this.gender = user.getGender();
+        this.country = user.getCountry();
         this.experience = user.getExperience();
+        this.status = user.getStatus();
         this.glossaryHover = user.isGlossaryHover();
     }
 }

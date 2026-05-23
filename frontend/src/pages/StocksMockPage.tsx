@@ -7,6 +7,7 @@ import { PdfExportContext } from "../contexts/PdfExportContext";
 import qaimaLogo from "../assets/qaima-final.png";
 import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import { useRef, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Star, Sun, Moon, ChevronDown, ChevronUp, LineChart, MapPin } from "lucide-react";
 import InvestLevelBadge from "../components/InvestLevelBadge";
 import StockSearchBar from "../components/StockSearchBar";
@@ -28,6 +29,7 @@ import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas-pro";
+import { clientLog } from "../utils/clientLog";
 import type { AnalysisResponse } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
 import DictTerm from "../components/DictTerm";
@@ -35,6 +37,7 @@ import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { refreshTokenBalance } from "../api/billingStore";
 import { useDictionary } from "../components/DictContext";
 import { useTheme } from "../hooks/useTheme";
+import useReportUserName from "../hooks/useReportUserName";
 import {
   formatKstDate,
   formatKstOffsetDateTime,
@@ -209,6 +212,7 @@ export default function StocksMockPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { investLevel } = useDictionary();
+  const reportUserName = useReportUserName();
   const currentTime = useKSTTime();
 
   const [chartLoading, setChartLoading] = useState(false);
@@ -295,6 +299,18 @@ export default function StocksMockPage() {
     change: null,
     changeRate: null,
   });
+  const reportMeta = analysisData
+    ? {
+        featureType: "FEATURE1" as const,
+        subjectLabel: `${mainStock.name || analysisData.metrics?.stockCode || "분석종목"} (${mainStock.symbol || analysisData.metrics?.stockCode || "-"})`,
+        generatedAt: analysisResult?.meta?.timestamp ?? null,
+        analysisModel: llmVendor,
+        investLevel,
+        userName: reportUserName,
+        analysisWindow: analysisFrom || analysisTo ? `${analysisFrom || "-"} ~ ${analysisTo || "-"}` : null,
+        dataAsOf: analysisData.metrics?.asOf ?? null,
+      }
+    : null;
 
   // OHLCV 기반 표시값 포맷
   const formatPrice = (n: number) => {
@@ -405,7 +421,7 @@ export default function StocksMockPage() {
       }
       return data;
     } catch (e: any) {
-      console.error("차트 데이터 조회 실패:", {
+      clientLog.error("Chart data fetch failed", {
         message: e?.message,
         status: e?.response?.status,
         data: e?.response?.data,
@@ -480,14 +496,14 @@ export default function StocksMockPage() {
         };
       }
     } catch (e) {
-      console.error("추가 캔들 로딩 실패:", e);
+      clientLog.error("Additional candle load failed", e);
     } finally {
       isLoadingMoreRef.current = false;
     }
   };
 
   const handleSearch = async (value: string) => {
-    console.log("검색 실행:", value);
+    clientLog.warn("Stock search submitted", value);
 
     const q = value.trim();
     if (!q) {
@@ -537,7 +553,7 @@ export default function StocksMockPage() {
         changeRate: stockInfo.changeRate ?? null, // number 그대로
       }));
     } catch (e) {
-      console.error("종목 정보 조회 실패(임시 무시):", e);
+      clientLog.warn("Stock lookup failed; fallback path used", e);
 
       if (/^\d{6}$/.test(q)) {
         resolvedCode = q;
@@ -583,7 +599,7 @@ export default function StocksMockPage() {
       }
       setTrendData(Array.isArray(trend) ? trend : []);
     } catch (e) {
-      console.error("재무제표 조회 실패:", e);
+      clientLog.error("Financial statement fetch failed", e);
     }
 
     // 초기 차트는 30일만 로드하고, 분석기간 입력값은 유지
@@ -800,7 +816,7 @@ export default function StocksMockPage() {
       const fileName = `${mainStock.symbol}_analysis.pdf`;
       doc.save(fileName);
     } catch (e) {
-      console.error("PDF 생성 실패:", e);
+      clientLog.error("PDF generation failed", e);
     } finally {
       // 캡처 종료 — 화면을 원래 스크롤 등장 동작으로 복원
       setPdfExporting(false);
@@ -1290,6 +1306,7 @@ export default function StocksMockPage() {
                 financialTimeline={financialTimeline}
                 priceFlowSummary={priceFlowSummary}
                 layout="full"
+                reportMeta={reportMeta}
               />
               </PdfExportContext.Provider>
             </div>}
@@ -1297,7 +1314,7 @@ export default function StocksMockPage() {
           </>
         )}
 
-        {isAnalysisModalOpen && analysisResult && (
+        {isAnalysisModalOpen && analysisResult && createPortal(
           <div
             className="fixed inset-0 z-[100] bg-ink/50 flex items-center justify-center p-4"
             onClick={() => setIsAnalysisModalOpen(false)}
@@ -1338,10 +1355,12 @@ export default function StocksMockPage() {
                   financialTimeline={financialTimeline}
                   priceFlowSummary={priceFlowSummary}
                   layout="full"
+                  reportMeta={reportMeta}
                 />
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
 
         <FinancialDetailModal

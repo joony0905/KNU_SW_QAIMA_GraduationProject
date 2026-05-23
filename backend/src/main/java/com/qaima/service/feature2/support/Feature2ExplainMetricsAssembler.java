@@ -180,8 +180,27 @@ public class Feature2ExplainMetricsAssembler {
         if (newsList == null || newsList.isEmpty()) {
             return List.of();
         }
-        return newsList.stream()
+        List<NewsItemDto> scoredNews = newsList.stream()
+                .filter(news -> news != null && news.getSentimentScore() != null)
                 .limit(NEWS_LIMIT)
+                .toList();
+        if (scoredNews.size() >= NEWS_LIMIT) {
+            return toRecentNewsSummaries(scoredNews);
+        }
+
+        List<NewsItemDto> fallbackNews = newsList.stream()
+                .filter(news -> news != null && news.getSentimentScore() == null)
+                .limit(NEWS_LIMIT - scoredNews.size())
+                .toList();
+
+        List<NewsItemDto> selectedNews = new java.util.ArrayList<>(NEWS_LIMIT);
+        selectedNews.addAll(scoredNews);
+        selectedNews.addAll(fallbackNews);
+        return toRecentNewsSummaries(selectedNews);
+    }
+
+    private List<Feature2ExplainMetricsDto.RecentNewsSummary> toRecentNewsSummaries(List<NewsItemDto> newsList) {
+        return newsList.stream()
                 .map(news -> Feature2ExplainMetricsDto.RecentNewsSummary.builder()
                         .newsId(news.getNewsId())
                         .title(news.getTitle())

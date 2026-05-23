@@ -1,6 +1,7 @@
 package com.qaima.api.UserController;
 
 import com.qaima.common.ApiResponse;
+import com.qaima.dto.user.SocialProfileCompleteRequestDto;
 import com.qaima.dto.user.UserProfileUpdateRequestDto;
 import com.qaima.dto.user.UserResponseDto;
 import com.qaima.dto.user.UserRiskProfileDto;
@@ -31,6 +32,15 @@ public class UserController {
             @Valid @RequestBody UserProfileUpdateRequestDto requestDto
     ) {
         return userService.updateProfile(currentUserId(authentication), requestDto)
+                .map(ApiResponse::success);
+    }
+
+    @PatchMapping("/me/social-profile")
+    public Mono<ApiResponse<UserResponseDto>> completeSocialProfile(
+            Authentication authentication,
+            @Valid @RequestBody SocialProfileCompleteRequestDto requestDto
+    ) {
+        return userService.completeSocialProfile(currentUserId(authentication), requestDto)
                 .map(ApiResponse::success);
     }
 

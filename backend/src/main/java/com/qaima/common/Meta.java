@@ -19,6 +19,7 @@ public class Meta {
     private Instant timestamp;
     private List<String> warnings;
     private String warning;
+    private Long reportId;
 
     public Meta() {}
 
@@ -72,4 +73,8 @@ public class Meta {
             getWarnings().add(warning);
         }
     }
+
+    public Long getReportId() { return reportId; }
+
+    public void setReportId(Long reportId) { this.reportId = reportId; }
 }

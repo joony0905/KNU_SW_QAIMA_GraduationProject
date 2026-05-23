@@ -31,4 +31,4 @@ async def analyze(req: Feature3AnalysisRequest) -> PortfolioAnalyzeResponse:
         return response
     except Exception as e:
         log.exception("feature3 portfolio analysis failed")
-        raise HTTPException(status_code=500, detail=f"FEATURE3_ANALYSIS_FAILED:{e.__class__.__name__}")
+        raise HTTPException(status_code=500, detail=f"FEATURE3_ANALYZE_FAILED:{e.__class__.__name__}")

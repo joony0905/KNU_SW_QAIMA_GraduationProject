@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.qaima.common.ErrorCode;
+import com.qaima.common.ErrorException;
 import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneAnalysisExplainDto;
 import com.qaima.dto.featone.FeatOneAnalysisExplainOverallDto;
@@ -145,7 +147,10 @@ public class FastApiAnalysisClient implements AnalysisApiClient {
                                 if (status.isError()) {
                                     log.error("[FastApiAnalysisClient][{}][error] status={}, body={}",
                                             endpointName, status.value(), body);
-                                    return Mono.error(new RuntimeException("FASTAPI_" + errorCodeEndpoint + "_HTTP_" + status.value()));
+                                    return Mono.error(new ErrorException(
+                                            ErrorCode.ANALYSIS_API_FAILED,
+                                            "FastAPI " + errorCodeEndpoint + " failed. status=" + status.value()
+                                    ));
                                 }
                                 try {
                                     log.info("[FastApiAnalysisClient][{}] raw response={}", endpointName, body);

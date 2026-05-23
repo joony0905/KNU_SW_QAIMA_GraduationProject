@@ -20,6 +20,7 @@ import {
 
 import type { Candle } from "../types/candle";
 import { useTheme } from "../hooks/useTheme";
+import { clientLog } from "../utils/clientLog";
 
 /**
  * indicators는 "result.metrics.indicators"를 page에서 분리해 내려주는 형태 (indicatorData)
@@ -510,7 +511,7 @@ function TradingViewWidget({
         autoScale: false,
       });
     } catch (e) {
-      console.warn("[markers] createSeriesMarkers failed:", e);
+      clientLog.warn("TradingView marker creation failed", e);
       candleMarkersRef.current = null;
     }
 
@@ -1278,7 +1279,7 @@ function TradingViewWidget({
     try {
       sm.setMarkers(finalMarkers);
     } catch (e) {
-      console.warn("[markers] setMarkers failed:", e);
+      clientLog.warn("TradingView marker update failed", e);
     }
   }, [
     showMarkers,

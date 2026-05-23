@@ -411,18 +411,10 @@ public class Feature2AnalyzeService {
                 .map(publishedAt -> publishedAt.toLocalDate())
                 .findFirst()
                 .orElse(null);
-        List<NewsItemDto> dailyNews = summaryDate == null
-                ? scoredNews
-                : scoredNews.stream()
-                .filter(item -> item.getPublishedAt() != null
-                        && summaryDate.equals(item.getPublishedAt().toLocalDate()))
-                .toList();
-
-        List<NewsItemDto> avgTargets = dailyNews.isEmpty() ? scoredNews : dailyNews;
-        BigDecimal dailyAvgScore = avgTargets.stream()
+        BigDecimal recentAvgScore = scoredNews.stream()
                 .map(NewsItemDto::getSentimentScore)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(BigDecimal.valueOf(avgTargets.size()), 6, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(scoredNews.size()), 6, RoundingMode.HALF_UP);
 
         List<Feature2MetricsDto.RecentNewsSentiment> recentItems = scoredNews.stream()
                 .limit(5)
@@ -438,8 +430,8 @@ public class Feature2AnalyzeService {
 
         return Feature2MetricsDto.NewsSentimentSummary.builder()
                 .summaryDate(summaryDate)
-                .dailyAvgScore(dailyAvgScore)
-                .dailyNewsCount(avgTargets.size())
+                .dailyAvgScore(recentAvgScore)
+                .dailyNewsCount(scoredNews.size())
                 .scoredNewsCount(scoredNews.size())
                 .positiveCount(countByLabel(scoredNews, "positive"))
                 .neutralCount(countByLabel(scoredNews, "neutral"))

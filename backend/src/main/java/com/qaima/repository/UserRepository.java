@@ -12,6 +12,8 @@ import org.springframework.data.repository.query.Param;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     List<User> findAllByNameAndBirthdate(String name, String birthdate);
+    @Query("select u from User u where u.name = :name and (u.birthdate = :birthdate or u.birthdate like concat(:birthdate, '%'))")
+    List<User> findAllByNameAndBirthdatePrefix(@Param("name") String name, @Param("birthdate") String birthdate);
     List<User> findAllByPhoneIsNotNull();
     Optional<User> findByPhone(String phone);
 

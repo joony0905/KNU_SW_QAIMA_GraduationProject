@@ -1,17 +1,19 @@
 // src/pages/PortfolioMockPage.tsx
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { MouseEvent, ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Trash2, Plus, Info, ClipboardList, Sun, Moon, ChevronDown, ChevronUp, Lock } from "lucide-react";
+import { Trash2, Plus, Info, ClipboardList, Sun, Moon, ChevronDown, ChevronUp, Lock, Save, Download, Maximize2 } from "lucide-react";
 import InvestLevelBadge from "../components/InvestLevelBadge";
 import { isLoggedIn } from "../utils/auth";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchCell from "../components/StockSearchCell";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { useDictionary } from "../components/DictContext";
+import DictionaryText from "../components/DictionaryText";
 import { getMyRiskProfile } from "../api/user";
-import { fetchPortfolioAnalysis, previewFeature3OverlayCache } from "../api/portfolio";
+import { fetchMyDefaultPortfolio, fetchPortfolioAnalysis, previewFeature3OverlayCache, replaceMyDefaultPortfolio } from "../api/portfolio";
 import { fetchFeature2MacroRates } from "../api/feature2";
 import { getApiErrorMessage } from "../utils/errorMessage";
 import type { Feature2ExchangeRatePoint } from "../types/feature2";
@@ -28,6 +30,11 @@ import {
   storeFeature3RiskGamma,
   syncFeature3RiskDefaults,
 } from "../utils/riskProfile";
+import qaimaLogo from "../assets/qaima-final.png";
+import { clientLog } from "../utils/clientLog";
+import { downloadElementAsPdf, waitForPdfCaptureReady } from "../utils/reportPdf";
+import ReportHeader from "../components/ReportHeader";
+import useReportUserName from "../hooks/useReportUserName";
 
 const LLM_VENDOR_OPTIONS = [
   "GPT-5.4",
@@ -433,12 +440,16 @@ const renderExplainSection = (section?: PortfolioExplainSection | null, options?
   return (
     <div className="rounded-xl bg-bg-sunk border border-line p-4">
       {!options?.hideTitle ? <h4 className="text-sm font-bold text-ink">{section.title ?? "요약"}</h4> : null}
-      {section.summary ? <p className={`${options?.hideTitle ? "" : "mt-1"} text-xs leading-relaxed text-ink-3`}>{section.summary}</p> : null}
+      {section.summary ? (
+        <p className={`${options?.hideTitle ? "" : "mt-1"} text-xs leading-relaxed text-ink-3`}>
+          <DictionaryText text={section.summary} />
+        </p>
+      ) : null}
       {!section.summary && section.bullets?.length ? (
         <ul className={`${options?.hideTitle ? "" : "mt-2"} flex flex-col gap-1`}>
           {section.bullets.slice(0, 4).map((bullet, index) => (
             <li key={`${section.title ?? "explain"}-${index}`} className="text-xs leading-relaxed text-ink-4">
-              {bullet}
+              <DictionaryText text={bullet} />
             </li>
           ))}
         </ul>
@@ -482,6 +493,65 @@ const portfolioPieStyle = (weights: PortfolioAnalyzeResponse["currentPortfolio"]
   };
 };
 
+const polarPoint = (cx: number, cy: number, radius: number, angleDeg: number) => {
+  const angle = ((angleDeg - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(angle),
+    y: cy + radius * Math.sin(angle),
+  };
+};
+
+function SvgPortfolioPieChart({
+  weights,
+  label,
+  className,
+}: {
+  weights: PortfolioAnalyzeResponse["currentPortfolio"]["weights"];
+  label: string;
+  className: string;
+}) {
+  const positiveWeights = weights.filter((weight) => Math.max(0, weight.weight) > 0);
+  const total = positiveWeights.reduce((sum, weight) => sum + Math.max(0, weight.weight), 0);
+  let cursor = 0;
+
+  if (total <= 0) {
+    return (
+      <svg viewBox="0 0 100 100" className={className} role="img" aria-label={label}>
+        <circle cx="50" cy="50" r="49" fill="#e5e7eb" stroke="rgb(var(--color-line))" strokeWidth="1" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 100 100" className={className} role="img" aria-label={label}>
+      {positiveWeights.map((weight, index) => {
+        const ratio = Math.max(0, weight.weight) / total;
+        const startAngle = cursor * 360;
+        const endAngle = (cursor + ratio) * 360;
+        cursor += ratio;
+        const color = weight.assetType === "CASH" ? CASH_COLOR : pieColorForIndex(index);
+
+        if (ratio >= 0.9999) {
+          return <circle key={`${weight.stockCode}-${index}`} cx="50" cy="50" r="49" fill={color} />;
+        }
+
+        const start = polarPoint(50, 50, 49, startAngle);
+        const end = polarPoint(50, 50, 49, endAngle);
+        const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+        const path = [
+          "M 50 50",
+          `L ${start.x.toFixed(3)} ${start.y.toFixed(3)}`,
+          `A 49 49 0 ${largeArc} 1 ${end.x.toFixed(3)} ${end.y.toFixed(3)}`,
+          "Z",
+        ].join(" ");
+
+        return <path key={`${weight.stockCode}-${index}`} d={path} fill={color} />;
+      })}
+      <circle cx="50" cy="50" r="49" fill="none" stroke="rgb(var(--color-line))" strokeWidth="1" />
+    </svg>
+  );
+}
+
 const weightMapByStock = (weights: PortfolioAnalyzeResponse["currentPortfolio"]["weights"]) =>
   new Map(weights.map((weight) => [weight.stockCode, weight.weight]));
 
@@ -515,6 +585,7 @@ export default function PortfolioMockPage() {
   const location = useLocation();
   const { theme, toggle } = useTheme();
   const { investLevel } = useDictionary();
+  const reportUserName = useReportUserName();
   // 로그인 여부: Portfolio Manager 잠금 오버레이 + 분석 실행 가드에 사용.
   // 토큰 상태는 마운트 시 한 번 평가하면 충분 — 로그인 후엔 /login → /feature/3 으로
   // 다시 마운트되므로 자연스럽게 갱신된다.
@@ -675,6 +746,9 @@ export default function PortfolioMockPage() {
   const [overseasRows, setOverseasRows] = useState<HoldingRow[]>([]);
   const [domesticCash, setDomesticCash] = useState(0);
   const [overseasCash, setOverseasCash] = useState(0);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [savingPortfolio, setSavingPortfolio] = useState(false);
+  const [portfolioSaveMessage, setPortfolioSaveMessage] = useState("");
 
   // 현재 선택된 마켓에 맞는 rows / setter
   const rows = selectedMarket === "국내" ? domesticRows : overseasRows;
@@ -687,6 +761,32 @@ export default function PortfolioMockPage() {
   const cashValueKRW = selectedMarket === "국내" ? cashAmount : exchangeRate ? cashAmount * exchangeRate : 0;
   const cashValueDisplay = Math.max(0, cashAmount);
   const riskyValue = rows.reduce((sum, r) => sum + r.quantity * r.avgPrice, 0);
+  useEffect(() => {
+    if (!loggedIn) return;
+    let alive = true;
+
+    fetchMyDefaultPortfolio()
+      .then((portfolio) => {
+        if (!alive) return;
+        setDomesticRows((portfolio.holdings ?? []).map((holding, index) => ({
+          id: index + 1,
+          name: holding.stockName,
+          stockCode: holding.stockCode,
+          quantity: holding.quantity,
+          avgPrice: holding.averagePrice,
+        })));
+        setDomesticCash(portfolio.cashAmount ?? 0);
+      })
+      .catch(() => {
+        if (alive) {
+          setPortfolioSaveMessage("저장된 포트폴리오를 불러오지 못했습니다.");
+        }
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [loggedIn]);
 
   // 총 금액 계산 (국내: 원, 해외: 달러 기준이라고 가정)
   const totalKRW =
@@ -766,10 +866,29 @@ export default function PortfolioMockPage() {
   const [selectedSmlBenchmarkCode, setSelectedSmlBenchmarkCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [isPortfolioZoomOpen, setIsPortfolioZoomOpen] = useState(false);
   const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
   const [isModelOpen, setIsModelOpen] = useState(false);
   const modelRef = useRef<HTMLDivElement | null>(null);
+  const portfolioPdfRef = useRef<HTMLElement | null>(null);
   const portfolioReportRef = useRef<HTMLDivElement | null>(null);
+  const reportMeta = analysisResult
+    ? {
+        featureType: "FEATURE3" as const,
+        subjectLabel: "포트폴리오",
+        subjectDetail: `${rows[0]?.name || analysisResult.currentPortfolio.weights[0]?.companyName || "구성종목"} 외 ${Math.max(0, rows.length - 1)}개 종목`,
+        generatedAt: new Date().toISOString(),
+        analysisModel: llmVendor,
+        investLevel,
+        userName: reportUserName,
+        analysisWindow: selectedWindow.label,
+        dataAsOf: analysisResult.freshness?.newestDataAt ?? analysisResult.freshness?.priceSeriesAsOf ?? null,
+        riskProfile: analysisResult.policy.riskProfile.profileType,
+        priceBasis: pricePolicyLabel[analysisResult.policy.pricePolicy.used] ?? analysisResult.policy.pricePolicy.used,
+        covarianceModel: covarianceModelLabel[analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? ""] ?? analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? null,
+      }
+    : null;
 
   const toggleExtraOption = (key: string) => {
     setOverlayPreview(null);
@@ -914,12 +1033,38 @@ export default function PortfolioMockPage() {
   }, [isModelOpen]);
 
   useEffect(() => {
+    document.body.classList.toggle("qaima-portfolio-zoom-active", isPortfolioZoomOpen);
+    return () => {
+      document.body.classList.remove("qaima-portfolio-zoom-active");
+    };
+  }, [isPortfolioZoomOpen]);
+
+  useEffect(() => {
     const reportNode = portfolioReportRef.current;
     if (!reportNode || !analysisResult) return;
 
     const sections = Array.from(reportNode.children).filter(
       (child): child is HTMLElement => child instanceof HTMLElement,
     );
+
+    if (pdfExporting) {
+      sections.forEach((section) => {
+        section.classList.add("is-visible");
+        section.style.transitionDelay = "0ms";
+      });
+      return;
+    }
+
+    const revealVisibleSections = () => {
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      sections.forEach((section) => {
+        if (section.classList.contains("is-visible")) return;
+        const rect = section.getBoundingClientRect();
+        if (rect.top < viewportHeight + 240 && rect.bottom > -240) {
+          section.classList.add("is-visible");
+        }
+      });
+    };
 
     sections.forEach((section, index) => {
       section.classList.remove("is-visible");
@@ -939,12 +1084,38 @@ export default function PortfolioMockPage() {
           observer.unobserve(entry.target);
         });
       },
-      { threshold: 0.18, rootMargin: "0px 0px -28% 0px" },
+      { threshold: 0.01, rootMargin: "240px 0px 240px 0px" },
     );
 
     sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, [analysisResult, analysisTab]);
+    requestAnimationFrame(revealVisibleSections);
+
+    window.addEventListener("scroll", revealVisibleSections, { passive: true });
+    window.addEventListener("resize", revealVisibleSections);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", revealVisibleSections);
+      window.removeEventListener("resize", revealVisibleSections);
+    };
+  }, [analysisResult, analysisTab, pdfExporting]);
+
+  const handlePortfolioDownloadClick = async () => {
+    if (!analysisResult || !portfolioPdfRef.current) return;
+
+    setPdfExporting(true);
+    try {
+      await waitForPdfCaptureReady();
+      await downloadElementAsPdf(
+        portfolioPdfRef.current,
+        `portfolio_${analysisTab.toLowerCase()}_analysis.pdf`,
+        qaimaLogo,
+      );
+    } catch (e) {
+      clientLog.error("Portfolio PDF generation failed", e);
+    } finally {
+      setPdfExporting(false);
+    }
+  };
 
   // 공통: 현재 마켓의 rows 조작
   const handleAddRow = () => {
@@ -996,9 +1167,73 @@ export default function PortfolioMockPage() {
     setCashAmount(Number(value.replace(/[^0-9.-]/g, "")) || 0);
   };
 
+  const handleSavePortfolio = async () => {
+    if (!loggedIn) {
+      goLogin();
+      return;
+    }
+    setSavingPortfolio(true);
+    setPortfolioSaveMessage("");
+    try {
+      const saved = await replaceMyDefaultPortfolio({
+        cashAmount: Math.max(0, cashAmount),
+        holdings: rows
+          .filter((row) => row.name.trim() !== "" && row.quantity > 0 && row.avgPrice > 0)
+          .map((row) => ({
+            stockCode: (row.stockCode ?? row.name).trim(),
+            stockName: row.name.trim(),
+            quantity: row.quantity,
+            averagePrice: row.avgPrice,
+          })),
+      });
+      setDomesticRows((saved.holdings ?? []).map((holding, index) => ({
+        id: index + 1,
+        name: holding.stockName,
+        stockCode: holding.stockCode,
+        quantity: holding.quantity,
+        avgPrice: holding.averagePrice,
+      })));
+      setDomesticCash(saved.cashAmount ?? 0);
+      setSelectedMarket("국내");
+      setPortfolioSaveMessage("포트폴리오가 저장되었습니다.");
+      setSaveModalOpen(false);
+    } catch (e) {
+      setPortfolioSaveMessage(getApiErrorMessage(e, "포트폴리오 저장에 실패했습니다."));
+    } finally {
+      setSavingPortfolio(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-bg ml-[84px]">
-      <div className="qaima-stagger max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
+      {saveModalOpen && createPortal(
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-surface border border-line shadow-card p-5">
+            <h3 className="text-base font-bold text-ink tracking-tight">포트폴리오 저장</h3>
+            <p className="mt-2 text-sm text-ink-3">현재 포트폴리오 상태를 저장할까요?</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSaveModalOpen(false)}
+                disabled={savingPortfolio}
+                className="px-4 py-2 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-bg-sunk disabled:opacity-60"
+              >
+                아니오
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePortfolio}
+                disabled={savingPortfolio}
+                className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+              >
+                {savingPortfolio ? "저장 중" : "예"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
+      <div className={`qaima-stagger ${isPortfolioZoomOpen ? "qaima-zoom-host" : ""} max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6`}>
         {/* 헤더 */}
         <header className="flex items-center justify-between">
           <div>
@@ -1198,14 +1433,24 @@ export default function PortfolioMockPage() {
                     <h2 className="text-lg font-bold text-ink tracking-tight">Portfolio Manager</h2>
                     <p className="text-sm mt-0.5 text-ink-3">보유 종목을 추가하거나 수정하세요</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleAddRow}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-accent text-white hover:opacity-90"
-                  >
-                    <Plus size={14} />
-                    종목 추가
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSaveModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors border border-line text-ink hover:bg-bg-sunk"
+                    >
+                      <Save size={14} />
+                      저장
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddRow}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-accent text-white hover:opacity-90"
+                    >
+                      <Plus size={14} />
+                      종목 추가
+                    </button>
+                  </div>
                 </div>
 
                 <div className="px-4 pb-4">
@@ -1289,6 +1534,9 @@ export default function PortfolioMockPage() {
                       </div>
                     </div>
 	                </div>
+                  {portfolioSaveMessage && (
+                    <div className="px-4 pb-4 text-sm text-ink-3">{portfolioSaveMessage}</div>
+                  )}
 
                 {/* 비로그인 잠금 오버레이: Portfolio Manager 영역 전체를 블러로 덮고 로그인 유도 */}
                 {!loggedIn && (
@@ -1670,35 +1918,73 @@ export default function PortfolioMockPage() {
           )}
 
           {/* 3.1 핵심 요약 카드 */}
+          {isPortfolioZoomOpen && (
+            <div
+              className="fixed inset-0 z-[90] bg-ink/50"
+              onClick={() => setIsPortfolioZoomOpen(false)}
+            />
+          )}
           {analysisResult && (
-            <section className="qaima-portfolio-report qaima-report-enter w-full flex flex-col gap-5">
+            <section
+              ref={portfolioPdfRef}
+              className={`qaima-portfolio-report qaima-report-enter flex flex-col gap-5 ${
+                isPortfolioZoomOpen
+                  ? "fixed inset-x-4 top-4 bottom-4 z-[100] mx-auto w-auto max-w-6xl overflow-y-auto rounded-2xl bg-bg p-5 sm:p-7 shadow-pop"
+                  : "w-full"
+              }`}
+              onClick={(event) => {
+                if (isPortfolioZoomOpen) event.stopPropagation();
+              }}
+            >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <h2 className="text-lg font-bold text-ink tracking-tight">분석 결과</h2>
-                <div className="inline-flex self-start sm:self-auto rounded-xl bg-bg-sunk border border-line p-1">
+                <div data-pdf-exclude="true" className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex self-start sm:self-auto rounded-xl bg-bg-sunk border border-line p-1">
+                    <button
+                      type="button"
+                      onClick={() => setAnalysisTab("BASIC")}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                        analysisTab === "BASIC"
+                          ? "bg-surface text-ink shadow-card"
+                          : "text-ink-3 hover:text-ink"
+                      }`}
+                    >
+                      리스크 요약
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAnalysisTab("ADVANCED")}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                        analysisTab === "ADVANCED"
+                          ? "bg-surface text-ink shadow-card"
+                          : "text-ink-3 hover:text-ink"
+                      }`}
+                    >
+                      최적화 관측
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setAnalysisTab("BASIC")}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
-                      analysisTab === "BASIC"
-                        ? "bg-surface text-ink shadow-card"
-                        : "text-ink-3 hover:text-ink"
-                    }`}
+                    onClick={handlePortfolioDownloadClick}
+                    aria-label="PDF로 다운로드"
+                    title="PDF로 다운로드"
+                    className="w-9 h-9 grid place-items-center rounded-lg border border-line bg-surface text-ink-2 hover:bg-bg-sunk transition-colors"
                   >
-                    리스크 요약
+                    <Download size={16} />
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAnalysisTab("ADVANCED")}
-                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
-                      analysisTab === "ADVANCED"
-                        ? "bg-surface text-ink shadow-card"
-                        : "text-ink-3 hover:text-ink"
-                    }`}
+                    onClick={() => setIsPortfolioZoomOpen((prev) => !prev)}
+                    aria-label={isPortfolioZoomOpen ? "크게 보기 닫기" : "크게 보기"}
+                    title={isPortfolioZoomOpen ? "크게 보기 닫기" : "크게 보기"}
+                    className="w-9 h-9 grid place-items-center rounded-lg border border-line bg-surface text-ink-2 hover:bg-bg-sunk transition-colors"
                   >
-                    최적화 관측
+                    {isPortfolioZoomOpen ? <span className="text-lg leading-none">x</span> : <Maximize2 size={16} />}
                   </button>
                 </div>
               </div>
+
+              <ReportHeader meta={reportMeta} />
 
               {analysisTab === "BASIC" && <div ref={portfolioReportRef} className="qaima-scroll-stagger flex flex-col gap-5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1826,11 +2112,19 @@ export default function PortfolioMockPage() {
                           </div>
 
                           <div className="mt-4 flex items-center gap-4">
-                            <div
-                              className="w-20 h-20 rounded-full border border-line flex-shrink-0"
-                              style={portfolioPieStyle(portfolio.weights)}
-                              aria-label={`${portfolio.label} 비중 차트`}
-                            />
+                            {pdfExporting ? (
+                              <SvgPortfolioPieChart
+                                weights={portfolio.weights}
+                                label={`${portfolio.label} 비중 차트`}
+                                className="w-20 h-20 flex-shrink-0"
+                              />
+                            ) : (
+                              <div
+                                className="w-20 h-20 rounded-full border border-line flex-shrink-0"
+                                style={portfolioPieStyle(portfolio.weights)}
+                                aria-label={`${portfolio.label} 비중 차트`}
+                              />
+                            )}
                             <div className="flex-1 min-w-0">
                               <p className="text-xs text-ink-4">변동성</p>
                               <p className="text-2xl font-bold text-ink font-mono tabular tracking-tighter">
@@ -1915,11 +2209,19 @@ export default function PortfolioMockPage() {
                             </span>
                           </div>
                           <div className="mt-3 flex items-center gap-3">
-                            <div
-                              className="w-20 h-20 rounded-full border border-line flex-shrink-0"
-                              style={portfolioPieStyle(portfolio.weights)}
-                              aria-label={`${portfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
-                            />
+                            {pdfExporting ? (
+                              <SvgPortfolioPieChart
+                                weights={portfolio.weights}
+                                label={`${portfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
+                                className="w-20 h-20 flex-shrink-0"
+                              />
+                            ) : (
+                              <div
+                                className="w-20 h-20 rounded-full border border-line flex-shrink-0"
+                                style={portfolioPieStyle(portfolio.weights)}
+                                aria-label={`${portfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
+                              />
+                            )}
                             <div className="min-w-0 flex-1">
                               <div className="grid grid-cols-2 gap-2 text-[10px] text-ink-4">
                                 <div>
@@ -1985,11 +2287,19 @@ export default function PortfolioMockPage() {
 	                          </div>
 	                        </div>
 	                        <div className="mt-3 flex items-center gap-3">
-	                          <div
-	                            className="w-20 h-20 rounded-full border border-line flex-shrink-0"
-	                            style={portfolioPieStyle(theoreticalPortfolio.weights)}
-	                            aria-label={`${theoreticalBasicLabel} 구성비 파이차트`}
-	                          />
+	                          {pdfExporting ? (
+	                            <SvgPortfolioPieChart
+	                              weights={theoreticalPortfolio.weights}
+	                              label={`${theoreticalBasicLabel} 구성비 파이차트`}
+	                              className="w-20 h-20 flex-shrink-0"
+	                            />
+	                          ) : (
+	                            <div
+	                              className="w-20 h-20 rounded-full border border-line flex-shrink-0"
+	                              style={portfolioPieStyle(theoreticalPortfolio.weights)}
+	                              aria-label={`${theoreticalBasicLabel} 구성비 파이차트`}
+	                            />
+	                          )}
 	                          <div className="min-w-0 flex-1">
 	                            <div className="grid grid-cols-3 gap-2 text-[10px] text-ink-4">
 	                              <div>
@@ -2288,11 +2598,19 @@ export default function PortfolioMockPage() {
 	                          <span className="text-[11px] font-bold text-ink-4">{riskLevelLabel[portfolio.riskLevel] ?? portfolio.riskLevel}</span>
 	                        </div>
                         <div className="mt-4 flex items-center gap-3">
-                          <div
-                            className="w-16 h-16 rounded-full border border-line flex-shrink-0"
-                            style={portfolioPieStyle(portfolio.weights)}
-                            aria-label={`${portfolio.label} 구성비 파이차트`}
-                          />
+                          {pdfExporting ? (
+                            <SvgPortfolioPieChart
+                              weights={portfolio.weights}
+                              label={`${portfolio.label} 구성비 파이차트`}
+                              className="w-16 h-16 flex-shrink-0"
+                            />
+                          ) : (
+                            <div
+                              className="w-16 h-16 rounded-full border border-line flex-shrink-0"
+                              style={portfolioPieStyle(portfolio.weights)}
+                              aria-label={`${portfolio.label} 구성비 파이차트`}
+                            />
+                          )}
                           <div className="min-w-0">
                             <p className="text-[11px] text-ink-4">변동성</p>
 	                            <p className="text-lg font-bold font-mono tabular text-ink">{formatPct(portfolio.volatility)}</p>
@@ -2343,7 +2661,9 @@ export default function PortfolioMockPage() {
                         <h3 className="text-base font-bold text-ink">설명 요약</h3>
                         <span className="text-[11px] font-bold text-ink-4">{analysisResult.explain.provider}</span>
                       </div>
-                      <p className="mt-3 text-sm leading-relaxed text-ink-3">{analysisResult.explain.text}</p>
+                      <p className="mt-3 text-sm leading-relaxed text-ink-3">
+                        <DictionaryText text={analysisResult.explain.text} />
+                      </p>
                     </div>
                   ) : null}
                 </section>
@@ -2367,8 +2687,10 @@ export default function PortfolioMockPage() {
               {analysisTab === "ADVANCED" && <div ref={portfolioReportRef} className="qaima-scroll-stagger rounded-2xl p-5 bg-surface border border-line shadow-card">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-bold text-ink">분석 진단</h3>
-                    <p className="mt-1 text-xs text-ink-4">{analysisResult.freshness.userMessage}</p>
+                    <h3 className="text-base font-bold text-ink"><DictionaryText text="분석 진단" /></h3>
+                    <p className="mt-1 text-xs text-ink-4">
+                      <DictionaryText text={analysisResult.freshness.userMessage ?? ""} />
+                    </p>
                   </div>
                   <span className="text-xs font-mono tabular text-ink-4">
                     분석대상 {analysisResult.policy.dataQuality.includedHoldingCount}개 · 제외 {analysisResult.policy.dataQuality.excludedHoldingCount}개
@@ -2377,19 +2699,19 @@ export default function PortfolioMockPage() {
 
                 <div className="mt-4 grid grid-cols-1 lg:grid-cols-5 gap-3">
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4">가격 시계열 기준</p>
+                    <p className="text-xs text-ink-4"><DictionaryText text="가격 시계열 기준" /></p>
                     <p className="mt-1 text-sm font-bold text-ink">
                       {pricePolicyLabel[analysisResult.policy.pricePolicy.used] ?? analysisResult.policy.pricePolicy.used}
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4">수익률 표본수</p>
+                    <p className="text-xs text-ink-4"><DictionaryText text="수익률 표본수" /></p>
                     <p className="mt-1 text-sm font-bold text-ink">
                       {analysisResult.advanced?.covarianceDiagnostics?.sampleSize ?? 0}일
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4">공통 결측률</p>
+                    <p className="text-xs text-ink-4"><DictionaryText text="공통 결측률" /></p>
                     <p className="mt-1 text-sm font-bold text-ink font-mono tabular">
                       {formatPct(analysisResult.policy.dataQuality.commonMissingRate)}
                     </p>
@@ -2398,13 +2720,13 @@ export default function PortfolioMockPage() {
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4">공분산 추정 모형</p>
+                    <p className="text-xs text-ink-4"><DictionaryText text="공분산 추정 모형" /></p>
                     <p className="mt-1 text-sm font-bold text-ink">
                       {covarianceModelLabel[analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? ""] ?? analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? "-"}
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4">무위험수익률 r_f</p>
+                    <p className="text-xs text-ink-4"><DictionaryText text="무위험수익률 r_f" /></p>
                     <p className="mt-1 text-sm font-bold text-ink font-mono tabular">
                       {formatPct(analysisResult.policy.riskFreePolicy?.rate ?? 0)}
                     </p>
@@ -2508,6 +2830,82 @@ export default function PortfolioMockPage() {
                       y: Math.min(168, Math.max(40, svgPoint.y)),
                     });
                   };
+                  const renderSclChart = (series: Feature3SclSeries) => {
+                    const asset = capmAssets.find((item) => item.stockCode === series.stockCode) ?? null;
+                    const points = series.points ?? [];
+                    const line = series.line;
+                    const marketValues = points.map((point) => point.marketReturn).filter(Number.isFinite);
+                    const assetValues = points.map((point) => point.assetReturn).filter(Number.isFinite);
+                    const minXRaw = Math.min(...marketValues, -0.01);
+                    const maxXRaw = Math.max(...marketValues, 0.01);
+                    const minYRaw = Math.min(...assetValues, -0.01);
+                    const maxYRaw = Math.max(...assetValues, 0.01);
+                    const padX = Math.max((maxXRaw - minXRaw) * 0.12, 0.005);
+                    const padY = Math.max((maxYRaw - minYRaw) * 0.12, 0.005);
+                    const minX = minXRaw - padX;
+                    const maxX = maxXRaw + padX;
+                    const minY = minYRaw - padY;
+                    const maxY = maxYRaw + padY;
+                    const x = (value: number) => 44 + ((value - minX) / Math.max(maxX - minX, 0.0001)) * 292;
+                    const y = (value: number) => 168 - ((value - minY) / Math.max(maxY - minY, 0.0001)) * 128;
+                    const regression = (marketReturn: number) => (line?.dailyAlpha ?? 0) + (line?.beta ?? 0) * marketReturn;
+                    const path = line?.beta !== null && line?.beta !== undefined
+                      ? `M ${x(minXRaw).toFixed(1)} ${y(regression(minXRaw)).toFixed(1)} L ${x(maxXRaw).toFixed(1)} ${y(regression(maxXRaw)).toFixed(1)}`
+                      : "";
+
+                    return (
+                      <div key={`scl-pdf-${series.stockCode}`} className="mt-2 rounded-lg bg-bg-sunk border border-line p-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-[11px] font-bold text-ink">
+                              {series.companyName ?? asset?.companyName ?? series.stockCode}
+                            </p>
+                            <p className="mt-0.5 text-[10px] text-ink-4">
+                              <DictionaryText text={`${series.benchmarkName ?? asset?.benchmarkName ?? series.benchmarkCode ?? asset?.benchmarkCode ?? "벤치마크"} 기준 · 종목 수익률 = 일간 α + β × 벤치마크 수익률`} />
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-[10px] font-mono tabular text-ink-4">
+                            <span>β {line?.beta?.toFixed(3) ?? "-"}</span>
+                            <span>일간 α {line?.dailyAlpha !== null && line?.dailyAlpha !== undefined ? formatPct(line.dailyAlpha, 3) : "-"}</span>
+                            <span>R² {asset?.rSquared?.toFixed(3) ?? "-"}</span>
+                          </div>
+                        </div>
+                        <svg
+                          viewBox="0 0 360 198"
+                          className="mt-2 h-52 w-full"
+                          role="img"
+                          aria-label={`${series.companyName ?? series.stockCode} Security Characteristic Line regression chart`}
+                        >
+                          <line x1="44" y1="168" x2="336" y2="168" stroke="currentColor" className="text-line" />
+                          <line x1="44" y1="168" x2="44" y2="40" stroke="currentColor" className="text-line" />
+                          <line x1={x(0)} y1="40" x2={x(0)} y2="168" stroke="#cbd5e1" strokeDasharray="3 4" />
+                          <line x1="44" y1={y(0)} x2="336" y2={y(0)} stroke="#cbd5e1" strokeDasharray="3 4" />
+                          <text x="336" y="158" textAnchor="end" className="fill-ink-4 text-[10px]">벤치마크 수익률</text>
+                          <text x="44" y="24" className="fill-ink-4 text-[10px]">종목 수익률</text>
+                          <text x="44" y="184" className="fill-ink-4 text-[9px]">{formatPct(minX)}</text>
+                          <text x="336" y="184" textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(maxX)}</text>
+                          <text x="38" y={y(minY)} textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(minY)}</text>
+                          <text x="38" y={y(maxY)} textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(maxY)}</text>
+                          {path && <path d={path} fill="none" stroke="#dc2626" strokeWidth="2.4" strokeLinecap="round" />}
+                          {points.slice(-180).map((point, index) => (
+                            <circle
+                              key={`scl-pdf-point-${series.stockCode}-${point.date ?? index}`}
+                              cx={x(point.marketReturn)}
+                              cy={y(point.assetReturn)}
+                              r="2.3"
+                              fill="#2563eb"
+                              opacity="0.42"
+                            />
+                          ))}
+                        </svg>
+                        <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-ink-4">
+                          <span className="text-accent"><DictionaryText text="파란 점: 공통 거래일 일간 로그수익률" /></span>
+                          <span className="text-danger"><DictionaryText text="빨간 선: SCL 회귀선" /></span>
+                          <span><DictionaryText text={`최근 ${Math.min(180, points.length)}개 관측치 표시`} /></span>
+                        </div>
+                      </div>
+                    );
+                  };
                   const sclHoverMarket = sclHover ? toSclMarket(sclHover.x) : null;
                   const sclHoverAsset = sclHover ? toSclAsset(sclHover.y) : null;
                   const smlHoverBeta = smlHover ? toSmlBeta(smlHover.x) : null;
@@ -2516,9 +2914,9 @@ export default function PortfolioMockPage() {
                     <div className="mt-4 rounded-xl bg-bg-sunk border border-line p-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <h4 className="text-sm font-bold text-ink">CAPM · SCL · SML 기대수익률 혼합</h4>
+                          <h4 className="text-sm font-bold text-ink"><DictionaryText text="CAPM · SCL · SML 기대수익률 혼합" /></h4>
                           <p className="mt-1 text-xs leading-relaxed text-ink-4">
-                            최적화 입력 E[R]은 과거 흐름 추정값과 CAPM 기대수익률을 표본수·벤치마크 품질·설명력 기반 신뢰도로 혼합한 값입니다.
+                            <DictionaryText text="최적화 입력 E[R]은 과거 흐름 추정값과 CAPM 기대수익률을 표본수·벤치마크 품질·설명력 기반 신뢰도로 혼합한 값입니다." />
                           </p>
                         </div>
                         <span className="rounded-md border border-line bg-surface px-2 py-1 text-[11px] font-mono text-ink-3">
@@ -2527,7 +2925,7 @@ export default function PortfolioMockPage() {
                       </div>
                       <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
                         <div className="rounded-lg bg-surface border border-line p-2">
-                          <p className="text-[11px] text-ink-4">벤치마크</p>
+                          <p className="text-[11px] text-ink-4"><DictionaryText text="벤치마크" /></p>
                           <p className="mt-1 text-xs font-bold text-ink">
                             {benchmark?.mode === "MULTI_BENCHMARK"
                               ? `상장시장별 ${benchmark.benchmarks?.length ?? 0}개`
@@ -2538,14 +2936,14 @@ export default function PortfolioMockPage() {
                           </p>
                         </div>
                         <div className="rounded-lg bg-surface border border-line p-2">
-                          <p className="text-[11px] text-ink-4">벤치마크 결측률</p>
+                          <p className="text-[11px] text-ink-4"><DictionaryText text="벤치마크 결측률" /></p>
                           <p className="mt-1 text-xs font-mono font-bold text-ink">{formatPct(primaryBenchmark?.missingRate)}</p>
                           <p className="mt-0.5 text-[11px] text-ink-4">
                             {primaryBenchmark?.availablePriceCount ?? 0}/{primaryBenchmark?.expectedTradingDayCount ?? 0}
                           </p>
                         </div>
                         <div className="rounded-lg bg-surface border border-line p-2">
-                          <p className="text-[11px] text-ink-4">CAPM 반영 종목</p>
+                          <p className="text-[11px] text-ink-4"><DictionaryText text="CAPM 반영 종목" /></p>
                           <p className="mt-1 text-xs font-mono font-bold text-ink">
                             {(capm?.appliedAssetCount ?? 0) + (capm?.partialAssetCount ?? 0)}개
                           </p>
@@ -2554,7 +2952,7 @@ export default function PortfolioMockPage() {
                           </p>
                         </div>
                         <div className="rounded-lg bg-surface border border-line p-2">
-                          <p className="text-[11px] text-ink-4">평균 CAPM 반영 비중</p>
+                          <p className="text-[11px] text-ink-4"><DictionaryText text="평균 CAPM 반영 비중" /></p>
                           <p className="mt-1 text-xs font-mono font-bold text-ink">
                             {formatPct(typeof expectedPolicy?.averageCapmWeight === "number" ? expectedPolicy.averageCapmWeight : 0)}
                           </p>
@@ -2566,9 +2964,9 @@ export default function PortfolioMockPage() {
                       {capmAssets.length ? (
                         <div className="mt-3">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h5 className="text-xs font-bold text-ink">최종 E[R]</h5>
+                            <h5 className="text-xs font-bold text-ink"><DictionaryText text="최종 E[R]" /></h5>
                             <p className="text-[11px] text-ink-4">
-                              과거 흐름 E[R]과 CAPM E[R]을 신뢰도 기반 반영 비중으로 혼합합니다.
+                              <DictionaryText text="과거 흐름 E[R]과 CAPM E[R]을 신뢰도 기반 반영 비중으로 혼합합니다." />
                             </p>
                           </div>
                           <div className="mt-2 overflow-x-auto">
@@ -2576,17 +2974,17 @@ export default function PortfolioMockPage() {
                             <thead className="text-ink-4">
                               <tr>
                                 <th className="py-2 pr-3">종목</th>
-                                <th className="py-2 pr-3">벤치마크</th>
-                                <th className="py-2 pr-3">상태</th>
-                                <th className="py-2 pr-3">표본</th>
+                                <th className="py-2 pr-3"><DictionaryText text="벤치마크" /></th>
+                                <th className="py-2 pr-3"><DictionaryText text="상태" /></th>
+                                <th className="py-2 pr-3"><DictionaryText text="표본" /></th>
                                 <th className="py-2 pr-3">β</th>
                                 <th className="py-2 pr-3">연율 α</th>
                                 <th className="py-2 pr-3">R²</th>
-                                <th className="py-2 pr-3">과거 흐름 E[R]</th>
-                                <th className="py-2 pr-3">CAPM E[R]</th>
-                                <th className="py-2 pr-3">최종 E[R]</th>
-                                <th className="py-2 pr-3">CAPM 반영 비중</th>
-                                <th className="py-2 pr-3">낮은 비중 근거</th>
+                                <th className="py-2 pr-3"><DictionaryText text="과거 흐름 E[R]" /></th>
+                                <th className="py-2 pr-3"><DictionaryText text="CAPM E[R]" /></th>
+                                <th className="py-2 pr-3"><DictionaryText text="최종 E[R]" /></th>
+                                <th className="py-2 pr-3"><DictionaryText text="CAPM 반영 비중" /></th>
+                                <th className="py-2 pr-3"><DictionaryText text="낮은 비중 근거" /></th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2615,31 +3013,43 @@ export default function PortfolioMockPage() {
                         <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
                           <div className="rounded-lg bg-surface border border-line p-3">
                             <div className="flex items-center justify-between gap-2">
-                              <h5 className="text-xs font-bold text-ink">SCL 진단</h5>
-                              <span className="text-[10px] text-ink-4">α: 일간 / 연율 구분 표시</span>
+                              <h5 className="text-xs font-bold text-ink"><DictionaryText text="SCL 진단" /></h5>
+                              <span className="text-[10px] text-ink-4"><DictionaryText text="α: 일간 / 연율 구분 표시" /></span>
                             </div>
-                            {selectableSclSeries.length ? (
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {selectableSclSeries.map((series) => {
-                                  const selected = activeSclSeries?.stockCode === series.stockCode;
-                                  return (
-                                    <button
-                                      key={`scl-tab-${series.stockCode}`}
-                                      type="button"
-                                      onClick={() => setSelectedSclStockCode(series.stockCode)}
-                                      className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
-                                        selected
-                                          ? "border-accent bg-accent text-white"
-                                          : "border-line bg-bg-sunk text-ink-3 hover:border-accent/50 hover:text-ink"
-                                      }`}
-                                    >
-                                      {series.companyName ?? capmAssets.find((asset) => asset.stockCode === series.stockCode)?.companyName ?? series.stockCode}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            ) : null}
-                            {activeSclSeries ? (
+                            {pdfExporting ? (
+                              selectableSclSeries.length ? (
+                                <div className="mt-2 flex flex-col gap-3">
+                                  {selectableSclSeries.map((series) => renderSclChart(series))}
+                                </div>
+                              ) : (
+                                <div className="mt-2 rounded-lg bg-bg-sunk border border-line p-3 text-[11px] text-ink-4">
+                                  <DictionaryText text="SCL 회귀선을 그릴 공통 수익률 관측치가 부족합니다." />
+                                </div>
+                              )
+                            ) : (
+                              <>
+                                {selectableSclSeries.length ? (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {selectableSclSeries.map((series) => {
+                                      const selected = activeSclSeries?.stockCode === series.stockCode;
+                                      return (
+                                        <button
+                                          key={`scl-tab-${series.stockCode}`}
+                                          type="button"
+                                          onClick={() => setSelectedSclStockCode(series.stockCode)}
+                                          className={`rounded-md border px-2 py-1 text-[11px] font-semibold transition ${
+                                            selected
+                                              ? "border-accent bg-accent text-white"
+                                              : "border-line bg-bg-sunk text-ink-3 hover:border-accent/50 hover:text-ink"
+                                          }`}
+                                        >
+                                          {series.companyName ?? capmAssets.find((asset) => asset.stockCode === series.stockCode)?.companyName ?? series.stockCode}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : null}
+                                {activeSclSeries ? (
                               <div className="mt-2 rounded-lg bg-bg-sunk border border-line p-2">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div>
@@ -2647,7 +3057,7 @@ export default function PortfolioMockPage() {
                                       {activeSclSeries.companyName ?? activeSclAsset?.companyName ?? activeSclSeries.stockCode}
                                     </p>
                                     <p className="mt-0.5 text-[10px] text-ink-4">
-                                      {activeSclSeries.benchmarkName ?? activeSclAsset?.benchmarkName ?? activeSclSeries.benchmarkCode ?? activeSclAsset?.benchmarkCode ?? "벤치마크"} 기준 · 종목 수익률 = 일간 α + β × 벤치마크 수익률
+                                      <DictionaryText text={`${activeSclSeries.benchmarkName ?? activeSclAsset?.benchmarkName ?? activeSclSeries.benchmarkCode ?? activeSclAsset?.benchmarkCode ?? "벤치마크"} 기준 · 종목 수익률 = 일간 α + β × 벤치마크 수익률`} />
                                     </p>
                                   </div>
                                   <div className="flex flex-wrap gap-2 text-[10px] font-mono tabular text-ink-4">
@@ -2705,15 +3115,17 @@ export default function PortfolioMockPage() {
                                   )}
                                 </svg>
                                 <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-ink-4">
-                                  <span className="text-accent">파란 점: 공통 거래일 일간 로그수익률</span>
-                                  <span className="text-danger">빨간 선: SCL 회귀선</span>
-                                  <span>최근 {Math.min(180, sclPoints.length)}개 관측치 표시</span>
+                                  <span className="text-accent"><DictionaryText text="파란 점: 공통 거래일 일간 로그수익률" /></span>
+                                  <span className="text-danger"><DictionaryText text="빨간 선: SCL 회귀선" /></span>
+                                  <span><DictionaryText text={`최근 ${Math.min(180, sclPoints.length)}개 관측치 표시`} /></span>
                                 </div>
                               </div>
                             ) : (
                               <div className="mt-2 rounded-lg bg-bg-sunk border border-line p-3 text-[11px] text-ink-4">
-                                SCL 회귀선을 그릴 공통 수익률 관측치가 부족합니다.
+                                <DictionaryText text="SCL 회귀선을 그릴 공통 수익률 관측치가 부족합니다." />
                               </div>
+                            )}
+                              </>
                             )}
                             <div className="mt-2 overflow-x-auto">
                               <table className="w-full min-w-[560px] text-left text-[11px]">
@@ -2721,11 +3133,11 @@ export default function PortfolioMockPage() {
                                   <tr>
                                     <th className="py-2 pr-3">종목</th>
                                     <th className="py-2 pr-3">β</th>
-                                    <th className="py-2 pr-3">일간 α</th>
-                                    <th className="py-2 pr-3">연율 α</th>
+                                    <th className="py-2 pr-3"><DictionaryText text="일간 α" /></th>
+                                    <th className="py-2 pr-3"><DictionaryText text="연율 α" /></th>
                                     <th className="py-2 pr-3">R²</th>
-                                    <th className="py-2 pr-3">표본</th>
-                                    <th className="py-2 pr-3">상태</th>
+                                    <th className="py-2 pr-3"><DictionaryText text="표본" /></th>
+                                    <th className="py-2 pr-3"><DictionaryText text="상태" /></th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -2751,13 +3163,13 @@ export default function PortfolioMockPage() {
                               </table>
                             </div>
                             <p className="mt-2 text-[11px] text-ink-4">
-                              SCL은 벤치마크 일간 로그수익률과 종목 일간 로그수익률의 관계를 요약한 보조 진단입니다.
+                              <DictionaryText text="SCL은 벤치마크 일간 로그수익률과 종목 일간 로그수익률의 관계를 요약한 보조 진단입니다." />
                             </p>
                           </div>
                           <div className="rounded-lg bg-surface border border-line p-3">
                             <div className="flex items-center justify-between gap-2">
-                              <h5 className="text-xs font-bold text-ink">SML 진단</h5>
-                              <span className="text-[10px] text-ink-4">x: β · y: 연율 E[R]</span>
+                              <h5 className="text-xs font-bold text-ink"><DictionaryText text="SML 진단" /></h5>
+                              <span className="text-[10px] text-ink-4"><DictionaryText text="x: β · y: 연율 E[R]" /></span>
                             </div>
                             {smlGroups.length > 1 ? (
                               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -2840,10 +3252,10 @@ export default function PortfolioMockPage() {
                                   <tr>
                                     <th className="py-2 pr-3">종목</th>
                                     <th className="py-2 pr-3">β</th>
-                                    <th className="py-2 pr-3">CAPM E[R]</th>
-                                    <th className="py-2 pr-3">과거 흐름 E[R]</th>
-                                    <th className="py-2 pr-3">최종 E[R]</th>
-                                    <th className="py-2 pr-3">CAPM 반영 비중</th>
+                                    <th className="py-2 pr-3"><DictionaryText text="CAPM E[R]" /></th>
+                                    <th className="py-2 pr-3"><DictionaryText text="과거 흐름 E[R]" /></th>
+                                    <th className="py-2 pr-3"><DictionaryText text="최종 E[R]" /></th>
+                                    <th className="py-2 pr-3"><DictionaryText text="CAPM 반영 비중" /></th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -2861,23 +3273,23 @@ export default function PortfolioMockPage() {
                               </table>
                             </div>
                             <p className="mt-2 text-[11px] text-ink-4">
-                              SML은 CAPM line 대비 종목 위치를 보는 보조 진단이며 예상 수익률 보장이나 추천 비중이 아닙니다.
+                              <DictionaryText text="SML은 CAPM line 대비 종목 위치를 보는 보조 진단이며 예상 수익률 보장이나 추천 비중이 아닙니다." />
                             </p>
                           </div>
                         </div>
                       ) : null}
                       <div className="mt-2 rounded-lg bg-surface border border-line px-3 py-2 text-[11px] text-ink-3">
                         <p className="text-ink">
-                          CAPM 반영 비중은 공통 표본 수, 벤치마크 품질, 결측률, R², correlation, 변동성 안정성을 함께 반영해 계산합니다.
+                          <DictionaryText text="CAPM 반영 비중은 공통 표본 수, 벤치마크 품질, 결측률, R², correlation, 변동성 안정성을 함께 반영해 계산합니다." />
                         </p>
                         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-1.5">
-                          <p><span className="font-semibold text-ink">공통 표본</span>: 종목과 벤치마크의 공통 수익률 표본 수가 충분할수록 커집니다.</p>
-                          <p><span className="font-semibold text-ink">벤치마크 출처</span>: 저장 데이터 또는 외부 보강 데이터이면 높고, 저장 데이터가 부족하면 낮게 반영됩니다.</p>
-                          <p><span className="font-semibold text-ink">데이터 커버리지</span>: 벤치마크 결측률이 낮을수록 커집니다.</p>
-                          <p><span className="font-semibold text-ink">시장 설명력(R²)</span>: 시장수익률이 종목수익률을 설명하는 정도가 높을수록 커집니다.</p>
-                          <p><span className="font-semibold text-ink">상관관계(correlation)</span>: 종목과 벤치마크 수익률의 동행성이 강할수록 커집니다.</p>
-                          <p><span className="font-semibold text-ink">변동성 안정성</span>: 종목 변동성이 과도하게 높으면 CAPM 반영을 줄입니다.</p>
-                          <p><span className="font-semibold text-ink">과거 흐름 비중</span>: CAPM 신뢰도가 낮을수록 과거 흐름 추정값 비중이 커집니다.</p>
+                          <p><DictionaryText text="공통 표본: 종목과 벤치마크의 공통 수익률 표본 수가 충분할수록 커집니다." /></p>
+                          <p><DictionaryText text="벤치마크 출처: 저장 데이터 또는 외부 보강 데이터이면 높고, 저장 데이터가 부족하면 낮게 반영됩니다." /></p>
+                          <p><DictionaryText text="데이터 커버리지: 벤치마크 결측률이 낮을수록 커집니다." /></p>
+                          <p><DictionaryText text="시장 설명력(R²): 시장수익률이 종목수익률을 설명하는 정도가 높을수록 커집니다." /></p>
+                          <p><DictionaryText text="상관관계(correlation): 종목과 벤치마크 수익률의 동행성이 강할수록 커집니다." /></p>
+                          <p><DictionaryText text="변동성 안정성: 종목 변동성이 과도하게 높으면 CAPM 반영을 줄입니다." /></p>
+                          <p><DictionaryText text="과거 흐름 비중: CAPM 신뢰도가 낮을수록 과거 흐름 추정값 비중이 커집니다." /></p>
                         </div>
                       </div>
                     </div>
@@ -2914,7 +3326,7 @@ export default function PortfolioMockPage() {
                     <div className="flex items-center justify-between gap-3">
                       <h4 className="text-sm font-bold text-ink">효율적 프론티어</h4>
                       <p className="text-xs text-ink-4">
-                        E[R]은 극단 수익률을 완화한 과거 흐름과 시장 기준 기대수익률을 신뢰도에 따라 가중한 연율 추정값입니다.
+                        <DictionaryText text="E[R]은 극단 수익률을 완화한 과거 흐름과 시장 기준 기대수익률을 신뢰도에 따라 가중한 연율 추정값입니다." />
                       </p>
                     </div>
                     {(() => {
@@ -3499,55 +3911,55 @@ export default function PortfolioMockPage() {
                             )}
                           </svg>
 	                          <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-ink-3">
-	                            <span>파란선 효율적 프론티어</span>
-	                            <span>회색점 무위험자산 · σ 0% 축외</span>
-	                            <span className="text-success">녹색 점선 자본배분선(CAL)</span>
-                            <span className="text-purple-600">보라 점선 투자자 무차별곡선</span>
-                            <span className="text-success">최대샤프 포트폴리오</span>
-                            <span className="text-orange-600">CAL 기반 위험배분</span>
-                            <span className="text-danger">효용최대 포트폴리오</span>
-                            <span className="text-purple-600">이론적 효용접점</span>
-                            <span className="text-accent">최소분산 포트폴리오</span>
-                            <span>회색 현재 포트폴리오</span>
+                            <span><DictionaryText text="파란선 효율적 프론티어" /></span>
+	                            <span><DictionaryText text="회색점 무위험자산 · σ 0% 축외" /></span>
+	                            <span className="text-success"><DictionaryText text="녹색 점선 자본배분선(CAL)" /></span>
+                            <span className="text-purple-600"><DictionaryText text="보라 점선 투자자 무차별곡선" /></span>
+                            <span className="text-success"><DictionaryText text="최대샤프 포트폴리오" /></span>
+                            <span className="text-orange-600"><DictionaryText text="CAL 기반 위험배분" /></span>
+                            <span className="text-danger"><DictionaryText text="효용최대 포트폴리오" /></span>
+                            <span className="text-purple-600"><DictionaryText text="이론적 효용접점" /></span>
+                            <span className="text-accent"><DictionaryText text="최소분산 포트폴리오" /></span>
+                            <span><DictionaryText text="회색 현재 포트폴리오" /></span>
                           </div>
                           <div className="mt-2 rounded-lg bg-surface border border-line px-3 py-2 text-[11px] text-ink-3">
-                            그래프의 E[R]은 시각화 안정성을 위해 -30%~60% 범위로 표시됩니다. 계산에는 cap 이전 기대수익률이 사용됩니다.
+                            <DictionaryText text="그래프의 E[R]은 시각화 안정성을 위해 -30%~60% 범위로 표시됩니다. 계산에는 cap 이전 기대수익률이 사용됩니다." />
                           </div>
 	                          <div className="mt-2 rounded-lg bg-surface border border-line px-3 py-2 text-[11px] text-ink-3">
-	                            <p className="font-semibold text-ink">마커 산출 기준</p>
+	                            <p className="font-semibold text-ink"><DictionaryText text="마커 산출 기준" /></p>
 	                            <div className="mt-1.5 grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-2">
 	                              <p>
-	                                <span className="font-semibold text-ink">효율적 프론티어</span>는 현금을 제외한 위험자산 100% 조합에서 목표 기대수익률별 최소분산 포트폴리오를 구한 뒤, 지배되는 점을 제거한 상단 경계입니다. 같은 σ에서 더 높은 E[R]을 제공하는 조합만 남습니다.
+	                                <DictionaryText text="효율적 프론티어는 현금을 제외한 위험자산 100% 조합에서 목표 기대수익률별 최소분산 포트폴리오를 구한 뒤, 지배되는 점을 제거한 상단 경계입니다. 같은 σ에서 더 높은 E[R]을 제공하는 조합만 남습니다." />
 	                              </p>
 	                              <p>
-	                                <span className="font-semibold text-success">최대샤프 포트폴리오</span>는 효율적 프론티어 위에서 (E[R] - r_f) / σ가 가장 큰 위험자산 조합입니다. 무위험자산과 이 점을 잇는 직선이 자본배분선(CAL)의 기준선입니다.
+	                                <DictionaryText text="최대샤프 포트폴리오는 효율적 프론티어 위에서 (E[R] - r_f) / σ가 가장 큰 위험자산 조합입니다. 무위험자산과 이 점을 잇는 직선이 자본배분선(CAL)의 기준선입니다." />
 	                              </p>
 	                              <p>
-	                                <span className="font-semibold text-orange-600">CAL 기반 위험배분</span>은 최대샤프 위험자산 조합에 무위험자산을 섞고, 위험회피계수 γ와 현금 한도에 따라 위험자산 비중을 조절한 배분입니다.
+	                                <DictionaryText text="CAL 기반 위험배분은 최대샤프 위험자산 조합에 무위험자산을 섞고, 위험회피계수 γ와 현금 한도에 따라 위험자산 비중을 조절한 배분입니다." />
 	                              </p>
 	                              <p>
-	                                <span className="font-semibold text-danger">효용최대 포트폴리오</span>는 U = E[R] - 0.5 · γ · σ²를 최대화하는 배분입니다. 현재 현금 한도, 레버리지 금지, 종목별 비중 제한을 적용하므로 이론 접점이 제약 밖이면 가능한 경계점에 위치합니다.
+	                                <DictionaryText text="효용최대 포트폴리오는 U = E[R] - 0.5 · γ · σ²를 최대화하는 배분입니다. 현재 현금 한도, 레버리지 금지, 종목별 비중 제한을 적용하므로 이론 접점이 제약 밖이면 가능한 경계점에 위치합니다." />
 	                              </p>
 	                              <p>
-	                                <span className="font-semibold text-purple-600">이론적 효용접점</span>은 제약을 풀고 CAL과 투자자 무차별곡선이 접하는 지점입니다. 위험자산 배수 y* = (E[R]_maxSharpe - r_f) / (γ · σ_maxSharpe²)로 계산하며, y*가 현재 제약 밖이면 별도 마커와 목표 카드로 표시합니다.
+	                                <DictionaryText text="이론적 효용접점은 제약을 풀고 CAL과 투자자 무차별곡선이 접하는 지점입니다. 위험자산 배수 y* = (E[R]_maxSharpe - r_f) / (γ · σ_maxSharpe²)로 계산하며, y*가 현재 제약 밖이면 별도 마커와 목표 카드로 표시합니다." />
 	                              </p>
 	                              <p>
-	                                <span className="font-semibold text-accent">최소분산 포트폴리오</span>는 위험자산만 100% 보유한다고 가정했을 때 wᵀΣw가 가장 작은 조합입니다. 기대수익률보다 공분산 행렬의 구조가 핵심입니다.
+	                                <DictionaryText text="최소분산 포트폴리오는 위험자산만 100% 보유한다고 가정했을 때 wᵀΣw가 가장 작은 조합입니다. 기대수익률보다 공분산 행렬의 구조가 핵심입니다." />
 	                              </p>
 	                              <p>
-	                                <span className="font-semibold text-purple-600">투자자 무차별곡선</span>은 동일한 효용 U를 갖는 σ-E[R] 조합입니다. 내부해에서는 CAL과 접하고, 현금 한도나 위험자산 100% 상한에 걸리면 효용최대 포트폴리오에서는 교차처럼 보일 수 있습니다.
+	                                <DictionaryText text="투자자 무차별곡선은 동일한 효용 U를 갖는 σ-E[R] 조합입니다. 내부해에서는 CAL과 접하고, 현금 한도나 위험자산 100% 상한에 걸리면 효용최대 포트폴리오에서는 교차처럼 보일 수 있습니다." />
 	                              </p>
 	                              <p>
-	                                <span className="font-semibold text-ink">현재 포트폴리오</span>는 사용자가 입력한 수량, 평균단가, 보유 현금으로 계산한 현재 구성입니다. 평단 대비 손익은 표시용이며, 최적화 계산에는 가격 시계열의 수익률/공분산이 사용됩니다.
+	                                <DictionaryText text="현재 포트폴리오는 사용자가 입력한 수량, 평균단가, 보유 현금으로 계산한 현재 구성입니다. 평단 대비 손익은 표시용이며, 최적화 계산에는 가격 시계열의 수익률/공분산이 사용됩니다." />
 	                              </p>
 	                              <p>
-	                                <span className="font-semibold text-success">자본배분선(CAL)</span>은 무위험수익률 r_f에서 최대샤프 포트폴리오 방향으로 확장되는 선입니다. 이론적 효용접점이 있으면 최대샤프 이후 구간까지 점선으로 연장해 표시합니다.
+	                                <DictionaryText text="자본배분선(CAL)은 무위험수익률 r_f에서 최대샤프 포트폴리오 방향으로 확장되는 선입니다. 이론적 효용접점이 있으면 최대샤프 이후 구간까지 점선으로 연장해 표시합니다." />
 	                              </p>
 	                            </div>
 	                          </div>
                           {utilityValue !== null && (
                             <div className="mt-2 rounded-lg bg-surface border border-line px-3 py-2 text-[11px] text-ink-3">
-                              투자자 무차별곡선은 실제 위험회피계수 γ {riskAversionGamma.toFixed(2)} 기준으로 효용최대 포트폴리오를 지나도록 렌더링됩니다.
+                              <DictionaryText text={`투자자 무차별곡선은 실제 위험회피계수 γ ${riskAversionGamma.toFixed(2)} 기준으로 효용최대 포트폴리오를 지나도록 렌더링됩니다.`} />
                               <span className="ml-2 font-mono tabular text-ink">U={utilityValue.toFixed(4)}</span>
                             </div>
                           )}
@@ -3590,11 +4002,19 @@ export default function PortfolioMockPage() {
                                     </span>
                                   </div>
                                   <div className="mt-3 flex items-center gap-3">
-                                    <div
-                                      className="w-20 h-20 rounded-full border border-line flex-shrink-0"
-                                      style={portfolioPieStyle(portfolio.weights)}
-                                      aria-label={`${advancedPortfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
-                                    />
+                                    {pdfExporting ? (
+                                      <SvgPortfolioPieChart
+                                        weights={portfolio.weights}
+                                        label={`${advancedPortfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
+                                        className="w-20 h-20 flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div
+                                        className="w-20 h-20 rounded-full border border-line flex-shrink-0"
+                                        style={portfolioPieStyle(portfolio.weights)}
+                                        aria-label={`${advancedPortfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
+                                      />
+                                    )}
                                     <div className="min-w-0 flex-1">
                                       <div className="grid grid-cols-2 gap-2 text-[10px] text-ink-4">
                                         <div>
@@ -3660,11 +4080,19 @@ export default function PortfolioMockPage() {
                                   </div>
                                 </div>
                                 <div className="mt-3 flex items-center gap-3">
-                                  <div
-                                    className="w-20 h-20 rounded-full border border-line flex-shrink-0"
-                                    style={portfolioPieStyle(theoreticalUtility.weights)}
-                                    aria-label="이론적 효용접점 구성비 파이차트"
-                                  />
+                                  {pdfExporting ? (
+                                    <SvgPortfolioPieChart
+                                      weights={theoreticalUtility.weights}
+                                      label="이론적 효용접점 구성비 파이차트"
+                                      className="w-20 h-20 flex-shrink-0"
+                                    />
+                                  ) : (
+                                    <div
+                                      className="w-20 h-20 rounded-full border border-line flex-shrink-0"
+                                      style={portfolioPieStyle(theoreticalUtility.weights)}
+                                      aria-label="이론적 효용접점 구성비 파이차트"
+                                    />
+                                  )}
                                   <div className="min-w-0 flex-1">
                                     <div className="grid grid-cols-3 gap-2 text-[10px] text-ink-4">
                                       <div>

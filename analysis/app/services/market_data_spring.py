@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Literal
+import logging
 
 import httpx
 
@@ -15,6 +16,7 @@ from app.services.market_data import (
 )
 
 Freq = Literal["ONE_D", "ONE_W"]
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -56,13 +58,13 @@ class SpringMarketDataProvider(MarketDataProvider):
         if to is not None:
             payload["to"] = to.isoformat()
         self._last_payload = payload
-        print(f"[DEBUG][spring-pack] payload={payload}")
+        log.debug("[spring-pack] payload=%s", payload)
 
         with httpx.Client(timeout=self.cfg.timeout_sec) as client:
             r = client.post(url, json=payload)
             r.raise_for_status()
             data = r.json()
-            print(f"[DEBUG][spring-pack] response warnings={data.get('warnings', [])}")
+            log.debug("[spring-pack] response warnings=%s", data.get("warnings", []))
             return data
 
     def get_industry_members(self, industry_id: int) -> List[str]:

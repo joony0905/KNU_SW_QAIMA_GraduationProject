@@ -9,6 +9,7 @@ import com.qaima.dto.feature2.Feature2AnalyzeResponseDto;
 import com.qaima.dto.feature2.Feature2MetricsDto;
 import com.qaima.service.credit.CreditService;
 import com.qaima.service.feature2.Feature2AnalyzeService;
+import com.qaima.service.report.AnalysisReportService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -29,6 +30,7 @@ public class Feature2AnalyzeController {
 
     private final Feature2AnalyzeService feature2AnalyzeService;
     private final CreditService creditService;
+    private final AnalysisReportService analysisReportService;
 
     @PostMapping("/analyze")
     public Mono<ApiResponse<Feature2AnalyzeResponseDto>> analyze(
@@ -46,12 +48,33 @@ public class Feature2AnalyzeController {
 
         return creditService.useFeature2(userId, referenceId)
                 .then(feature2AnalyzeService.analyze(req)
-                        .map(this::wrapWithWarnings)
+                        .flatMap(res -> attachReportId(userId, req, res, wrapWithWarnings(res)))
                         .onErrorResume(ex -> {
                             log.error("[Feature2] analysis failed. cause={}", ex.getMessage(), ex);
-                            return creditService.refundFeature2(userId, referenceId, "FEATURE2_ANALYZE_FAILED")
+                            return creditService.refundFeature2(userId, referenceId, ErrorCode.FEATURE2_ANALYZE_FAILED.code())
                                     .thenReturn(wrapWithWarnings(fallbackResponse()));
                         }));
+    }
+
+    private Mono<ApiResponse<Feature2AnalyzeResponseDto>> attachReportId(
+            Long userId,
+            Feature2AnalyzeRequestDto request,
+            Feature2AnalyzeResponseDto data,
+            ApiResponse<Feature2AnalyzeResponseDto> response
+    ) {
+        if (data == null || response == null || response.getMeta() == null) {
+            return Mono.just(response);
+        }
+        return analysisReportService.createFeature2(userId, request, data)
+                .map(reportId -> {
+                    response.getMeta().setReportId(reportId);
+                    return response;
+                })
+                .onErrorResume(ex -> {
+                    log.warn("[Feature2] report snapshot save failed. userId={}, cause={}", userId, ex.getMessage(), ex);
+                    response.getMeta().addWarning("REPORT_SAVE_FAILED");
+                    return Mono.just(response);
+                });
     }
 
     private ApiResponse<Feature2AnalyzeResponseDto> wrapWithWarnings(Feature2AnalyzeResponseDto res) {

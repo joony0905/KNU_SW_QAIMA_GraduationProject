@@ -26,7 +26,7 @@ public class MetaController {
                         return Mono.just(response);
                     }
 
-                    String errorCode = "META_NOT_FOUND";
+                    String errorCode = ErrorCode.META_NOT_FOUND.code();
                     String message = "티커 메타 정보를 가져오지 못했습니다.";
 
                     if (response != null && response.getErrors() != null && !response.getErrors().isEmpty()) {
@@ -39,8 +39,8 @@ public class MetaController {
                         }
                     }
 
-                    ErrorCode mapped = "META_NOT_FOUND".equalsIgnoreCase(errorCode)
-                            ? ErrorCode.RESOURCE_NOT_FOUND
+                    ErrorCode mapped = ErrorCode.META_NOT_FOUND.code().equalsIgnoreCase(errorCode)
+                            ? ErrorCode.META_NOT_FOUND
                             : ErrorCode.INTERNAL_ERROR;
 
                     return Mono.error(new ErrorException(mapped, message));

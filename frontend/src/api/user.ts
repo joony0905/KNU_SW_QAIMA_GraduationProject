@@ -10,7 +10,10 @@ export interface MyProfile {
   name: string;
   phone: string;
   birthdate: string;
+  gender: string | null;
+  country: string | null;
   experience: string | null;
+  status: string | null;
   glossaryHover: boolean;
 }
 
@@ -20,6 +23,13 @@ export interface MyProfileUpdate {
   phone?: string;
   experience?: string;
   glossaryHover?: boolean;
+}
+
+export interface SocialProfileCompleteRequest {
+  name: string;
+  phone: string;
+  birthdate: string;
+  country: string;
 }
 
 export interface MyRiskProfile {
@@ -41,6 +51,13 @@ export const updateMyProfile = async (
   payload: MyProfileUpdate
 ): Promise<MyProfile> => {
   const res = await api.patch("/users/me", payload);
+  return res.data.data;
+};
+
+export const completeSocialProfile = async (
+  payload: SocialProfileCompleteRequest
+): Promise<MyProfile> => {
+  const res = await api.patch("/users/me/social-profile", payload);
   return res.data.data;
 };
 

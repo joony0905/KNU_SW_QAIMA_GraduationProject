@@ -1,5 +1,6 @@
 // Feature2MockPage.tsx
 import { useState, useRef, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
 import InvestLevelBadge from "../components/InvestLevelBadge";
@@ -10,6 +11,9 @@ import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import TradingViewWidget from "../components/TradingViewWidget";
 import Feature2ExternalFactorPanel from "../components/Feature2ExternalFactorPanel";
+import { clientLog } from "../utils/clientLog";
+import { PdfExportContext } from "../contexts/PdfExportContext";
+import qaimaLogo from "../assets/qaima-final.png";
 
 import AnalysisResultPanel, { LLM_VENDOR_OPTIONS } from "../components/AnalysisResultPanel";
 import type { AnalysisPanelResult } from "../types/analysisPanel";
@@ -54,6 +58,8 @@ import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { formatKstOffsetDateTime, shiftKstDays, shiftKstMonths } from "../utils/kst";
 import { refreshTokenBalance } from "../api/billingStore";
 import { useDictionary } from "../components/DictContext";
+import { downloadElementAsPdf, waitForPdfCaptureReady } from "../utils/reportPdf";
+import useReportUserName from "../hooks/useReportUserName";
 
 const getColorClassByNumber = (n: number | null) => {
   if (n === null || !Number.isFinite(n)) return "text-flat";
@@ -231,6 +237,7 @@ export default function Feature2MockPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const { investLevel } = useDictionary();
+  const reportUserName = useReportUserName();
   const searchRequestIdRef = useRef(0);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState<string | null>(null);
@@ -339,7 +346,7 @@ export default function Feature2MockPage() {
         allowedDayKeys,
       );
     } catch (e: unknown) {
-      console.error("차트 데이터 조회 실패:", e);
+      clientLog.error("Chart data fetch failed", e);
       setChartError("차트를 불러오지 못했습니다.");
       setCandles([]);
       setMainStock((prevState) => ({
@@ -426,7 +433,7 @@ export default function Feature2MockPage() {
         };
       }
     } catch (e) {
-      console.error("추가 캔들 로딩 실패:", e);
+      clientLog.error("Additional candle load failed", e);
     } finally {
       isLoadingMoreRef.current = false;
     }
@@ -453,6 +460,9 @@ export default function Feature2MockPage() {
   const [err, setErr] = useState("");
   const [showAnalyzeButton, setShowAnalyzeButton] = useState(true);
   const [displayText, setDisplayText] = useState("");
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const pdfRef = useRef<HTMLDivElement | null>(null);
   const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
   const [selectedFreq, setSelectedFreq] = useState<"ONE_D" | "ONE_W">("ONE_D");
   const [selectedWindow, setSelectedWindow] = useState<60 | 120 | 180 | 252>(120);
@@ -460,6 +470,39 @@ export default function Feature2MockPage() {
     () => parseFeature2Explain(analysisData?.explain),
     [analysisData?.explain],
   );
+  const analysisPanelResult = useMemo<AnalysisPanelResult | null>(() => {
+    if (!analysisResult) return null;
+
+    return {
+      explain: feature2Explain,
+      warnings: analysisResult.meta?.warnings ?? null,
+      metrics: {
+        stock: analysisData?.metrics?.stock ?? null,
+        peerCluster: analysisData?.metrics?.peerCluster ?? null,
+        shortSelling: analysisData?.metrics?.shortSelling ?? null,
+        shortSellingTrendSummary: analysisData?.metrics?.shortSellingTrendSummary ?? null,
+        shortSellingSeries: shortSellingSeriesResult?.data ?? null,
+        baseRate: analysisData?.metrics?.baseRate ?? null,
+        macroRates: analysisData?.metrics?.macroRates ?? macroRatesResult?.data ?? null,
+        macroRatesSeries: analysisData?.metrics?.macroRatesSeries ?? macroRatesSeriesResult?.data ?? null,
+        investorFlow: analysisData?.metrics?.investorFlow ?? investorFlowResult?.data ?? null,
+        baseRateTrendSummary: analysisData?.metrics?.baseRateTrendSummary ?? null,
+        baseRateSeries: baseRateSeriesResult?.data ?? null,
+        newsSentimentSummary: analysisData?.metrics?.newsSentimentSummary ?? null,
+        newsList: analysisData?.metrics?.newsList ?? null,
+      },
+      meta: analysisResult.meta,
+    };
+  }, [
+    analysisResult,
+    feature2Explain,
+    analysisData?.metrics,
+    shortSellingSeriesResult?.data,
+    macroRatesResult?.data,
+    macroRatesSeriesResult?.data,
+    investorFlowResult?.data,
+    baseRateSeriesResult?.data,
+  ]);
 
   const [hasSelectedStock, setHasSelectedStock] = useState(false);
   const [mainStock, setMainStock] = useState<MainStockState>({
@@ -469,6 +512,21 @@ export default function Feature2MockPage() {
     change: null,
     changeRate: null,
   });
+  const reportMeta = analysisPanelResult
+    ? {
+        featureType: "FEATURE2" as const,
+        subjectLabel: `${mainStock.name || analysisPanelResult.metrics?.stock?.companyName || "분석종목"} (${mainStock.symbol || analysisPanelResult.metrics?.stock?.stockCode || "-"})`,
+        generatedAt: analysisResult?.meta?.timestamp ?? null,
+        analysisModel: llmVendor,
+        investLevel,
+        userName: reportUserName,
+        analysisWindow: `최근 ${selectedWindow}거래일`,
+        dataAsOf:
+          analysisPanelResult.metrics?.newsSentimentSummary?.summaryDate
+          ?? analysisPanelResult.metrics?.shortSelling?.reportDate
+          ?? null,
+      }
+    : null;
 
   const currentTime = useKSTTime();
 
@@ -498,7 +556,7 @@ export default function Feature2MockPage() {
       }
     } catch (error) {
       if (requestId != null && searchRequestIdRef.current !== requestId) return;
-      console.error("매크로 금리/환율 조회 실패:", error);
+      clientLog.error("Macro rates fetch failed", error);
       setMacroRatesResult(null);
       setMacroRatesSeriesResult(null);
       setMacroRatesError("환율/국채 데이터를 불러오지 못했습니다.");
@@ -596,7 +654,7 @@ export default function Feature2MockPage() {
   const industrySeries = useMemo(() => {
   const raw = (analysisData?.metrics?.industryIndex ?? industryIndexResult?.data ?? null)?.series;
 
-  console.log("🔥 [RAW industryIndex.series]", raw);
+  clientLog.warn("Raw industry index series mapped", raw);
 
   if (!raw || !Array.isArray(raw)) return [];
 
@@ -612,7 +670,7 @@ export default function Feature2MockPage() {
       value: Number(p.value),
     }));
 
-  console.log("🔥 [MAPPED industrySeries]", mapped);
+  clientLog.warn("Mapped industry series", mapped);
 
   return mapped;
 }, [analysisData, industryIndexResult]);
@@ -923,6 +981,26 @@ export default function Feature2MockPage() {
       setErr(getApiErrorMessage(e, "분석 결과를 불러오지 못했습니다."));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadClick = async () => {
+    if (!analysisResult || !pdfRef.current) return;
+    const reportElement =
+      pdfRef.current.querySelector<HTMLElement>(".qaima-report-enter") ?? pdfRef.current;
+
+    setPdfExporting(true);
+    try {
+      await waitForPdfCaptureReady();
+      await downloadElementAsPdf(
+        reportElement,
+        `${mainStock.symbol || "feature2"}_external_analysis.pdf`,
+        qaimaLogo,
+      );
+    } catch (e) {
+      clientLog.error("Feature2 PDF generation failed", e);
+    } finally {
+      setPdfExporting(false);
     }
   };
 
@@ -1284,44 +1362,67 @@ export default function Feature2MockPage() {
         )}
 
         {(loading || !!err || !!analysisResult) && (
-          <AnalysisResultPanel
-            result={
-              analysisResult
-                ? {
-                    explain: feature2Explain,
-                    warnings: analysisResult?.meta?.warnings ?? null,
-                    metrics: {
-                      stock: analysisData?.metrics?.stock ?? null,
-                      peerCluster: analysisData?.metrics?.peerCluster ?? null,
-                      shortSelling: analysisData?.metrics?.shortSelling ?? null,
-                      shortSellingTrendSummary: analysisData?.metrics?.shortSellingTrendSummary ?? null,
-                      shortSellingSeries: shortSellingSeriesResult?.data ?? null,
-                      baseRate: analysisData?.metrics?.baseRate ?? null,
-                      macroRates: analysisData?.metrics?.macroRates ?? macroRates,
-                      macroRatesSeries: analysisData?.metrics?.macroRatesSeries ?? macroRatesSeriesResult?.data ?? null,
-                      investorFlow: analysisData?.metrics?.investorFlow ?? investorFlow,
-                      baseRateTrendSummary: analysisData?.metrics?.baseRateTrendSummary ?? null,
-                      baseRateSeries: baseRateSeriesResult?.data ?? null,
-                      newsSentimentSummary: analysisData?.metrics?.newsSentimentSummary ?? null,
-                      newsList: analysisData?.metrics?.newsList ?? null,
-                    },
-                    meta: analysisResult?.meta,
-                  }
-                : null
-            }
-            loading={loading}
-            err={err}
-            showAnalyzeButton={false}
-            onAnalyze={handleAnalyzeClick}
-            onDownload={() => {}}
-            onZoom={() => {}}
-            llmVendor={llmVendor}
-            onLlmVendorChange={setLlmVendor}
-            displayText={displayText}
-            layout="full"
-          />
+          <div ref={pdfRef}>
+            <PdfExportContext.Provider value={pdfExporting}>
+              <AnalysisResultPanel
+                result={analysisPanelResult}
+                loading={loading}
+                err={err}
+                showAnalyzeButton={false}
+                onAnalyze={handleAnalyzeClick}
+                onDownload={handleDownloadClick}
+                onZoom={() => setIsAnalysisModalOpen(true)}
+                llmVendor={llmVendor}
+                onLlmVendorChange={setLlmVendor}
+                displayText={displayText}
+                layout="full"
+                reportMeta={reportMeta}
+              />
+            </PdfExportContext.Provider>
+          </div>
         )}
         </>)}
+
+        {isAnalysisModalOpen && analysisResult && createPortal(
+          <div
+            className="fixed inset-0 z-[100] bg-ink/50 flex items-center justify-center p-4"
+            onClick={() => setIsAnalysisModalOpen(false)}
+          >
+            <div
+              className="bg-surface rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-pop"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-3 border-b border-line">
+                <h2 className="text-base sm:text-lg font-semibold text-ink">
+                  {mainStock.name} ({mainStock.symbol}) 외부요인 분석
+                </h2>
+                <button
+                  onClick={() => setIsAnalysisModalOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-bg-sunk text-ink-3 hover:text-ink text-xl transition-colors"
+                >
+                  x
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5 sm:p-8">
+                <AnalysisResultPanel
+                  result={analysisPanelResult}
+                  loading={false}
+                  err=""
+                  showAnalyzeButton={false}
+                  onAnalyze={handleAnalyzeClick}
+                  onDownload={handleDownloadClick}
+                  onZoom={() => {}}
+                  llmVendor={llmVendor}
+                  onLlmVendorChange={setLlmVendor}
+                  displayText={displayText}
+                  layout="full"
+                  reportMeta={reportMeta}
+                />
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
 
         {toast.visible && (
           <div

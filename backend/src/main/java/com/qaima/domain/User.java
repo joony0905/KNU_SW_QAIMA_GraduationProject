@@ -39,8 +39,14 @@ public class User {
     @Column(name = "default_risk_gamma", precision = 5, scale = 4)
     private BigDecimal defaultRiskGamma;
 
-    @Column(length = 6)
+    @Column(length = 7)
     private String birthdate;
+
+    @Column(length = 10)
+    private String gender;
+
+    @Column(length = 50)
+    private String country;
 
     // --- 권한/상태 ---
     @Enumerated(EnumType.STRING)

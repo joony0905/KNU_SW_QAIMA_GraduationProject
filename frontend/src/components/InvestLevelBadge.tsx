@@ -11,7 +11,7 @@ type Props = {
 };
 
 export default function InvestLevelBadge({ className }: Props) {
-  const { investLevel } = useDictionary();
+  const { investLevel, investLevelReady } = useDictionary();
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -28,7 +28,9 @@ export default function InvestLevelBadge({ className }: Props) {
         </span>
         <span className="flex flex-col leading-tight">
           <span className="text-[11px] font-semibold text-accent sm:text-xs">투자레벨 기준 분석</span>
-          <span className="mt-0.5 text-sm font-bold text-ink sm:text-base">{investLevel}</span>
+          <span className="mt-0.5 text-sm font-bold text-ink sm:text-base">
+            {investLevelReady ? investLevel : "불러오는 중"}
+          </span>
         </span>
       </button>
 

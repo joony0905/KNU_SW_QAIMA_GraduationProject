@@ -2,6 +2,7 @@ package com.qaima.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.common.ApiResponse;
+import com.qaima.common.ErrorCode;
 import com.qaima.security.JwtAuthFilter;
 import com.qaima.security.OAuth2LoginFailureHandler;
 import com.qaima.security.OAuth2LoginSuccessHandler;
@@ -94,12 +95,12 @@ public class SecurityConfig {
                 // 401/403에서 errorCode 주입 + JSON 응답
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((exchange, ex2) -> {
-                            exchange.getAttributes().put("errorCode", "UNAUTHORIZED");
-                            return writeJson(exchange, 401, "UNAUTHORIZED", "인증이 필요합니다.");
+                            exchange.getAttributes().put("errorCode", ErrorCode.UNAUTHORIZED.code());
+                            return writeJson(exchange, ErrorCode.UNAUTHORIZED);
                         })
                         .accessDeniedHandler((exchange, ex2) -> {
-                            exchange.getAttributes().put("errorCode", "FORBIDDEN");
-                            return writeJson(exchange, 403, "FORBIDDEN", "권한이 없습니다.");
+                            exchange.getAttributes().put("errorCode", ErrorCode.FORBIDDEN.code());
+                            return writeJson(exchange, ErrorCode.FORBIDDEN);
                         })
                 )
 
@@ -126,17 +127,18 @@ public class SecurityConfig {
     }
 
     private Mono<Void> writeJson(org.springframework.web.server.ServerWebExchange exchange,
-                                 int status, String code, String message) {
+                                 ErrorCode errorCode) {
         var response = exchange.getResponse();
-        response.setStatusCode(org.springframework.http.HttpStatus.valueOf(status));
+        response.setStatusCode(errorCode.status());
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
         try {
-            byte[] bytes = objectMapper.writeValueAsBytes(ApiResponse.error(code, message));
+            byte[] bytes = objectMapper.writeValueAsBytes(ApiResponse.error(errorCode.code(), errorCode.defaultMessage()));
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));
         } catch (Exception e) {
-            byte[] bytes = ("{\"success\":false,\"code\":\"" + code + "\",\"message\":\"" + message + "\"}")
+            byte[] bytes = ("{\"meta\":{\"status\":\"failure\"},\"data\":null,\"errors\":[{\"code\":\""
+                    + errorCode.code() + "\",\"message\":\"" + errorCode.defaultMessage() + "\"}]}")
                     .getBytes(java.nio.charset.StandardCharsets.UTF_8);
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));

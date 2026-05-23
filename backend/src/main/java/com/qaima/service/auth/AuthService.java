@@ -114,7 +114,7 @@ public class AuthService {
         }
 
         return Blocking.call(() -> {
-                    List<User> matches = userRepository.findAllByNameAndBirthdate(name, birthdate);
+                    List<User> matches = userRepository.findAllByNameAndBirthdatePrefix(name, birthdate);
                     if (StringUtils.hasText(phone)) {
                         matches = matches.stream()
                                 .filter(user -> phone.equals(normalizeOptionalDigits(user.getPhone())))
@@ -169,13 +169,17 @@ public class AuthService {
 
         mailAuthService.consumeSignupEmailVerification(email, requestDto.getVerificationCode());
 
+        String birthdate = normalizeSignupBirthdate(requestDto.getBirthdate());
+        String country = trimToNull(requestDto.getCountry());
         Instant now = Instant.now();
         User newUser = new User();
         newUser.setEmail(email);
         newUser.setPasswordHash(passwordEncoder.encode(requestDto.getPassword()));
         newUser.setName(requestDto.getName());
         newUser.setPhone(phone);
-        newUser.setBirthdate(requestDto.getBirthdate());
+        newUser.setBirthdate(birthdate);
+        newUser.setGender(genderFromResidentDigit(birthdate.charAt(6)));
+        newUser.setCountry(country);
         newUser.setRole(UserRole.user);
         newUser.setStatus("active");
         newUser.setEmailVerified(true);
@@ -216,6 +220,25 @@ public class AuthService {
             throw new IllegalArgumentException("생년월일은 6자리로 입력해 주세요.");
         }
         return digits;
+    }
+
+    private static String normalizeSignupBirthdate(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("생년월일은 7자리로 입력해 주세요.");
+        }
+        String digits = value.replaceAll("[^0-9]", "");
+        if (digits.length() != 7) {
+            throw new IllegalArgumentException("생년월일은 7자리로 입력해 주세요.");
+        }
+        char genderDigit = digits.charAt(6);
+        if (genderDigit < '1' || genderDigit > '4') {
+            throw new IllegalArgumentException("올바른 성별 자릿수를 입력해 주세요.");
+        }
+        return digits;
+    }
+
+    private static String genderFromResidentDigit(char genderDigit) {
+        return (genderDigit == '1' || genderDigit == '3') ? "male" : "female";
     }
 
     private static String normalizeOptionalDigits(String value) {

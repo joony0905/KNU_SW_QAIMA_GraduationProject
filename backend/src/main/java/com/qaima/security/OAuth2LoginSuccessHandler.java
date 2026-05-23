@@ -38,7 +38,7 @@ public class OAuth2LoginSuccessHandler implements ServerAuthenticationSuccessHan
         return oAuth2SocialLoginService.login(registrationId, oauth2Token.getPrincipal().getAttributes(), ip, ua)
                 .flatMap(result -> {
                     refreshTokenCookieService.writeRefreshTokenCookie(exchange.getResponse(), result.refreshToken());
-                    return clearSessionAndRedirect(exchange, buildSuccessUri(registrationId));
+                    return clearSessionAndRedirect(exchange, buildSuccessUri(registrationId, result.profileRequired()));
                 })
                 .onErrorResume(ex -> redirectFailure(exchange, registrationId, resolveCode(ex)));
     }
@@ -53,10 +53,11 @@ public class OAuth2LoginSuccessHandler implements ServerAuthenticationSuccessHan
                 .then(redirectStrategy.sendRedirect(exchange, uri));
     }
 
-    private URI buildSuccessUri(String provider) {
+    private URI buildSuccessUri(String provider, boolean profileRequired) {
         return UriComponentsBuilder.fromUriString(authOAuth2Properties.getSuccessRedirectUrl())
                 .queryParam("status", "success")
                 .queryParam("provider", provider)
+                .queryParam("profileRequired", profileRequired)
                 .build(true)
                 .toUri();
     }
