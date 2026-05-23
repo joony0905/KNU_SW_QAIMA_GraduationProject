@@ -4,6 +4,7 @@ import StockInputBox from "./StockInputBox";
 import StockCard from "./StockCard";
 import { fetchFeaturedStocks } from "../api/featuredStock";
 import type { FeaturedStockDto, FeaturedStockTopic } from "../types/featuredStock";
+import { clientLog } from "../utils/clientLog";
 
 interface StockItem {
   name: string;
@@ -111,7 +112,7 @@ export default function StockSearchBar({
       } catch (e) {
         if (cancelled) return;
         // KIS 순위 조회 실패 시 fallback 노출
-        console.warn("특징주 조회 실패, fallback 사용:", e);
+        clientLog.warn("Featured stock fallback used", e);
         setStocks(FALLBACK_STOCKS);
         setHasError(true);
       } finally {

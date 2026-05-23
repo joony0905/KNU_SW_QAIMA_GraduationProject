@@ -4,6 +4,7 @@ import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.Instant;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -35,8 +36,17 @@ public class User {
     @Column(length = 20)
     private String experience;
 
-    @Column(length = 6)
+    @Column(name = "default_risk_gamma", precision = 5, scale = 4)
+    private BigDecimal defaultRiskGamma;
+
+    @Column(length = 7)
     private String birthdate;
+
+    @Column(length = 10)
+    private String gender;
+
+    @Column(length = 50)
+    private String country;
 
     // --- 권한/상태 ---
     @Enumerated(EnumType.STRING)

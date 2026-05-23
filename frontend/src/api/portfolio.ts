@@ -2,6 +2,7 @@
 import api from "./apiClient";
 import { ENDPOINTS } from "./endpoints";
 import type { ApiResponse } from "../types/common/api";
+import type { InvestLevel } from "../utils/investLevel";
 
 export type Feature3ProfileType = "CONSERVATIVE" | "NEUTRAL" | "AGGRESSIVE";
 export type Feature3RiskLevel = "LOW" | "MID" | "HIGH";
@@ -26,6 +27,7 @@ export type PortfolioCashPositionRequest = {
 
 export type PortfolioAnalyzeRequest = {
   portfolioId?: number;
+  investLevel?: InvestLevel;
   holdings: PortfolioHoldingRequest[];
   cashPositions?: PortfolioCashPositionRequest[];
   riskProfile: {
@@ -51,6 +53,24 @@ export type PortfolioAnalyzeRequest = {
     llmVendor?: string;
     maxCashWeight?: number;
   };
+};
+
+export type SavedPortfolioHolding = {
+  stockCode: string;
+  stockName: string;
+  quantity: number;
+  averagePrice: number;
+};
+
+export type SavedPortfolio = {
+  portfolioId: number | null;
+  cashAmount: number;
+  holdings: SavedPortfolioHolding[];
+};
+
+export type SavePortfolioRequest = {
+  cashAmount: number;
+  holdings: SavedPortfolioHolding[];
 };
 
 export type Feature3OverlayCachePreviewRequest = {
@@ -452,6 +472,23 @@ export const fetchPortfolioAnalysis = async (
 ): Promise<PortfolioAnalyzeResponse> => {
   const res = await api.post<ApiResponse<PortfolioAnalyzeResponse>>(
     ENDPOINTS.portfolio.analyze(),
+    req,
+  );
+  return res.data.data;
+};
+
+export const fetchMyDefaultPortfolio = async (): Promise<SavedPortfolio> => {
+  const res = await api.get<ApiResponse<SavedPortfolio>>(
+    ENDPOINTS.portfolio.myDefault(),
+  );
+  return res.data.data;
+};
+
+export const replaceMyDefaultPortfolio = async (
+  req: SavePortfolioRequest,
+): Promise<SavedPortfolio> => {
+  const res = await api.put<ApiResponse<SavedPortfolio>>(
+    ENDPOINTS.portfolio.myDefault(),
     req,
   );
   return res.data.data;

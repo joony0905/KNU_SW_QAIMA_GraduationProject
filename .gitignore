@@ -138,7 +138,9 @@ celerybeat.pid
 # Environments
 .env
 .envrc
+.kis_token_cache.json
 .venv
+.venv*/
 env/
 venv/
 ENV/

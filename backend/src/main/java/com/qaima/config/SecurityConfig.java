@@ -2,10 +2,13 @@ package com.qaima.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.common.ApiResponse;
+import com.qaima.common.ErrorCode;
 import com.qaima.security.JwtAuthFilter;
 import com.qaima.security.OAuth2LoginFailureHandler;
 import com.qaima.security.OAuth2LoginSuccessHandler;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -32,6 +35,16 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
     private final OAuth2LoginFailureHandler oAuth2LoginFailureHandler;
+
+    @Value("${qaima.cors.allowed-origin-patterns:http://localhost:5173,http://localhost:3000,https://localhost:5173,https://localhost:3000}")
+    private List<String> allowedOriginPatterns;
+
+    @PostConstruct
+    void validateCorsConfiguration() {
+        if (allowedOriginPatterns != null && allowedOriginPatterns.contains("*")) {
+            throw new IllegalStateException("qaima.cors.allowed-origin-patterns must not contain '*' when credentials are enabled");
+        }
+    }
 
     @Bean
     public SecurityWebFilterChain filterChain(ServerHttpSecurity http) {
@@ -61,6 +74,16 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/featured-stocks/**").permitAll()
                         .pathMatchers("/api/v1/feature3/market-data/**").permitAll()
                         .pathMatchers("/api/v1/feature2/peercluster/data").permitAll()
+                        .pathMatchers("/api/v1/feature2/news/**").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/base-rate").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/base-rate-series").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/macro-rates").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/macro-rates-series").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/industry-index").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/short-selling").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/short-selling-series").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/related-stocks").permitAll()
+                        .pathMatchers("/api/v1/feature2/cards/investor-flow").permitAll()
 
                         // 관리자
                         .pathMatchers("/api/v1/admin/**").hasRole("ADMIN")
@@ -72,12 +95,12 @@ public class SecurityConfig {
                 // 401/403에서 errorCode 주입 + JSON 응답
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint((exchange, ex2) -> {
-                            exchange.getAttributes().put("errorCode", "UNAUTHORIZED");
-                            return writeJson(exchange, 401, "UNAUTHORIZED", "인증이 필요합니다.");
+                            exchange.getAttributes().put("errorCode", ErrorCode.UNAUTHORIZED.code());
+                            return writeJson(exchange, ErrorCode.UNAUTHORIZED);
                         })
                         .accessDeniedHandler((exchange, ex2) -> {
-                            exchange.getAttributes().put("errorCode", "FORBIDDEN");
-                            return writeJson(exchange, 403, "FORBIDDEN", "권한이 없습니다.");
+                            exchange.getAttributes().put("errorCode", ErrorCode.FORBIDDEN.code());
+                            return writeJson(exchange, ErrorCode.FORBIDDEN);
                         })
                 )
 
@@ -92,13 +115,7 @@ public class SecurityConfig {
         // 쿠키/인증 쓰면 true 필요 (지금은 토큰 방식이어도 켜놔도 무방)
         config.setAllowCredentials(true);
 
-        // Vite(5173) / CRA(3000) 둘 다 허용
-        config.setAllowedOriginPatterns(List.of(
-                "http://localhost:5173",
-                "http://localhost:3000",
-                "https://localhost:5173",
-                "https://localhost:3000"
-        ));
+        config.setAllowedOriginPatterns(allowedOriginPatterns);
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
@@ -110,17 +127,18 @@ public class SecurityConfig {
     }
 
     private Mono<Void> writeJson(org.springframework.web.server.ServerWebExchange exchange,
-                                 int status, String code, String message) {
+                                 ErrorCode errorCode) {
         var response = exchange.getResponse();
-        response.setStatusCode(org.springframework.http.HttpStatus.valueOf(status));
+        response.setStatusCode(errorCode.status());
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
         try {
-            byte[] bytes = objectMapper.writeValueAsBytes(ApiResponse.error(code, message));
+            byte[] bytes = objectMapper.writeValueAsBytes(ApiResponse.error(errorCode.code(), errorCode.defaultMessage()));
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));
         } catch (Exception e) {
-            byte[] bytes = ("{\"success\":false,\"code\":\"" + code + "\",\"message\":\"" + message + "\"}")
+            byte[] bytes = ("{\"meta\":{\"status\":\"failure\"},\"data\":null,\"errors\":[{\"code\":\""
+                    + errorCode.code() + "\",\"message\":\"" + errorCode.defaultMessage() + "\"}]}")
                     .getBytes(java.nio.charset.StandardCharsets.UTF_8);
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));

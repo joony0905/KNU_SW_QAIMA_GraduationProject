@@ -25,45 +25,33 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AnalysisApiException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleAnalysisApi(AnalysisApiException e, ServerWebExchange exchange) {
-        exchange.getAttributes().put("errorCode", "ANALYSIS_API_FAILED");
-        return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("ANALYSIS_API_FAILED", "분석 결과를 불러올 수 없습니다.")));
+        return error(ErrorCode.ANALYSIS_API_FAILED, "분석 결과를 불러올 수 없습니다.", exchange);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleNotFound(ResourceNotFoundException e, ServerWebExchange exchange) {
-        exchange.getAttributes().put("errorCode", "RESOURCE_NOT_FOUND");
-        return Mono.just(ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(ApiResponse.error("RESOURCE_NOT_FOUND", e.getMessage())));
+        return error(ErrorCode.RESOURCE_NOT_FOUND, e.getMessage(), exchange);
     }
 
     @ExceptionHandler(WebExchangeBindException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleBind(WebExchangeBindException e, ServerWebExchange exchange) {
-        exchange.getAttributes().put("errorCode", "VALIDATION_ERROR");
         String msg = firstValidationMessage(e);
-        return Mono.just(ResponseEntity.badRequest()
-                .body(ApiResponse.error("VALIDATION_ERROR", msg)));
+        return error(ErrorCode.VALIDATION_ERROR, msg, exchange);
     }
 
     @ExceptionHandler(ServerWebInputException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleInput(ServerWebInputException e, ServerWebExchange exchange) {
-        exchange.getAttributes().put("errorCode", "VALIDATION_ERROR");
-        return Mono.just(ResponseEntity.badRequest()
-                .body(ApiResponse.error("VALIDATION_ERROR", safeMessage(e.getReason(), "Validation error"))));
+        return error(ErrorCode.VALIDATION_ERROR, safeMessage(e.getReason(), "Validation error"), exchange);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleIllegalArgument(IllegalArgumentException e, ServerWebExchange exchange) {
-        exchange.getAttributes().put("errorCode", "VALIDATION_ERROR");
-        return Mono.just(ResponseEntity.badRequest()
-                .body(ApiResponse.error("VALIDATION_ERROR", safeMessage(e.getMessage(), "Validation error"))));
+        return error(ErrorCode.VALIDATION_ERROR, safeMessage(e.getMessage(), "Validation error"), exchange);
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleIllegalState(IllegalStateException e, ServerWebExchange exchange) {
-        exchange.getAttributes().put("errorCode", "INTERNAL_ERROR");
-        return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("INTERNAL_ERROR", safeMessage(e.getMessage(), "서버 내부 오류"))));
+        return error(ErrorCode.INTERNAL_ERROR, safeMessage(e.getMessage(), "서버 내부 오류"), exchange);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
@@ -74,29 +62,21 @@ public class GlobalExceptionHandler {
             status = HttpStatus.INTERNAL_SERVER_ERROR;
         }
 
-        String code = switch (statusValue) {
-            case 400 -> "BAD_REQUEST";
-            case 401 -> "UNAUTHORIZED";
-            case 403 -> "FORBIDDEN";
-            case 404 -> "NOT_FOUND";
-            case 405 -> "METHOD_NOT_ALLOWED";
-            case 406 -> "NOT_ACCEPTABLE";
-            case 409 -> "CONFLICT";
-            case 415 -> "UNSUPPORTED_MEDIA_TYPE";
-            case 422 -> "UNPROCESSABLE_ENTITY";
-            default -> "HTTP_" + statusValue;
-        };
-
-        exchange.getAttributes().put("errorCode", code);
+        ErrorCode errorCode = ErrorCode.fromHttpStatus(statusValue);
+        exchange.getAttributes().put("errorCode", errorCode.code());
         return Mono.just(ResponseEntity.status(status)
-                .body(ApiResponse.error(code, safeMessage(e.getReason(), status.getReasonPhrase()))));
+                .body(ApiResponse.error(errorCode.code(), safeMessage(e.getReason(), errorCode.defaultMessage()))));
     }
 
     @ExceptionHandler(Exception.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleException(Exception e, ServerWebExchange exchange) {
-        exchange.getAttributes().put("errorCode", "INTERNAL_ERROR");
-        return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("INTERNAL_ERROR", "서버 내부 오류")));
+        return error(ErrorCode.INTERNAL_ERROR, ErrorCode.INTERNAL_ERROR.defaultMessage(), exchange);
+    }
+
+    private Mono<ResponseEntity<ApiResponse<Void>>> error(ErrorCode errorCode, String message, ServerWebExchange exchange) {
+        exchange.getAttributes().put("errorCode", errorCode.code());
+        return Mono.just(ResponseEntity.status(errorCode.status())
+                .body(ApiResponse.error(errorCode.code(), safeMessage(message, errorCode.defaultMessage()))));
     }
 
     private static String firstValidationMessage(WebExchangeBindException e) {

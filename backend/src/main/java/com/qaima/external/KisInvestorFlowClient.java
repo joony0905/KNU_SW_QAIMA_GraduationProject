@@ -6,6 +6,7 @@ import com.qaima.common.ErrorException;
 import com.qaima.dto.kis.KisInvestorDailyByMarketResponseDto;
 import com.qaima.dto.kis.KisInvestorTradeByStockDailyResponseDto;
 import com.qaima.dto.kis.KisResponseDto;
+import com.qaima.service.batch.KisBatchRateLimiter;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -37,6 +38,7 @@ public class KisInvestorFlowClient {
 
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final KisBatchRateLimiter rateLimiter;
 
     @Value("${kis.app-key}")
     private String appKey;
@@ -49,10 +51,12 @@ public class KisInvestorFlowClient {
 
     public KisInvestorFlowClient(
             @Qualifier("kisWebClient") WebClient webClient,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            KisBatchRateLimiter rateLimiter
     ) {
         this.webClient = webClient;
         this.objectMapper = objectMapper;
+        this.rateLimiter = rateLimiter;
     }
 
     public Mono<List<KisInvestorTradeByStockDailyResponseDto.Row>> fetchInvestorTradeByStockDaily(
@@ -97,7 +101,8 @@ public class KisInvestorFlowClient {
                             .header("custtype", "P")
                             .accept(MediaType.APPLICATION_JSON);
 
-                    return exchangeAndParse(spec, endpoint, KisInvestorTradeByStockDailyResponseDto.class);
+                    return rateLimiter.acquireMono()
+                            .then(exchangeAndParse(spec, endpoint, KisInvestorTradeByStockDailyResponseDto.class));
                 })
                 .map(raw -> {
                     KisInvestorTradeByStockDailyResponseDto parsed = raw.parsed();
@@ -147,7 +152,8 @@ public class KisInvestorFlowClient {
                             .header("custtype", "P")
                             .accept(MediaType.APPLICATION_JSON);
 
-                    return exchangeAndParse(spec, endpoint, KisInvestorDailyByMarketResponseDto.class);
+                    return rateLimiter.acquireMono()
+                            .then(exchangeAndParse(spec, endpoint, KisInvestorDailyByMarketResponseDto.class));
                 })
                 .map(raw -> {
                     KisInvestorDailyByMarketResponseDto parsed = raw.parsed();
@@ -165,17 +171,18 @@ public class KisInvestorFlowClient {
             return tokenMono;
         }
 
-        tokenMono = webClient.post()
-                .uri("/oauth2/tokenP")
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .bodyValue(Map.of(
-                        "grant_type", "client_credentials",
-                        "appkey", appKey,
-                        "appsecret", appSecret
-                ))
-                .retrieve()
-                .bodyToMono(KisResponseDto.class)
+        tokenMono = rateLimiter.acquireMono()
+                .then(webClient.post()
+                        .uri("/oauth2/tokenP")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .bodyValue(Map.of(
+                                "grant_type", "client_credentials",
+                                "appkey", appKey,
+                                "appsecret", appSecret
+                        ))
+                        .retrieve()
+                        .bodyToMono(KisResponseDto.class))
                 .map(resp -> {
                     cachedToken = "Bearer " + resp.getAccessToken();
                     return cachedToken;

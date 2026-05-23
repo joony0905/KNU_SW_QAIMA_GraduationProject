@@ -7,7 +7,8 @@ import { PdfExportContext } from "../contexts/PdfExportContext";
 import qaimaLogo from "../assets/qaima-final.png";
 import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import { useRef, useEffect, useState } from "react";
-import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Star, Sun, Moon, ChevronDown, ChevronUp, LineChart, MapPin } from "lucide-react";
 import InvestLevelBadge from "../components/InvestLevelBadge";
 import StockSearchBar from "../components/StockSearchBar";
 import FeatureIntro from "../components/FeatureIntro";
@@ -28,12 +29,15 @@ import { fetchCandles, fetchCandlesBefore } from "../api/charts";
 import type { Candle } from "../types/candle";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas-pro";
+import { clientLog } from "../utils/clientLog";
 import type { AnalysisResponse } from "../types/analysis";
 import type { ApiResponse } from "../types/common/api";
 import DictTerm from "../components/DictTerm";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { refreshTokenBalance } from "../api/billingStore";
+import { useDictionary } from "../components/DictContext";
 import { useTheme } from "../hooks/useTheme";
+import useReportUserName from "../hooks/useReportUserName";
 import {
   formatKstDate,
   formatKstOffsetDateTime,
@@ -207,6 +211,8 @@ const buildPriceFlowSummary = (
 export default function StocksMockPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { investLevel } = useDictionary();
+  const reportUserName = useReportUserName();
   const currentTime = useKSTTime();
 
   const [chartLoading, setChartLoading] = useState(false);
@@ -222,6 +228,8 @@ export default function StocksMockPage() {
   const [indicatorData, setIndicatorData] = useState<IndicatorData | null>(
     null,
   );
+  const [showChartIndicators, setShowChartIndicators] = useState(true);
+  const [showChartMarkers, setShowChartMarkers] = useState(false);
 
   // 분석 요청 파라미터
   const [analysisFreq, setAnalysisFreq] = useState<
@@ -291,6 +299,18 @@ export default function StocksMockPage() {
     change: null,
     changeRate: null,
   });
+  const reportMeta = analysisData
+    ? {
+        featureType: "FEATURE1" as const,
+        subjectLabel: `${mainStock.name || analysisData.metrics?.stockCode || "분석종목"} (${mainStock.symbol || analysisData.metrics?.stockCode || "-"})`,
+        generatedAt: analysisResult?.meta?.timestamp ?? null,
+        analysisModel: llmVendor,
+        investLevel,
+        userName: reportUserName,
+        analysisWindow: analysisFrom || analysisTo ? `${analysisFrom || "-"} ~ ${analysisTo || "-"}` : null,
+        dataAsOf: analysisData.metrics?.asOf ?? null,
+      }
+    : null;
 
   // OHLCV 기반 표시값 포맷
   const formatPrice = (n: number) => {
@@ -401,7 +421,7 @@ export default function StocksMockPage() {
       }
       return data;
     } catch (e: any) {
-      console.error("차트 데이터 조회 실패:", {
+      clientLog.error("Chart data fetch failed", {
         message: e?.message,
         status: e?.response?.status,
         data: e?.response?.data,
@@ -476,14 +496,14 @@ export default function StocksMockPage() {
         };
       }
     } catch (e) {
-      console.error("추가 캔들 로딩 실패:", e);
+      clientLog.error("Additional candle load failed", e);
     } finally {
       isLoadingMoreRef.current = false;
     }
   };
 
   const handleSearch = async (value: string) => {
-    console.log("검색 실행:", value);
+    clientLog.warn("Stock search submitted", value);
 
     const q = value.trim();
     if (!q) {
@@ -499,6 +519,8 @@ export default function StocksMockPage() {
     setFinancialTimeline(null);
     setPriceFlowSummary(null);
     setIndicatorData(null);
+    setShowChartIndicators(true);
+    setShowChartMarkers(false);
     setShowAnalyzeButton(true);
 
     // 기본 분석 기간: 최근 6개월
@@ -531,7 +553,7 @@ export default function StocksMockPage() {
         changeRate: stockInfo.changeRate ?? null, // number 그대로
       }));
     } catch (e) {
-      console.error("종목 정보 조회 실패(임시 무시):", e);
+      clientLog.warn("Stock lookup failed; fallback path used", e);
 
       if (/^\d{6}$/.test(q)) {
         resolvedCode = q;
@@ -577,7 +599,7 @@ export default function StocksMockPage() {
       }
       setTrendData(Array.isArray(trend) ? trend : []);
     } catch (e) {
-      console.error("재무제표 조회 실패:", e);
+      clientLog.error("Financial statement fetch failed", e);
     }
 
     // 초기 차트는 30일만 로드하고, 분석기간 입력값은 유지
@@ -616,6 +638,8 @@ export default function StocksMockPage() {
     setFinancialTimeline(null);
     setPriceFlowSummary(null);
     setIndicatorData(null);
+    setShowChartIndicators(true);
+    setShowChartMarkers(false);
 
     if (!mainStock.symbol) {
       setErr("먼저 종목을 검색한 뒤 분석을 실행해주세요.");
@@ -659,6 +683,7 @@ export default function StocksMockPage() {
         marketDivCode,
         includeExplain,
         llmVendor,
+        investLevel,
       });
 
       setAnalysisResult(result);
@@ -685,6 +710,8 @@ export default function StocksMockPage() {
         stoch14_3_3: ind?.stoch14_3_3 ?? null,
         warnings: ind?.warnings ?? [],
       });
+      setShowChartIndicators(true);
+      setShowChartMarkers(false);
     } catch (e) {
       setErr(getApiErrorMessage(e, "분석 결과를 불러오지 못했습니다."));
     } finally {
@@ -789,7 +816,7 @@ export default function StocksMockPage() {
       const fileName = `${mainStock.symbol}_analysis.pdf`;
       doc.save(fileName);
     } catch (e) {
-      console.error("PDF 생성 실패:", e);
+      clientLog.error("PDF generation failed", e);
     } finally {
       // 캡처 종료 — 화면을 원래 스크롤 등장 동작으로 복원
       setPdfExporting(false);
@@ -1030,6 +1057,37 @@ export default function StocksMockPage() {
                 {/* 헤더와 차트 사이 divider */}
                 <div className="h-px bg-line" />
 
+                {indicatorData && (
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowChartIndicators((prev) => !prev)}
+                      aria-pressed={showChartIndicators}
+                      className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors ${
+                        showChartIndicators
+                          ? "border-accent bg-accent-soft text-accent-ink"
+                          : "border-line bg-surface text-ink-3 hover:bg-bg-sunk"
+                      }`}
+                    >
+                      <LineChart size={14} aria-hidden="true" />
+                      보조지표
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowChartMarkers((prev) => !prev)}
+                      aria-pressed={showChartMarkers}
+                      className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition-colors ${
+                        showChartMarkers
+                          ? "border-accent bg-accent-soft text-accent-ink"
+                          : "border-line bg-surface text-ink-3 hover:bg-bg-sunk"
+                      }`}
+                    >
+                      <MapPin size={14} aria-hidden="true" />
+                      마커
+                    </button>
+                  </div>
+                )}
+
                 {/* 차트 영역 — sunken 제거, 같은 흰 배경 위에 차트 */}
                 <div className="flex-1 min-h-0 w-full flex items-stretch">
                     {chartLoading && (
@@ -1052,9 +1110,12 @@ export default function StocksMockPage() {
                       <div className="flex-1 min-h-0 w-full">
                         {/* TradingViewWidget 부모 높이를 100% 사용 */}
                         <TradingViewWidget
+                          key={showChartIndicators ? "chart-with-indicators" : "chart-price-only"}
                           candles={candles}
                           indicators={indicatorData}
-                          showSubPanes={Boolean(indicatorData)}
+                          showSubPanes={Boolean(indicatorData && showChartIndicators)}
+                          showIndicators={showChartIndicators}
+                          showMarkers={showChartMarkers}
                           markerMode="triple" // "sto_ema" | "bb_sto" | "both"
                           onRequestMoreHistory={handleRequestMoreHistory}
                         />
@@ -1169,10 +1230,11 @@ export default function StocksMockPage() {
                   <p className="text-sm text-ink-3 mt-1">
                     가격 흐름 · 재무 시계열 · 보조지표를 종합한 리포트
                   </p>
-                  <InvestLevelBadge className="mt-2" />
                 </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <div ref={modelRef} className="relative">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-shrink-0">
+                  <InvestLevelBadge />
+                  <div className="flex items-center gap-3">
+                    <div ref={modelRef} className="relative">
                     <button
                       onClick={() => setIsModelOpen((prev) => !prev)}
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-line text-sm"
@@ -1200,15 +1262,16 @@ export default function StocksMockPage() {
                         ))}
                       </div>
                     )}
-                  </div>
-                  <button
+                    </div>
+                    <button
                     onClick={handleAnalyzeClick}
                     disabled={loading}
                     className="px-5 py-2.5 rounded-lg bg-accent text-white font-semibold text-sm
                                hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight"
                   >
                     분석 결과 보기 →
-                  </button>
+                    </button>
+                  </div>
                 </div>
               </section>
             )}
@@ -1243,6 +1306,7 @@ export default function StocksMockPage() {
                 financialTimeline={financialTimeline}
                 priceFlowSummary={priceFlowSummary}
                 layout="full"
+                reportMeta={reportMeta}
               />
               </PdfExportContext.Provider>
             </div>}
@@ -1250,7 +1314,7 @@ export default function StocksMockPage() {
           </>
         )}
 
-        {isAnalysisModalOpen && analysisResult && (
+        {isAnalysisModalOpen && analysisResult && createPortal(
           <div
             className="fixed inset-0 z-[100] bg-ink/50 flex items-center justify-center p-4"
             onClick={() => setIsAnalysisModalOpen(false)}
@@ -1291,10 +1355,12 @@ export default function StocksMockPage() {
                   financialTimeline={financialTimeline}
                   priceFlowSummary={priceFlowSummary}
                   layout="full"
+                  reportMeta={reportMeta}
                 />
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
 
         <FinancialDetailModal

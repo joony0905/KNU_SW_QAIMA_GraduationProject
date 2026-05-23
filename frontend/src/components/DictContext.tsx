@@ -35,6 +35,7 @@ interface DictContextValue {
   setGlossaryHover: (value: boolean) => void;
   // 사용자 투자레벨(=백엔드 User.experience). 분석 결과 보기 영역 등 전역에서 참조.
   investLevel: InvestLevel;
+  investLevelReady: boolean;
   setInvestLevel: (value: InvestLevel) => void;
 }
 
@@ -44,6 +45,7 @@ const DictCtx = createContext<DictContextValue>({
   glossaryHover: false,
   setGlossaryHover: () => {},
   investLevel: DEFAULT_INVEST_LEVEL,
+  investLevelReady: false,
   setInvestLevel: () => {},
 });
 
@@ -51,6 +53,7 @@ export function DictProvider({ children }: { children: React.ReactNode }) {
   const [terms, setTerms] = useState<Map<string, DictionaryTermDto>>(new Map());
   const [ready, setReady] = useState(false);
   const [glossaryHover, setGlossaryHover] = useState(false);
+  const [investLevelReady, setInvestLevelReady] = useState(false);
   const [investLevel, setInvestLevel] = useState<InvestLevel>(DEFAULT_INVEST_LEVEL);
 
   useEffect(() => {
@@ -66,23 +69,43 @@ export function DictProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setReady(true));
   }, []);
 
-  // 로그인 사용자면 글로서리 hover · 투자레벨을 한 번 읽어와 앱 전역에 반영.
+  // 로그인 사용자면 글로서리 hover · 투자레벨을 읽어와 앱 전역에 반영.
   // 비로그인 시 /users/me(인증 필요) 호출 → 401 → 강제 로그인 이동을 피하려고
   // 호출 자체를 막는다. (워치리스트 동기화와 동일한 가드)
   useEffect(() => {
-    if (!isLoggedIn()) return;
     let alive = true;
-    getMyProfile()
-      .then((p) => {
-        if (!alive) return;
-        setGlossaryHover(p.glossaryHover);
-        setInvestLevel(toInvestLevel(p.experience));
-      })
-      .catch(() => {
-        // 프로필 조회 실패 시 기본값 유지
-      });
+
+    const syncProfile = () => {
+      if (!isLoggedIn()) {
+        setGlossaryHover(false);
+        setInvestLevel(DEFAULT_INVEST_LEVEL);
+        setInvestLevelReady(true);
+        return;
+      }
+
+      setInvestLevelReady(false);
+      getMyProfile()
+        .then((p) => {
+          if (!alive) return;
+          setGlossaryHover(p.glossaryHover);
+          setInvestLevel(toInvestLevel(p.experience));
+        })
+        .catch(() => {
+          // 프로필 조회 실패 시 기본값 유지
+        })
+        .finally(() => {
+          if (alive) {
+            setInvestLevelReady(true);
+          }
+        });
+    };
+
+    syncProfile();
+    window.addEventListener("qaima:auth-change", syncProfile);
+
     return () => {
       alive = false;
+      window.removeEventListener("qaima:auth-change", syncProfile);
     };
   }, []);
 
@@ -94,6 +117,7 @@ export function DictProvider({ children }: { children: React.ReactNode }) {
         glossaryHover,
         setGlossaryHover,
         investLevel,
+        investLevelReady,
         setInvestLevel,
       }}
     >

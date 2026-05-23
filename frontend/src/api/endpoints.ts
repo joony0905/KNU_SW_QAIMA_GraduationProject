@@ -3,6 +3,9 @@ export const ENDPOINTS = {
     login: "/auth/login",
     signup: "/auth/signup",
   },
+  users: {
+    riskProfile: "/users/me/risk-profile",
+  },
   stocks: {
     search: (query: string) => `/stocks/search?q=${encodeURIComponent(query)}`,
     getByCode: (stockCode: string) => `/stocks/code/${stockCode}`,
@@ -38,6 +41,7 @@ export const ENDPOINTS = {
   portfolio: {
     analyze: () => "/feature3/analysis",
     overlayCachePreview: () => "/feature3/overlay-cache/preview",
+    myDefault: () => "/portfolios/me/default",
   },
   dictionary: {
     search: (params: { q?: string; initial?: string; page?: number; size?: number }) => {
@@ -55,7 +59,7 @@ export const ENDPOINTS = {
     initials: () => "/dictionary/initials",
   },
   news: {
-    listByStock: (stockCode: string, limit = 15) =>
+    listByStock: (stockCode: string, limit = 30) =>
       `/feature2/news?stockCode=${stockCode}&limit=${limit}`,
     detail: (newsId: number) => `/feature2/news/${newsId}`,
   },

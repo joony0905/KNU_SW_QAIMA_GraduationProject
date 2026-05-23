@@ -4,6 +4,7 @@ import com.qaima.common.ApiResponse;
 import com.qaima.domain.CandleSource;
 import com.qaima.domain.Freq;
 import com.qaima.dto.candle.CandleSeriesResponse;
+import com.qaima.service.candle.CandleTimePolicy;
 import com.qaima.service.candle.CandleLoadResult;
 import com.qaima.service.chart.ChartService;
 import com.qaima.mapper.CandleMapper;
@@ -44,7 +45,7 @@ public class ChartController {
         CandleSeriesResponse data = CandleSeriesResponse.builder()
                 .stockCode(stockCode)
                 .freq(freq.name())
-                .timezone("UTC")
+                .timezone(CandleTimePolicy.timezoneLabel(CandleTimePolicy.DEFAULT_TRADING_ZONE))
                 .source(result.getSource().name())
                 .data(CandleMapper.toSeries(result.getCandles()))
                 .build();

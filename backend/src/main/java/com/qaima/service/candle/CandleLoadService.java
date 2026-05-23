@@ -33,7 +33,6 @@ import java.util.Comparator;
 @RequiredArgsConstructor
 public class CandleLoadService {
 
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final String KRX_MARKET = "KRX";
 
     private final PriceOhlcvRepository priceOhlcvRepository;
@@ -50,12 +49,12 @@ public class CandleLoadService {
 
         return Mono.fromCallable(() ->
                         priceOhlcvRepository.findRange(
-                                stockCode, freq, from, to
+                                stockCode, freq, dbRangeFromForRead(stock, freq, from), to
                         )
                 )
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(dbCandles -> {
-                    if (!shouldFetchCandlesFromExternal(dbCandles)) {
+                    if (!shouldFetchCandlesFromExternal(stock, dbCandles)) {
                         return Mono.just(new CandleLoadResult(dbCandles, CandleSource.DB));
                     }
 
@@ -63,8 +62,8 @@ public class CandleLoadService {
                             stockCode,
                             freq,
                             dbCandles.size(),
-                            latestTradingDay(),
-                            latestLocalDate(dbCandles));
+                            latestTradingDay(stock),
+                            latestLocalDate(stock, dbCandles));
 
                     return stockClient.fetchCandles(stock, freq, from, to)
                             .flatMap(result ->
@@ -120,12 +119,12 @@ public class CandleLoadService {
         int minRequiredRows = Math.max(requiredRows, 1);
 
         return Mono.fromCallable(() ->
-                        priceOhlcvRepository.findRange(stockCode, freq, from, to)
+                        priceOhlcvRepository.findRange(stockCode, freq, dbRangeFromForRead(stock, freq, from), to)
                 )
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(dbCandles -> {
                     boolean insufficientRows = dbCandles == null || dbCandles.size() < minRequiredRows;
-                    boolean shouldFetch = shouldFetchCandlesFromExternal(dbCandles) || insufficientRows;
+                    boolean shouldFetch = shouldFetchCandlesFromExternal(stock, dbCandles) || insufficientRows;
 
                     if (!shouldFetch) {
                         return Mono.just(new CandleLoadResult(dbCandles, CandleSource.DB));
@@ -138,7 +137,7 @@ public class CandleLoadService {
                             minRequiredRows,
                             from,
                             to,
-                            latestLocalDate(dbCandles));
+                            latestLocalDate(stock, dbCandles));
 
                     return stockClient.fetchCandles(stock, freq, from, to)
                             .flatMap(result ->
@@ -193,17 +192,18 @@ public class CandleLoadService {
                             .map(dto -> toEntity(stock, freq, dto))
                             .collect(Collectors.toList());
 
-                    List<PriceOhlcv> missingOnly = filterMissingCandles(existing, entities);
+                    ZoneId tradingZone = CandleTimePolicy.tradingZone(stock);
+                    List<PriceOhlcv> missingOnly = filterMissingCandles(existing, entities, tradingZone);
                     if (missingOnly.isEmpty()) {
                         log.info("[CANDLE] external returned only existing rows. stockCode={}, freq={}, fetchedSize={}",
                                 stock.getStockCode(), freq, entities.size());
-                        return mergeCandles(existing, entities);
+                        return mergeCandles(existing, entities, tradingZone);
                     }
 
                     List<PriceOhlcv> saved = priceOhlcvRepository.saveAll(missingOnly);
                     log.info("[CANDLE] persisted missing rows only. stockCode={}, freq={}, existingSize={}, fetchedSize={}, insertedSize={}",
                             stock.getStockCode(), freq, existing == null ? 0 : existing.size(), entities.size(), saved.size());
-                    return mergeCandles(existing, saved);
+                    return mergeCandles(existing, saved, tradingZone);
                 })
                 .subscribeOn(Schedulers.boundedElastic());
     }
@@ -235,7 +235,7 @@ public class CandleLoadService {
 
                     // DB 히트
                     if (dbCandles != null && !dbCandles.isEmpty()) {
-                        System.out.println("Candle DB히트");
+                        log.debug("[CandleLoad] DB hit. stockCode={}, freq={}, rows={}", stockCode, freq, dbCandles.size());
                         List<PriceOhlcv> asc = dbCandles.stream()
                                 .sorted(Comparator.comparing(p -> p.getId().getTs()))
                                 .toList();
@@ -278,60 +278,65 @@ public class CandleLoadService {
                 });
     }
 
-    private boolean shouldFetchCandlesFromExternal(List<PriceOhlcv> existing) {
+    private boolean shouldFetchCandlesFromExternal(Stock stock, List<PriceOhlcv> existing) {
         if (existing == null || existing.isEmpty()) {
             return true;
         }
 
-        LocalDate latestRequestedDate = latestTradingDay();
-        LocalDate latestDbDate = latestLocalDate(existing);
+        LocalDate latestRequestedDate = latestTradingDay(stock);
+        LocalDate latestDbDate = latestLocalDate(stock, existing);
         return latestDbDate == null || latestDbDate.isBefore(latestRequestedDate);
     }
 
-    private LocalDate latestTradingDay() {
-        return tradingCalendarService.latestTradingDay(ZonedDateTime.now(KST), KRX_MARKET);
+    private LocalDate latestTradingDay(Stock stock) {
+        ZoneId tradingZone = CandleTimePolicy.tradingZone(stock);
+        return tradingCalendarService.latestTradingDay(ZonedDateTime.now(tradingZone), KRX_MARKET);
     }
 
-    private LocalDate latestLocalDate(List<PriceOhlcv> candles) {
+    private LocalDate latestLocalDate(Stock stock, List<PriceOhlcv> candles) {
         if (candles == null || candles.isEmpty()) {
             return null;
         }
 
+        ZoneId tradingZone = CandleTimePolicy.tradingZone(stock);
         return candles.stream()
-                .map(candle -> candle != null && candle.getId() != null ? candle.getId().getTs() : null)
+                .map(candle -> CandleTimePolicy.tradingDate(candle, tradingZone))
                 .filter(java.util.Objects::nonNull)
-                .map(OffsetDateTime::toLocalDate)
                 .max(LocalDate::compareTo)
                 .orElse(null);
     }
 
-    private List<PriceOhlcv> filterMissingCandles(List<PriceOhlcv> existing, List<PriceOhlcv> fetched) {
+    private List<PriceOhlcv> filterMissingCandles(
+            List<PriceOhlcv> existing,
+            List<PriceOhlcv> fetched,
+            ZoneId tradingZone
+    ) {
         Set<String> existingKeys = (existing == null ? List.<PriceOhlcv>of() : existing).stream()
-                .map(this::candleLogicalKey)
+                .map(entity -> candleLogicalKey(entity, tradingZone))
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toCollection(HashSet::new));
 
         return (fetched == null ? List.<PriceOhlcv>of() : fetched).stream()
                 .filter(entity -> {
-                    String key = candleLogicalKey(entity);
+                    String key = candleLogicalKey(entity, tradingZone);
                     return key != null && !existingKeys.contains(key);
                 })
                 .toList();
     }
 
-    private List<PriceOhlcv> mergeCandles(List<PriceOhlcv> existing, List<PriceOhlcv> fetched) {
+    private List<PriceOhlcv> mergeCandles(List<PriceOhlcv> existing, List<PriceOhlcv> fetched, ZoneId tradingZone) {
         java.util.LinkedHashMap<String, PriceOhlcv> merged = new java.util.LinkedHashMap<>();
 
         if (existing != null) {
             existing.stream()
                     .filter(entity -> entity != null && entity.getId() != null)
-                    .forEach(entity -> merged.put(candleLogicalKey(entity), entity));
+                    .forEach(entity -> merged.put(candleLogicalKey(entity, tradingZone), entity));
         }
 
         if (fetched != null) {
             fetched.stream()
                     .filter(entity -> entity != null && entity.getId() != null)
-                    .forEach(entity -> merged.put(candleLogicalKey(entity), entity));
+                    .forEach(entity -> merged.put(candleLogicalKey(entity, tradingZone), entity));
         }
 
         return merged.values().stream()
@@ -339,13 +344,13 @@ public class CandleLoadService {
                 .toList();
     }
 
-    private String candleLogicalKey(PriceOhlcv entity) {
+    private String candleLogicalKey(PriceOhlcv entity, ZoneId tradingZone) {
         if (entity == null || entity.getId() == null) return null;
         PriceOhlcvId id = entity.getId();
         if (id.getStockId() == null || id.getFreq() == null || id.getTs() == null) return null;
 
         if (id.getFreq() == Freq.ONE_D) {
-            LocalDate tradingDay = id.getTs().atZoneSameInstant(KST).toLocalDate();
+            LocalDate tradingDay = CandleTimePolicy.tradingDate(id.getTs(), tradingZone);
             return id.getStockId() + "|" + id.getFreq() + "|" + tradingDay;
         }
 
@@ -372,6 +377,17 @@ public class CandleLoadService {
         };
     }
 
+    private OffsetDateTime dbRangeFromForRead(Stock stock, Freq freq, OffsetDateTime from) {
+        if (from == null || freq != Freq.ONE_D) {
+            return from;
+        }
+        ZoneId tradingZone = CandleTimePolicy.tradingZone(stock);
+        if (!CandleTimePolicy.DEFAULT_TRADING_ZONE.equals(tradingZone)) {
+            return from;
+        }
+        return from.minusHours(9);
+    }
+
     private PriceOhlcv toEntity(Stock stock, Freq freq, PriceOhlcvDto dto) {
         Freq resolvedFreq = (dto != null && dto.getFreq() != null) ? dto.getFreq() : freq;
         if (resolvedFreq == null) {
@@ -386,7 +402,7 @@ public class CandleLoadService {
 
         PriceOhlcvId id = new PriceOhlcvId(
                 stock.getStockId(),
-                normalizeTsForFreq(dto.getTs(), resolvedFreq),
+                normalizeTsForFreq(stock, dto.getTs(), resolvedFreq),
                 resolvedFreq
         );
 
@@ -401,9 +417,7 @@ public class CandleLoadService {
         return e;
     }
 
-    private OffsetDateTime normalizeTsForFreq(OffsetDateTime ts, Freq freq) {
-        if (ts == null || freq != Freq.ONE_D) return ts;
-        LocalDate tradingDay = ts.atZoneSameInstant(KST).toLocalDate();
-        return tradingDay.atStartOfDay(KST).toOffsetDateTime();
+    private OffsetDateTime normalizeTsForFreq(Stock stock, OffsetDateTime ts, Freq freq) {
+        return CandleTimePolicy.canonicalTs(ts, freq, CandleTimePolicy.tradingZone(stock));
     }
 }

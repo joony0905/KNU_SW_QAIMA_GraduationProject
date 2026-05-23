@@ -4,11 +4,13 @@ import java.util.List;
 
 public record Feature3FastApiAnalyzeRequestDto(
         Long portfolioId,
+        String investLevel,
         List<Holding> holdings,
         List<CashPosition> cashPositions,
         RiskProfile riskProfile,
         Options options,
-        List<OverlaySignal> overlaySignals
+        List<OverlaySignal> overlaySignals,
+        InputData inputData
 ) {
     public record Holding(
             String stockCode,
@@ -66,6 +68,57 @@ public record Feature3FastApiAnalyzeRequestDto(
             String severity,
             String source,
             String evidence
+    ) {
+    }
+
+    public record InputData(
+            List<PriceSeries> priceSeries,
+            List<BenchmarkSeries> benchmarkSeries,
+            List<OverlaySignal> overlaySignals
+    ) {
+    }
+
+    public record PriceSeries(
+            String stockCode,
+            String companyName,
+            String requestedPriceBasis,
+            String usedPriceBasis,
+            String source,
+            String cacheStatus,
+            Integer expectedTradingDayCount,
+            Integer availablePriceCount,
+            Double missingRate,
+            Boolean fallbackUsed,
+            List<PricePoint> data,
+            List<Warning> warnings
+    ) {
+    }
+
+    public record BenchmarkSeries(
+            String benchmarkCode,
+            String benchmarkName,
+            String source,
+            Boolean benchmarkAvailable,
+            Integer expectedTradingDayCount,
+            Integer availablePriceCount,
+            Double missingRate,
+            List<PricePoint> data,
+            List<Warning> warnings
+    ) {
+    }
+
+    public record PricePoint(
+            String ts,
+            Double close
+    ) {
+    }
+
+    public record Warning(
+            String code,
+            String message,
+            String userMessage,
+            String severity,
+            String target
     ) {
     }
 }

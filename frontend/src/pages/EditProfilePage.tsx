@@ -10,10 +10,19 @@ const inputClass =
 
 const labelClass = "block text-sm font-medium text-ink-2 mb-1.5";
 
-// 생년월일은 백엔드에 6자리 문자열(YYMMDD)로 저장된다. 세기 추정 없이 그대로 표기.
+// 생년월일은 앞 6자리(YYMMDD)만 화면에 표기한다.
 const formatBirthdate = (v: string): string => {
-  if (/^\d{6}$/.test(v)) return `${v.slice(0, 2)}.${v.slice(2, 4)}.${v.slice(4, 6)}`;
+  if (/^\d{6,7}$/.test(v)) return `${v.slice(0, 2)}.${v.slice(2, 4)}.${v.slice(4, 6)}`;
   return v || "-";
+};
+
+const formatGender = (gender: string, birthdate: string): string => {
+  if (gender === "male") return "남성";
+  if (gender === "female") return "여성";
+  const digit = birthdate.replace(/[^0-9]/g, "").charAt(6);
+  if (digit === "1" || digit === "3") return "남성";
+  if (digit === "2" || digit === "4") return "여성";
+  return "-";
 };
 
 function Card({
@@ -55,6 +64,7 @@ export default function EditProfilePage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState(""); // 아이디 = 이메일, 변경 불가
   const [birthdate, setBirthdate] = useState(""); // 변경 불가
+  const [gender, setGender] = useState(""); // 변경 불가
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -71,6 +81,7 @@ export default function EditProfilePage() {
         setPhone(p.phone ?? "");
         setEmail(p.email ?? "");
         setBirthdate(p.birthdate ?? "");
+        setGender(p.gender ?? "");
         setInitial({ name: p.name ?? "", phone: p.phone ?? "" });
       })
       .catch((e) => {
@@ -161,6 +172,14 @@ export default function EditProfilePage() {
                 <input
                   className={inputClass}
                   value={formatBirthdate(birthdate)}
+                  disabled
+                />
+              </div>
+              <div>
+                <label className={labelClass}>성별</label>
+                <input
+                  className={inputClass}
+                  value={formatGender(gender, birthdate)}
                   disabled
                 />
               </div>

@@ -7,6 +7,7 @@ import com.qaima.dto.feature3.Feature3BenchmarkSeriesResponseDto;
 import com.qaima.external.IndustryIndexFetcher;
 import com.qaima.repository.IndustryIndexOhlcvRepository;
 import com.qaima.repository.IndustryIndexRepository;
+import com.qaima.service.candle.CandleTimePolicy;
 import com.qaima.service.tradingcalendar.TradingCalendarService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -221,10 +222,18 @@ public class Feature3BenchmarkSeriesService {
         if (rows == null || rows.isEmpty()) {
             return List.of();
         }
-        return rows.stream()
+        java.util.LinkedHashMap<LocalDate, IndustryIndexOhlcv> deduped = new java.util.LinkedHashMap<>();
+        rows.stream()
                 .filter(Objects::nonNull)
                 .filter(row -> row.getId() != null && row.getId().getTs() != null)
                 .filter(row -> row.getClose() != null && row.getClose().signum() > 0)
+                .sorted(Comparator.comparing(row -> row.getId().getTs()))
+                .forEach(row -> deduped.put(
+                        CandleTimePolicy.tradingDate(row.getId().getTs(), CandleTimePolicy.DEFAULT_TRADING_ZONE),
+                        row
+                ));
+
+        return deduped.values().stream()
                 .sorted(Comparator.comparing(row -> row.getId().getTs()))
                 .toList();
     }
@@ -285,7 +294,11 @@ public class Feature3BenchmarkSeriesService {
         double missingRate = round(Math.max(0.0, 1.0 - ((double) availableCount / Math.max(expected, 1))));
         List<Feature3BenchmarkSeriesResponseDto.PricePoint> points = sanitized.stream()
                 .map(row -> new Feature3BenchmarkSeriesResponseDto.PricePoint(
-                        row.getId().getTs().toString(),
+                        CandleTimePolicy.canonicalTs(
+                                row.getId().getTs(),
+                                Freq.ONE_D,
+                                CandleTimePolicy.DEFAULT_TRADING_ZONE
+                        ).toString(),
                         row.getClose().doubleValue()
                 ))
                 .toList();
@@ -314,7 +327,7 @@ public class Feature3BenchmarkSeriesService {
         LocalDate latestDbDate = rows.stream()
                 .filter(Objects::nonNull)
                 .filter(row -> row.getId() != null && row.getId().getTs() != null)
-                .map(row -> row.getId().getTs().atZoneSameInstant(KST).toLocalDate())
+                .map(row -> CandleTimePolicy.tradingDate(row.getId().getTs(), CandleTimePolicy.DEFAULT_TRADING_ZONE))
                 .max(Comparator.naturalOrder())
                 .orElse(null);
         return latestDbDate == null || latestDbDate.isBefore(window.to());

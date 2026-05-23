@@ -19,6 +19,8 @@ export interface AnalysisExplainSection {
 
 export interface AnalysisPanelResult {
   explain?: {
+    provider?: string | null;
+    model?: string | null;
     text?: string | null;
     sections?: {
       priceFlow?: AnalysisExplainSection | null;

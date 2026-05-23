@@ -32,4 +32,5 @@ public class FeatOneRequestDto {
 
     private Boolean includeExplain;
     private String llmVendor;
+    private String investLevel;
 }

@@ -36,7 +36,8 @@ public class Feature2RequestNormalizer {
                 normalizePeerCount(req == null ? null : req.getPeerCount()),
                 normalizeMaxLag(req == null ? null : req.getMaxLag()),
                 normalizeDisplayLimit(req == null ? null : req.getDisplayLimit()),
-                normalizeLlmVendor(req == null ? null : req.getLlmVendor())
+                normalizeLlmVendor(req == null ? null : req.getLlmVendor()),
+                normalizeInvestLevel(req == null ? null : req.getInvestLevel())
         );
     }
 
@@ -86,5 +87,15 @@ public class Feature2RequestNormalizer {
         }
         String trimmed = llmVendor.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeInvestLevel(String investLevel) {
+        if (investLevel == null || investLevel.isBlank()) {
+            return "초급자";
+        }
+        return switch (investLevel.trim()) {
+            case "초급자", "중급자", "고급자", "전문가" -> investLevel.trim();
+            default -> "초급자";
+        };
     }
 }

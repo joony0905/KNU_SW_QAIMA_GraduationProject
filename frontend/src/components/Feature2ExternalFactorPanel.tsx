@@ -176,6 +176,12 @@ export default function Feature2ExternalFactorPanel({
   onSelectRelatedStock,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ExternalFactorTab>("summary");
+  const hasInvestorFlowData = Boolean(
+    investorFlow?.stockSummary
+      || investorFlow?.marketSummary
+      || investorFlow?.stockSeries?.length
+      || investorFlow?.marketSeries?.length,
+  );
   const krBaseRate = macroRates?.krBaseRate ?? baseRateMetrics ?? null;
   const usdKrw = macroRates?.usdKrw ?? null;
   const krBondYields = useMemo(
@@ -252,6 +258,17 @@ export default function Feature2ExternalFactorPanel({
           }
         />
         <MetricTile
+          label="시장 수급"
+          value={
+            investorFlowLoading
+              ? "조회중"
+              : investorFlow?.marketSummary
+                ? formatFlowAmount(investorFlow.marketSummary.combinedNetBuyValueMillionSum)
+                : "-"
+          }
+          sub={investorFlow?.marketCode ?? "시장 매핑 없음"}
+        />
+        <MetricTile
           label="유사종목 흐름"
           value={
             peerFlowLocked ? (
@@ -268,7 +285,7 @@ export default function Feature2ExternalFactorPanel({
           sub={
             peerFlowLocked
               ? "분석 결과 보기 후 활성화"
-              : `피어 평균 ${formatSignedPct(peerDelta)}`
+              : `유사 종목군 평균 ${formatSignedPct(peerDelta)}`
           }
         />
         <MetricTile
@@ -371,28 +388,30 @@ export default function Feature2ExternalFactorPanel({
           {investorFlowError}
         </div>
       )}
-      {!investorFlowLoading && !investorFlowError && !investorFlow?.stockSummary && (
+      {!investorFlowLoading && !investorFlowError && !hasInvestorFlowData && (
         <div className="min-h-[360px] flex items-center justify-center text-sm text-ink-3 rounded-lg border border-line bg-bg-sunk">
           수급 데이터가 없습니다.
         </div>
       )}
-      {!investorFlowLoading && !investorFlowError && investorFlow?.stockSummary && (
+      {!investorFlowLoading && !investorFlowError && hasInvestorFlowData && investorFlow && (
         <>
           <div className="grid grid-cols-2 gap-2">
             <MetricTile
               label="외국인 누적"
-              value={formatFlowAmount(investorFlow.stockSummary.foreignNetBuyValueMillionSum)}
-              sub={`${investorFlow.stockSummary.pointCount}거래일`}
+              value={formatFlowAmount(investorFlow.stockSummary?.foreignNetBuyValueMillionSum)}
+              sub={investorFlow.stockSummary ? `${investorFlow.stockSummary.pointCount}거래일` : "종목 데이터 없음"}
             />
             <MetricTile
               label="기관 누적"
-              value={formatFlowAmount(investorFlow.stockSummary.institutionNetBuyValueMillionSum)}
-              sub={investorFlowDirectionText(investorFlow.stockSummary.direction)}
+              value={formatFlowAmount(investorFlow.stockSummary?.institutionNetBuyValueMillionSum)}
+              sub={investorFlow.stockSummary ? investorFlowDirectionText(investorFlow.stockSummary.direction) : "종목 데이터 없음"}
             />
             <MetricTile
               label="외국인+기관"
-              value={formatFlowAmount(investorFlow.stockSummary.combinedNetBuyValueMillionSum)}
-              sub={`${formatDate(investorFlow.stockSummary.startDate)} ~ ${formatDate(investorFlow.stockSummary.endDate)}`}
+              value={formatFlowAmount(investorFlow.stockSummary?.combinedNetBuyValueMillionSum)}
+              sub={investorFlow.stockSummary
+                ? `${formatDate(investorFlow.stockSummary.startDate)} ~ ${formatDate(investorFlow.stockSummary.endDate)}`
+                : "종목 데이터 없음"}
             />
             <MetricTile
               label="시장 수급"
@@ -404,10 +423,12 @@ export default function Feature2ExternalFactorPanel({
               sub={investorFlow.marketCode ?? "시장 매핑 없음"}
             />
           </div>
-          <div>
-            <p className="mb-2 text-sm font-semibold text-ink">종목 외국인/기관 순매수</p>
-            <InvestorFlowTrendChart points={investorFlow.stockSeries ?? []} height={210} />
-          </div>
+          {investorFlow.stockSeries?.length > 0 && (
+            <div>
+              <p className="mb-2 text-sm font-semibold text-ink">종목 외국인/기관 순매수</p>
+              <InvestorFlowTrendChart points={investorFlow.stockSeries} height={210} />
+            </div>
+          )}
           {investorFlow.marketSeries?.length > 0 && (
             <div>
               <p className="mb-2 text-sm font-semibold text-ink">시장 외국인/기관 순매수</p>
@@ -645,7 +666,7 @@ function PeerFlowSummaryCard({
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-ink-2">유사종목 흐름</p>
-            <p className="mt-1 text-xs text-ink-3">분석 결과 보기 후 피어 평균 흐름이 활성화됩니다.</p>
+            <p className="mt-1 text-xs text-ink-3">분석 결과 보기 후 유사 종목군 평균 흐름이 활성화됩니다.</p>
           </div>
           <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-ink-3">
             <Lock size={13} aria-hidden="true" />
@@ -660,10 +681,10 @@ function PeerFlowSummaryCard({
     anchorVsPeer == null
       ? "종목 대비 데이터 없음"
       : anchorVsPeer > 0.01
-        ? `분석 종목이 피어 평균보다 ${formatSignedPct(anchorVsPeer)} 강함`
+        ? `분석 종목이 유사 종목군 평균보다 ${formatSignedPct(anchorVsPeer)} 강함`
         : anchorVsPeer < -0.01
-          ? `분석 종목이 피어 평균보다 ${formatSignedPct(Math.abs(anchorVsPeer))} 약함`
-          : "분석 종목과 피어 평균 흐름이 유사";
+          ? `분석 종목이 유사 종목군 평균보다 ${formatSignedPct(Math.abs(anchorVsPeer))} 약함`
+          : "분석 종목과 유사 종목군 평균 흐름이 유사";
 
   return (
     <div className="rounded-lg border border-line bg-surface px-3 py-3">
@@ -678,7 +699,7 @@ function PeerFlowSummaryCard({
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
         <div className="rounded-md bg-bg-sunk px-2 py-2">
-          <p className="text-ink-3">피어 평균</p>
+          <p className="text-ink-3">유사 종목군 평균</p>
           <p className="mt-0.5 font-bold text-ink">{formatSignedPct(peerDelta)}</p>
         </div>
         <div className="rounded-md bg-bg-sunk px-2 py-2">
@@ -686,7 +707,7 @@ function PeerFlowSummaryCard({
           <p className="mt-0.5 font-bold text-ink">{formatSignedPct(anchorDelta)}</p>
         </div>
         <div className="rounded-md bg-bg-sunk px-2 py-2">
-          <p className="text-ink-3">피어 수</p>
+          <p className="text-ink-3">유사 종목 수</p>
           <p className="mt-0.5 font-bold text-ink">{peerCount}개</p>
         </div>
       </div>

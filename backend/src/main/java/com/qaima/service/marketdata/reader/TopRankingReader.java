@@ -8,6 +8,7 @@ import com.qaima.dto.featuredstock.FeaturedStockDto;
 import com.qaima.dto.featuredstock.FeaturedStockTopic;
 import com.qaima.external.KrStockClient;
 import com.qaima.repository.StockRepository;
+import com.qaima.service.tradingcalendar.TradingCalendarService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
@@ -37,22 +38,26 @@ public class TopRankingReader {
     private static final Duration MARKET_TTL = Duration.ofSeconds(10);
     private static final DateTimeFormatter CACHE_DATE_FORMATTER = DateTimeFormatter.BASIC_ISO_DATE;
     private static final TypeReference<List<FeaturedStockDto>> FEATURED_STOCK_LIST_TYPE = new TypeReference<>() {};
+    private static final String KRX_MARKET = "KRX";
 
     private final KrStockClient krStockClient;
     private final StockRepository stockRepository;
     private final ReactiveStringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final TradingCalendarService tradingCalendarService;
 
     public TopRankingReader(
             KrStockClient krStockClient,
             StockRepository stockRepository,
             ReactiveStringRedisTemplate redisTemplate,
-            @Qualifier("redisObjectMapper") ObjectMapper objectMapper
+            @Qualifier("redisObjectMapper") ObjectMapper objectMapper,
+            TradingCalendarService tradingCalendarService
     ) {
         this.krStockClient = krStockClient;
         this.stockRepository = stockRepository;
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
+        this.tradingCalendarService = tradingCalendarService;
     }
 
     public Mono<List<FeaturedStockDto>> fetch(FeaturedStockTopic topic, int limit) {
@@ -103,25 +108,37 @@ public class TopRankingReader {
     private CachePolicy cachePolicy(FeaturedStockTopic topic, int limit) {
         LocalDateTime now = LocalDateTime.now(KST);
         LocalTime time = now.toLocalTime();
+        LocalDate today = now.toLocalDate();
+        boolean tradingDay = tradingCalendarService.isTradingDay(today, KRX_MARKET);
 
-        if (!time.isBefore(PRE_OPEN_CACHE_CUTOFF) && time.isBefore(MARKET_CACHE_START)) {
+        if (tradingDay && !time.isBefore(PRE_OPEN_CACHE_CUTOFF) && time.isBefore(MARKET_CACHE_START)) {
             return CachePolicy.disabled();
         }
 
-        LocalDate rankingDate = time.isBefore(PRE_OPEN_CACHE_CUTOFF)
-                ? now.toLocalDate().minusDays(1)
-                : now.toLocalDate();
+        LocalDate rankingDate = rankingDate(today, time, tradingDay);
         String key = "ranking-stocks:%s:%s:%d".formatted(rankingDate.format(CACHE_DATE_FORMATTER), topic, limit);
 
-        if (!time.isBefore(MARKET_CACHE_START) && time.isBefore(MARKET_CACHE_END)) {
+        if (tradingDay && !time.isBefore(MARKET_CACHE_START) && time.isBefore(MARKET_CACHE_END)) {
             return new CachePolicy(true, key, MARKET_TTL);
         }
 
-        LocalDate cutoffDate = time.isBefore(PRE_OPEN_CACHE_CUTOFF)
-                ? now.toLocalDate()
-                : now.toLocalDate().plusDays(1);
+        LocalDate cutoffDate = nextPreOpenCutoffDate(today, time, tradingDay);
         Duration ttl = Duration.between(now, LocalDateTime.of(cutoffDate, PRE_OPEN_CACHE_CUTOFF));
         return !ttl.isZero() && !ttl.isNegative() ? new CachePolicy(true, key, ttl) : CachePolicy.disabled();
+    }
+
+    private LocalDate rankingDate(LocalDate today, LocalTime time, boolean tradingDay) {
+        if (tradingDay && !time.isBefore(PRE_OPEN_CACHE_CUTOFF)) {
+            return today;
+        }
+        return tradingCalendarService.previousTradingDay(today, KRX_MARKET);
+    }
+
+    private LocalDate nextPreOpenCutoffDate(LocalDate today, LocalTime time, boolean tradingDay) {
+        if (tradingDay && time.isBefore(PRE_OPEN_CACHE_CUTOFF)) {
+            return today;
+        }
+        return tradingCalendarService.nextTradingDay(today, KRX_MARKET);
     }
 
     private Mono<List<FeaturedStockDto>> filterSupportedEquities(List<FeaturedStockDto> rankings) {

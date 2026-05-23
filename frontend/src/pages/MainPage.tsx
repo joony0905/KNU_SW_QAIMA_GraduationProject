@@ -9,6 +9,7 @@ import { logout } from "../api/auth";
 import { clearAccessToken } from "../api/tokenStore";
 import { clearUser } from "../api/userStore";
 import { clearTokenBalance } from "../api/billingStore";
+import qaimaLogo from "../assets/qaima-final.png";
 
 // ───────────────────────────────────────────────────────────────
 // Hero AI 비주얼 — 6 streams convergence (Qaima 로고 자리 포함)
@@ -200,9 +201,7 @@ function HeroVisual() {
         <circle cx={target[0]} cy={target[1]} r="44" fill={surface} stroke={accent} strokeWidth="2" />
         <g transform={`translate(${target[0]} ${target[1]})`}>
           <circle r="28" fill="none" stroke={inkSoft} strokeWidth="1" strokeDasharray="2 3" opacity="0.45" />
-          <text x="0" y="3" textAnchor="middle" fontSize="8" fill={inkSoft} fontFamily="JetBrains Mono, monospace" letterSpacing="0.1em" opacity="0.6">
-            LOGO
-          </text>
+          <image href={qaimaLogo} x="-23" y="-23" width="46" height="46" preserveAspectRatio="xMidYMid meet" />
         </g>
 
         <text x={target[0]} y={target[1] - 56} textAnchor="middle" fontSize="9" fill={inkSoft} fontFamily="JetBrains Mono, monospace" letterSpacing="0.18em" fontWeight="600">
@@ -427,7 +426,7 @@ export default function MainPage() {
       tag: "FEATURE 02", title: "외부요인", en: "Macro & Context",
       desc: "산업 지수, 금리, 뉴스, 공매도, 유사 종목 — 한 종목을 둘러싼 외부 환경을 모두 모아 분석합니다.",
       visual: "radar" as const,
-      bullets: ["산업 peer cluster", "기준금리 시계열", "실시간 뉴스 큐레이션"],
+      bullets: ["산업 유사 종목군", "기준금리 시계열", "실시간 뉴스 큐레이션"],
       to: "/feature/2",
     },
     {

@@ -5,6 +5,7 @@ export interface ApiResponse<T> {
     timestamp?: string;
     warning?: string | null;
     warnings?: string[];
+    reportId?: number | null;
   } | null;
   data: T;
   errors: Array<{

@@ -8,7 +8,7 @@ from app.models.feature2 import (
     NewsSentimentRequest,
     NewsSentimentResponse,
     NewsSentimentResultItem,
-    Feature2ExplainRequest,
+    Feature2AnalysisRequest,
     Feature2ExplainResponse,
     PeerClusterRequest,
     PeerClusterResponse,
@@ -62,10 +62,10 @@ async def news_sentiment(req: NewsSentimentRequest) -> NewsSentimentResponse:
         raise HTTPException(status_code=500, detail=f"NEWS_SENTIMENT_FAILED:{e.__class__.__name__}")
 
 
-@router.post("/explain", response_model=Feature2ExplainResponse)
-async def explain(req: Feature2ExplainRequest) -> Feature2ExplainResponse:
+@router.post("/analysis", response_model=Feature2ExplainResponse)
+async def analysis(req: Feature2AnalysisRequest) -> Feature2ExplainResponse:
     try:
-        return await analyze_feature2_explain(req)
+        return await analyze_feature2_explain(req.to_explain_request())
     except Exception as e:
-        log.exception("feature2 explain failed")
-        raise HTTPException(status_code=500, detail=f"FEATURE2_EXPLAIN_FAILED:{e.__class__.__name__}")
+        log.exception("feature2 analysis explain failed")
+        raise HTTPException(status_code=500, detail=f"FEATURE2_ANALYZE_FAILED:{e.__class__.__name__}")

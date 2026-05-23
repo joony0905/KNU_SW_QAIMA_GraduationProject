@@ -17,6 +17,7 @@ const normalizeStock = (raw: any): StockDto => ({
 export const getStockByCode = async (stockCode: string): Promise<StockDto> => {
   const res = await api.get<ApiResponse<StockDto>>(
     ENDPOINTS.stocks.getByCode(stockCode),
+    { _skipAuthRedirect: true },
   );
   return normalizeStock((res.data as any)?.data);
 };
@@ -24,6 +25,7 @@ export const getStockByCode = async (stockCode: string): Promise<StockDto> => {
 export const searchStocks = async (query: string): Promise<StockDto[]> => {
   const res = await api.get<ApiResponse<StockDto[]>>(
     ENDPOINTS.stocks.search(query),
+    { _skipAuthRedirect: true },
   );
   return res.data.data;
 };

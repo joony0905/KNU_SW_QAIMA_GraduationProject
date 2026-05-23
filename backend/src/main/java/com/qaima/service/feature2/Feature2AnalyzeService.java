@@ -6,6 +6,7 @@ import com.qaima.domain.BaseRate;
 import com.qaima.domain.Exchange;
 import com.qaima.domain.ShortSelling;
 import com.qaima.domain.Stock;
+import com.qaima.dto.common.AnalysisExplainDto;
 import com.qaima.dto.feature2.Feature2AnalyzeRequestDto;
 import com.qaima.dto.feature2.Feature2AnalyzeResponseDto;
 import com.qaima.dto.feature2.Feature2ExplainMetricsDto;
@@ -111,12 +112,12 @@ public class Feature2AnalyzeService {
                                         .then(attachTrendSummaries(stockContext, command, meta, metrics))
                                         .then(attachNews(stockContext, meta, metrics))
                                         .then(Mono.defer(() -> loadExplain(command, meta, metrics)))
-                                        .defaultIfEmpty("")
                                         .map(explain -> responseFactory.success(
                                                 metrics,
                                                 meta,
-                                                explain.isBlank() ? null : explain
-                                        ));
+                                                explain
+                                        ))
+                                        .switchIfEmpty(Mono.fromSupplier(() -> responseFactory.success(metrics, meta)));
                             });
                 })
                 .onErrorResume(ex -> {
@@ -343,7 +344,7 @@ public class Feature2AnalyzeService {
                 .then();
     }
 
-    private Mono<String> loadExplain(
+    private Mono<AnalysisExplainDto> loadExplain(
             Feature2Command command,
             Feature2MetaDto meta,
             Feature2MetricsDto metrics
@@ -368,6 +369,7 @@ public class Feature2AnalyzeService {
                 .freq(command.freq())
                 .window(command.window())
                 .llmVendor(command.llmVendor())
+                .investLevel(command.investLevel())
                 .metrics(explainMetrics)
                 .build();
 
@@ -376,8 +378,8 @@ public class Feature2AnalyzeService {
                         .orElseGet(List::of)
                         .forEach(meta::addWarning))
                 .flatMap(response -> {
-                    String explain = response.getExplain();
-                    if (explain == null || explain.isBlank()) {
+                    AnalysisExplainDto explain = response.getExplain();
+                    if (explain == null) {
                         return Mono.empty();
                     }
                     return Mono.just(explain);
@@ -409,18 +411,10 @@ public class Feature2AnalyzeService {
                 .map(publishedAt -> publishedAt.toLocalDate())
                 .findFirst()
                 .orElse(null);
-        List<NewsItemDto> dailyNews = summaryDate == null
-                ? scoredNews
-                : scoredNews.stream()
-                .filter(item -> item.getPublishedAt() != null
-                        && summaryDate.equals(item.getPublishedAt().toLocalDate()))
-                .toList();
-
-        List<NewsItemDto> avgTargets = dailyNews.isEmpty() ? scoredNews : dailyNews;
-        BigDecimal dailyAvgScore = avgTargets.stream()
+        BigDecimal recentAvgScore = scoredNews.stream()
                 .map(NewsItemDto::getSentimentScore)
                 .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(BigDecimal.valueOf(avgTargets.size()), 6, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(scoredNews.size()), 6, RoundingMode.HALF_UP);
 
         List<Feature2MetricsDto.RecentNewsSentiment> recentItems = scoredNews.stream()
                 .limit(5)
@@ -436,8 +430,8 @@ public class Feature2AnalyzeService {
 
         return Feature2MetricsDto.NewsSentimentSummary.builder()
                 .summaryDate(summaryDate)
-                .dailyAvgScore(dailyAvgScore)
-                .dailyNewsCount(avgTargets.size())
+                .dailyAvgScore(recentAvgScore)
+                .dailyNewsCount(scoredNews.size())
                 .scoredNewsCount(scoredNews.size())
                 .positiveCount(countByLabel(scoredNews, "positive"))
                 .neutralCount(countByLabel(scoredNews, "neutral"))

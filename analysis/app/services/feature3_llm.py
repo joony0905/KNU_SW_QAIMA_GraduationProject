@@ -7,6 +7,7 @@ import os
 import httpx
 
 from app.models.feature3 import Feature3ExplainResult, Feature3Warning, PortfolioAnalyzeResponse
+from app.services.llm.invest_level import invest_level_prompt
 
 log = logging.getLogger(__name__)
 
@@ -86,8 +87,9 @@ def _int_env(name: str, default: int) -> int:
 async def generate_feature3_explain(
     response: PortfolioAnalyzeResponse,
     vendor: str | None,
+    invest_level: str | None = None,
 ) -> Feature3ExplainResult:
-    prompt = _prompt(response)
+    prompt = _prompt(response, invest_level)
     normalized_vendor = _normalize_vendor(vendor)
     log.info(
         "[feature3][llm] start requested_vendor=%s normalized_vendor=%s prompt_chars=%s overlays=%s adjusted_portfolios=%s",
@@ -251,7 +253,7 @@ async def _gemini(prompt: str, vendor_label: str | None) -> Feature3ExplainResul
         return _fallback("GEMINI", model, "LLM_API_KEY_MISSING")
     payload = {
         "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1800},
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1800, "responseMimeType": "application/json"},
     }
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -336,33 +338,40 @@ def _openai_response_schema() -> dict:
     }
 
 
-def _prompt(response: PortfolioAnalyzeResponse) -> str:
+def _prompt(response: PortfolioAnalyzeResponse, invest_level: str | None = None) -> str:
     payload = {
-        "sectionData": _explain_context(response),
+        "analysis_context": _explain_context(response),
     }
     return (
         "Feature3 포트폴리오 리스크 분석 결과를 일반 사용자에게 설명한다.\n"
-        "금지: 공분산, Ledoit-Wolf, 감마, 효용함수 같은 내부 수학 용어를 먼저 쓰지 않는다.\n"
+        f"{invest_level_prompt(invest_level)}"
+        "금융/계량 용어인 CAPM, SCL, SML, Ledoit-Wolf, 공분산, 베타, Sharpe, 상관계수는 투자레벨에 맞춰 사용할 수 있다.\n"
+        "초급자와 중급자에게는 금융/계량 용어를 처음 쓸 때 쉬운 의미를 함께 붙인다.\n"
+        "고급자와 전문가에게는 금융/계량 용어를 자연스럽게 사용할 수 있다.\n"
+        "blendedExpectedReturn, halfTurnoverBudget, singleNameDeltaCap, adjustedPortfolioComparisons, sectionData, insightContext, overlaySignals 같은 내부 필드명과 구현 변수명은 최종 설명에 그대로 쓰지 않는다.\n"
+        "내부 필드명은 의미 중심 표현으로 바꾼다. 예: blendedExpectedReturn은 결합 기대수익률, halfTurnoverBudget은 비중 변화 한도, singleNameDeltaCap은 개별 종목 비중 변화 제한으로 표현한다.\n"
         "반드시 제공된 JSON의 숫자와 경고만 사용한다. 새 숫자, 새 종목, 새 원인은 만들지 않는다.\n"
-        "sectionData만 근거로 사용한다.\n"
-        "데이터가 부족한 섹션은 단정하지 말고 '확인 가능한 범위에서는'처럼 제한적으로 설명한다.\n"
-        "insightContext는 단순 요약이 아니라 각 지표의 투자위험상 의미를 해석하기 위한 우선 근거로 사용한다.\n"
-        "insightContext의 interpretationCue는 그대로 복사하지 말고, 섹션별 문맥에 맞춰 자연스럽게 풀어서 설명한다.\n"
+        "입력 JSON의 analysis_context만 근거로 사용한다.\n"
+        "데이터가 부족한 섹션은 한계를 짧게 밝히되, 확인 가능한 리스크 방향과 점검 포인트는 설명한다.\n"
+        "interpretationGuide는 단순 요약이 아니라 각 지표의 투자위험상 의미를 해석하기 위한 우선 근거로 사용한다.\n"
+        "interpretationGuide의 해석 힌트는 그대로 복사하지 말고, 섹션별 문맥에 맞춰 자연스럽게 풀어서 설명한다.\n"
         "가능하면 각 섹션 summary에는 관련 종목명 또는 포트폴리오명을 최소 1개 포함해 사용자가 화면 카드와 연결해 읽을 수 있게 한다.\n"
-        "core_risk는 currentPortfolio, topRiskContributors, riskDrivers를 근거로 쓴다.\n"
+        "core_risk는 현재 포트폴리오, 주요 리스크 기여 종목, 주요 리스크 요인을 근거로 쓴다.\n"
         "volatility_analysis는 volatilityAnalysis.portfolios와 summary의 목표 변동성 차이를 근거로 쓴다.\n"
         "efficiency_analysis는 efficiencyAnalysis.portfolios의 Sharpe, expectedReturn, volatility를 근거로 위험 대비 효율을 설명한다.\n"
-        "efficiency_analysis는 반드시 최적화 입력 기대수익률이 과거 수익률 추정치 단독이 아니라 CAPM 기대수익률을 결합한 blendedExpectedReturn이라는 점을 설명한다.\n"
+        "efficiency_analysis는 반드시 최적화 입력 기대수익률이 과거 수익률 추정치 단독이 아니라 CAPM 기대수익률을 결합한 기대수익률이라는 점을 설명한다.\n"
         "CAPM은 APT가 아니며, CAPM 기대수익률은 정답이나 보장 수익률이 아니라 표본 수, R², correlation, 변동성, 벤치마크 품질을 반영한 추정치다.\n"
         "KOSPI/KOSDAQ 혼합 포트폴리오는 상장시장별 benchmark를 사용하는 exchange-aware CAPM proxy로 설명하고, 정식 multi-factor model 또는 APT라고 표현하지 않는다.\n"
         "beta와 SML은 benchmark별로 분리해 해석해야 하며, equity risk premium은 현재 MVP에서 공통 정책값을 사용한다는 점을 필요한 경우 언급한다.\n"
-        "CAPM 반영 비중이 낮으면 낮은 R², 낮은 correlation, 높은 volatility, 표본 부족, benchmark 품질 중 sectionData에 있는 근거만 사용해 제한적으로 설명한다.\n"
+        "CAPM 반영 비중이 낮으면 낮은 R², 낮은 correlation, 높은 volatility, 표본 부족, benchmark 품질 중 입력 JSON에 있는 근거만 사용해 제한적으로 설명한다.\n"
         "SCL/SML은 시장 민감도와 기대수익률 위치를 해석하기 위한 진단 지표이며 투자 권고선이나 목표 비중으로 표현하지 않는다.\n"
-        "overlay_observations는 overlaySignals, overlayExplanations, overlayVisualizations를 근거로 체크된 보조 관측의 방향성과 리스크 함의를 설명한다.\n"
+        "리스크 기여도, 변동성, Sharpe, 결합 기대수익률, 보조 관측 신호가 같은 방향이면 신호 일관성으로 설명한다.\n"
+        "서로 엇갈리면 포트폴리오 판단을 단정하지 말고 상충 신호와 추가 점검 포인트로 설명한다.\n"
+        "overlay_observations는 보조 관측 신호, 보조 관측 설명, 시각화 요약을 근거로 체크된 보조 관측의 방향성과 리스크 함의를 설명한다.\n"
         "보조관측 중 종목 분산구조 반영은 peer/correlation overlay 신호와 portfolioInternalCorrelationSummary를 함께 보되, 내부 상관관계가 실제 포트폴리오의 ground truth이고 peer 보조관측은 참고 신호로만 설명한다.\n"
         "peer 보조관측과 내부 상관관계가 같은 방향이면 제한적으로 연관성을 설명하고, 다르면 왜곡하지 말고 확인 가능한 차이로 설명한다.\n"
         "보조 관측 반영 포트폴리오는 정식 APT 모델이 아니라 선택한 보조 지표를 제한적으로 반영한 비교 포트폴리오다.\n"
-        "portfolio_comparison은 adjustedPortfolioComparisons의 weightChanges와 volatility를 근거로 하되, 행동 지시가 아니라 보조 지표 반영 전후의 차이로 설명한다.\n"
+        "portfolio_comparison은 보조 지표 반영 전후의 비중 변화와 변동성 변화를 근거로 하되, 행동 지시가 아니라 비교 결과의 차이로 설명한다.\n"
         "final_judgement는 위 세 섹션을 종합하되 매수/매도/리밸런싱 권고처럼 쓰지 않는다.\n"
         "'CAPM이 정답이다', '예상 수익률을 보장한다', '추천 비중' 같은 표현은 금지한다.\n"
         "'CAPM 기대수익률을 품질 지표 기반 신뢰도로 제한 반영', '시장 벤치마크 설명력이 낮아 CAPM 반영비중이 제한됨', '최적화는 결합 기대수익률을 사용', 'SCL/SML은 진단 지표' 같은 뉘앙스로 작성한다.\n"
@@ -377,7 +386,7 @@ def _prompt(response: PortfolioAnalyzeResponse) -> str:
         "overall.summary는 final_judgement.summary와 동일하게 둔다. overall.bullets와 overall.risks는 빈 배열로 둔다.\n"
         "adjustedPortfolios는 추천/최적 포트폴리오가 아니라 보조 지표 반영 비교 포트폴리오다.\n"
         "보조 관측 반영 결과는 core risk 최적화 결과를 대체하지 않고, 선택한 보조 지표가 비중과 변동성에 미치는 제한적 변화를 보여준다.\n"
-        "halfTurnoverBudget과 singleNameDeltaCap을 넘는 강한 결론을 쓰지 않는다.\n"
+        "비중 변화 한도와 개별 종목 비중 변화 제한을 넘는 행동 결론은 쓰지 않되, 그 제약 안에서 관찰되는 변화의 의미는 설명한다.\n"
         "반드시 아래 JSON 구조만 출력한다. 마크다운 코드펜스와 추가 문장은 금지한다.\n"
         "{\n"
         '  "sections": {\n'
@@ -396,12 +405,12 @@ def _prompt(response: PortfolioAnalyzeResponse) -> str:
 
 def _explain_context(response: PortfolioAnalyzeResponse) -> dict:
     return {
-        "insightContext": _insight_context(response),
+        "interpretationGuide": _insight_context(response),
         "coreRisk": {
             "summary": response.summary.model_dump(mode="json"),
             "currentPortfolio": _portfolio_brief(response.current_portfolio),
             "topRiskContributors": _top_risk_contributors(response.current_portfolio),
-            "riskDrivers": _brief_risk_drivers(response),
+            "mainRiskFactors": _brief_risk_drivers(response),
             "dataQuality": {
                 "includedHoldingCount": response.policy.data_quality.included_holding_count,
                 "excludedHoldingCount": response.policy.data_quality.excluded_holding_count,
@@ -431,12 +440,12 @@ def _explain_context(response: PortfolioAnalyzeResponse) -> dict:
         },
         "portfolioComparison": {
             "basicPortfolios": [_portfolio_brief(portfolio) for portfolio in response.basic_portfolios],
-            "adjustedPortfolioComparisons": _adjusted_portfolio_comparisons(response),
+            "supplementaryPortfolioComparisons": _adjusted_portfolio_comparisons(response),
             "overlayScenarioPolicy": {
                 "name": "Overlay Scenario Policy v1",
                 "role": "supplementary_indicator_adjusted_comparison_not_recommendation_or_apt",
-                "halfTurnoverBudget": 0.09,
-                "singleNameDeltaCap": 0.035,
+                "weightChangeLimit": 0.09,
+                "singleHoldingChangeLimit": 0.035,
                 "cashPolicy": "preserve_core_cash_weight",
             },
         },
@@ -811,8 +820,8 @@ def _scenario_impact_insight(response: PortfolioAnalyzeResponse) -> dict:
         "policy": {
             "role": "risk_stress_visualization",
             "notRecommendation": True,
-            "halfTurnoverBudget": 0.09,
-            "singleNameDeltaCap": 0.035,
+            "weightChangeLimit": 0.09,
+            "singleHoldingChangeLimit": 0.035,
             "cashPolicy": "preserve_core_cash_weight",
         },
         "scenarios": scenarios,
@@ -996,7 +1005,7 @@ def _capm_explain_context(response: PortfolioAnalyzeResponse) -> dict:
             "benchmarkSelectionReason": asset.get("benchmarkSelectionReason"),
             "historicalExpectedReturn": asset.get("historicalExpectedReturn"),
             "capmExpectedReturn": asset.get("capmExpectedReturn"),
-            "blendedExpectedReturn": asset.get("blendedExpectedReturn"),
+            "combinedExpectedReturn": asset.get("blendedExpectedReturn"),
             "historicalWeight": asset.get("historicalWeight"),
             "capmWeight": asset.get("capmWeight"),
             "confidence": asset.get("confidence"),
@@ -1016,7 +1025,7 @@ def _capm_explain_context(response: PortfolioAnalyzeResponse) -> dict:
 
     return {
         "policyNote": "CAPM은 APT나 정식 multi-factor model이 아닙니다. KOSPI/KOSDAQ 혼합 포트폴리오에서는 상장시장별 benchmark를 쓰는 exchange-aware CAPM proxy로 beta와 SML을 benchmark별로 해석하며, equity risk premium은 MVP 공통 정책값을 사용합니다.",
-        "optimizerExpectedReturnInput": "blendedExpectedReturn",
+        "optimizerExpectedReturnInput": "combinedExpectedReturn",
         "benchmarkPolicy": benchmark_policy,
         "benchmarkMode": benchmark_policy.get("mode") if isinstance(benchmark_policy, dict) else None,
         "benchmarks": benchmark_policy.get("benchmarks") if isinstance(benchmark_policy, dict) else [],

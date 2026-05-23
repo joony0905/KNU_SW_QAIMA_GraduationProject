@@ -29,7 +29,7 @@ public class OAuth2SocialLoginService {
     private final AuthLoginLogService authLoginLogService;
     private final PlatformTransactionManager transactionManager;
 
-    public record SocialLoginResult(String refreshToken) {}
+    public record SocialLoginResult(String refreshToken, boolean profileRequired) {}
 
     private record SocialProfile(
             SocialProvider provider,
@@ -76,6 +76,9 @@ public class OAuth2SocialLoginService {
         if (user == null || user.getUserId() == null) {
             return fail(profile.provider(), "SOCIAL_ACCOUNT_INVALID", "Linked account is invalid", null, profile.email(), ip, ua);
         }
+        if (isProfileRequired(user) || isProfileIncomplete(user)) {
+            return issueSession(user, profile.provider(), profile.email(), ip, ua, true);
+        }
         if (user.getStatus() == null || !user.getStatus().equalsIgnoreCase("active")) {
             return fail(profile.provider(), "ACCOUNT_INACTIVE", "Account is inactive", user.getUserId(), profile.email(), ip, ua);
         }
@@ -94,7 +97,7 @@ public class OAuth2SocialLoginService {
                 ? Blocking.call(() -> socialAccountRepository.save(socialAccount)).then()
                 : Mono.empty();
 
-        return sync.then(issueSession(user, profile.provider(), profile.email(), ip, ua));
+        return sync.then(issueSession(user, profile.provider(), profile.email(), ip, ua, false));
     }
 
     private Mono<SocialLoginResult> createOrRejectNewAccount(SocialProfile profile,
@@ -126,7 +129,7 @@ public class OAuth2SocialLoginService {
                                             null,
                                             null
                                     ).onErrorResume(e -> Mono.empty())
-                                    .then(issueSession(savedUser, profile.provider(), profile.email(), ip, ua)));
+                                    .then(issueSession(savedUser, profile.provider(), profile.email(), ip, ua, true)));
                 });
     }
 
@@ -140,7 +143,7 @@ public class OAuth2SocialLoginService {
             user.setPasswordHash(null);
             user.setName(profile.name());
             user.setRole(UserRole.user);
-            user.setStatus("active");
+            user.setStatus("profile_required");
             user.setEmailVerified(true);
             user.setEmailVerifiedAt(Instant.now());
             user.setGlossaryHover(false);
@@ -165,7 +168,8 @@ public class OAuth2SocialLoginService {
                                                  SocialProvider provider,
                                                  String email,
                                                  String ip,
-                                                 String ua) {
+                                                 String ua,
+                                                 boolean profileRequired) {
         return loginSessionService.issueRefreshToken(user, ip, ua, null)
                 .flatMap(refreshToken -> authLoginLogService.event(
                                 loginEvent(provider),
@@ -177,7 +181,18 @@ public class OAuth2SocialLoginService {
                                 null,
                                 null
                         ).onErrorResume(e -> Mono.empty())
-                        .thenReturn(new SocialLoginResult(refreshToken)));
+                        .thenReturn(new SocialLoginResult(refreshToken, profileRequired)));
+    }
+
+    private static boolean isProfileRequired(User user) {
+        return user.getStatus() != null && user.getStatus().equalsIgnoreCase("profile_required");
+    }
+
+    private static boolean isProfileIncomplete(User user) {
+        return !StringUtils.hasText(user.getPhone())
+                || !StringUtils.hasText(user.getBirthdate())
+                || !StringUtils.hasText(user.getGender())
+                || !StringUtils.hasText(user.getCountry());
     }
 
     private Mono<SocialLoginResult> fail(SocialProvider provider,

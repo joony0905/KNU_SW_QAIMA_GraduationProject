@@ -204,6 +204,17 @@ button:focus-visible {
   animation-delay: 0.58s;
 }
 
+.qaima-zoom-host,
+.qaima-zoom-host > * {
+  transform: none !important;
+  animation: none !important;
+}
+
+.qaima-portfolio-zoom-active .qaima-page-in {
+  transform: none !important;
+  animation: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .qaima-page-in,
   .qaima-stagger > * {
@@ -230,6 +241,47 @@ button:focus-visible {
     opacity: 1 !important;
     transform: none !important;
     transition: none !important;
+  }
+}
+
+@keyframes qaima-modal-backdrop-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes qaima-modal-pop-in {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.qaima-modal-backdrop-in {
+  animation: qaima-modal-backdrop-in 0.2s ease-out both;
+}
+
+.qaima-modal-pop-in {
+  animation: qaima-modal-pop-in 0.32s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qaima-modal-backdrop-in,
+  .qaima-modal-pop-in {
+    animation: none !important;
   }
 }
 
@@ -349,6 +401,38 @@ button:focus-visible {
   transform: translateY(0) scale(1);
 }
 
+.qaima-pdf-capture.qaima-report-enter,
+.qaima-pdf-capture .qaima-report-enter,
+.qaima-pdf-capture.qaima-scroll-stagger > *,
+.qaima-pdf-capture .qaima-scroll-stagger > * {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+.qaima-pdf-capture.qaima-feature2-report::before,
+.qaima-pdf-capture .qaima-feature2-report::before {
+  display: none !important;
+}
+
+.qaima-pdf-capture.qaima-portfolio-report [aria-label*="파이차트"],
+.qaima-pdf-capture .qaima-portfolio-report [aria-label*="파이차트"],
+.qaima-pdf-capture.qaima-portfolio-report [aria-label*="비중 차트"],
+.qaima-pdf-capture .qaima-portfolio-report [aria-label*="비중 차트"] {
+  opacity: 1 !important;
+  clip-path: circle(74% at 50% 50%) !important;
+  transform: rotate(0deg) scale(1) !important;
+  animation: none !important;
+}
+
+.qaima-pdf-capture.qaima-portfolio-report [aria-label*="파이차트"]::after,
+.qaima-pdf-capture .qaima-portfolio-report [aria-label*="파이차트"]::after,
+.qaima-pdf-capture.qaima-portfolio-report [aria-label*="비중 차트"]::after,
+.qaima-pdf-capture .qaima-portfolio-report [aria-label*="비중 차트"]::after {
+  display: none !important;
+}
+
 .qaima-report-stagger > *:nth-child(1) {
   animation-delay: 0.04s;
 }
@@ -378,9 +462,9 @@ button:focus-visible {
 .qaima-portfolio-report [aria-label*="비중 차트"] {
   position: relative;
   overflow: hidden;
-  opacity: 0;
-  clip-path: circle(18% at 50% 50%);
-  transform: rotate(-115deg) scale(0.9);
+  opacity: 1;
+  clip-path: circle(74% at 50% 50%);
+  transform: rotate(0deg) scale(1);
   transform-origin: center;
 }
 

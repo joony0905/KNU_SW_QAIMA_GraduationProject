@@ -26,6 +26,10 @@ export default function OAuth2SuccessPage() {
         if (!ok) {
           throw new Error("인증 정보를 받아오지 못했습니다.");
         }
+        if (searchParams.get("profileRequired") === "true") {
+          navigate("/signup/social-complete", { replace: true });
+          return;
+        }
         const redirect =
           sessionStorage.getItem("qaima_redirect") || "/feature/1";
         sessionStorage.removeItem("qaima_redirect");

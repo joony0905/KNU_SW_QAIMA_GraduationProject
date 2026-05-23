@@ -80,9 +80,11 @@ export const requestPasswordReset = async (email: string): Promise<void> => {
 export interface SignupRequest {
   email: string;
   password: string;
+  verificationCode: string;
   name: string;
   birthdate: string;
   phone: string;
+  country: string;
 }
 
 export const signup = async (payload: SignupRequest): Promise<void> => {

@@ -21,4 +21,5 @@ public class Feature2AnalyzeRequestDto {
     private Integer maxLag;
     private Integer displayLimit;
     private String llmVendor;
+    private String investLevel;
 }

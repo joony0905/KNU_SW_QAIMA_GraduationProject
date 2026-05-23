@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 @Slf4j
 @Component
@@ -32,7 +33,7 @@ public class Feature2NewsSentimentClient {
         this.objectMapper = objectMapper;
     }
 
-    public SentimentBatchResponse analyze(List<NewsSentimentInput> items, String model) {
+    public Mono<SentimentBatchResponse> analyze(List<NewsSentimentInput> items, String model) {
         // TODO: 현재는 Spring이 정한 모델명을 전달하고, 추후 클라이언트 선택 모델을 그대로 넘기도록 확장한다.
         Feature2NewsSentimentExternalRequestDto requestDto = Feature2NewsSentimentExternalRequestDto.builder()
                 .items(items.stream()
@@ -47,13 +48,15 @@ public class Feature2NewsSentimentClient {
                 .model(model)
                 .build();
 
-        String body = webClient.post()
+        return webClient.post()
                 .uri("/feature2/news-sentiment")
                 .bodyValue(requestDto)
                 .retrieve()
                 .bodyToMono(String.class)
-                .block();
+                .map(this::parseResponse);
+    }
 
+    private SentimentBatchResponse parseResponse(String body) {
         try {
             Feature2NewsSentimentExternalEnvelopeDto envelope = tryReadEnvelope(body);
             Feature2NewsSentimentExternalResponseDto payload = envelope != null && envelope.getData() != null

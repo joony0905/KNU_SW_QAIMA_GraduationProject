@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 import math
+import logging
 
 import numpy as np
 
@@ -21,6 +22,7 @@ from app.services.market_data import (
 )
 
 
+log = logging.getLogger(__name__)
 MIN_CORR = 0.2
 # v1 조정 방식은 관측용 산업 공통 움직임 단순 차감이다.
 # TODO: 요인 모델 검증 후 BETA_RESIDUAL_RESERVED 구현을 추가한다.
@@ -137,7 +139,7 @@ def _align_returns_by_common_dates(
         ar = _log_returns(ap)
         br = _log_returns(op)
     except Exception as ex:
-        print(f"[DEBUG][_align_returns_by_common_dates] log return failed: {ex.__class__.__name__}: {ex}")
+        log.debug(f"[DEBUG][_align_returns_by_common_dates] log return failed: {ex.__class__.__name__}: {ex}")
         return None
 
     a_ret_dates = ad[1:]
@@ -153,7 +155,7 @@ def _align_returns_by_common_dates(
             common_b.append(j)
 
     if len(common_a) < min_common:
-        print(
+        log.debug(
             f"[DEBUG][_align_returns_by_common_dates] insufficient common return dates: "
             f"{len(common_a)} < {min_common}"
         )
@@ -178,7 +180,7 @@ def _best_lag_corr(
     """
     n = min(ar.size, br.size)
     if n < min_points:
-        print(f"[DEBUG][_best_lag_corr] n too short: {n} < {min_points}")
+        log.debug(f"[DEBUG][_best_lag_corr] n too short: {n} < {min_points}")
         return None, None
 
     best_lag: Optional[int] = None
@@ -208,7 +210,7 @@ def _best_lag_corr(
             best_corr = float(c)
 
     if best_lag is None:
-        print("[DEBUG][_best_lag_corr] no valid lag found")
+        log.debug("[DEBUG][_best_lag_corr] no valid lag found")
         return None, None
     return best_lag, float(best_corr)
 
@@ -230,12 +232,12 @@ def _rebased_pct_on_common_dates(series: PriceSeries, common_dates: List[np.date
 
     valid = np.where(~np.isnan(vals))[0]
     if valid.size == 0:
-        print("[DEBUG][_rebased_pct_on_common_dates] all values are NaN on common dates")
+        log.debug("[DEBUG][_rebased_pct_on_common_dates] all values are NaN on common dates")
         return np.full_like(vals, np.nan)
 
     base = vals[valid[0]]
     if base <= 0:
-        print(f"[DEBUG][_rebased_pct_on_common_dates] invalid base price: {base}")
+        log.debug(f"[DEBUG][_rebased_pct_on_common_dates] invalid base price: {base}")
         return np.full_like(vals, np.nan)
 
     return (vals / base) - 1.0
@@ -460,9 +462,9 @@ def _empty_response(
 def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     warnings: List[str] = []
 
-    print("=" * 80)
-    print("[DEBUG][compute_peer_cluster_v1] START")
-    print(
+    log.debug("=" * 80)
+    log.debug("[DEBUG][compute_peer_cluster_v1] START")
+    log.debug(
         "[DEBUG][compute_peer_cluster_v1] req = "
         f"industry_id={req.industry_id}, "
         f"anchor_stock_code={req.anchor_stock_code}, "
@@ -482,7 +484,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     if freq != "ONE_D":
         warnings.append("PEER_FREQ_NOT_SUPPORTED_FALLBACK_ONE_D")
         freq = "ONE_D"
-        print("[DEBUG][compute_peer_cluster_v1] freq fallback applied -> ONE_D")
+        log.debug("[DEBUG][compute_peer_cluster_v1] freq fallback applied -> ONE_D")
 
     # -------------------------
     # 1) pack 우선 로드. 없으면 기존 bulk 경로를 사용한다.
@@ -513,24 +515,24 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             if spring_warnings:
                 warnings.extend(list(spring_warnings))
 
-            print("[DEBUG][pack] loaded from spring pack")
-            print(f"[DEBUG][pack] members count = {len(members)}")
-            print(f"[DEBUG][pack] metas count   = {len(metas)}")
-            print(f"[DEBUG][pack] price_map cnt = {len(price_map)}")
-            print(f"[DEBUG][pack] liq_map cnt   = {len(liq_map)}")
-            print(f"[DEBUG][pack] spring warnings = {spring_warnings}")
-            print(f"[DEBUG][pack] anchor in members   = {req.anchor_stock_code in members}")
-            print(f"[DEBUG][pack] anchor in price_map = {req.anchor_stock_code in price_map}")
+            log.debug("[DEBUG][pack] loaded from spring pack")
+            log.debug(f"[DEBUG][pack] members count = {len(members)}")
+            log.debug(f"[DEBUG][pack] metas count   = {len(metas)}")
+            log.debug(f"[DEBUG][pack] price_map cnt = {len(price_map)}")
+            log.debug(f"[DEBUG][pack] liq_map cnt   = {len(liq_map)}")
+            log.debug(f"[DEBUG][pack] spring warnings = {spring_warnings}")
+            log.debug(f"[DEBUG][pack] anchor in members   = {req.anchor_stock_code in members}")
+            log.debug(f"[DEBUG][pack] anchor in price_map = {req.anchor_stock_code in price_map}")
 
             if req.anchor_stock_code in price_map:
                 aps = price_map[req.anchor_stock_code]
-                print(
+                log.debug(
                     "[DEBUG][pack] anchor series size = "
                     f"dates={len(aps.dates)}, close={len(aps.close)}"
                 )
 
         except Exception as ex:
-            print(f"[DEBUG][pack] spring pack fetch failed: {ex.__class__.__name__}: {ex}")
+            log.debug(f"[DEBUG][pack] spring pack fetch failed: {ex.__class__.__name__}: {ex}")
             return _empty_response(req, freq, warnings + ["SPRING_PACK_FETCH_FAILED", ex.__class__.__name__])
     else:
         # 기존 bulk 경로. 로컬/mock provider에서 사용한다.
@@ -539,32 +541,32 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         price_map = _market.get_price_series_bulk(members, freq=freq, window=req.window)
         liq_map = _market.get_liquidity_series_bulk(members, freq=freq, window=req.window)
 
-        print("[DEBUG][pack] loaded from legacy provider")
-        print(f"[DEBUG][pack] members count = {len(members)}")
-        print(f"[DEBUG][pack] metas count   = {len(metas)}")
-        print(f"[DEBUG][pack] price_map cnt = {len(price_map)}")
-        print(f"[DEBUG][pack] liq_map cnt   = {len(liq_map)}")
-        print(f"[DEBUG][pack] anchor in members   = {req.anchor_stock_code in members}")
-        print(f"[DEBUG][pack] anchor in price_map = {req.anchor_stock_code in price_map}")
+        log.debug("[DEBUG][pack] loaded from legacy provider")
+        log.debug(f"[DEBUG][pack] members count = {len(members)}")
+        log.debug(f"[DEBUG][pack] metas count   = {len(metas)}")
+        log.debug(f"[DEBUG][pack] price_map cnt = {len(price_map)}")
+        log.debug(f"[DEBUG][pack] liq_map cnt   = {len(liq_map)}")
+        log.debug(f"[DEBUG][pack] anchor in members   = {req.anchor_stock_code in members}")
+        log.debug(f"[DEBUG][pack] anchor in price_map = {req.anchor_stock_code in price_map}")
 
     # -------------------------
     # 2) 기본 검증
     # -------------------------
     if not members:
-        print("[DEBUG][validation] NO_INDUSTRY_MEMBERS")
+        log.debug("[DEBUG][validation] NO_INDUSTRY_MEMBERS")
         return _empty_response(req, freq, warnings + ["NO_INDUSTRY_MEMBERS"])
 
     if req.anchor_stock_code not in members:
         warnings.append("ANCHOR_NOT_IN_INDUSTRY_MEMBERS")
-        print("[DEBUG][validation] anchor not in members")
+        log.debug("[DEBUG][validation] anchor not in members")
 
     anchor_ps = price_map.get(req.anchor_stock_code)
     if anchor_ps is None:
-        print("[DEBUG][validation] ANCHOR_PRICE_SERIES_MISSING")
+        log.debug("[DEBUG][validation] ANCHOR_PRICE_SERIES_MISSING")
         raw_candidate_count = len([c for c in members if c != req.anchor_stock_code])
         return _empty_response(req, freq, warnings + ["ANCHOR_PRICE_SERIES_MISSING"], raw_candidate_count=raw_candidate_count)
 
-    print(
+    log.debug(
         "[DEBUG][validation] anchor series ok: "
         f"dates={len(anchor_ps.dates)}, close={len(anchor_ps.close)}"
     )
@@ -596,7 +598,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
 
     candidates = [c for c in members if c != req.anchor_stock_code]
     raw_candidate_count = len(candidates)
-    print(f"[DEBUG][liquidity] initial candidates = {raw_candidate_count}")
+    log.debug(f"[DEBUG][liquidity] initial candidates = {raw_candidate_count}")
 
     if raw_candidate_count < req.peer_count:
         warnings.append("PEER_COUNT_REDUCED_BY_CANDIDATE_SIZE")
@@ -612,7 +614,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         keep = set(ranked[: req.liquidity_top_k_turnover])
         before = len(candidates)
         candidates = [c for c in candidates if c in keep]
-        print(f"[DEBUG][liquidity] top_k_turnover applied: {before} -> {len(candidates)}")
+        log.debug(f"[DEBUG][liquidity] top_k_turnover applied: {before} -> {len(candidates)}")
         if len(candidates) < before:
             warnings.append("LIQUIDITY_TOPK_TURNOVER_APPLIED")
         if len(candidates) < req.peer_count:
@@ -625,7 +627,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             c for c in candidates
             if (avg_turnover.get(c) is not None and float(avg_turnover[c]) >= float(req.liquidity_min_turnover))
         ]
-        print(f"[DEBUG][liquidity] min_turnover applied: {before} -> {len(candidates)}")
+        log.debug(f"[DEBUG][liquidity] min_turnover applied: {before} -> {len(candidates)}")
         if len(candidates) < before:
             warnings.append("LIQUIDITY_MIN_TURNOVER_APPLIED")
         if len(candidates) < req.peer_count:
@@ -638,7 +640,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             c for c in candidates
             if (avg_volume.get(c) is not None and float(avg_volume[c]) >= float(req.liquidity_min_volume))
         ]
-        print(f"[DEBUG][liquidity] min_volume applied: {before} -> {len(candidates)}")
+        log.debug(f"[DEBUG][liquidity] min_volume applied: {before} -> {len(candidates)}")
         if len(candidates) < before:
             warnings.append("LIQUIDITY_MIN_VOLUME_APPLIED")
         if len(candidates) < req.peer_count:
@@ -647,7 +649,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     anchor_turnover = avg_turnover.get(req.anchor_stock_code)
     anchor_volatility = volatility_map.get(req.anchor_stock_code)
 
-    print(
+    log.debug(
         "[DEBUG][prefilter] anchor metrics: "
         f"avg_turnover={anchor_turnover}, volatility={anchor_volatility}"
     )
@@ -675,7 +677,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             continue
         quality_filtered.append(code)
 
-    print(
+    log.debug(
         "[DEBUG][quality-filter] "
         f"candidates={len(candidates)}, turnover_floor={turnover_floor}, "
         f"vol_floor={vol_floor}, vol_ceiling={vol_ceiling}, result={len(quality_filtered)}"
@@ -698,7 +700,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     evaluated_candidate_count = len(candidates)
 
     if not candidates:
-        print("[DEBUG][liquidity] NO_CANDIDATES_AFTER_LIQUIDITY_FILTER")
+        log.debug("[DEBUG][liquidity] NO_CANDIDATES_AFTER_LIQUIDITY_FILTER")
         return _empty_response(
             req,
             freq,
@@ -707,7 +709,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             evaluated_candidate_count=evaluated_candidate_count,
         )
 
-    print(f"[DEBUG][liquidity] final candidates = {len(candidates)}")
+    log.debug(f"[DEBUG][liquidity] final candidates = {len(candidates)}")
 
     # -------------------------
     # 4) 상관계수 + 선행/후행 기준 점수화
@@ -719,7 +721,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     if max_lag < 1:
         max_lag = 1
 
-    print(f"[DEBUG][score] max_lag = {max_lag}")
+    log.debug(f"[DEBUG][score] max_lag = {max_lag}")
     adjusted_fallback_warned = False
     first_adjustment_fallback_reason: Optional[str] = None
     stability_insufficient_warned = False
@@ -727,21 +729,21 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     for code in candidates:
         ps = price_map.get(code)
         if ps is None:
-            print(f"[DEBUG][score][DROP] {code}: price series missing")
+            log.debug(f"[DEBUG][score][DROP] {code}: price series missing")
             continue
 
-        print(
+        log.debug(
             f"[DEBUG][score][TRY] {code}: "
             f"dates={len(ps.dates)}, close={len(ps.close)}"
         )
 
         aligned = _align_returns_by_common_dates(anchor_ps, ps, min_common=30)
         if aligned is None:
-            print(f"[DEBUG][score][DROP] {code}: alignment failed")
+            log.debug(f"[DEBUG][score][DROP] {code}: alignment failed")
             continue
 
         ar, br = aligned
-        print(
+        log.debug(
             f"[DEBUG][score][ALIGN] {code}: "
             f"anchor_returns={ar.size}, peer_returns={br.size}"
         )
@@ -826,7 +828,7 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             volatility_similarity_score=volatility_similarity_score.get(code),
         )
 
-        print(
+        log.debug(
             f"[DEBUG][score][KEEP] {code}: "
             f"corr0={corr0}, adjusted_corr={adjusted_corr}, best_lag={best_lag}, ll_corr={ll_corr}, "
             f"lag_confidence={lag_conf}, corr_stability={corr_stability}, segments={segment_corrs}, "
@@ -864,22 +866,22 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
         if not eligible_for_selection:
             # v1 selected peer는 양의 동행성만 사용한다. 향후 contrastPeer에서는 음의 상관을 활용할 수 있다.
             peer_items.pop()
-            print(f"[DEBUG][score][DISPLAY] {code}: not selected-eligible. corr={corr0}, adjusted_corr={adjusted_corr}")
+            log.debug(f"[DEBUG][score][DISPLAY] {code}: not selected-eligible. corr={corr0}, adjusted_corr={adjusted_corr}")
 
-    print(f"[DEBUG][score] peer_items count = {len(peer_items)}")
+    log.debug(f"[DEBUG][score] peer_items count = {len(peer_items)}")
     eligible_candidate_count = len(peer_items)
     effective_peer_count = min(req.peer_count, eligible_candidate_count)
 
     if eligible_candidate_count < req.peer_count:
         warnings.append("INSUFFICIENT_PEERS_AFTER_SERIES_FILTER")
         warnings.append("PEER_CLUSTER_LOW_POSITIVE_CORR_CANDIDATES")
-        print(
+        log.debug(
             f"[DEBUG][score] insufficient peers after filter: "
             f"{eligible_candidate_count} < {req.peer_count}"
         )
 
     if not peer_items and not display_candidate_items:
-        print("[DEBUG][score] NO_PEERS_AFTER_ALIGNMENT")
+        log.debug("[DEBUG][score] NO_PEERS_AFTER_ALIGNMENT")
         return _empty_response(
             req,
             freq,
@@ -936,9 +938,9 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     if not adjustment_valid and first_adjustment_fallback_reason is None and industry_index_ps is None:
         first_adjustment_fallback_reason = "INDUSTRY_INDEX_MISSING"
 
-    print("[DEBUG][score] selected peers:")
+    log.debug("[DEBUG][score] selected peers:")
     for idx, p in enumerate(selected, start=1):
-        print(
+        log.debug(
             f"  {idx}. {p.stock_code} "
             f"peer_score={p.peer_score}, corr={p.corr}, adjusted_corr={p.adjusted_corr}, "
             f"best_lag={p.best_lag}, relation={p.relation}"
@@ -949,14 +951,14 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     # -------------------------
     common_dates = _np_dates(anchor_ps.dates)
 
-    print(f"[DEBUG][chart] anchor_dates count = {len(common_dates)}")
-    print(f"[DEBUG][chart] common init count = {len(common_dates)}")
+    log.debug(f"[DEBUG][chart] anchor_dates count = {len(common_dates)}")
+    log.debug(f"[DEBUG][chart] common init count = {len(common_dates)}")
 
     if industry_index_ps is not None:
         index_dates = _np_dates(industry_index_ps.dates)
         before = len(common_dates)
         common_dates = np.intersect1d(common_dates, index_dates)
-        print(
+        log.debug(
             f"[DEBUG][chart] intersect with industry index: "
             f"index_dates={len(index_dates)}, common {before} -> {len(common_dates)}"
         )
@@ -966,12 +968,12 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     for p in selected:
         ps = price_map.get(p.stock_code)
         if ps is None:
-            print(f"[DEBUG][chart][WARN] missing selected peer series: {p.stock_code}")
+            log.debug(f"[DEBUG][chart][WARN] missing selected peer series: {p.stock_code}")
             continue
 
         peer_dates = _np_dates(ps.dates)
         covered_count = len(np.intersect1d(common_dates, peer_dates))
-        print(
+        log.debug(
             f"[DEBUG][chart] peer coverage {p.stock_code}: "
             f"peer_dates={len(peer_dates)}, covered={covered_count}/{len(common_dates)}"
         )
@@ -979,17 +981,17 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             warnings.append(f"PEER_CHART_COVERAGE_LOW:{p.stock_code}")
 
     common_dates = list(common_dates)
-    print(f"[DEBUG][chart] common_dates count = {len(common_dates)}")
+    log.debug(f"[DEBUG][chart] common_dates count = {len(common_dates)}")
 
     if common_dates:
-        print(
+        log.debug(
             f"[DEBUG][chart] common_dates first={common_dates[0]}, "
             f"last={common_dates[-1]}"
         )
 
     if len(common_dates) < 30:
         warnings.append("INSUFFICIENT_COMMON_DATES_FOR_CHART")
-        print(
+        log.debug(
             f"[DEBUG][chart] insufficient common dates for chart: "
             f"{len(common_dates)} < 30"
         )
@@ -1010,20 +1012,20 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
     for p in selected:
         ps = price_map.get(p.stock_code)
         if ps is None:
-            print(f"[DEBUG][chart][WARN] selected peer missing when rebase: {p.stock_code}")
+            log.debug(f"[DEBUG][chart][WARN] selected peer missing when rebase: {p.stock_code}")
             rel_cols.append(np.full((len(common_dates),), np.nan))
             continue
 
         col = _rebased_pct_on_common_dates(ps, common_dates)
         nan_count = int(np.isnan(col).sum())
-        print(
+        log.debug(
             f"[DEBUG][chart] rebased {p.stock_code}: "
             f"len={len(col)}, nan_count={nan_count}"
         )
         rel_cols.append(col)
 
     rel_mat = np.vstack(rel_cols).T if rel_cols else np.zeros((0, 0), dtype=float)
-    print(f"[DEBUG][chart] rel_mat shape = {rel_mat.shape}")
+    log.debug(f"[DEBUG][chart] rel_mat shape = {rel_mat.shape}")
 
     centroid: List[RelativePoint] = []
     band: List[BandPoint] = []
@@ -1043,11 +1045,11 @@ def compute_peer_cluster_v1(req: PeerClusterRequest) -> PeerClusterResponse:
             band.append(BandPoint(t=dt, p20=float(p20), p80=float(p80)))
             peer_coverage.append(RelativePoint(t=dt, value=float(coverage)))
 
-    print(f"[DEBUG][chart] centroid count = {len(centroid)}")
-    print(f"[DEBUG][chart] band count     = {len(band)}")
-    print(f"[DEBUG][compute_peer_cluster_v1] warnings = {warnings + ['MARKET_CAP_EXCLUDED_V1']}")
-    print("[DEBUG][compute_peer_cluster_v1] END")
-    print("=" * 80)
+    log.debug(f"[DEBUG][chart] centroid count = {len(centroid)}")
+    log.debug(f"[DEBUG][chart] band count     = {len(band)}")
+    log.debug(f"[DEBUG][compute_peer_cluster_v1] warnings = {warnings + ['MARKET_CAP_EXCLUDED_V1']}")
+    log.debug("[DEBUG][compute_peer_cluster_v1] END")
+    log.debug("=" * 80)
 
     return PeerClusterResponse(
         method="INDUSTRY_CORR_V1",

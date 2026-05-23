@@ -5,10 +5,11 @@ import type { ApiResponse } from "../types/common/api";
 
 export const fetchNewsByStock = async (
   stockCode: string,
-  limit = 15,
+  limit = 30,
 ): Promise<NewsItemDto[]> => {
   const res = await api.get<ApiResponse<NewsItemDto[]>>(
     ENDPOINTS.news.listByStock(stockCode, limit),
+    { _skipAuthRedirect: true },
   );
   return res.data.data;
 };

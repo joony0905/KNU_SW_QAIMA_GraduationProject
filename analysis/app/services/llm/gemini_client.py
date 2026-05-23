@@ -12,6 +12,7 @@ from app.services.llm.base import LLMClient
 from app.models.feature1 import Feature1Request, Feature1Metrics, FinancialPointItem
 from app.models.feature2 import Feature2ExplainRequest
 from app.services.llm.feature2_prompt import build_feature2_prompt
+from app.services.llm.invest_level import invest_level_prompt
 
 
 # v1 사용
@@ -114,6 +115,7 @@ class GeminiClient(LLMClient):
             "generationConfig": {
                 "temperature": 0.1,
                 "maxOutputTokens": 900 if compact else 1600,
+                "responseMimeType": "application/json",
             },
         }
 
@@ -169,20 +171,24 @@ class GeminiClient(LLMClient):
             "2) 섹션별 summary는 정확히 3문장으로 작성\n"
             "3) overall.summary는 정확히 5문장, overall.conclusion은 정확히 1문장으로 작성\n"
             "4) 투자 권유/매수·매도 추천 금지\n"
-            "5) 데이터가 비거나 약하면 그 한계를 보수적으로 표현\n\n"
-            "6) 키 이름은 반드시 sections.price_flow / sections.market_snapshot / sections.indicators / sections.financial_timeline / overall 을 정확히 유지\n"
-            "7) 키를 번역하거나 camelCase로 바꾸지 말 것\n\n"
+            "5) 데이터가 같은 방향이면 간접 신호와 점검 포인트를 제시하고, 데이터가 엇갈리면 상충 신호로 설명\n"
+            "6) 데이터가 비거나 약하면 한계를 짧게 밝히되, 확인 가능한 범위의 의미는 함께 설명\n\n"
+            "7) 키 이름은 반드시 sections.price_flow / sections.market_snapshot / sections.indicators / sections.financial_timeline / overall 을 정확히 유지\n"
+            "8) 키를 번역하거나 camelCase로 바꾸지 말 것\n\n"
+            f"{invest_level_prompt(req.invest_level)}\n"
 
             "출력 JSON 스키마:\n"
             "{"
             "\"sections\":{"
-              "\"price_flow\":{\"summary\":\"string\"},"
-              "\"market_snapshot\":{\"summary\":\"string\"},"
-              "\"indicators\":{\"summary\":\"string\"},"
-              "\"financial_timeline\":{\"summary\":\"string\"}"
+              "\"price_flow\":{\"title\":\"가격 흐름\",\"summary\":\"string\",\"bullets\":[]},"
+              "\"market_snapshot\":{\"title\":\"시장 스냅샷\",\"summary\":\"string\",\"bullets\":[]},"
+              "\"indicators\":{\"title\":\"보조지표\",\"summary\":\"string\",\"bullets\":[]},"
+              "\"financial_timeline\":{\"title\":\"재무 흐름\",\"summary\":\"string\",\"bullets\":[]}"
             "},"
             "\"overall\":{"
               "\"summary\":\"string\","
+              "\"bullets\":[],"
+              "\"risks\":[],"
               "\"conclusion\":\"string\""
             "}"
             "}\n\n"
