@@ -69,6 +69,7 @@ public class NewsSentimentService {
     private static final Duration NEWS_DETAIL_TTL = Duration.ofDays(7);
     private static final Duration NEWS_FOCUS_TTL = Duration.ofDays(7);
     private static final Duration NEWS_SENTIMENT_TTL = Duration.ofDays(7);
+    private static final Duration REDIS_BLOCK_TIMEOUT = Duration.ofSeconds(2);
     private static final int NEWS_FETCH_LIMIT = 15;
     private static final int NEWS_EXPORT_DISPLAY_LIMIT = 100;
     private static final int NEWS_FETCH_START = 1;
@@ -1087,7 +1088,7 @@ public class NewsSentimentService {
 
     private CachedNewsListPayload readNewsListCache(String key, List<String> warnings) {
         try {
-            String value = redisTemplate.opsForValue().get(key).block();
+            String value = redisTemplate.opsForValue().get(key).block(REDIS_BLOCK_TIMEOUT);
             if (value == null || value.isBlank()) {
                 return null;
             }
@@ -1102,7 +1103,7 @@ public class NewsSentimentService {
         try {
             redisTemplate.opsForValue()
                     .set(key, objectMapper.writeValueAsString(payload), NEWS_LIST_TTL)
-                    .block();
+                    .block(REDIS_BLOCK_TIMEOUT);
         } catch (Exception ex) {
             warnings.add(NewsWarningCodes.CACHE_WRITE_FAILED);
         }
@@ -1129,7 +1130,7 @@ public class NewsSentimentService {
 
     private CachedNewsRefreshPayload readNewsRefreshCache(String key, List<String> warnings) {
         try {
-            String value = redisTemplate.opsForValue().get(key).block();
+            String value = redisTemplate.opsForValue().get(key).block(REDIS_BLOCK_TIMEOUT);
             if (value == null || value.isBlank()) {
                 return null;
             }
@@ -1144,7 +1145,7 @@ public class NewsSentimentService {
         try {
             redisTemplate.opsForValue()
                     .set(key, objectMapper.writeValueAsString(payload), NEWS_REFRESH_TTL)
-                    .block();
+                    .block(REDIS_BLOCK_TIMEOUT);
         } catch (Exception ex) {
             warnings.add(NewsWarningCodes.CACHE_WRITE_FAILED);
         }
@@ -1170,7 +1171,7 @@ public class NewsSentimentService {
         try {
             String value = redisTemplate.opsForValue()
                     .get(buildNewsDetailCacheKey(newsId))
-                    .block();
+                    .block(REDIS_BLOCK_TIMEOUT);
             if (value == null || value.isBlank()) {
                 return null;
             }
@@ -1185,7 +1186,7 @@ public class NewsSentimentService {
         try {
             redisTemplate.opsForValue()
                     .set(buildNewsDetailCacheKey(detail.getNewsId()), objectMapper.writeValueAsString(detail), NEWS_DETAIL_TTL)
-                    .block();
+                    .block(REDIS_BLOCK_TIMEOUT);
         } catch (Exception ex) {
             warnings.add(NewsWarningCodes.CACHE_WRITE_FAILED);
         }
@@ -1197,7 +1198,7 @@ public class NewsSentimentService {
 
     private CachedFocusTextValue readFocusCache(Long newsId, List<String> warnings) {
         try {
-            String value = redisTemplate.opsForValue().get(buildNewsFocusCacheKey(newsId)).block();
+            String value = redisTemplate.opsForValue().get(buildNewsFocusCacheKey(newsId)).block(REDIS_BLOCK_TIMEOUT);
             if (value == null || value.isBlank()) {
                 return null;
             }
@@ -1218,7 +1219,7 @@ public class NewsSentimentService {
         try {
             redisTemplate.opsForValue()
                     .set(buildNewsFocusCacheKey(newsId), objectMapper.writeValueAsString(payload), NEWS_FOCUS_TTL)
-                    .block();
+                    .block(REDIS_BLOCK_TIMEOUT);
         } catch (Exception ex) {
             warnings.add(NewsWarningCodes.CACHE_WRITE_FAILED);
         }
@@ -1232,7 +1233,7 @@ public class NewsSentimentService {
         try {
             String value = redisTemplate.opsForValue()
                     .get(buildNewsSentimentCacheKey(newsId))
-                    .block();
+                    .block(REDIS_BLOCK_TIMEOUT);
             if (value == null || value.isBlank()) {
                 return null;
             }
@@ -1258,7 +1259,7 @@ public class NewsSentimentService {
                     .build();
             redisTemplate.opsForValue()
                     .set(buildNewsSentimentCacheKey(newsId), objectMapper.writeValueAsString(payload), NEWS_SENTIMENT_TTL)
-                    .block();
+                    .block(REDIS_BLOCK_TIMEOUT);
         } catch (Exception ex) {
             warnings.add(NewsWarningCodes.CACHE_WRITE_FAILED);
         }
@@ -1272,7 +1273,9 @@ public class NewsSentimentService {
             List<NewsSentimentInput> toAnalyze,
             List<String> warnings
     ) {
-        return sentimentClient.analyze(toAnalyze, sentimentModel);
+        // This service is intentionally executed from loadNewsBlocking on boundedElastic.
+        return sentimentClient.analyze(toAnalyze, sentimentModel)
+                .block(Duration.ofSeconds(12));
     }
 
     String buildNewsListCacheKeyByStock(String stockCode) {
