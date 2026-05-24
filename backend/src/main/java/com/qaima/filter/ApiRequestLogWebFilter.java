@@ -11,6 +11,7 @@ import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 
+import java.net.InetSocketAddress;
 import java.util.UUID;
 
 /**
@@ -79,9 +80,7 @@ public class ApiRequestLogWebFilter implements WebFilter {
 
         String ip = firstNonBlank(
                 ex.getRequest().getHeaders().getFirst("X-Forwarded-For"),
-                ex.getRequest().getRemoteAddress() != null
-                        ? ex.getRequest().getRemoteAddress().getAddress().getHostAddress()
-                        : null
+                resolveRemoteAddress(ex.getRequest().getRemoteAddress())
         );
 
         String ua = ex.getRequest().getHeaders().getFirst("User-Agent");
@@ -114,6 +113,14 @@ public class ApiRequestLogWebFilter implements WebFilter {
     private static String firstNonBlank(String a, String b) {
         if (a != null && !a.isBlank()) return a.split(",")[0].trim();
         return b;
+    }
+
+    private static String resolveRemoteAddress(InetSocketAddress remoteAddress) {
+        if (remoteAddress == null) return null;
+        if (remoteAddress.getAddress() != null) {
+            return remoteAddress.getAddress().getHostAddress();
+        }
+        return remoteAddress.getHostString();
     }
 
     private static String truncate(String s, int max) {

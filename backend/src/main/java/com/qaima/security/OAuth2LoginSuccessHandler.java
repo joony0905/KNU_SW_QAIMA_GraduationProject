@@ -2,6 +2,7 @@ package com.qaima.security;
 
 import com.qaima.service.auth.OAuth2SocialLoginService;
 import com.qaima.service.auth.SocialLoginException;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -83,9 +84,13 @@ public class OAuth2LoginSuccessHandler implements ServerAuthenticationSuccessHan
         if (xff != null && !xff.isBlank()) {
             return xff.split(",")[0].trim();
         }
-        if (exchange.getRequest().getRemoteAddress() == null) {
+        InetSocketAddress remoteAddress = exchange.getRequest().getRemoteAddress();
+        if (remoteAddress == null) {
             return null;
         }
-        return exchange.getRequest().getRemoteAddress().getAddress().getHostAddress();
+        if (remoteAddress.getAddress() != null) {
+            return remoteAddress.getAddress().getHostAddress();
+        }
+        return remoteAddress.getHostString();
     }
 }

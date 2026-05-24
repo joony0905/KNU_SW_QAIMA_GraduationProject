@@ -8,6 +8,7 @@ import com.qaima.dto.user.PwdResetRequestDto;
 import com.qaima.service.auth.AuthLoginLogService;
 import com.qaima.service.auth.MailAuthService;
 import jakarta.validation.Valid;
+import java.net.InetSocketAddress;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -164,8 +165,12 @@ public class EmailController {
     private static String extractClientIp(ServerHttpRequest request) {
         String xff = request.getHeaders().getFirst("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
-        if (request.getRemoteAddress() == null) return null;
-        return request.getRemoteAddress().getAddress().getHostAddress();
+        InetSocketAddress remoteAddress = request.getRemoteAddress();
+        if (remoteAddress == null) return null;
+        if (remoteAddress.getAddress() != null) {
+            return remoteAddress.getAddress().getHostAddress();
+        }
+        return remoteAddress.getHostString();
     }
 
     private static String escapeHtml(String s) {
