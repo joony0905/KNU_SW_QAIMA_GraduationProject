@@ -128,6 +128,9 @@ public class NewsSentimentService {
     @Value("${feature2.news.sentiment.model:kf-deberta-sentiment-v2}")
     private String sentimentModel;
 
+    @Value("${feature2.news.sentiment.timeout-seconds:30}")
+    private long sentimentTimeoutSeconds;
+
     public Mono<NewsLoadResult> loadNews(Stock stock) {
         return Mono.fromCallable(() -> loadNewsBlocking(stock))
                 .subscribeOn(Schedulers.boundedElastic());
@@ -1275,7 +1278,7 @@ public class NewsSentimentService {
     ) {
         // This service is intentionally executed from loadNewsBlocking on boundedElastic.
         return sentimentClient.analyze(toAnalyze, sentimentModel)
-                .block(Duration.ofSeconds(12));
+                .block(Duration.ofSeconds(Math.max(1, sentimentTimeoutSeconds)));
     }
 
     String buildNewsListCacheKeyByStock(String stockCode) {

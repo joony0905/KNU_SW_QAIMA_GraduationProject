@@ -32,6 +32,7 @@ feature2:
   news:
     sentiment:
       model: ${FEATURE2_NEWS_SENTIMENT_MODEL:kf-deberta-sentiment-v2}
+      timeout-seconds: ${FEATURE2_NEWS_SENTIMENT_TIMEOUT_SECONDS:30}
 
 auth:
   cookie:
