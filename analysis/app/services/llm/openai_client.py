@@ -21,6 +21,8 @@ DEFAULT_TIMEOUT = 30.0
 RATE_LIMIT_RETRY_DELAYS = (0.6, 1.2)
 SERVER_ERROR_RETRY_DELAYS = (1.0, 2.0)
 DEFAULT_MAX_OUTPUT_TOKENS = 10000
+DEFAULT_FEATURE2_MAX_OUTPUT_TOKENS = 4000
+DEFAULT_FEATURE2_COMPACT_MAX_OUTPUT_TOKENS = 1800
 log = logging.getLogger(__name__)
 
 
@@ -36,6 +38,14 @@ class OpenAIClient(LLMClient):
             self.max_output_tokens: int = int(os.getenv("OPENAI_MAX_OUTPUT_TOKENS", DEFAULT_MAX_OUTPUT_TOKENS))
         except ValueError:
             self.max_output_tokens = DEFAULT_MAX_OUTPUT_TOKENS
+        try:
+            self.feature2_max_output_tokens: int = int(os.getenv("FEATURE2_OPENAI_MAX_OUTPUT_TOKENS", DEFAULT_FEATURE2_MAX_OUTPUT_TOKENS))
+        except ValueError:
+            self.feature2_max_output_tokens = DEFAULT_FEATURE2_MAX_OUTPUT_TOKENS
+        try:
+            self.feature2_compact_max_output_tokens: int = int(os.getenv("FEATURE2_OPENAI_COMPACT_MAX_OUTPUT_TOKENS", DEFAULT_FEATURE2_COMPACT_MAX_OUTPUT_TOKENS))
+        except ValueError:
+            self.feature2_compact_max_output_tokens = DEFAULT_FEATURE2_COMPACT_MAX_OUTPUT_TOKENS
 
     async def generate_explain(
         self,
@@ -217,7 +227,10 @@ class OpenAIClient(LLMClient):
                 "제공된 Feature2 외부요인 데이터만 사용해 설명하세요."
             ),
             "input": build_feature2_prompt(req, compact=compact),
-            "max_output_tokens": min(self.max_output_tokens, 1200 if compact else 2200),
+            "max_output_tokens": min(
+                self.max_output_tokens,
+                self.feature2_compact_max_output_tokens if compact else self.feature2_max_output_tokens,
+            ),
             "reasoning": {"effort": "low"},
             "text": {
                 "format": {

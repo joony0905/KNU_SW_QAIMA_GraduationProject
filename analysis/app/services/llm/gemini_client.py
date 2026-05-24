@@ -19,6 +19,8 @@ from app.services.llm.invest_level import invest_level_prompt
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 DEFAULT_MODEL = "gemini-2.5-flash"
 DEFAULT_TIMEOUT = 10.0
+DEFAULT_FEATURE2_MAX_OUTPUT_TOKENS = 4000
+DEFAULT_FEATURE2_COMPACT_MAX_OUTPUT_TOKENS = 1800
 RATE_LIMIT_RETRY_DELAYS = (0.6, 1.2)
 log = logging.getLogger(__name__)
 
@@ -31,6 +33,14 @@ class GeminiClient(LLMClient):
             self.timeout: float = float(os.getenv("GEMINI_TIMEOUT", DEFAULT_TIMEOUT))
         except ValueError:
             self.timeout = DEFAULT_TIMEOUT
+        try:
+            self.feature2_max_output_tokens: int = int(os.getenv("FEATURE2_GEMINI_MAX_OUTPUT_TOKENS", DEFAULT_FEATURE2_MAX_OUTPUT_TOKENS))
+        except ValueError:
+            self.feature2_max_output_tokens = DEFAULT_FEATURE2_MAX_OUTPUT_TOKENS
+        try:
+            self.feature2_compact_max_output_tokens: int = int(os.getenv("FEATURE2_GEMINI_COMPACT_MAX_OUTPUT_TOKENS", DEFAULT_FEATURE2_COMPACT_MAX_OUTPUT_TOKENS))
+        except ValueError:
+            self.feature2_compact_max_output_tokens = DEFAULT_FEATURE2_COMPACT_MAX_OUTPUT_TOKENS
 
     async def generate_explain(
         self,
@@ -114,7 +124,7 @@ class GeminiClient(LLMClient):
             "contents": [{"role": "user", "parts": [{"text": build_feature2_prompt(req, compact=compact)}]}],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 900 if compact else 1600,
+                "maxOutputTokens": self.feature2_compact_max_output_tokens if compact else self.feature2_max_output_tokens,
                 "responseMimeType": "application/json",
             },
         }
