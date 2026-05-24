@@ -93,6 +93,17 @@ public class WebClientConfig {
                 .build();
     }
 
+    @Bean(name = "krxWebClient")
+    public WebClient krxWebClient(
+            @Value("${krx.data.base-url:https://data.krx.co.kr}") String baseUrl
+    ) {
+        return WebClient.builder()
+                .baseUrl(baseUrl)
+                .defaultHeader(HttpHeaders.USER_AGENT, "Mozilla/5.0")
+                .codecs(this::configureLargeResponseCodecs)
+                .build();
+    }
+
     @Bean(name = "opendartWebClient")
     public WebClient openDartWebClient(
             @Value("${opendart.base-url:https://opendart.fss.or.kr/api}") String baseUrl
