@@ -147,13 +147,17 @@ def normalize_market_div(value: Any) -> Optional[str]:
     if not s:
         return None
     if s in {"J", "Q", "K"}:
-        return "J"
+        return s
     return s
 
 
 def infer_market_div_from_path(csv_path: str) -> Optional[str]:
     name = Path(csv_path).name.lower()
-    if "kosdaq" in name or "kospi" in name or "konex" in name:
+    if "kosdaq" in name:
+        return "Q"
+    if "konex" in name:
+        return "K"
+    if "kospi" in name:
         return "J"
     return None
 
@@ -869,7 +873,7 @@ def load_seed_stock_rows(csv_paths: List[str], stock_code_col: str, market_div_c
         raise ValueError("No seed rows loaded from CSV input")
 
     work = pd.concat(frames, ignore_index=True)
-    work = work.dropna(subset=["stock_code"]).drop_duplicates(subset=["stock_code"], keep="first")
+    work = work.dropna(subset=["stock_code"]).drop_duplicates(subset=["market_div", "stock_code"], keep="first")
     work = work.sort_values("stock_code").reset_index(drop=True)
     return work
 
