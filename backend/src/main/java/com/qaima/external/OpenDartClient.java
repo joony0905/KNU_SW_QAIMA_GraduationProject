@@ -1,9 +1,13 @@
 package com.qaima.external;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qaima.common.Blocking;
 import com.qaima.dto.opendart.OpenDartStockTotalStatusResponse;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -30,12 +34,20 @@ public class OpenDartClient {
     private static final DateTimeFormatter BASIC_DATE = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final WebClient webClient;
+    private final ObjectMapper objectMapper;
+    private final String baseUrl;
 
     @Value("${opendart.api-key:${OPENDART_API_KEY:}}")
     private String apiKey;
 
-    public OpenDartClient(@Qualifier("opendartWebClient") WebClient webClient) {
+    public OpenDartClient(
+            @Qualifier("opendartWebClient") WebClient webClient,
+            ObjectMapper objectMapper,
+            @Value("${opendart.base-url:https://opendart.fss.or.kr/api}") String baseUrl
+    ) {
         this.webClient = webClient;
+        this.objectMapper = objectMapper;
+        this.baseUrl = trimTrailingSlash(baseUrl);
     }
 
     public Mono<List<OpenDartStockTotalStatusResponse.Row>> fetchStockTotalStatus(
@@ -63,26 +75,8 @@ public class OpenDartClient {
                         .build())
                 .retrieve()
                 .bodyToMono(OpenDartStockTotalStatusResponse.class)
-                .flatMap(response -> {
-                    String status = safeTrim(response.getStatus());
-                    if (STATUS_OK.equals(status)) {
-                        List<OpenDartStockTotalStatusResponse.Row> rows =
-                                response.getList() == null ? List.of() : response.getList();
-                        log.info("[OpenDART] stock total status fetched. corpCode={}, businessYear={}, reportCode={}, rows={}",
-                                corpCode, businessYear, reportCode, rows.size());
-                        return Mono.just(rows);
-                    }
-
-                    if (STATUS_NO_DATA.equals(status)) {
-                        log.info("[OpenDART] stock total status empty. corpCode={}, businessYear={}, reportCode={}, message={}",
-                                corpCode, businessYear, reportCode, response.getMessage());
-                        return Mono.just(List.of());
-                    }
-
-                    return Mono.error(new IllegalStateException(
-                            "OpenDART stock total status failed. status=" + status + ", message=" + response.getMessage()
-                    ));
-                });
+                .onErrorResume(error -> fetchStockTotalStatusWithCurl(corpCode, businessYear, reportCode, error))
+                .flatMap(response -> handleStockTotalStatusResponse(corpCode, businessYear, reportCode, response));
     }
 
     public Mono<List<OpenDartStockTotalStatusResponse.Row>> fetchStockTotalStatus(
@@ -105,8 +99,91 @@ public class OpenDartClient {
                 .accept(MediaType.APPLICATION_OCTET_STREAM, MediaType.ALL)
                 .retrieve()
                 .bodyToMono(byte[].class)
+                .onErrorResume(error -> fetchBytesWithCurl(corpCodeUrl(), error))
                 .flatMap(bytes -> Blocking.call(() -> parseCorpCodes(bytes)))
                 .doOnNext(entries -> log.info("[OpenDART] corp codes fetched. entries={}", entries.size()));
+    }
+
+    private Mono<OpenDartStockTotalStatusResponse> fetchStockTotalStatusWithCurl(
+            String corpCode,
+            int businessYear,
+            String reportCode,
+            Throwable cause
+    ) {
+        return fetchBytesWithCurl(stockTotalStatusUrl(corpCode, businessYear, reportCode), cause)
+                .flatMap(bytes -> Blocking.call(() -> objectMapper.readValue(bytes, OpenDartStockTotalStatusResponse.class)));
+    }
+
+    private Mono<byte[]> fetchBytesWithCurl(String url, Throwable cause) {
+        log.warn("[OpenDART] WebClient request failed; falling back to curl. url={}, cause={}",
+                sanitizeUrl(url), cause.toString());
+        return Blocking.call(() -> runCurl(url));
+    }
+
+    private byte[] runCurl(String url) throws Exception {
+        Process process = new ProcessBuilder(
+                "curl",
+                "-fsSL",
+                "--connect-timeout",
+                "10",
+                "--max-time",
+                "60",
+                url
+        ).start();
+        byte[] stdout = process.getInputStream().readAllBytes();
+        byte[] stderr = process.getErrorStream().readAllBytes();
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new IllegalStateException("OpenDART curl fallback failed. exitCode=" + exitCode
+                    + ", stderr=" + new String(stderr, StandardCharsets.UTF_8));
+        }
+        return stdout;
+    }
+
+    private Mono<List<OpenDartStockTotalStatusResponse.Row>> handleStockTotalStatusResponse(
+            String corpCode,
+            int businessYear,
+            String reportCode,
+            OpenDartStockTotalStatusResponse response
+    ) {
+        String status = safeTrim(response.getStatus());
+        if (STATUS_OK.equals(status)) {
+            List<OpenDartStockTotalStatusResponse.Row> rows =
+                    response.getList() == null ? List.of() : response.getList();
+            log.info("[OpenDART] stock total status fetched. corpCode={}, businessYear={}, reportCode={}, rows={}",
+                    corpCode, businessYear, reportCode, rows.size());
+            return Mono.just(rows);
+        }
+
+        if (STATUS_NO_DATA.equals(status)) {
+            log.info("[OpenDART] stock total status empty. corpCode={}, businessYear={}, reportCode={}, message={}",
+                    corpCode, businessYear, reportCode, response.getMessage());
+            return Mono.just(List.of());
+        }
+
+        return Mono.error(new IllegalStateException(
+                "OpenDART stock total status failed. status=" + status + ", message=" + response.getMessage()
+        ));
+    }
+
+    private String corpCodeUrl() {
+        return baseUrl + "/corpCode.xml?crtfc_key=" + encode(apiKey);
+    }
+
+    private String stockTotalStatusUrl(String corpCode, int businessYear, String reportCode) {
+        return baseUrl
+                + "/stockTotqySttus.json?crtfc_key=" + encode(apiKey)
+                + "&corp_code=" + encode(corpCode)
+                + "&bsns_year=" + businessYear
+                + "&reprt_code=" + encode(reportCode);
+    }
+
+    private String encode(String value) {
+        return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8);
+    }
+
+    private String sanitizeUrl(String url) {
+        return URI.create(url).getPath();
     }
 
     private List<CorpCodeEntry> parseCorpCodes(byte[] zipBytes) throws Exception {
@@ -204,6 +281,17 @@ public class OpenDartClient {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String trimTrailingSlash(String value) {
+        if (value == null || value.isBlank()) {
+            return "https://opendart.fss.or.kr/api";
+        }
+        String trimmed = value.trim();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
     public record CorpCodeEntry(
