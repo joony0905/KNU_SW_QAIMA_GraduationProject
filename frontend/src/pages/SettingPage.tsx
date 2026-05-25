@@ -42,6 +42,9 @@ import {
 } from "../utils/riskProfile";
 import { fetchMyReports, fetchReportDetail } from "../api/reports";
 import type { AnalysisReportDetail, AnalysisReportSummary, ReportFeatureType } from "../types/report";
+import { mapWarningsToNotes, expandWarningLines } from "../utils/warningNotes";
+import { useTranslation } from "react-i18next";
+import { LANGUAGE_STORAGE_KEY, type SupportedLanguage } from "../i18n";
 import ReportHeader from "../components/ReportHeader";
 import { downloadElementAsPdf, waitForPdfCaptureReady } from "../utils/reportPdf";
 import qaimaLogo from "../assets/qaima-final.png";
@@ -139,11 +142,12 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
   };
   const explain = snapshot?.explain;
   const sections = Object.entries(explain?.sections ?? {}).filter(([, value]) => value);
-  const warnings = Array.isArray(report.warnings)
+  const rawWarnings = Array.isArray(report.warnings)
     ? report.warnings
     : Array.isArray(snapshot?.warnings)
       ? snapshot.warnings
       : [];
+  const warnings = expandWarningLines(mapWarningsToNotes(rawWarnings));
 
   return (
     <div className="w-[900px] max-w-full bg-surface text-ink p-6 flex flex-col gap-4">
@@ -217,9 +221,7 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
           <h3 className="text-base font-bold text-ink">참고</h3>
           <ul className="mt-2 list-disc list-inside text-sm text-ink-2">
             {warnings.map((item, idx) => (
-              <li key={`warning-${idx}`}>
-                {typeof item === "string" ? item : JSON.stringify(item)}
-              </li>
+              <li key={`warning-${idx}`}>{item}</li>
             ))}
           </ul>
         </section>
@@ -331,6 +333,7 @@ function SettingSelect<T extends string>({
 export default function SettingPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
+  const { t, i18n } = useTranslation(["common", "settingPage"]);
   const {
     glossaryHover,
     setGlossaryHover,
@@ -345,7 +348,22 @@ export default function SettingPage() {
   const [wlLoading, setWlLoading] = useState(true);
   const [wlError, setWlError] = useState<string | null>(null);
   const [isEditingWatchlist, setIsEditingWatchlist] = useState(false);
-  const [language, setLanguage] = useState<"한국어" | "English">("한국어");
+  const languageOptions = ["한국어", "English"] as const;
+  type LanguageLabel = (typeof languageOptions)[number];
+  const labelToLng = (label: LanguageLabel): SupportedLanguage =>
+    label === "English" ? "en" : "ko";
+  const lngToLabel = (lng: string): LanguageLabel =>
+    lng.startsWith("en") ? "English" : "한국어";
+  const language = lngToLabel(i18n.language);
+  const setLanguage = (next: LanguageLabel) => {
+    const lng = labelToLng(next);
+    i18n.changeLanguage(lng);
+    try {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, lng);
+    } catch {
+      // localStorage 사용 불가 환경에서는 메모리에만 반영
+    }
+  };
   const [riskProfileLabel, setRiskProfileLabel] = useState<RiskProfileLabel | "미설정">("미설정");
   const [riskProfileError, setRiskProfileError] = useState<string | null>(null);
   const [reportFilter, setReportFilter] = useState<ReportFeatureType | "ALL">("ALL");
@@ -515,7 +533,7 @@ export default function SettingPage() {
     "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-line bg-surface text-sm font-medium text-ink-2 hover:bg-bg-sunk transition-colors";
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px]">
+    <div className="min-h-screen bg-bg md:ml-[84px]">
       <div className="qaima-stagger max-w-3xl mx-auto px-4 sm:px-6 py-5 sm:py-7 flex flex-col gap-5">
         {/* 헤더 */}
         <header className="flex items-end justify-between">
@@ -702,12 +720,12 @@ export default function SettingPage() {
         {/* 언어 */}
         <SettingCard
           icon={Languages}
-          title="언어 / Language"
-          desc="서비스 표시 언어를 선택합니다"
+          title={t("common:language.label")}
+          desc={t("common:language.description")}
         >
           <SettingSelect
             value={language}
-            options={["한국어", "English"] as const}
+            options={languageOptions}
             onChange={setLanguage}
           />
         </SettingCard>

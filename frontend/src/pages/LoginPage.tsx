@@ -1,39 +1,16 @@
 import { useEffect, useState } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import naverIcon from "../assets/navericon.png";
 import googleIcon from "../assets/googleicon.png";
 import { login, startOAuth2Login, type SocialProvider } from "../api/auth";
 import { setAccessToken } from "../api/tokenStore";
 import { setUser } from "../api/userStore";
 
-const PROVIDER_LABEL: Record<SocialProvider, string> = {
+const PROVIDER_LABEL_EN: Record<SocialProvider, string> = {
   google: "Google",
-  kakao: "카카오",
+  kakao: "Kakao",
   naver: "NAVER",
-};
-
-const resolveOAuth2Error = (
-  code: string | null,
-  provider: string | null,
-): string => {
-  const providerLabel =
-    provider && provider in PROVIDER_LABEL
-      ? PROVIDER_LABEL[provider as SocialProvider]
-      : "소셜";
-  switch (code) {
-    case "ACCOUNT_LINK_REQUIRED":
-      return "이미 가입된 이메일입니다. 일반 로그인 후 설정에서 소셜 계정을 연결해주세요.";
-    case "PROVIDER_EMAIL_NOT_VERIFIED":
-      return `${providerLabel} 계정의 이메일이 인증되지 않았습니다.`;
-    case "PROVIDER_PROFILE_INVALID":
-      return `${providerLabel} 계정에서 필수 정보를 가져오지 못했습니다. 권한을 확인해주세요.`;
-    case "ACCOUNT_INACTIVE":
-      return "계정이 비활성 상태입니다.";
-    case "SOCIAL_ACCOUNT_INVALID":
-      return "연결된 계정 정보가 올바르지 않습니다.";
-    default:
-      return `${providerLabel} 로그인에 실패했습니다.`;
-  }
 };
 
 const inputClass =
@@ -41,10 +18,37 @@ const inputClass =
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation("loginPage");
   const [searchParams, setSearchParams] = useSearchParams();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const resolveProviderLabel = (provider: string | null): string => {
+    if (provider === "kakao") return t("oauth2.providerKakao");
+    if (provider && provider in PROVIDER_LABEL_EN) {
+      return PROVIDER_LABEL_EN[provider as SocialProvider];
+    }
+    return t("oauth2.providerFallback");
+  };
+
+  const resolveOAuth2Error = (code: string | null, provider: string | null): string => {
+    const providerLabel = resolveProviderLabel(provider);
+    switch (code) {
+      case "ACCOUNT_LINK_REQUIRED":
+        return t("oauth2.accountLinkRequired");
+      case "PROVIDER_EMAIL_NOT_VERIFIED":
+        return t("oauth2.providerEmailNotVerified", { provider: providerLabel });
+      case "PROVIDER_PROFILE_INVALID":
+        return t("oauth2.providerProfileInvalid", { provider: providerLabel });
+      case "ACCOUNT_INACTIVE":
+        return t("oauth2.accountInactive");
+      case "SOCIAL_ACCOUNT_INVALID":
+        return t("oauth2.socialAccountInvalid");
+      default:
+        return t("oauth2.loginFailed", { provider: providerLabel });
+    }
+  };
 
   useEffect(() => {
     const status = searchParams.get("status");
@@ -59,6 +63,8 @@ export default function LoginPage() {
       next.delete("provider");
       setSearchParams(next, { replace: true });
     }
+    // resolveOAuth2Error 는 t 에 의존하지만 언어 변경마다 다시 평가할 필요는 없음
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, setSearchParams]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,7 +78,7 @@ export default function LoginPage() {
 
     try {
       if (!form.email || !form.password) {
-        throw new Error("이메일과 비밀번호를 입력하세요.");
+        throw new Error(t("errors.empty"));
       }
 
       const data = await login({ email: form.email, password: form.password });
@@ -91,15 +97,15 @@ export default function LoginPage() {
       if (serverMessage) {
         setError(serverMessage);
       } else if (status === 400) {
-        setError("이메일 또는 비밀번호가 일치하지 않습니다.");
+        setError(t("errors.invalid"));
       } else if (status === 401) {
-        setError("로그인 세션이 만료되었습니다. 다시 로그인해주세요.");
+        setError(t("errors.expired"));
       } else if (status === 423) {
-        setError("계정이 잠겼습니다. 잠시 후 다시 시도해주세요.");
+        setError(t("errors.locked"));
       } else if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError("로그인 중 오류가 발생했습니다.");
+        setError(t("errors.unknown"));
       }
     } finally {
       setLoading(false);
@@ -107,12 +113,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg p-4 ml-[84px]">
+    <div className="min-h-screen flex items-center justify-center bg-bg p-4 md:ml-[84px]">
       <div className="w-full max-w-[440px] bg-surface border border-line rounded-2xl shadow-card p-10 flex flex-col gap-7">
         {/* 헤더 */}
         <div>
           <h1 className="text-3xl font-bold text-ink tracking-tighter">
-            로그인
+            {t("title")}
           </h1>
         </div>
 
@@ -121,7 +127,7 @@ export default function LoginPage() {
           <input
             name="email"
             type="email"
-            placeholder="이메일"
+            placeholder={t("fields.email")}
             value={form.email}
             onChange={handleChange}
             className={inputClass}
@@ -129,7 +135,7 @@ export default function LoginPage() {
           <input
             name="password"
             type="password"
-            placeholder="비밀번호"
+            placeholder={t("fields.password")}
             value={form.password}
             onChange={handleChange}
             className={inputClass}
@@ -139,10 +145,10 @@ export default function LoginPage() {
 
           <div className="flex justify-between items-center text-xs text-ink-3 mt-1">
             <Link to="/signup" className="hover:text-ink transition-colors">
-              회원가입
+              {t("links.signup")}
             </Link>
             <Link to="/find-account" className="hover:text-ink transition-colors">
-              아이디/비밀번호 찾기
+              {t("links.findAccount")}
             </Link>
           </div>
 
@@ -151,7 +157,7 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full mt-3 py-3 rounded-lg bg-accent text-white text-base font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {loading ? "로그인 중..." : "로그인"}
+            {loading ? t("buttons.submitting") : t("buttons.submit")}
           </button>
         </form>
 
@@ -162,7 +168,7 @@ export default function LoginPage() {
           </div>
           <div className="relative flex justify-center">
             <span className="bg-surface px-3 text-[11px] text-ink-3 tracking-tight uppercase">
-              or continue with
+              {t("or")}
             </span>
           </div>
         </div>
@@ -174,7 +180,7 @@ export default function LoginPage() {
             onClick={() => startOAuth2Login("naver")}
             className="flex flex-col items-center gap-2 py-3 rounded-lg border border-line bg-surface hover:bg-bg-sunk transition-colors"
           >
-            <img src={naverIcon} alt="NAVER 로그인" className="w-9 h-9 rounded-full" />
+            <img src={naverIcon} alt={t("buttons.naver")} className="w-9 h-9 rounded-full" />
             <span className="text-[11px] font-medium text-ink-2">NAVER</span>
           </button>
 
@@ -183,7 +189,7 @@ export default function LoginPage() {
             onClick={() => startOAuth2Login("google")}
             className="flex flex-col items-center gap-2 py-3 rounded-lg border border-line bg-surface hover:bg-bg-sunk transition-colors"
           >
-            <img src={googleIcon} alt="Google 로그인" className="w-9 h-9 rounded-full" />
+            <img src={googleIcon} alt={t("buttons.google")} className="w-9 h-9 rounded-full" />
             <span className="text-[11px] font-medium text-ink-2">Google</span>
           </button>
         </div>

@@ -1,5 +1,6 @@
 // src/pages/MainPage.tsx
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Sun, Moon } from "lucide-react";
 import Reveal from "../components/Reveal";
 import StockInputBox from "../components/StockInputBox";
@@ -385,6 +386,7 @@ function WorkflowIcon({ kind }: { kind: "search" | "ai" | "doc" }) {
 export default function MainPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
+  const { t } = useTranslation("mainPage");
   const loggedIn = isLoggedIn();
 
   const handleLogin = () => {
@@ -414,45 +416,35 @@ export default function MainPage() {
     navigate(q ? `/feature/1?q=${encodeURIComponent(q)}` : "/feature/1");
   };
 
-  const features = [
-    {
-      tag: "FEATURE 01", title: "심층분석", en: "Deep Equity Analysis",
-      desc: "단일 종목의 가격 흐름과 재무지표를 AI가 한 번에 정리합니다. 매수/매도 시점, 밸류에이션 평가, 주요 리스크까지.",
-      visual: "candle" as const,
-      bullets: ["실시간 캔들차트", "재무지표 자동 해석", "LLM 보고서 생성"],
-      to: "/feature/1",
-    },
-    {
-      tag: "FEATURE 02", title: "외부요인", en: "Macro & Context",
-      desc: "산업 지수, 금리, 뉴스, 공매도, 유사 종목 — 한 종목을 둘러싼 외부 환경을 모두 모아 분석합니다.",
-      visual: "radar" as const,
-      bullets: ["산업 유사 종목군", "기준금리 시계열", "실시간 뉴스 큐레이션"],
-      to: "/feature/2",
-    },
-    {
-      tag: "FEATURE 03", title: "포트폴리오", en: "Portfolio Health",
-      desc: "보유 자산을 입력하면 위험·분산·효율을 진단합니다. 투자 성향에 맞춘 리밸런싱까지.",
-      visual: "pie" as const,
-      bullets: ["위험 수준 진단", "분산 구조 분석", "성향 기반 추천"],
-      to: "/feature/3",
-    },
-  ];
+  const features = (["deep", "external", "portfolio"] as const).map((key, i) => ({
+    tag: t(`features.items.${key}.tag`),
+    title: t(`features.items.${key}.title`),
+    en: t(`features.items.${key}.en`),
+    desc: t(`features.items.${key}.desc`),
+    visual: (["candle", "radar", "pie"] as const)[i],
+    bullets: [
+      t(`features.items.${key}.bullet1`),
+      t(`features.items.${key}.bullet2`),
+      t(`features.items.${key}.bullet3`),
+    ],
+    to: `/feature/${i + 1}`,
+  }));
 
-  const steps = [
-    { n: "01", title: "검색", desc: "종목명·코드·티커 무엇이든. 한국·미국 시장을 모두 지원합니다.", icon: "search" as const },
-    { n: "02", title: "AI 분석", desc: "Gemini · GPT 기반 LLM이 가격·재무·뉴스·산업·금리 데이터를 동시에 읽습니다.", icon: "ai" as const },
-    { n: "03", title: "인사이트", desc: "단순 수치가 아닌 \"왜 그런가\"의 해석. PDF로 저장해 가져갈 수 있습니다.", icon: "doc" as const },
-  ];
+  const steps = (["step1", "step2", "step3"] as const).map((key, i) => ({
+    n: String(i + 1).padStart(2, "0"),
+    title: t(`workflow.${key}.title`),
+    desc: t(`workflow.${key}.desc`),
+    icon: (["search", "ai", "doc"] as const)[i],
+  }));
 
-  const sources = [
-    { label: "실시간 시세", source: "한국투자증권 KIS API", note: "코스피 · 코스닥 · NYSE · NASDAQ" },
-    { label: "재무 데이터", source: "DART · SEC EDGAR", note: "분기/연간 재무제표, 공시 원본" },
-    { label: "거시 지표", source: "한국은행 · FRED", note: "기준금리, 환율, 채권 수익률" },
-    { label: "뉴스 & 공시", source: "주요 미디어 · 거래소 공시", note: "공매도 · 외국인 매매 동향 포함" },
-  ];
+  const sources = (["price", "financial", "macro", "news"] as const).map((key) => ({
+    label: t(`sources.${key}.label`),
+    source: t(`sources.${key}.source`),
+    note: t(`sources.${key}.note`),
+  }));
 
   return (
-    <div className="min-h-screen bg-bg text-ink ml-[84px]">
+    <div className="min-h-screen bg-bg text-ink md:ml-[84px]">
       {/* HERO */}
       <section className="relative pt-16 sm:pt-20 pb-14 overflow-hidden">
         {/* 우상단 — 로그인/로그아웃 + 다크모드 토글. 사이드바에만 있으면
@@ -464,12 +456,12 @@ export default function MainPage() {
                        border border-line text-ink-2 text-sm font-semibold
                        shadow-card hover:bg-bg-sunk transition-colors"
           >
-            {loggedIn ? "로그아웃" : "로그인"}
+            {loggedIn ? t("header.logout") : t("header.login")}
           </button>
           <div className="relative group">
             <button
               onClick={toggle}
-              aria-label={theme === "dark" ? "라이트모드로 변경" : "다크모드로 변경"}
+              aria-label={theme === "dark" ? t("header.toLight") : t("header.toDark")}
               className="w-9 h-9 grid place-items-center rounded-xl bg-surface
                          border border-line text-ink-2 shadow-card
                          hover:bg-bg-sunk transition-colors"
@@ -482,7 +474,7 @@ export default function MainPage() {
                          px-2.5 py-1.5 shadow-pop opacity-0 group-hover:opacity-100
                          transition-opacity"
             >
-              {theme === "dark" ? "라이트모드로 변경" : "다크모드로 변경"}
+              {theme === "dark" ? t("header.toLight") : t("header.toDark")}
             </span>
           </div>
         </div>
@@ -491,35 +483,21 @@ export default function MainPage() {
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-soft text-accent-ink text-xs font-mono font-semibold tracking-wider mb-6">
               <span className="w-1.5 h-1.5 rounded-full bg-accent" />
-              POWERED BY AI
+              {t("hero.badge")}
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-[56px] leading-[1.1] tracking-tighter font-bold text-ink m-0">
-              시장을 읽는 일,<br />
-              <span className="text-accent">AI에게 맡기세요.</span>
+              {t("hero.titleLine1")}<br />
+              <span className="text-accent">{t("hero.titleLine2")}</span>
             </h1>
 
             <p className="text-base sm:text-[17px] leading-relaxed text-ink-2 mt-5 mb-9 max-w-[480px]">
-              가격, 재무, 산업, 뉴스, 금리까지 — 흩어진 데이터를 하나의 분석 보고서로 정리합니다. 종목 하나만 입력하면 됩니다.
+              {t("hero.subtitle")}
             </p>
 
             {/* 검색박스 — 심층분석과 동일한 자동완성 검색 컴포넌트 */}
             <div className="max-w-[520px]">
-              <StockInputBox placeholder="삼성전자, 005930, NVDA…" onSearch={goAnalyze} showInterest={false} enableRecent={false} />
-            </div>
-
-            {/* 인기 종목 */}
-            <div className="flex flex-wrap items-center gap-2 mt-4 text-xs text-ink-3">
-              <span className="font-mono tracking-wider">지금 많이 검색돼요</span>
-              {["삼성전자", "SK하이닉스", "NVDA", "현대차"].map((s) => (
-                <button
-                  key={s}
-                  onClick={() => navigate(`/feature/1?q=${encodeURIComponent(s)}`)}
-                  className="px-2.5 py-1 rounded-full bg-bg-sunk text-ink-2 text-xs font-medium hover:bg-line transition-colors"
-                >
-                  {s}
-                </button>
-              ))}
+              <StockInputBox placeholder={t("hero.searchPlaceholder")} onSearch={goAnalyze} showInterest={false} enableRecent={false} />
             </div>
           </div>
 
@@ -535,9 +513,9 @@ export default function MainPage() {
       <section className="py-20 bg-bg-alt">
         <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <SectionHead
-            eyebrow="WHAT QAIMA DOES"
-            title="3가지 시선으로, 한 종목을 본다"
-            sub="가격만 본다고 시장이 보이지 않습니다. Qaima는 종목·환경·포트폴리오 세 축에서 동시에 분석합니다."
+            eyebrow={t("features.eyebrow")}
+            title={t("features.title")}
+            sub={t("features.sub")}
           />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-12">
             {features.map((f, i) => (
@@ -580,9 +558,9 @@ export default function MainPage() {
       <section className="py-20">
         <div className="px-8 sm:px-12 lg:px-16 max-w-[1400px] mx-auto">
           <SectionHead
-            eyebrow="HOW IT WORKS"
-            title="검색 한 번, 분석 30초"
-            sub="복잡한 설정 없이 — 종목명만 입력하면 흩어진 데이터를 모아 AI가 보고서를 작성합니다."
+            eyebrow={t("workflow.eyebrow")}
+            title={t("workflow.title")}
+            sub={t("workflow.sub")}
           />
           <div className="relative grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
             <div
@@ -598,7 +576,7 @@ export default function MainPage() {
                   <div className="w-12 h-12 rounded-2xl bg-accent-soft text-accent-ink grid place-items-center">
                     <WorkflowIcon kind={s.icon} />
                   </div>
-                  <div className="font-mono text-xs text-ink-4 font-semibold">STEP {s.n}</div>
+                  <div className="font-mono text-xs text-ink-4 font-semibold">{t("workflow.stepLabel", { n: s.n })}</div>
                 </div>
                 <div>
                   <h4 className="text-xl m-0 mb-2 text-ink font-bold tracking-tight">{s.title}</h4>
@@ -616,9 +594,9 @@ export default function MainPage() {
       <section className="py-20 bg-bg-alt">
         <div className="max-w-[1400px] mx-auto px-8 sm:px-12 lg:px-16">
           <SectionHead
-            eyebrow="DATA YOU CAN TRUST"
-            title="공식 출처에서, 실시간으로"
-            sub="블로그 요약이 아닙니다. 거래소·중앙은행·공시 시스템에서 직접 가져온 1차 데이터를 분석합니다."
+            eyebrow={t("sources.eyebrow")}
+            title={t("sources.title")}
+            sub={t("sources.sub")}
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-12">
             {sources.map((s, i) => (
@@ -653,21 +631,21 @@ export default function MainPage() {
 
             <div className="relative z-[1] max-w-[720px]">
               <div className="text-xs font-mono tracking-widest text-white/70 font-semibold mb-4">
-                START FREE · 신용카드 불필요
+                {t("cta.tag")}
               </div>
               <h2 className="text-3xl sm:text-4xl lg:text-[44px] m-0 text-white font-bold tracking-tighter leading-tight">
-                <span className="block">지금 분석을 시작하세요.</span>
-                <span className="block mt-3">가입하면 토큰 5개를 드립니다.</span>
+                <span className="block">{t("cta.titleLine1")}</span>
+                <span className="block mt-3">{t("cta.titleLine2")}</span>
               </h2>
               <p className="text-base text-white/80 mt-5 mb-9 max-w-[540px] leading-relaxed">
-                첫 분석은 무료입니다. 토큰을 다 쓰면 그때 결제하세요. 강제 유료화·자동 결제는 없습니다.
+                {t("cta.subtitle")}
               </p>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => navigate("/signup")}
                   className="bg-white text-accent-ink border-none rounded-xl px-7 py-3.5 text-[15px] font-semibold cursor-pointer flex items-center gap-2 hover:opacity-90 transition-opacity"
                 >
-                  무료로 시작하기
+                  {t("cta.primary")}
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 12h14M13 5l7 7-7 7" />
                   </svg>
@@ -682,7 +660,7 @@ export default function MainPage() {
                     }}
                     className="bg-transparent text-white border border-white/30 rounded-xl px-6 py-3.5 text-[15px] font-medium cursor-pointer hover:bg-white/10 transition-colors"
                   >
-                    로그인
+                    {t("cta.loginButton")}
                   </button>
                 )}
               </div>

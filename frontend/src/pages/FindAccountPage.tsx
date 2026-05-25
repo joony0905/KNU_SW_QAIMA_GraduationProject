@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { findLoginId, requestPasswordReset } from "../api/auth";
 import { getApiErrorMessage } from "../utils/errorMessage";
 
@@ -15,7 +16,8 @@ type ResultState =
   | { type: "error"; message: string };
 
 export default function FindAccountPage() {
-  // 아이디 찾기 (백엔드 연결: POST /auth/find-id)
+  const { t } = useTranslation("findAccountPage");
+
   const [findIdForm, setFindIdForm] = useState({
     name: "",
     birthdate: "",
@@ -24,7 +26,6 @@ export default function FindAccountPage() {
   const [findIdLoading, setFindIdLoading] = useState(false);
   const [findIdResult, setFindIdResult] = useState<ResultState>({ type: "idle" });
 
-  // 비밀번호 재설정 (백엔드 연결)
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetResult, setResetResult] = useState<ResultState>({ type: "idle" });
@@ -32,11 +33,11 @@ export default function FindAccountPage() {
   const handleFindId = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!findIdForm.name.trim()) {
-      setFindIdResult({ type: "error", message: "이름을 입력해주세요." });
+      setFindIdResult({ type: "error", message: t("findId.errors.noName") });
       return;
     }
     if (!/^\d{6}$/.test(findIdForm.birthdate)) {
-      setFindIdResult({ type: "error", message: "생년월일 6자리(YYMMDD)를 입력해주세요." });
+      setFindIdResult({ type: "error", message: t("findId.errors.invalidBirthdate") });
       return;
     }
 
@@ -53,10 +54,9 @@ export default function FindAccountPage() {
       setFindIdResult({ type: "success", message: maskedEmail });
     } catch (err) {
       // 미존재/동명이인 중복 등은 백엔드가 한글 메시지를 errors[0].message 로 내려준다.
-      // (중복 시: "...전화번호를 함께 입력해 주세요." → 아래 전화번호 입력 안내로 이어짐)
       setFindIdResult({
         type: "error",
-        message: getApiErrorMessage(err, "아이디를 찾지 못했습니다."),
+        message: getApiErrorMessage(err, t("findId.errors.notFound")),
       });
     } finally {
       setFindIdLoading(false);
@@ -66,11 +66,11 @@ export default function FindAccountPage() {
   const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetEmail.trim()) {
-      setResetResult({ type: "error", message: "이메일을 입력해주세요." });
+      setResetResult({ type: "error", message: t("reset.errors.noEmail") });
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail)) {
-      setResetResult({ type: "error", message: "이메일 형식이 올바르지 않습니다." });
+      setResetResult({ type: "error", message: t("reset.errors.invalidEmail") });
       return;
     }
 
@@ -79,30 +79,20 @@ export default function FindAccountPage() {
 
     try {
       await requestPasswordReset(resetEmail.trim());
-      setResetResult({
-        type: "success",
-        message:
-          "입력하신 이메일이 가입돼 있다면 비밀번호 재설정 링크가 발송됩니다. 메일함을 확인해주세요. (링크 유효시간: 30분)",
-      });
+      setResetResult({ type: "success", message: t("reset.successMessage") });
     } catch (err: unknown) {
       const axiosErr = err as any;
       const status = axiosErr?.response?.status;
       const message = axiosErr?.response?.data?.errors?.[0]?.message;
 
       if (status === 429) {
-        setResetResult({
-          type: "error",
-          message: "요청이 너무 잦습니다. 잠시 후 다시 시도해주세요.",
-        });
+        setResetResult({ type: "error", message: t("reset.errors.rateLimited") });
       } else if (message) {
         setResetResult({ type: "error", message });
       } else if (err instanceof Error) {
         setResetResult({ type: "error", message: err.message });
       } else {
-        setResetResult({
-          type: "error",
-          message: "요청 처리 중 오류가 발생했습니다.",
-        });
+        setResetResult({ type: "error", message: t("reset.errors.unknown") });
       }
     } finally {
       setResetLoading(false);
@@ -110,16 +100,14 @@ export default function FindAccountPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px] py-12 px-4">
+    <div className="min-h-screen bg-bg md:ml-[84px] py-12 px-4">
       <div className="max-w-5xl mx-auto flex flex-col gap-8">
         {/* 헤더 */}
         <div>
           <h1 className="text-3xl font-bold text-ink tracking-tighter">
-            계정 찾기
+            {t("title")}
           </h1>
-          <p className="mt-1.5 text-sm text-ink-3">
-            아이디를 잊었거나 비밀번호를 분실하셨나요?
-          </p>
+          <p className="mt-1.5 text-sm text-ink-3">{t("subtitle")}</p>
         </div>
 
         {/* 두 카드 */}
@@ -128,20 +116,18 @@ export default function FindAccountPage() {
           <section className="bg-surface border border-line rounded-2xl shadow-card p-8 flex flex-col gap-5">
             <div>
               <div className="text-[11px] font-semibold text-accent tracking-tight">
-                FIND ID
+                {t("findId.eyebrow")}
               </div>
               <h2 className="mt-1 text-xl font-bold text-ink tracking-tight">
-                아이디 찾기
+                {t("findId.title")}
               </h2>
-              <p className="mt-1 text-xs text-ink-3">
-                가입 시 입력한 이름과 생년월일로 조회합니다.
-              </p>
+              <p className="mt-1 text-xs text-ink-3">{t("findId.description")}</p>
             </div>
 
             <form onSubmit={handleFindId} className="flex flex-col gap-3">
               <input
                 type="text"
-                placeholder="이름"
+                placeholder={t("findId.fields.name")}
                 value={findIdForm.name}
                 onChange={(e) =>
                   setFindIdForm((prev) => ({ ...prev, name: e.target.value }))
@@ -151,7 +137,7 @@ export default function FindAccountPage() {
               <input
                 type="text"
                 inputMode="numeric"
-                placeholder="생년월일 (6자리)"
+                placeholder={t("findId.fields.birthdate")}
                 value={findIdForm.birthdate}
                 onChange={(e) =>
                   setFindIdForm((prev) => ({
@@ -165,7 +151,7 @@ export default function FindAccountPage() {
               <input
                 type="text"
                 inputMode="numeric"
-                placeholder="전화번호 (선택 · 동명이인 구분용)"
+                placeholder={t("findId.fields.phone")}
                 value={findIdForm.phone}
                 onChange={(e) =>
                   setFindIdForm((prev) => ({
@@ -182,19 +168,15 @@ export default function FindAccountPage() {
                 disabled={findIdLoading}
                 className={primaryBtn + " mt-2"}
               >
-                {findIdLoading ? "조회 중..." : "아이디 찾기"}
+                {findIdLoading ? t("findId.buttons.submitting") : t("findId.buttons.submit")}
               </button>
             </form>
 
             {findIdResult.type === "success" && (
               <div className="rounded-lg bg-success/10 border border-success/30 px-4 py-3 text-sm">
-                <p className="text-ink-3 text-xs mb-1">회원님의 아이디</p>
-                <p className="font-mono font-semibold text-ink">
-                  {findIdResult.message}
-                </p>
-                <p className="mt-2 text-[11px] text-ink-4">
-                  보안을 위해 이메일 일부를 가렸습니다.
-                </p>
+                <p className="text-ink-3 text-xs mb-1">{t("findId.result.label")}</p>
+                <p className="font-mono font-semibold text-ink">{findIdResult.message}</p>
+                <p className="mt-2 text-[11px] text-ink-4">{t("findId.result.maskNote")}</p>
               </div>
             )}
             {findIdResult.type === "error" && (
@@ -206,20 +188,18 @@ export default function FindAccountPage() {
           <section className="bg-surface border border-line rounded-2xl shadow-card p-8 flex flex-col gap-5">
             <div>
               <div className="text-[11px] font-semibold text-accent tracking-tight">
-                RESET PASSWORD
+                {t("reset.eyebrow")}
               </div>
               <h2 className="mt-1 text-xl font-bold text-ink tracking-tight">
-                비밀번호 재설정
+                {t("reset.title")}
               </h2>
-              <p className="mt-1 text-xs text-ink-3">
-                가입한 이메일로 비밀번호 재설정 링크를 보내드립니다.
-              </p>
+              <p className="mt-1 text-xs text-ink-3">{t("reset.description")}</p>
             </div>
 
             <form onSubmit={handleRequestReset} className="flex flex-col gap-3">
               <input
                 type="email"
-                placeholder="이메일"
+                placeholder={t("reset.fields.email")}
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
                 className={inputClass}
@@ -230,7 +210,7 @@ export default function FindAccountPage() {
                 disabled={resetLoading}
                 className={primaryBtn + " mt-2"}
               >
-                {resetLoading ? "전송 중..." : "재설정 링크 받기"}
+                {resetLoading ? t("reset.buttons.submitting") : t("reset.buttons.submit")}
               </button>
             </form>
 
@@ -248,7 +228,7 @@ export default function FindAccountPage() {
         {/* 하단 */}
         <p className="text-center text-xs text-ink-3">
           <Link to="/login" className="hover:text-ink transition-colors">
-            ← 로그인으로 돌아가기
+            {t("backToLogin")}
           </Link>
         </p>
       </div>
