@@ -150,17 +150,17 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* 모바일 전용 햄버거 버튼 (좌측 상단) — 데스크탑에서는 사이드바가 항상 보이므로 숨김 */}
-      <button
-        type="button"
-        onClick={() => setMobileOpen(true)}
-        aria-label={t("openMenu")}
-        className="md:hidden fixed top-3 left-3 z-30 w-10 h-10 grid place-items-center
-                   rounded-xl bg-surface border border-line text-ink-2 shadow-card
-                   hover:bg-bg-sunk transition-colors"
-      >
-        <Menu size={20} />
-      </button>
+      {/* 모바일 전용 상단 고정 바 — 햄버거 포함, 스크롤에 무관하게 항상 상단 고정 */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-12 z-30 bg-surface border-b border-line flex items-center px-3">
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label={t("openMenu")}
+          className="w-10 h-10 grid place-items-center rounded-xl text-ink-2 hover:bg-bg-sunk transition-colors"
+        >
+          <Menu size={20} />
+        </button>
+      </div>
 
       {/* 모바일 사이드바 백드롭 — 바깥 여백 클릭 시 닫기 */}
       {mobileOpen && (

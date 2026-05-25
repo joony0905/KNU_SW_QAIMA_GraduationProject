@@ -15,7 +15,7 @@ export default function MainLayout({ children }: Props) {
       <BillingProvider>
         <div className="flex min-h-screen bg-bg text-ink">
           <Sidebar />
-          <main className="flex-1">
+          <main className="flex-1 pt-12 md:pt-0">
             <PageTransition>{children}</PageTransition>
           </main>
         </div>
