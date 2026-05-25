@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { User } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { getMyProfile, updateMyProfile } from "../api/user";
 import { getApiErrorMessage } from "../utils/errorMessage";
 import { setUser } from "../api/userStore";
@@ -14,15 +15,6 @@ const labelClass = "block text-sm font-medium text-ink-2 mb-1.5";
 const formatBirthdate = (v: string): string => {
   if (/^\d{6,7}$/.test(v)) return `${v.slice(0, 2)}.${v.slice(2, 4)}.${v.slice(4, 6)}`;
   return v || "-";
-};
-
-const formatGender = (gender: string, birthdate: string): string => {
-  if (gender === "male") return "남성";
-  if (gender === "female") return "여성";
-  const digit = birthdate.replace(/[^0-9]/g, "").charAt(6);
-  if (digit === "1" || digit === "3") return "남성";
-  if (digit === "2" || digit === "4") return "여성";
-  return "-";
 };
 
 function Card({
@@ -56,21 +48,30 @@ function Card({
 
 export default function EditProfilePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation("editProfilePage");
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState(""); // 아이디 = 이메일, 변경 불가
-  const [birthdate, setBirthdate] = useState(""); // 변경 불가
-  const [gender, setGender] = useState(""); // 변경 불가
+  const [email, setEmail] = useState("");
+  const [birthdate, setBirthdate] = useState("");
+  const [gender, setGender] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  // 초기 변경 감지를 위해 원본 값을 보관
   const [initial, setInitial] = useState({ name: "", phone: "" });
+
+  const formatGender = (g: string, bd: string): string => {
+    if (g === "male") return t("gender.male");
+    if (g === "female") return t("gender.female");
+    const digit = bd.replace(/[^0-9]/g, "").charAt(6);
+    if (digit === "1" || digit === "3") return t("gender.male");
+    if (digit === "2" || digit === "4") return t("gender.female");
+    return "-";
+  };
 
   useEffect(() => {
     let alive = true;
@@ -85,7 +86,7 @@ export default function EditProfilePage() {
         setInitial({ name: p.name ?? "", phone: p.phone ?? "" });
       })
       .catch((e) => {
-        if (alive) setLoadError(getApiErrorMessage(e, "내 정보를 불러오지 못했습니다."));
+        if (alive) setLoadError(getApiErrorMessage(e, t("errors.loadFailed")));
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -93,7 +94,7 @@ export default function EditProfilePage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [t]);
 
   const handlePhoneChange = (v: string) => setPhone(v.replace(/[^0-9]/g, ""));
 
@@ -103,15 +104,14 @@ export default function EditProfilePage() {
 
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setSaveError("이름을 입력해주세요.");
+      setSaveError(t("errors.nameRequired"));
       return;
     }
     if (phone && phone.length < 9) {
-      setSaveError("전화번호를 정확히 입력해주세요.");
+      setSaveError(t("errors.phoneInvalid"));
       return;
     }
 
-    // 바뀐 필드만 전송 (백엔드는 보낸 필드만 반영)
     const payload: { name?: string; phone?: string } = {};
     if (trimmedName !== initial.name) payload.name = trimmedName;
     if (phone !== initial.phone) payload.phone = phone;
@@ -124,12 +124,10 @@ export default function EditProfilePage() {
     setSaving(true);
     try {
       const updated = await updateMyProfile(payload);
-      // 헤더/설정 화면이 참조하는 사용자 캐시도 갱신
       setUser({ email: updated.email, name: updated.name });
       navigate("/setting");
     } catch (err) {
-      // phone 중복 시 백엔드: 400 "이미 사용 중인 전화번호입니다."
-      setSaveError(getApiErrorMessage(err, "개인정보 수정에 실패했습니다."));
+      setSaveError(getApiErrorMessage(err, t("errors.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -143,13 +141,13 @@ export default function EditProfilePage() {
       >
         <header>
           <h1 className="text-2xl sm:text-3xl font-bold text-ink tracking-tighter">
-            개인정보 수정
+            {t("title")}
           </h1>
         </header>
 
         {loading ? (
           <p className="text-sm text-ink-3 py-10 text-center animate-pulse">
-            내 정보를 불러오는 중...
+            {t("loading")}
           </p>
         ) : loadError ? (
           <p className="text-sm text-danger py-10 text-center">{loadError}</p>
@@ -157,18 +155,18 @@ export default function EditProfilePage() {
           <>
             <Card
               icon={User}
-              title="기본정보"
-              desc="이름과 연락처를 수정할 수 있습니다"
+              title={t("card.title")}
+              desc={t("card.desc")}
             >
               <div>
-                <label className={labelClass}>아이디(이메일)</label>
+                <label className={labelClass}>{t("labels.email")}</label>
                 <input className={inputClass} value={email} disabled />
                 <p className="mt-1.5 text-xs text-ink-3">
-                  아이디로 사용되는 이메일은 변경할 수 없습니다.
+                  {t("emailHint")}
                 </p>
               </div>
               <div>
-                <label className={labelClass}>생년월일</label>
+                <label className={labelClass}>{t("labels.birthdate")}</label>
                 <input
                   className={inputClass}
                   value={formatBirthdate(birthdate)}
@@ -176,7 +174,7 @@ export default function EditProfilePage() {
                 />
               </div>
               <div>
-                <label className={labelClass}>성별</label>
+                <label className={labelClass}>{t("labels.gender")}</label>
                 <input
                   className={inputClass}
                   value={formatGender(gender, birthdate)}
@@ -184,22 +182,22 @@ export default function EditProfilePage() {
                 />
               </div>
               <div>
-                <label className={labelClass}>이름</label>
+                <label className={labelClass}>{t("labels.name")}</label>
                 <input
                   className={inputClass}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="이름"
+                  placeholder={t("placeholders.name")}
                 />
               </div>
               <div>
-                <label className={labelClass}>전화번호</label>
+                <label className={labelClass}>{t("labels.phone")}</label>
                 <input
                   className={inputClass}
                   value={phone}
                   onChange={(e) => handlePhoneChange(e.target.value)}
                   inputMode="numeric"
-                  placeholder="전화번호 ( - 제외)"
+                  placeholder={t("placeholders.phone")}
                 />
               </div>
             </Card>
@@ -214,7 +212,7 @@ export default function EditProfilePage() {
                 disabled={saving}
                 className="px-5 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
-                {saving ? "저장 중..." : "변경 저장"}
+                {saving ? t("buttons.saving") : t("buttons.save")}
               </button>
             </div>
           </>

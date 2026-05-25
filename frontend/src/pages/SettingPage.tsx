@@ -62,14 +62,6 @@ const formatBirthdate = (v: string): string =>
     ? `${v.slice(0, 2)}.${v.slice(2, 4)}.${v.slice(4, 6)}`
     : v || "-";
 
-const formatGender = (gender?: string | null, birthdate?: string | null): string => {
-  if (gender === "male") return "남성";
-  if (gender === "female") return "여성";
-  const digit = birthdate?.replace(/[^0-9]/g, "").charAt(6);
-  if (digit === "1" || digit === "3") return "남성";
-  if (digit === "2" || digit === "4") return "여성";
-  return "-";
-};
 
 type CardProps = {
   icon: React.ElementType;
@@ -101,12 +93,6 @@ function SettingCard({ icon: Icon, title, desc, action, children }: CardProps) {
   );
 }
 
-const featureLabel = (featureType: string) => {
-  if (featureType === "FEATURE1") return "기능1";
-  if (featureType === "FEATURE2") return "기능2";
-  if (featureType === "FEATURE3") return "기능3";
-  return featureType;
-};
 
 const formatKstDateTime = (value?: string | null) => {
   if (!value) return "-";
@@ -124,6 +110,7 @@ const formatKstDateTime = (value?: string | null) => {
 };
 
 function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
+  const { t } = useTranslation("settingPage");
   const snapshot = report.resultSnapshot as {
     explain?: {
       text?: string | null;
@@ -155,8 +142,8 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
         meta={{
           featureType: report.featureType,
           subjectLabel: report.subjectType === "PORTFOLIO"
-            ? "포트폴리오"
-            : `${report.companyName || report.stockCode || "분석종목"} (${report.stockCode || "-"})`,
+            ? t("cards.reports.portfolioLabel")
+            : `${report.companyName || report.stockCode || t("cards.reports.stockFallback")} (${report.stockCode || "-"})`,
           subjectDetail: report.portfolioSummary,
           generatedAt: report.generatedAt,
           analysisModel: report.analysisModel,
@@ -171,12 +158,12 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
       <div className="rounded-xl border border-line bg-bg-sunk p-4">
         <h3 className="text-base font-bold text-ink">{report.title}</h3>
         <p className="mt-1 text-sm text-ink-3">
-          저장된 분석 스냅샷 기준으로 재생성한 리포트입니다.
+          {t("reportDetail.snapshotNote")}
         </p>
       </div>
       {explain?.overall?.summary || explain?.text || snapshot?.summary ? (
         <section className="rounded-xl border border-line bg-bg-sunk p-4">
-          <h3 className="text-base font-bold text-ink">종합 요약</h3>
+          <h3 className="text-base font-bold text-ink">{t("reportDetail.overallSummary")}</h3>
           <p className="mt-2 text-sm leading-relaxed text-ink-2">
             {explain?.overall?.summary || explain?.text || snapshot?.summary}
           </p>
@@ -187,7 +174,7 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
           ) : null}
           {explain?.overall?.risks?.length ? (
             <div className="mt-3">
-              <p className="text-sm font-semibold text-ink">리스크</p>
+              <p className="text-sm font-semibold text-ink">{t("reportDetail.risks")}</p>
               <ul className="mt-1 list-disc list-inside text-sm text-ink-2">
                 {explain.overall.risks.map((item, idx) => <li key={`risk-${idx}`}>{item}</li>)}
               </ul>
@@ -200,7 +187,7 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
       ) : null}
       {sections.length > 0 ? (
         <section className="rounded-xl border border-line bg-bg-sunk p-4">
-          <h3 className="text-base font-bold text-ink">세부 설명</h3>
+          <h3 className="text-base font-bold text-ink">{t("reportDetail.sections")}</h3>
           <div className="mt-3 flex flex-col gap-3">
             {sections.map(([key, section]) => (
               <div key={key} className="rounded-lg border border-line bg-surface p-3">
@@ -218,7 +205,7 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
       ) : null}
       {warnings.length > 0 ? (
         <section className="rounded-xl border border-line bg-bg-sunk p-4">
-          <h3 className="text-base font-bold text-ink">참고</h3>
+          <h3 className="text-base font-bold text-ink">{t("reportDetail.notes")}</h3>
           <ul className="mt-2 list-disc list-inside text-sm text-ink-2">
             {warnings.map((item, idx) => (
               <li key={`warning-${idx}`}>{item}</li>
@@ -334,6 +321,22 @@ export default function SettingPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
   const { t, i18n } = useTranslation(["common", "settingPage"]);
+
+  const formatGender = (gender?: string | null, birthdate?: string | null): string => {
+    if (gender === "male") return t("settingPage:basicInfo.genderMale");
+    if (gender === "female") return t("settingPage:basicInfo.genderFemale");
+    const digit = birthdate?.replace(/[^0-9]/g, "").charAt(6);
+    if (digit === "1" || digit === "3") return t("settingPage:basicInfo.genderMale");
+    if (digit === "2" || digit === "4") return t("settingPage:basicInfo.genderFemale");
+    return "-";
+  };
+
+  const featureLabel = (featureType: string) => {
+    if (featureType === "FEATURE1") return t("settingPage:featureLabel.FEATURE1");
+    if (featureType === "FEATURE2") return t("settingPage:featureLabel.FEATURE2");
+    if (featureType === "FEATURE3") return t("settingPage:featureLabel.FEATURE3");
+    return featureType;
+  };
   const {
     glossaryHover,
     setGlossaryHover,
@@ -371,6 +374,7 @@ export default function SettingPage() {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<AnalysisReportDetail | null>(null);
+  const [pdfReport, setPdfReport] = useState<AnalysisReportDetail | null>(null);
   const [reportDetailLoading, setReportDetailLoading] = useState(false);
   const [pdfExporting, setPdfExporting] = useState(false);
   const reportPdfRef = useRef<HTMLDivElement | null>(null);
@@ -384,7 +388,7 @@ export default function SettingPage() {
         if (alive) setWatchlist(items);
       })
       .catch(() => {
-        if (alive) setWlError("관심종목을 불러오지 못했습니다.");
+        if (alive) setWlError(t("settingPage:errors.watchlistLoad"));
       })
       .finally(() => {
         if (alive) setWlLoading(false);
@@ -407,7 +411,7 @@ export default function SettingPage() {
       })
       .catch((e) => {
         if (alive)
-          setProfileError(getApiErrorMessage(e, "내 정보를 불러오지 못했습니다."));
+          setProfileError(getApiErrorMessage(e, t("settingPage:errors.profileLoad")));
       });
     return () => {
       alive = false;
@@ -423,7 +427,7 @@ export default function SettingPage() {
         if (alive) setReports(rows);
       })
       .catch((e) => {
-        if (alive) setReportsError(getApiErrorMessage(e, "리포트 목록을 불러오지 못했습니다."));
+        if (alive) setReportsError(getApiErrorMessage(e, t("settingPage:errors.reportsLoad")));
       })
       .finally(() => {
         if (alive) setReportsLoading(false);
@@ -441,7 +445,7 @@ export default function SettingPage() {
       await updateMyProfile({ experience: next });
     } catch (e) {
       setInvestLevel(prev);
-      alert(getApiErrorMessage(e, "투자레벨 저장에 실패했습니다."));
+      alert(getApiErrorMessage(e, t("settingPage:errors.investLevelSave")));
     }
   };
 
@@ -457,7 +461,7 @@ export default function SettingPage() {
       syncFeature3RiskDefaults(option.gamma);
     } catch (e) {
       setRiskProfileLabel(prev);
-      setRiskProfileError(getApiErrorMessage(e, "투자성향 저장에 실패했습니다."));
+      setRiskProfileError(getApiErrorMessage(e, t("settingPage:errors.riskProfileSave")));
     }
   };
 
@@ -471,7 +475,7 @@ export default function SettingPage() {
       await updateMyProfile({ glossaryHover: next });
     } catch (e) {
       setGlossaryHover(!next);
-      alert(getApiErrorMessage(e, "환경설정 저장에 실패했습니다."));
+      alert(getApiErrorMessage(e, t("settingPage:errors.glossarySave")));
     } finally {
       setSavingPref(false);
     }
@@ -487,19 +491,19 @@ export default function SettingPage() {
       await deleteWatchlistItem(item.watchlistItemId);
     } catch {
       setWatchlist(prev);
-      alert("관심종목 삭제에 실패했습니다.");
+      alert(t("settingPage:errors.watchlistDelete"));
     }
   };
 
   const labelOf = (item: WatchlistItem) =>
-    item.stockName ?? (item.stockId != null ? `#${item.stockId}` : "종목");
+    item.stockName ?? (item.stockId != null ? `#${item.stockId}` : t("settingPage:cards.reports.stockFallback"));
 
   const openReportDetail = async (reportId: number) => {
     setReportDetailLoading(true);
     try {
       setSelectedReport(await fetchReportDetail(reportId));
     } catch (e) {
-      alert(getApiErrorMessage(e, "리포트 상세를 불러오지 못했습니다."));
+      alert(getApiErrorMessage(e, t("settingPage:errors.reportDetailLoad")));
     } finally {
       setReportDetailLoading(false);
     }
@@ -508,25 +512,25 @@ export default function SettingPage() {
   const handleReportDownload = async (report: AnalysisReportSummary | AnalysisReportDetail) => {
     try {
       const detail = "resultSnapshot" in report ? report : await fetchReportDetail(report.reportId);
-      setSelectedReport(detail);
+      setPdfReport(detail);
       setPdfExporting(true);
       await waitForPdfCaptureReady();
       if (!reportPdfRef.current) return;
       await downloadElementAsPdf(reportPdfRef.current, `qaima_report_${detail.reportId}.pdf`, qaimaLogo);
     } catch (e) {
       clientLog.error("Saved report PDF generation failed", e);
-      alert(getApiErrorMessage(e, "PDF 재다운로드에 실패했습니다."));
+      alert(getApiErrorMessage(e, t("settingPage:errors.pdfFailed")));
     } finally {
       setPdfExporting(false);
     }
   };
 
   const basicInfo: [string, string][] = [
-    ["이름", profile?.name || "-"],
-    ["아이디(이메일)", profile?.email || "-"],
-    ["전화번호", profile ? formatPhone(profile.phone) : "-"],
-    ["생년월일", profile ? formatBirthdate(profile.birthdate) : "-"],
-    ["성별", profile ? formatGender(profile.gender, profile.birthdate) : "-"],
+    [t("settingPage:basicInfo.name"), profile?.name || "-"],
+    [t("settingPage:basicInfo.email"), profile?.email || "-"],
+    [t("settingPage:basicInfo.phone"), profile ? formatPhone(profile.phone) : "-"],
+    [t("settingPage:basicInfo.birthdate"), profile ? formatBirthdate(profile.birthdate) : "-"],
+    [t("settingPage:basicInfo.gender"), profile ? formatGender(profile.gender, profile.birthdate) : "-"],
   ];
 
   const ghostBtn =
@@ -542,12 +546,12 @@ export default function SettingPage() {
               Account · Settings
             </div>
             <h1 className="mt-1 text-3xl font-bold text-ink tracking-tighter">
-              내정보
+              {t("settingPage:header")}
             </h1>
           </div>
           <button
             onClick={toggle}
-            aria-label={theme === "dark" ? "라이트 모드" : "다크 모드"}
+            aria-label={theme === "dark" ? t("settingPage:themeLight") : t("settingPage:themeDark")}
             className="w-9 h-9 grid place-items-center rounded-xl bg-surface border border-line text-ink-2 shadow-card hover:bg-bg-sunk transition-colors"
           >
             {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
@@ -557,15 +561,15 @@ export default function SettingPage() {
         {/* 기본정보 */}
         <SettingCard
           icon={User}
-          title="기본정보"
-          desc="계정에 등록된 정보입니다"
+          title={t("settingPage:cards.basicInfo.title")}
+          desc={t("settingPage:cards.basicInfo.desc")}
           action={
             <button
               onClick={() => navigate("/setting/edit")}
               className={ghostBtn}
             >
               <Pencil size={14} />
-              개인정보 수정
+              {t("settingPage:cards.basicInfo.editBtn")}
             </button>
           }
         >
@@ -590,15 +594,15 @@ export default function SettingPage() {
         {/* 투자레벨 */}
         <SettingCard
           icon={TrendingUp}
-          title="투자레벨"
-          desc="투자 설문 결과로 자동 설정되며, 직접 변경할 수 있습니다"
+          title={t("settingPage:cards.investLevel.title")}
+          desc={t("settingPage:cards.investLevel.desc")}
           action={
             <button
               onClick={() => navigate("/invest-level-survey")}
               className={ghostBtn}
             >
               <RotateCcw size={14} />
-              설문 다시하기
+              {t("settingPage:cards.investLevel.retakeBtn")}
             </button>
           }
         >
@@ -612,12 +616,12 @@ export default function SettingPage() {
         {/* 투자성향 */}
         <SettingCard
           icon={TrendingUp}
-          title="투자성향"
-          desc="투자 설문 결과로 자동 설정되며, 직접 변경할 수 있습니다"
+          title={t("settingPage:cards.riskProfile.title")}
+          desc={t("settingPage:cards.riskProfile.desc")}
           action={
             <button onClick={() => navigate("/survey")} className={ghostBtn}>
               <RotateCcw size={14} />
-              설문 다시하기
+              {t("settingPage:cards.riskProfile.retakeBtn")}
             </button>
           }
         >
@@ -641,8 +645,8 @@ export default function SettingPage() {
         {/* 용어 설명 hover */}
         <SettingCard
           icon={BookOpen}
-          title="용어 설명 미리보기"
-          desc="분석 화면의 용어에 마우스를 올리면 클릭 없이 설명을 보여줍니다"
+          title={t("settingPage:cards.glossaryHover.title")}
+          desc={t("settingPage:cards.glossaryHover.desc")}
         >
           <button
             type="button"
@@ -660,35 +664,35 @@ export default function SettingPage() {
             />
           </button>
           <span className="ml-3 text-sm text-ink-2 align-middle">
-            {glossaryHover ? "켜짐" : "꺼짐"}
+            {glossaryHover ? t("settingPage:cards.glossaryHover.on") : t("settingPage:cards.glossaryHover.off")}
           </span>
         </SettingCard>
 
         {/* 관심종목 */}
         <SettingCard
           icon={Star}
-          title="관심종목"
-          desc={wlLoading ? "불러오는 중..." : `총 ${watchlist.length}개`}
+          title={t("settingPage:cards.watchlist.title")}
+          desc={wlLoading ? t("settingPage:cards.watchlist.loadingDesc") : t("settingPage:cards.watchlist.countDesc", { count: watchlist.length })}
           action={
             watchlist.length > 0 ? (
               <button
                 onClick={() => setIsEditingWatchlist((prev) => !prev)}
                 className={ghostBtn}
               >
-                {isEditingWatchlist ? "완료" : "선택삭제"}
+                {isEditingWatchlist ? t("settingPage:cards.watchlist.doneBtn") : t("settingPage:cards.watchlist.deleteSelectBtn")}
               </button>
             ) : undefined
           }
         >
           {wlLoading ? (
             <p className="text-sm text-ink-3 text-center py-6">
-              관심종목을 불러오는 중입니다...
+              {t("settingPage:cards.watchlist.loading")}
             </p>
           ) : wlError ? (
             <p className="text-sm text-danger text-center py-6">{wlError}</p>
           ) : watchlist.length === 0 ? (
             <p className="text-sm text-ink-3 text-center py-6">
-              관심 종목이 없습니다.
+              {t("settingPage:cards.watchlist.empty")}
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -706,7 +710,7 @@ export default function SettingPage() {
                     <button
                       onClick={() => handleDeleteWatchlistItem(item)}
                       className="hover:opacity-70"
-                      aria-label={`${labelOf(item)} 삭제`}
+                      aria-label={t("settingPage:cards.watchlist.deleteAriaLabel", { name: labelOf(item) })}
                     >
                       <X size={13} />
                     </button>
@@ -733,8 +737,8 @@ export default function SettingPage() {
         {/* 내 리포트 */}
         <SettingCard
           icon={FileText}
-          title="내 리포트"
-          desc={reportsLoading ? "불러오는 중..." : `최근 리포트 ${reports.length}개`}
+          title={t("settingPage:cards.reports.title")}
+          desc={reportsLoading ? t("settingPage:cards.reports.loadingDesc") : t("settingPage:cards.reports.countDesc", { count: reports.length })}
           action={
             <div className="flex items-center gap-1 rounded-lg bg-bg-sunk border border-line p-1">
               {(["ALL", "FEATURE1", "FEATURE2", "FEATURE3"] as const).map((item) => (
@@ -746,18 +750,18 @@ export default function SettingPage() {
                     reportFilter === item ? "bg-surface text-ink shadow-card" : "text-ink-3"
                   }`}
                 >
-                  {item === "ALL" ? "전체" : featureLabel(item)}
+                  {item === "ALL" ? t("settingPage:cards.reports.filterAll") : featureLabel(item)}
                 </button>
               ))}
             </div>
           }
         >
           {reportsLoading ? (
-            <p className="text-sm text-ink-3 text-center py-6">리포트 목록을 불러오는 중입니다...</p>
+            <p className="text-sm text-ink-3 text-center py-6">{t("settingPage:cards.reports.loading")}</p>
           ) : reportsError ? (
             <p className="text-sm text-danger text-center py-6">{reportsError}</p>
           ) : reports.length === 0 ? (
-            <p className="text-sm text-ink-3 text-center py-6">저장된 리포트가 없습니다.</p>
+            <p className="text-sm text-ink-3 text-center py-6">{t("settingPage:cards.reports.empty")}</p>
           ) : (
             <div className="divide-y divide-line">
               {reports.map((report) => (
@@ -769,8 +773,8 @@ export default function SettingPage() {
                       </span>
                       <p className="text-sm font-bold text-ink truncate">
                         {report.subjectType === "PORTFOLIO"
-                          ? report.portfolioSummary || "포트폴리오"
-                          : `${report.companyName || report.stockCode || "종목"} (${report.stockCode || "-"})`}
+                          ? report.portfolioSummary || t("settingPage:cards.reports.portfolioLabel")
+                          : `${report.companyName || report.stockCode || t("settingPage:cards.reports.stockFallback")} (${report.stockCode || "-"})`}
                       </p>
                     </div>
                     <p className="mt-1 text-xs text-ink-3">
@@ -785,7 +789,7 @@ export default function SettingPage() {
                       className={ghostBtn}
                     >
                       <Eye size={14} />
-                      보기
+                      {t("settingPage:cards.reports.viewBtn")}
                     </button>
                     <button
                       type="button"
@@ -806,8 +810,8 @@ export default function SettingPage() {
         {/* 버그제보 */}
         <SettingCard
           icon={LifeBuoy}
-          title="버그제보 / 문의"
-          desc="이용 중 불편한 점을 알려주세요"
+          title={t("settingPage:cards.bugReport.title")}
+          desc={t("settingPage:cards.bugReport.desc")}
         >
           <a
             href="mailto:admin.qaima@gmail.com"
@@ -827,7 +831,7 @@ export default function SettingPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-line">
-              <h2 className="text-base font-bold text-ink">리포트 상세</h2>
+              <h2 className="text-base font-bold text-ink">{t("settingPage:reportDetail.title")}</h2>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -835,7 +839,7 @@ export default function SettingPage() {
                   className={ghostBtn}
                 >
                   <Download size={14} />
-                  PDF 재다운로드
+                  {t("settingPage:reportDetail.redownload")}
                 </button>
                 <button
                   type="button"
@@ -855,7 +859,7 @@ export default function SettingPage() {
       )}
       <div className="fixed -left-[10000px] top-0 pointer-events-none opacity-0">
         <div ref={reportPdfRef}>
-          {selectedReport && <SavedReportDocument report={selectedReport} />}
+          {pdfReport && <SavedReportDocument report={pdfReport} />}
         </div>
       </div>
     </div>

@@ -1,77 +1,34 @@
 // src/pages/DictionaryMockPage.tsx
 import { useState, useMemo, useEffect } from "react";
 import { Sun, Moon } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { DictionaryTermDto } from "../types/dictionary";
 import { fetchDictionaryTerms, fetchDictionaryTerm } from "../api/dictionary";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { useTheme } from "../hooks/useTheme";
 
 const HANGUL_LETTERS = [
-  "ㄱ",
-  "ㄴ",
-  "ㄷ",
-  "ㄹ",
-  "ㅁ",
-  "ㅂ",
-  "ㅅ",
-  "ㅇ",
-  "ㅈ",
-  "ㅊ",
-  "ㅋ",
-  "ㅌ",
-  "ㅍ",
-  "ㅎ",
+  "ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ",
+  "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
 ];
 
-const ALPHABET_ROW1 = [
-  "A",
-  "B",
-  "C",
-  "D",
-  "E",
-  "F",
-  "G",
-  "H",
-  "I",
-  "J",
-  "K",
-  "L",
-  "M",
-];
-
-const ALPHABET_ROW2 = [
-  "N",
-  "O",
-  "P",
-  "Q",
-  "R",
-  "S",
-  "T",
-  "U",
-  "V",
-  "W",
-  "X",
-  "Y",
-  "Z",
-];
-
-// ---- 컴포넌트 ----
+const ALPHABET_ROW1 = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M"];
+const ALPHABET_ROW2 = ["N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
 
 export default function DictionaryMockPage() {
+  const { t } = useTranslation("dictionaryPage");
   const { theme, toggle } = useTheme();
-  // 검색/필터 상태
+
   const [searchQuery, setSearchQuery] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedHangul, setSelectedHangul] = useState<string | null>(null);
   const [selectedAlpha, setSelectedAlpha] = useState<string | null>(null);
 
-  // API 상태
   const [terms, setTerms] = useState<DictionaryTermDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedTerm, setSelectedTerm] = useState<DictionaryTermDto | null>(null);
 
-  // 초기 로딩
   useEffect(() => {
     setLoading(true);
     fetchDictionaryTerms({})
@@ -79,11 +36,10 @@ export default function DictionaryMockPage() {
         setTerms(data);
         if (data.length > 0) setSelectedTerm(data[0]);
       })
-      .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
+      .catch(() => setFetchError(t("errors.loadFailed")))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
-  // 필터링 로직
   const filteredTerms = useMemo(() => {
     return terms.filter((term) => {
       if (searchQuery.trim()) {
@@ -97,11 +53,10 @@ export default function DictionaryMockPage() {
 
   const resultCount = filteredTerms.length;
 
-  // 돋보기 버튼 클릭 시 동작
   const handleSearchClick = () => {
     const q = searchQuery.trim();
     if (!q) {
-      setSearchError("검색어를 입력해주세요.");
+      setSearchError(t("errors.emptyQuery"));
       return;
     }
     setLoading(true);
@@ -112,14 +67,14 @@ export default function DictionaryMockPage() {
         if (data.length > 0) {
           setSelectedTerm(data[0]);
         } else {
-          setSearchError("해당 단어는 사전에 존재하지 않습니다.");
+          setSearchError(t("errors.notFound"));
         }
       })
-      .catch(() => setSearchError("검색 중 오류가 발생했습니다."))
+      .catch(() => setSearchError(t("errors.searchError")))
       .finally(() => setLoading(false));
   };
 
-  const searchPlaceholder = searchError ?? "키워드를 입력해주세요";
+  const searchPlaceholder = searchError ?? t("searchPlaceholder");
 
   return (
     <div className="min-h-screen bg-bg md:ml-[84px]">
@@ -131,13 +86,13 @@ export default function DictionaryMockPage() {
               Finance · Dictionary
             </div>
             <h1 className="mt-1 text-3xl font-bold text-ink tracking-tighter">
-              용어사전
+              {t("title")}
             </h1>
           </div>
           <div className="flex items-center gap-2.5">
             <button
               onClick={toggle}
-              aria-label={theme === "dark" ? "라이트 모드" : "다크 모드"}
+              aria-label={theme === "dark" ? t("themeLight") : t("themeDark")}
               className="w-9 h-9 grid place-items-center rounded-xl bg-surface
                          border border-line text-ink-2 shadow-card
                          hover:bg-bg-sunk transition-colors"
@@ -150,7 +105,7 @@ export default function DictionaryMockPage() {
 
         {/* 메인 영역 */}
         <main className="w-full flex flex-col lg:flex-row items-start justify-between gap-4 sm:gap-6">
-          {/* 좌측: 선택된 용어 설명 카드 (고정 높이) */}
+          {/* 좌측: 선택된 용어 설명 카드 */}
           <section className="w-full lg:flex-[0.9] rounded-2xl px-3.5 sm:px-4 md:px-5 py-4 sm:py-5 flex flex-col gap-2 h-[510px] bg-bg-sunk">
             {selectedTerm ? (
               <>
@@ -164,7 +119,7 @@ export default function DictionaryMockPage() {
                 </div>
               </>
             ) : (
-              <p className="text-sm text-ink-3">용어를 선택해주세요.</p>
+              <p className="text-sm text-ink-3">{t("termPlaceholder")}</p>
             )}
           </section>
 
@@ -172,17 +127,12 @@ export default function DictionaryMockPage() {
           <section className="w-full lg:flex-[1.1] flex flex-col gap-3">
             {/* 검색 + 한글/알파벳 필터 카드 */}
             <div className="w-full rounded-2xl px-4 py-3 flex flex-col gap-3 bg-bg-sunk">
-              {/* 상단: 말머리 + 제목 + 검색창 (한 줄) */}
+              {/* 상단: 말머리 + 제목 + 검색창 */}
               <div className="flex items-center gap-3">
-                <span className="text-base sm:text-lg md:text-xl text-ink">
-                  •
-                </span>
-
+                <span className="text-base sm:text-lg md:text-xl text-ink">•</span>
                 <span className="text-sm sm:text-base md:text-lg font-semibold whitespace-nowrap text-ink tracking-tight">
-                  경제용어
+                  {t("sectionLabel")}
                 </span>
-
-                {/* 검색창: 한 줄 안에서만, 고정 폭 */}
                 <div className="w-full max-w-sm">
                   <div
                     className={`h-9 sm:h-10 px-3 py-1.5 rounded-[10px] flex items-center justify-between border bg-surface ${
@@ -209,7 +159,7 @@ export default function DictionaryMockPage() {
                     >
                       <img
                         src="/src/assets/search.png"
-                        alt="검색"
+                        alt={t("searchAlt")}
                         className="w-3.5 h-3.5 sm:w-4 sm:h-4 object-contain"
                       />
                     </button>
@@ -222,7 +172,7 @@ export default function DictionaryMockPage() {
                 {/* 한글순 */}
                 <div className="flex flex-col gap-1.5">
                   <p className="text-xs sm:text-sm md:text-base font-medium text-ink-2">
-                    한글순
+                    {t("hangulLabel")}
                   </p>
                   <div className="flex flex-wrap gap-1">
                     {HANGUL_LETTERS.map((ch) => {
@@ -237,7 +187,7 @@ export default function DictionaryMockPage() {
                             setLoading(true);
                             fetchDictionaryTerms({ initial: next ?? undefined })
                               .then((data) => setTerms(data))
-                              .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
+                              .catch(() => setFetchError(t("errors.loadFailed")))
                               .finally(() => setLoading(false));
                           }}
                           className={`w-6 h-6 rounded-md outline outline-[0.5px] flex items-center justify-center transition-colors outline-line ${
@@ -258,10 +208,9 @@ export default function DictionaryMockPage() {
                 {/* 알파벳순 */}
                 <div className="flex flex-col gap-1.5">
                   <p className="text-xs sm:text-sm md:text-base font-medium text-ink-2">
-                    알파벳순
+                    {t("alphabetLabel")}
                   </p>
 
-                  {/* 첫 줄 A~M */}
                   <div className="flex flex-wrap gap-1">
                     {ALPHABET_ROW1.map((ch) => {
                       const isActive = selectedAlpha === ch && !selectedHangul;
@@ -275,7 +224,7 @@ export default function DictionaryMockPage() {
                             setLoading(true);
                             fetchDictionaryTerms({ initial: next ?? undefined })
                               .then((data) => setTerms(data))
-                              .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
+                              .catch(() => setFetchError(t("errors.loadFailed")))
                               .finally(() => setLoading(false));
                           }}
                           className={`w-6 h-6 rounded-md outline outline-[0.5px] flex items-center justify-center transition-colors outline-line ${
@@ -292,7 +241,6 @@ export default function DictionaryMockPage() {
                     })}
                   </div>
 
-                  {/* 둘째 줄 N~Z */}
                   <div className="flex flex-wrap gap-1">
                     {ALPHABET_ROW2.map((ch) => {
                       const isActive = selectedAlpha === ch && !selectedHangul;
@@ -306,7 +254,7 @@ export default function DictionaryMockPage() {
                             setLoading(true);
                             fetchDictionaryTerms({ initial: next ?? undefined })
                               .then((data) => setTerms(data))
-                              .catch(() => setFetchError("데이터를 불러오지 못했습니다."))
+                              .catch(() => setFetchError(t("errors.loadFailed")))
                               .finally(() => setLoading(false));
                           }}
                           className={`w-6 h-6 rounded-md outline outline-[0.5px] flex items-center justify-center transition-colors outline-line ${
@@ -330,19 +278,18 @@ export default function DictionaryMockPage() {
             <div className="w-full border-b pb-1 border-line">
               <p className="text-[11px] sm:text-xs md:text-sm font-medium text-ink-3">
                 {selectedHangul
-                  ? `'${selectedHangul}' 검색 결과 `
-                  : "검색 결과 "}
+                  ? t("result.withLetter", { letter: selectedHangul })
+                  : t("result.noLetter")}
                 <span className="font-semibold text-accent">{resultCount}</span>
-                건의 정보가 검색되었습니다.
+                {t("result.suffix")}
               </p>
             </div>
 
             {/* 검색 결과 리스트 카드 */}
             <div className="w-full rounded-2xl px-3 sm:px-4 py-3 flex items-stretch bg-bg-sunk">
-              {/* 좌측: 결과 목록 (고정 높이 + 내부 스크롤) */}
               <div className="flex-1 min-w-0 text-[11px] sm:text-xs md:text-sm leading-relaxed h-40 sm:h-48 md:h-52 overflow-y-auto">
                 {loading ? (
-                  <p className="text-[11px] py-2 text-ink-3">불러오는 중...</p>
+                  <p className="text-[11px] py-2 text-ink-3">{t("loading")}</p>
                 ) : fetchError ? (
                   <p className="text-[11px] py-2 text-danger">{fetchError}</p>
                 ) : (
@@ -353,7 +300,7 @@ export default function DictionaryMockPage() {
                         onClick={() => {
                           fetchDictionaryTerm(term.term)
                             .then((data) => setSelectedTerm(data))
-                            .catch(() => setFetchError("상세 정보를 불러오지 못했습니다."));
+                            .catch(() => setFetchError(t("errors.detailFailed")));
                         }}
                         className={`block w-full text-left py-0.5 transition-colors ${
                           term.term === selectedTerm?.term
@@ -366,9 +313,7 @@ export default function DictionaryMockPage() {
                     ))}
 
                     {filteredTerms.length === 0 && (
-                      <p className="text-[11px] py-2 text-ink-3">
-                        검색 결과가 없습니다.
-                      </p>
+                      <p className="text-[11px] py-2 text-ink-3">{t("noResults")}</p>
                     )}
                   </>
                 )}
