@@ -173,7 +173,7 @@ export default function Sidebar() {
 
       {/* 사이드바 본체 — 데스크탑에선 항상 노출, 모바일에선 mobileOpen 토글로 슬라이드 */}
       <div
-        className={`w-[84px] h-screen border-r border-line bg-surface
+        className={`w-[84px] h-dvh border-r border-line bg-surface
                     flex flex-col items-center py-6 gap-1.5 fixed left-0 top-0 z-50
                     transform transition-transform duration-200 ease-out
                     ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
