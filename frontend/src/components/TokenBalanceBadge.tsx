@@ -3,14 +3,10 @@ import { Coins } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTokenBalance } from "../hooks/useTokenBalance";
 import { useBilling } from "../contexts/BillingContext";
-import { isLoggedIn } from "../utils/auth";
-
 export default function TokenBalanceBadge() {
   const { t } = useTranslation("common");
   const balance = useTokenBalance();
   const { openBilling } = useBilling();
-
-  if (!isLoggedIn()) return null;
 
   return (
     <button
