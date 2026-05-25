@@ -1,0 +1,25 @@
+{
+  "title": "Dictionary",
+  "themeLight": "Light mode",
+  "themeDark": "Dark mode",
+  "sectionLabel": "Financial Terms",
+  "searchPlaceholder": "Enter a keyword",
+  "hangulLabel": "Hangul",
+  "alphabetLabel": "Alphabet",
+  "searchAlt": "Search",
+  "termPlaceholder": "Select a term.",
+  "result": {
+    "withLetter": "Results for '{{letter}}' ",
+    "noLetter": "Results ",
+    "suffix": "result(s) found."
+  },
+  "loading": "Loading...",
+  "noResults": "No results.",
+  "errors": {
+    "loadFailed": "Failed to load data.",
+    "searchError": "An error occurred during search.",
+    "notFound": "This term does not exist in the dictionary.",
+    "detailFailed": "Failed to load term details.",
+    "emptyQuery": "Please enter a search term."
+  }
+}

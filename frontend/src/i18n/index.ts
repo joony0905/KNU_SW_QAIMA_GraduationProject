@@ -26,6 +26,26 @@ import koFeature2Page from "./locales/ko/feature2Page.json";
 import enFeature2Page from "./locales/en/feature2Page.json";
 import koPortfolioPage from "./locales/ko/portfolioPage.json";
 import enPortfolioPage from "./locales/en/portfolioPage.json";
+import koFeatureIntro from "./locales/ko/featureIntro.json";
+import enFeatureIntro from "./locales/en/featureIntro.json";
+import koReportHeader from "./locales/ko/reportHeader.json";
+import enReportHeader from "./locales/en/reportHeader.json";
+import koEditProfilePage from "./locales/ko/editProfilePage.json";
+import enEditProfilePage from "./locales/en/editProfilePage.json";
+import koFinancialModal from "./locales/ko/financialModal.json";
+import enFinancialModal from "./locales/en/financialModal.json";
+import koSurveyPage from "./locales/ko/surveyPage.json";
+import enSurveyPage from "./locales/en/surveyPage.json";
+import koInvestLevelPage from "./locales/ko/investLevelPage.json";
+import enInvestLevelPage from "./locales/en/investLevelPage.json";
+import koBillingModal from "./locales/ko/billingModal.json";
+import enBillingModal from "./locales/en/billingModal.json";
+import koStockSearch from "./locales/ko/stockSearch.json";
+import enStockSearch from "./locales/en/stockSearch.json";
+import koMarketSnapshot from "./locales/ko/marketSnapshot.json";
+import enMarketSnapshot from "./locales/en/marketSnapshot.json";
+import koDictionaryPage from "./locales/ko/dictionaryPage.json";
+import enDictionaryPage from "./locales/en/dictionaryPage.json";
 
 export const SUPPORTED_LANGUAGES = ["ko", "en"] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
@@ -46,6 +66,16 @@ const resources = {
     stocksPage: koStocksPage,
     feature2Page: koFeature2Page,
     portfolioPage: koPortfolioPage,
+    featureIntro: koFeatureIntro,
+    reportHeader: koReportHeader,
+    editProfilePage: koEditProfilePage,
+    financialModal: koFinancialModal,
+    surveyPage: koSurveyPage,
+    investLevelPage: koInvestLevelPage,
+    billingModal: koBillingModal,
+    stockSearch: koStockSearch,
+    marketSnapshot: koMarketSnapshot,
+    dictionaryPage: koDictionaryPage,
   },
   en: {
     common: enCommon,
@@ -60,6 +90,16 @@ const resources = {
     stocksPage: enStocksPage,
     feature2Page: enFeature2Page,
     portfolioPage: enPortfolioPage,
+    featureIntro: enFeatureIntro,
+    reportHeader: enReportHeader,
+    editProfilePage: enEditProfilePage,
+    financialModal: enFinancialModal,
+    surveyPage: enSurveyPage,
+    investLevelPage: enInvestLevelPage,
+    billingModal: enBillingModal,
+    stockSearch: enStockSearch,
+    marketSnapshot: enMarketSnapshot,
+    dictionaryPage: enDictionaryPage,
   },
 } as const;
 
@@ -70,7 +110,13 @@ i18n
     resources,
     fallbackLng: "ko",
     supportedLngs: SUPPORTED_LANGUAGES as unknown as string[],
-    ns: ["common", "settingPage", "sidebar", "mainPage", "loginPage", "signupPage", "findAccountPage", "oauthPage", "analysisPanel", "stocksPage", "feature2Page", "portfolioPage"],
+    ns: [
+      "common", "settingPage", "sidebar", "mainPage", "loginPage", "signupPage",
+      "findAccountPage", "oauthPage", "analysisPanel", "stocksPage", "feature2Page",
+      "portfolioPage", "featureIntro", "reportHeader", "editProfilePage", "financialModal",
+      "surveyPage", "investLevelPage", "billingModal", "stockSearch", "marketSnapshot",
+      "dictionaryPage",
+    ],
     defaultNS: "common",
     interpolation: {
       escapeValue: false,

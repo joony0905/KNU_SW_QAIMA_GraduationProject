@@ -1,0 +1,25 @@
+{
+  "interest": "Watchlist",
+  "inputPlaceholder": "Enter a stock name or code",
+  "searching": "Searching...",
+  "noResults": "No results found",
+  "recentSearches": "Recent Searches",
+  "noWatchlist": "Your watchlist is empty.",
+  "invalidStock": "Invalid stock.",
+  "selectFromList": "Please select a stock from the list.",
+  "featured": {
+    "label": "Featured",
+    "loading": "Loading...",
+    "noStocks": "No stocks to display.",
+    "fallbackNotice": "Could not load featured stock data. Showing fallback data.",
+    "disclaimer": "ETF/KONEX and other products not supported by QAIMA are excluded, so rankings may differ slightly from your broker. Outside market hours, data reflects the most recent trading day's close.",
+    "topics": {
+      "GAINERS": "Top Gainers",
+      "LOSERS": "Top Losers",
+      "NEAR_NEW_HIGH": "Near 52W High",
+      "NEAR_NEW_LOW": "Near 52W Low",
+      "TOP_TURNOVER": "Top Turnover",
+      "VOLUME_SURGE": "Volume Surge"
+    }
+  }
+}

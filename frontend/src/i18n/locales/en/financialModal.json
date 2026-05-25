@@ -1,0 +1,14 @@
+{
+  "header": "Financial Details",
+  "periods": {
+    "A": "Annual",
+    "Q": "Quarterly",
+    "H": "Semi-Annual"
+  },
+  "columnLabel": {
+    "annual": "FY{{y}}"
+  },
+  "tableHeader": "Item",
+  "loading": "Loading financial data...",
+  "empty": "No financial data available for this period."
+}

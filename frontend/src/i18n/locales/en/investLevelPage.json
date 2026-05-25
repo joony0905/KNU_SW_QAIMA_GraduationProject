@@ -1,0 +1,29 @@
+{
+  "title": "Invest Level Survey",
+  "back": "Back",
+  "notice": {
+    "title": "A higher level is not necessarily better.",
+    "body": "Your invest level only determines the terminology difficulty used in analysis reports. A report full of unfamiliar terms will make decision-making harder. Please choose honestly based on what you actually understand."
+  },
+  "stageQuestion": "Select all terms below that you know the meaning of or have actually used in investment decisions.",
+  "next": "Next",
+  "result": {
+    "profileIntro": "Your invest level is",
+    "adjust": {
+      "title": "You can manually adjust your level",
+      "desc": "If a different level suits you better, change it below. The terminology difficulty in analysis reports will adjust accordingly."
+    },
+    "reset": "Answer Again",
+    "saving": "Saving...",
+    "save": "Save and Return to Settings"
+  },
+  "levels": {
+    "초급자": "Receive analysis with easy explanations focused on basic terms.",
+    "중급자": "Receive analysis including interpretation of key technical and flow indicators.",
+    "고급자": "Receive analysis covering valuation and macro indicators.",
+    "전문가": "Receive analysis using derivative and advanced macro terms as-is."
+  },
+  "errors": {
+    "saveFailed": "Failed to save invest level."
+  }
+}

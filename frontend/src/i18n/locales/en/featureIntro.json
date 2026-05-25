@@ -1,0 +1,21 @@
+{
+  "sub": "Enter a stock name or 6-digit code (e.g. 005930) in the search bar above to access all features at once.",
+  "deep": {
+    "heading": "Deep Analysis: an in-depth look at a single stock",
+    "items": {
+      "realTimeChart": { "title": "Live Chart & Indicators", "desc": "Displays EMA, Bollinger Bands, and Stochastic on top of a candlestick chart." },
+      "financialIndicators": { "title": "Investment Metrics & Financials", "desc": "Organizes key financial metrics such as profitability and stability, plus annual/quarterly statements." },
+      "financialTimeline": { "title": "Financial Timeline", "desc": "Visualizes revenue, operating income, and net income trends across periods." },
+      "aiReport": { "title": "AI Deep Report", "desc": "Generates an LLM analysis report combining price action, financials, and technical indicators." }
+    }
+  },
+  "external": {
+    "heading": "External Factors: the bigger picture around a stock",
+    "items": {
+      "rates": { "title": "Base Rate · FX · Bonds", "desc": "Examines the macro rate environment and FX trends alongside the stock." },
+      "industryIndex": { "title": "Sector Index · Peers", "desc": "Compares the relevant sector index and how peer stocks react." },
+      "supplyDemand": { "title": "Order Flow · Short Selling", "desc": "Tracks investor trading trends and short-selling flows." },
+      "newsSentiment": { "title": "News Sentiment + AI Report", "desc": "Generates an LLM report combining news sentiment and external factors." }
+    }
+  }
+}

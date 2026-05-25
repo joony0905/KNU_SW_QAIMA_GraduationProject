@@ -1,1 +1,455 @@
-{}
+{
+  "header": { "title": "포트폴리오", "lightMode": "라이트 모드", "darkMode": "다크 모드" },
+  "saveModal": { "title": "포트폴리오 저장", "body": "현재 포트폴리오 상태를 저장할까요?", "cancel": "아니오", "saving": "저장 중", "confirm": "예" },
+  "market": { "domestic": "국내", "overseas": "해외" },
+  "assetRatio": {
+    "titleDomestic": "국내 투자 자산 비율",
+    "titleOverseas": "해외 투자 자산 비율",
+    "won": "원",
+    "dollar": "달러",
+    "exchangeRateLoading": "환율 로딩중",
+    "exchangeRateNone": "환율 없음",
+    "exchangeRateFailed": "환율 로드 실패",
+    "centerLabel": "총 평가액",
+    "emptyTitle": "표시할 보유 비중이 없습니다",
+    "emptyBodyLoggedIn": "종목명, 수량, 평균단가를 입력하면 바로 반영됩니다.",
+    "emptyBodyGuest": "로그인 후 종목을 입력하면 비중이 표시됩니다."
+  },
+  "manager": {
+    "subtitle": "보유 종목을 추가하거나 수정하세요",
+    "save": "저장",
+    "addStock": "종목 추가",
+    "col": {
+      "name": "종목 이름",
+      "quantity": "보유 주식 수",
+      "avgPrice": "매수 평균단가",
+      "delete": "삭제"
+    },
+    "cashFixed": "고정",
+    "cashDomestic": "보유중인 현금",
+    "cashOverseas": "USD 현금",
+    "unnamedStock": "미입력 종목",
+    "saveSuccess": "포트폴리오가 저장되었습니다.",
+    "saveFailed": "포트폴리오 저장에 실패했습니다.",
+    "loadFailed": "저장된 포트폴리오를 불러오지 못했습니다.",
+    "lock": {
+      "title": "로그인이 필요한 기능입니다",
+      "body": "포트폴리오 입력과 분석은 로그인 후 이용할 수 있습니다.",
+      "button": "로그인하러 가기"
+    }
+  },
+  "analysisOptions": {
+    "title": "분석 옵션",
+    "baseOption": {
+      "label": "포트폴리오 기본 분석",
+      "locked": "(변경 불가)",
+      "desc0": "포트폴리오의 변동성, 분산, 효율성을 기본적으로 분석합니다.",
+      "desc1": "모든 분석의 기준이 되는 핵심 계산이 포함됩니다."
+    },
+    "extraLabel": "추가 분석 (선택사항)",
+    "periodLabel": "분석 기간",
+    "freqDay": "1일봉",
+    "extraOption": {
+      "fundamentals": {
+        "label": "종목 체력 반영",
+        "desc0": "재무와 밸류에이션을 기반으로 보유 종목의 특성을 함께 반영합니다.",
+        "desc1": "종목의 기본적인 체력과 상태를 고려한 해석을 제공합니다."
+      },
+      "industry": {
+        "label": "산업 집중도 반영",
+        "desc0": "포트폴리오가 특정 산업에 얼마나 집중되어 있는지 확인합니다.",
+        "desc1": "산업별 비중을 통해 쏠림 여부를 파악할 수 있습니다."
+      },
+      "correlation": {
+        "label": "종목 분산 구조 반영",
+        "desc0": "내가 보유한 종목들 간의 실제 움직임을 기반으로 위험 집중도를 분석합니다.",
+        "desc1": "또한, 보유 종목이 속한 산업군 내에 비슷한 흐름을 보이는 외부 종목들을 함께 참고합니다."
+      },
+      "technical": {
+        "label": "기술적 지표 반영",
+        "desc0": "가격 추세와 모멘텀 등 기술적 흐름을 함께 반영합니다.",
+        "desc1": "최근 시장 흐름을 기반으로 포트폴리오 상태를 보완적으로 해석합니다."
+      },
+      "news": {
+        "label": "뉴스 흐름 반영",
+        "desc0": "최근 뉴스의 전반적인 흐름을 반영하여 포트폴리오를 해석합니다.",
+        "desc1": "개별 종목에 영향을 줄 수 있는 주요 이슈를 함께 고려합니다."
+      }
+    },
+    "analysisWindow": { "6M": "6개월", "1Y": "1년", "2Y": "2년" }
+  },
+  "riskProfile": {
+    "title": "투자 성향 지수",
+    "required": "(필수)",
+    "surveyButton": "설문으로 확인하기",
+    "sliderConservative": "0.00 · 보수적",
+    "sliderAggressive": "공격적 · 1.00",
+    "desc": "0에 가까울수록 안정적인 자산 배분을, 1에 가까울수록 공격적인 자산 배분을 기준으로 분석해요.",
+    "cashLimitTitle": "최대 현금비중 한도",
+    "cashLimitLeft": "0% · 현금 X",
+    "cashLimitRight": "현금 O · 100%",
+    "cashLimitDesc": "포트폴리오에 현금을 최대로 얼마나 남길지 설정해요. 투자 성향 지수를 조정하면 기본 한도가 함께 갱신되고, 여기서 직접 조정할 수도 있어요. 해당 값이 분석에 반영돼요."
+  },
+  "runBanner": {
+    "tag": "✨ AI 포트폴리오 분석",
+    "title": "포트폴리오를 한 번에 분석해 드릴게요",
+    "subtitle": "변동성 · 분산 구조 · 효율성을 종합한 리포트",
+    "needRiskProfile": "투자 성향 지수를 먼저 입력해주세요.",
+    "needLogin": "분석을 실행하려면 로그인이 필요합니다.",
+    "analyzing": "분석 중...",
+    "viewButton": "분석 결과 보기 →",
+    "minOneStock": "최소 1개 종목을 입력해주세요.",
+    "needRiskProfileError": "투자 성향 지수를 입력해주세요.",
+    "analyzeFailed": "분석에 실패했습니다. 사용된 크레딧은 자동 환불됩니다."
+  },
+  "overlayPreview": {
+    "title": "추가 분석 비용 확인",
+    "estimatedCharge": "예상 차감",
+    "newAfterAnalysis": "새 분석 후 기준 시각이 기록됩니다",
+    "existingBase": "기준: {{date}}",
+    "refreshScheduled": "기존 기준: {{date}} · 새로 갱신 예정",
+    "currentClassBase": "기준: 현재 등록된 산업 분류",
+    "pendingBase": "기준 시각 확인 전",
+    "reuse": "최근 결과 사용해서 분석",
+    "forceRefresh": "새로 분석하기",
+    "cancel": "취소",
+    "confirm": "이 조건으로 분석"
+  },
+  "emptyResult": {
+    "title": "분석 결과가 여기에 표시됩니다",
+    "subtitle": "포트폴리오를 입력한 뒤 분석을 실행하세요"
+  },
+  "loading": "분석 중입니다...",
+  "result": {
+    "title": "분석 결과",
+    "tabBasic": "리스크 요약",
+    "tabAdvanced": "최적화 관측",
+    "downloadPdf": "PDF로 다운로드",
+    "zoomIn": "크게 보기",
+    "zoomClose": "크게 보기 닫기",
+    "subjectLabel": "포트폴리오"
+  },
+  "summary": {
+    "riskLevelCard": "위험 수준",
+    "portfolioVolatility": "포트폴리오 변동성",
+    "targetVolCard": "성향 기준 변동성",
+    "targetVolDesc": "투자 성향 기준 목표 변동성입니다",
+    "profileCard": "성향 프로필",
+    "profileDesc": "심리 기반 투자 성향",
+    "volDiff": "차이 {{value}}%"
+  },
+  "riskLevel": { "LOW": "낮음", "MID": "보통", "HIGH": "높음" },
+  "suitability": {
+    "CONSERVATIVE_THAN_PROFILE": "성향보다 안정적",
+    "ALIGNED": "성향과 유사",
+    "AGGRESSIVE_THAN_PROFILE": "성향보다 공격적"
+  },
+  "volatilitySection": {
+    "title": "변동성 기반 분석",
+    "desc": "가격 시계열의 공분산과 현금 한도를 기준으로 목표 변동성에 가까운 포트폴리오를 비교합니다.",
+    "desc2": "LOW/MID/HIGH는 절대 위험등급이 아닌 각 카드의 목표 변동성 대비 실현 변동성 수준입니다.",
+    "volatilityLabel": "변동성",
+    "targetLabel": "기준 {{value}}"
+  },
+  "efficiencySection": {
+    "title": "효율성 기반 분석",
+    "desc": "기대수익률과 변동성을 함께 고려해 위험 대비 수익 효율이 높은 포트폴리오를 비교합니다.",
+    "desc2": "평단 기준 현재 수익률은 참고 용도로 제공되며, 분석에 사용되지 않습니다.",
+    "unrealizedReturn": "평단 기준 현재 수익률"
+  },
+  "portfolioType": {
+    "CURRENT": "현재 구성",
+    "STABLE": "안정형",
+    "BALANCED": "균형형",
+    "AGGRESSIVE": "공격형",
+    "PSYCHOLOGICAL": "심리형",
+    "RISK_ALLOCATION": "CAL 기반 위험배분",
+    "UTILITY_OPTIMAL": "효용최대 포트폴리오",
+    "THEORETICAL_UTILITY": "이론적 효용접점",
+    "OVERLAY_BALANCED": "보조 관측 균형 시나리오",
+    "QUALITY_TILT": "품질 압력 시나리오",
+    "MOMENTUM_AWARE": "기술 흐름 압력",
+    "NEWS_GUARDED": "뉴스 경계 압력",
+    "DIVERSIFICATION_TILT": "분산 압력 시나리오",
+    "MIN_VOL": "최소분산 포트폴리오",
+    "MAX_SHARPE": "최대샤프 포트폴리오"
+  },
+  "theoreticalCard": {
+    "cashMaxLabel": "현금 확대 목표안",
+    "addCashLabel": "추가 투자 목표안",
+    "cashMaxDesc": "지금 설정한 현금 한도보다 현금을 더 많이 둘 때 목표로 삼을 수 있는 구성입니다.",
+    "addCashDesc": "현재 투자금만으로는 도달하기 어려워, 추가 현금을 넣을 때 목표로 삼을 수 있는 구성입니다.",
+    "cashMaxFundingLabel": "필요 현금 비중",
+    "addCashFundingLabel": "추가 필요액",
+    "cashPrefix": "현금 {{value}}",
+    "riskyMultiplier": "위험자산 배수"
+  },
+  "marketAnalysis": {
+    "title": "시장 기준 분석",
+    "desc": "과거 가격 흐름과 시장 기준 흐름을 함께 반영해 최종 기대 흐름이 어떻게 잡혔는지 확인합니다.",
+    "benchmarkCard": "벤치마크",
+    "appliedCard": "반영된 종목",
+    "capmWeightCard": "시장 기준 반영 비중",
+    "confidenceCard": "평균 신뢰도",
+    "confidenceDesc": "낮을수록 과거 흐름 중심",
+    "appliedCountSuffix": "개",
+    "excludedSuffix": "제외 {{count}}개 · 부분 {{partial}}개",
+    "missingRate": "결측 {{value}}",
+    "historicalExpected": "종목별 최종 기대 흐름",
+    "blendRatioLabel": "과거 {{historical}} · 시장 {{capm}}",
+    "historicalLabel": "과거 흐름 {{value}}",
+    "capmLabel": "시장 기준 {{value}}",
+    "finalLabel": "최종 {{value}}",
+    "summaryTable": "종목별 결과 요약",
+    "col": {
+      "stock": "종목",
+      "capmWeight": "시장 반영",
+      "finalExpected": "최종 기대 흐름",
+      "status": "상태"
+    },
+    "footnote": "시장 기준 분석은 종목이 시장 흐름과 얼마나 같이 움직였는지 참고해 최종 기대 흐름을 보정한 결과입니다. 예상 수익률 보장이나 추천 비중으로 해석하지 않습니다."
+  },
+  "capmStatus": { "AVAILABLE": "분석 가능", "DISABLED": "분석 제외", "UNAVAILABLE": "데이터 없음" },
+  "capmAssetStatus": { "APPLIED": "반영", "PARTIAL": "부분 반영", "EXCLUDED": "제외" },
+  "benchmarkSource": {
+    "DB": "저장 데이터",
+    "KIS_BACKFILLED": "외부 데이터 보강",
+    "DB_INSUFFICIENT": "저장 데이터 부족",
+    "DB_STALE": "최신 데이터 아님",
+    "UNAVAILABLE": "데이터 없음"
+  },
+  "riskContribution": {
+    "title": "위험 기여도",
+    "subtitle": "보유 비중보다 실제 위험을 많이 만드는 종목을 확인합니다."
+  },
+  "keyInsight": { "title": "주요 해석" },
+  "featureSource": {
+    "CORE_RISK": "핵심 리스크",
+    "FEATURE1": "기본 지표",
+    "FEATURE2": "보조 관측",
+    "FEATURE2_INDUSTRY": "업종 관측",
+    "FEATURE2_PEERCLUSTER": "유사 종목 관측",
+    "FEATURE2_NEWS": "뉴스 관측",
+    "FEATURE3": "포트폴리오 분석"
+  },
+  "overlayScenario": {
+    "title": "보조 관측 시나리오",
+    "desc": "핵심 리스크 최적화 결과를 대체하지 않는 보조 관측 기반 민감도 분석입니다. 선택한 보조 관측이 현재 구성의 확대·축소·분산 판단에 미치는 영향을 보여주며, 투자 추천 비중이나 수익률 최적해로 해석하지 않습니다.",
+    "maxDelta": "최대 변화 {{value}}"
+  },
+  "explainSummary": { "title": "설명 요약", "fallbackTitle": "요약" },
+  "warnings": { "title": "참고해주세요" },
+  "advanced": {
+    "title": "분석 진단",
+    "includedCount": "분석대상 {{count}}개 · 제외 {{excluded}}개",
+    "priceBase": "가격 시계열 기준",
+    "sampleCount": "수익률 표본수",
+    "sampleUnit": "일",
+    "commonMissing": "공통 결측률",
+    "missingDetail": "기준 {{threshold}} · 공통 {{count}}일",
+    "covModel": "공분산 추정 모형",
+    "riskFree": "무위험수익률 r_f",
+    "dataTable": {
+      "col": {
+        "stock": "구성종목",
+        "priceCount": "가격 관측치",
+        "missingRate": "결측률",
+        "dataSource": "데이터 소스",
+        "cacheStatus": "캐시 상태"
+      }
+    }
+  },
+  "capmSection": {
+    "title": "CAPM · SCL · SML 기대수익률 혼합",
+    "desc": "최적화 입력 E[R]은 과거 흐름 추정값과 CAPM 기대수익률을 표본수·벤치마크 품질·설명력 기반 신뢰도로 혼합한 값입니다.",
+    "benchmarkCard": "벤치마크",
+    "multiBenchmark": "상장시장별 {{count}}개",
+    "missingCard": "벤치마크 결측률",
+    "appliedCard": "CAPM 반영 종목",
+    "excludedCount": "제외 {{count}}개",
+    "avgWeightCard": "평균 CAPM 반영 비중",
+    "confidenceLabel": "신뢰도 {{value}}",
+    "finalER": "최종 E[R]",
+    "blendDesc": "과거 흐름 E[R]과 CAPM E[R]을 신뢰도 기반 반영 비중으로 혼합합니다.",
+    "tableCol": {
+      "stock": "종목",
+      "benchmark": "벤치마크",
+      "status": "상태",
+      "sample": "표본",
+      "historicalER": "과거 흐름 E[R]",
+      "capmER": "CAPM E[R]",
+      "finalER2": "최종 E[R]",
+      "capmWeight": "CAPM 반영 비중",
+      "weightReason": "낮은 비중 근거"
+    },
+    "capmWeightNote": "CAPM 반영 비중은 공통 표본 수, 벤치마크 품질, 결측률, R², correlation, 변동성 안정성을 함께 반영해 계산합니다.",
+    "capmWeightFactors": {
+      "commonSample": "공통 표본: 종목과 벤치마크의 공통 수익률 표본 수가 충분할수록 커집니다.",
+      "benchmarkSource": "벤치마크 출처: 저장 데이터 또는 외부 보강 데이터이면 높고, 저장 데이터가 부족하면 낮게 반영됩니다.",
+      "coverage": "데이터 커버리지: 벤치마크 결측률이 낮을수록 커집니다.",
+      "rSquared": "시장 설명력(R²): 시장수익률이 종목수익률을 설명하는 정도가 높을수록 커집니다.",
+      "correlation": "상관관계(correlation): 종목과 벤치마크 수익률의 동행성이 강할수록 커집니다.",
+      "volatility": "변동성 안정성: 종목 변동성이 과도하게 높으면 CAPM 반영을 줄입니다.",
+      "historicalWeight": "과거 흐름 비중: CAPM 신뢰도가 낮을수록 과거 흐름 추정값 비중이 커집니다."
+    }
+  },
+  "sclSection": {
+    "title": "SCL 진단",
+    "alphaNote": "α: 일간 / 연율 구분 표시",
+    "noData": "SCL 회귀선을 그릴 공통 수익률 관측치가 부족합니다.",
+    "chartBenchmarkLabel": "벤치마크 수익률",
+    "chartAssetLabel": "종목 수익률",
+    "legend": {
+      "points": "파란 점: 공통 거래일 일간 로그수익률",
+      "line": "빨간 선: SCL 회귀선",
+      "count": "최근 {{count}}개 관측치 표시"
+    },
+    "regressionDesc": "{{benchmark}} 기준 · 종목 수익률 = 일간 α + β × 벤치마크 수익률",
+    "tableCol": {
+      "stock": "종목",
+      "dailyAlpha": "일간 α",
+      "annualAlpha": "연율 α",
+      "sample": "표본",
+      "status": "상태"
+    },
+    "footnote": "SCL은 벤치마크 일간 로그수익률과 종목 일간 로그수익률의 관계를 요약한 보조 진단입니다.",
+    "benchmarkHover": "벤치 {{value}}",
+    "stockHover": "종목:{{value}}"
+  },
+  "smlSection": {
+    "title": "SML 진단",
+    "axisNote": "x: β · y: 연율 E[R]",
+    "chartBetaLabel": "β",
+    "chartReturnLabel": "연율 E[R]",
+    "missingRateDetail": "결측 {{value}}",
+    "tableCol": {
+      "stock": "종목",
+      "capmER": "CAPM E[R]",
+      "historicalER": "과거 흐름 E[R]",
+      "finalER": "최종 E[R]",
+      "capmWeight": "CAPM 반영 비중"
+    },
+    "footnote": "SML은 CAPM line 대비 종목 위치를 보는 보조 진단이며 예상 수익률 보장이나 추천 비중이 아닙니다.",
+    "betaHover": "β {{value}}",
+    "erHover": "E[R]:{{value}}"
+  },
+  "frontier": {
+    "title": "효율적 프론티어",
+    "desc": "E[R]은 극단 수익률을 완화한 과거 흐름과 시장 기준 기대수익률을 신뢰도에 따라 가중한 연율 추정값입니다.",
+    "ariaLabel": "효율적 프론티어, 자본배분선, 투자자 무차별곡선",
+    "volatilityAxis": "변동성 σ",
+    "returnAxis": "기대수익률 E[R]",
+    "legend": {
+      "frontier": "파란선 효율적 프론티어",
+      "riskFree": "회색점 무위험자산 · σ 0% 축외",
+      "cal": "녹색 점선 자본배분선(CAL)",
+      "indifference": "보라 점선 투자자 무차별곡선",
+      "maxSharpe": "최대샤프 포트폴리오",
+      "riskAllocation": "CAL 기반 위험배분",
+      "utilityOptimal": "효용최대 포트폴리오",
+      "theoreticalUtility": "이론적 효용접점",
+      "minVol": "최소분산 포트폴리오",
+      "current": "회색 현재 포트폴리오"
+    },
+    "tooltipRiskFree": "국채 무위험수익률",
+    "tooltipCoord": "좌표",
+    "tooltipRfLabel": "시각화상 CAL 축외 끝에 표시",
+    "tooltipRfNote": "실제 점은 변동성 0% 위치입니다.",
+    "efNote": "그래프의 E[R]은 시각화 안정성을 위해 -30%~60% 범위로 표시됩니다. 계산에는 cap 이전 기대수익률이 사용됩니다.",
+    "markerBasisTitle": "마커 산출 기준",
+    "markerBasis": {
+      "frontier": "효율적 프론티어는 현금을 제외한 위험자산 100% 조합에서 목표 기대수익률별 최소분산 포트폴리오를 구한 뒤, 지배되는 점을 제거한 상단 경계입니다. 같은 σ에서 더 높은 E[R]을 제공하는 조합만 남습니다.",
+      "maxSharpe": "최대샤프 포트폴리오는 효율적 프론티어 위에서 (E[R] - r_f) / σ가 가장 큰 위험자산 조합입니다. 무위험자산과 이 점을 잇는 직선이 자본배분선(CAL)의 기준선입니다.",
+      "riskAllocation": "CAL 기반 위험배분은 최대샤프 위험자산 조합에 무위험자산을 섞고, 위험회피계수 γ와 현금 한도에 따라 위험자산 비중을 조절한 배분입니다.",
+      "utilityOptimal": "효용최대 포트폴리오는 U = E[R] - 0.5 · γ · σ²를 최대화하는 배분입니다. 현재 현금 한도, 레버리지 금지, 종목별 비중 제한을 적용하므로 이론 접점이 제약 밖이면 가능한 경계점에 위치합니다.",
+      "theoreticalUtility": "이론적 효용접점은 제약을 풀고 CAL과 투자자 무차별곡선이 접하는 지점입니다. 위험자산 배수 y* = (E[R]_maxSharpe - r_f) / (γ · σ_maxSharpe²)로 계산하며, y*가 현재 제약 밖이면 별도 마커와 목표 카드로 표시합니다.",
+      "minVol": "최소분산 포트폴리오는 위험자산만 100% 보유한다고 가정했을 때 wᵀΣw가 가장 작은 조합입니다. 기대수익률보다 공분산 행렬의 구조가 핵심입니다.",
+      "indifference": "투자자 무차별곡선은 동일한 효용 U를 갖는 σ-E[R] 조합입니다. 내부해에서는 CAL과 접하고, 현금 한도나 위험자산 100% 상한에 걸리면 효용최대 포트폴리오에서는 교차처럼 보일 수 있습니다.",
+      "current": "현재 포트폴리오는 사용자가 입력한 수량, 평균단가, 보유 현금으로 계산한 현재 구성입니다. 평단 대비 손익은 표시용이며, 최적화 계산에는 가격 시계열의 수익률/공분산이 사용됩니다.",
+      "cal": "자본배분선(CAL)은 무위험수익률 r_f에서 최대샤프 포트폴리오 방향으로 확장되는 선입니다. 이론적 효용접점이 있으면 최대샤프 이후 구간까지 점선으로 연장해 표시합니다."
+    },
+    "indifferenceCurveNote": "투자자 무차별곡선은 실제 위험회피계수 γ {{gamma}} 기준으로 효용최대 포트폴리오를 지나도록 렌더링됩니다.",
+    "efficiencyTitle": "효율성 기반 분석"
+  },
+  "theoreticalAdvanced": {
+    "title": "이론적 효용접점",
+    "cashMaxDesc": "위험회피계수 γ 기준의 무제약 접점은 현재 현금 한도보다 더 높은 현금 비중을 요구합니다. 현금 한도를 완화하면 이 접점을 목표로 삼을 수 있습니다.",
+    "addCashDesc": "위험회피계수 γ 기준의 무제약 접점은 현재 총자산보다 큰 위험자산 금액을 요구합니다. 추가입금을 가정하면 이 접점을 목표로 삼을 수 있습니다.",
+    "cashMaxFundingLabel": "현금 한도 완화 필요",
+    "addCashFundingLabel": "추가 필요액",
+    "cashPrefix": "현금 {{value}}"
+  },
+  "pricePolicy": {
+    "YAHOO_ADJ_CLOSE": "수정종가",
+    "RAW_CLOSE": "종가",
+    "YAHOO_ADJ_CLOSE_WITH_KIS_FALLBACK": "수정주가 + 종가 보완",
+    "ADJUSTED_CLOSE": "수정종가 요청",
+    "CLOSE": "종가"
+  },
+  "covarianceModel": {
+    "LEDOIT_WOLF": "안정화 공분산",
+    "SAMPLE_COVARIANCE": "표본 공분산",
+    "SAMPLE": "표본 공분산"
+  },
+  "marketDataSource": {
+    "DB": "저장 데이터",
+    "KIS": "국내 시세",
+    "YAHOO": "Yahoo 수정종가",
+    "MARKETSTACK": "해외 시세",
+    "MIXED": "혼합",
+    "EMPTY": "데이터 없음",
+    "UNAVAILABLE": "사용 불가"
+  },
+  "cacheStatus": {
+    "HIT": "재사용",
+    "MISS": "새 조회",
+    "STALE": "오래됨",
+    "AVAILABLE": "사용 가능",
+    "UNAVAILABLE": "확인 필요",
+    "BYPASSED": "캐시 미사용",
+    "REFRESHED": "갱신됨"
+  },
+  "metric": {
+    "label": {
+      "PER": "PER", "PBR": "PBR", "PSR": "PSR", "ROE": "ROE",
+      "OPM": "영업이익률", "NPM": "순이익률", "Debt": "부채비율",
+      "Current": "유동비율", "RevenueGrowth": "매출 성장", "EPSGrowth": "EPS 성장",
+      "alignment": "추세 정렬", "percent_b": "밴드 위치", "zone": "스토캐스틱",
+      "k_minus_d": "K-D", "score": "감성 점수", "count": "뉴스 수"
+    },
+    "zone": { "overbought": "과열", "oversold": "침체", "neutral": "중립" },
+    "alignment": { "bullish": "상승 우위", "bearish": "하락 우위" },
+    "techCaption": "EMA, 볼린저밴드, 스토캐스틱 핵심값입니다."
+  },
+  "peer": {
+    "selectedLabel": "선택 유사 종목",
+    "selectedCount": "{{count}}개",
+    "corrLabel": "상관도 {{corr}}",
+    "lagLabel": " · {{lag}}일 시차",
+    "footerNote": "유사 종목 상관도는 동행 종목 참고 정보이며 비중 조정에는 직접 사용하지 않습니다."
+  },
+  "relation": { "LEADER": "선행", "FOLLOWER": "후행", "COINCIDENT": "동행", "UNKNOWN": "관계 미확정" },
+  "industry": { "label": "산업", "indexLabel": "업종 지수" },
+  "capmWeightReason": {
+    "lowRSquared": "낮은 R²",
+    "lowCorrelation": "낮은 correlation",
+    "insufficientSample": "표본 부족",
+    "betaUnavailable": "beta 계산 불가",
+    "highVolatility": "높은 변동성",
+    "lowConfidence": "신뢰도 낮음",
+    "goodQuality": "CAPM 품질 지표 양호",
+    "limited": "{{reasons}}으로 CAPM 반영 제한"
+  },
+  "advancedMarkerLabel": {
+    "CURRENT": "현재", "MIN_VOL": "최소분산", "MAX_SHARPE": "최대샤프",
+    "RISK_ALLOCATION": "위험배분", "UTILITY_OPTIMAL": "효용최대", "THEORETICAL_UTILITY": "이론접점"
+  },
+  "portfolioBasicLabel": {
+    "CURRENT": "현재 포트폴리오", "MIN_VOL": "변동성 최소안", "MAX_SHARPE": "위험 대비 수익 우수안",
+    "RISK_ALLOCATION": "CAL 기반 위험배분", "UTILITY_OPTIMAL": "효용최대안", "THEORETICAL_UTILITY": "목표 투자안"
+  },
+  "advancedPortfolioLabel": {
+    "CURRENT": "현재 포트폴리오", "MIN_VOL": "최소분산 포트폴리오", "MAX_SHARPE": "최대샤프 포트폴리오",
+    "RISK_ALLOCATION": "CAL 기반 위험배분", "UTILITY_OPTIMAL": "효용최대 포트폴리오", "THEORETICAL_UTILITY": "이론적 효용접점"
+  }
+}

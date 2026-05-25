@@ -1,0 +1,42 @@
+{
+  "title": "Plans / Token Top-Up",
+  "closeLabel": "Close",
+  "balance": {
+    "label": "Current Token Balance",
+    "unit": "Tokens"
+  },
+  "tabs": {
+    "subscription": "Subscription",
+    "bulk": "Token Top-Up"
+  },
+  "plans": {
+    "MONTHLY": {
+      "label": "Monthly Plan",
+      "unit": "KRW / month",
+      "perMonth": "9,900 KRW / month",
+      "highlights": ["1,000 tokens auto-credited monthly", "Unlimited access to all analysis features", "Cancel anytime"]
+    },
+    "YEARLY": {
+      "label": "Annual Plan",
+      "unit": "KRW / year",
+      "perMonth": "8,250 KRW / month (~17% off)",
+      "badge": "2 months free",
+      "highlights": ["12,000 tokens / year (equiv. 1,000/month)", "Save ~17% vs monthly", "Priority access to premium models"]
+    }
+  },
+  "bulk": {
+    "description": "The more you top up, the lower the per-token price.",
+    "tokenUnit": "Tokens",
+    "wonUnit": "KRW",
+    "perToken": "{{price}} KRW / token",
+    "tierLabel": "{{tokens}} Tokens",
+    "loginRequired": "Please log in to make a purchase."
+  },
+  "purchase": {
+    "button": "Subscribe to {{label}}",
+    "loginRequired": "Log in to continue",
+    "loginFirst": "Please log in before purchasing.",
+    "failed": "Token top-up failed. Please try again later.",
+    "success": "{{label}} top-up complete · {{tokens}} Tokens"
+  }
+}

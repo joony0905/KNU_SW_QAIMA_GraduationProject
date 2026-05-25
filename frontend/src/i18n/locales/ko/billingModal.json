@@ -1,0 +1,42 @@
+{
+  "title": "요금제 / 토큰 충전",
+  "closeLabel": "닫기",
+  "balance": {
+    "label": "현재 보유 토큰",
+    "unit": "토큰"
+  },
+  "tabs": {
+    "subscription": "구독제",
+    "bulk": "토큰 충전"
+  },
+  "plans": {
+    "MONTHLY": {
+      "label": "월간 구독",
+      "unit": "원 / 월",
+      "perMonth": "월 9,900원",
+      "highlights": ["매월 1,000 토큰 자동 충전", "모든 분석 기능 무제한 이용", "언제든지 해지 가능"]
+    },
+    "YEARLY": {
+      "label": "연간 구독",
+      "unit": "원 / 년",
+      "perMonth": "월 8,250원 (약 17% 할인)",
+      "badge": "2개월 무료",
+      "highlights": ["연 12,000 토큰 (월 환산 1,000개)", "월간 대비 약 17% 절약", "프리미엄 모델 우선 사용"]
+    }
+  },
+  "bulk": {
+    "description": "많이 충전할수록 토큰당 단가가 저렴해집니다.",
+    "tokenUnit": "토큰",
+    "wonUnit": "원",
+    "perToken": "토큰당 {{price}}원",
+    "tierLabel": "{{tokens}} 토큰",
+    "loginRequired": "결제는 로그인 후 이용할 수 있습니다."
+  },
+  "purchase": {
+    "button": "{{label}} 결제하기",
+    "loginRequired": "로그인 후 이용 가능",
+    "loginFirst": "로그인 후 결제할 수 있어요.",
+    "failed": "토큰 충전에 실패했습니다. 잠시 후 다시 시도해주세요.",
+    "success": "{{label}} 임시 충전 완료 · {{tokens}} 토큰"
+  }
+}

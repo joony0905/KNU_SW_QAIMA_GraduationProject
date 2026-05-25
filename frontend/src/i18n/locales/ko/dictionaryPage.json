@@ -1,0 +1,25 @@
+{
+  "title": "용어사전",
+  "themeLight": "라이트 모드",
+  "themeDark": "다크 모드",
+  "sectionLabel": "경제용어",
+  "searchPlaceholder": "키워드를 입력해주세요",
+  "hangulLabel": "한글순",
+  "alphabetLabel": "알파벳순",
+  "searchAlt": "검색",
+  "termPlaceholder": "용어를 선택해주세요.",
+  "result": {
+    "withLetter": "'{{letter}}' 검색 결과 ",
+    "noLetter": "검색 결과 ",
+    "suffix": "건의 정보가 검색되었습니다."
+  },
+  "loading": "불러오는 중...",
+  "noResults": "검색 결과가 없습니다.",
+  "errors": {
+    "loadFailed": "데이터를 불러오지 못했습니다.",
+    "searchError": "검색 중 오류가 발생했습니다.",
+    "notFound": "해당 단어는 사전에 존재하지 않습니다.",
+    "detailFailed": "상세 정보를 불러오지 못했습니다.",
+    "emptyQuery": "검색어를 입력해주세요."
+  }
+}

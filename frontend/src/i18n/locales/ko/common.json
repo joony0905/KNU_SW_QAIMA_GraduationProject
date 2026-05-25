@@ -12,5 +12,9 @@
     "confirm": "확인",
     "edit": "수정",
     "delete": "삭제"
+  },
+  "token": {
+    "label": "토큰",
+    "badgeAriaLabel": "토큰 잔량 확인 및 충전"
   }
 }

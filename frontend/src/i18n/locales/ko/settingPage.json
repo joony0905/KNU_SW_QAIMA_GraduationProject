@@ -37,5 +37,91 @@
     "editProfile": "프로필 수정",
     "viewReport": "상세보기",
     "downloadReport": "PDF 다운로드"
+  },
+  "header": "내정보",
+  "themeLight": "라이트 모드",
+  "themeDark": "다크 모드",
+  "cards": {
+    "basicInfo": {
+      "title": "기본정보",
+      "desc": "계정에 등록된 정보입니다",
+      "editBtn": "개인정보 수정"
+    },
+    "investLevel": {
+      "title": "투자레벨",
+      "desc": "투자 설문 결과로 자동 설정되며, 직접 변경할 수 있습니다",
+      "retakeBtn": "설문 다시하기"
+    },
+    "riskProfile": {
+      "title": "투자성향",
+      "desc": "투자 설문 결과로 자동 설정되며, 직접 변경할 수 있습니다",
+      "retakeBtn": "설문 다시하기"
+    },
+    "glossaryHover": {
+      "title": "용어 설명 미리보기",
+      "desc": "분석 화면의 용어에 마우스를 올리면 클릭 없이 설명을 보여줍니다",
+      "on": "켜짐",
+      "off": "꺼짐"
+    },
+    "watchlist": {
+      "title": "관심종목",
+      "loadingDesc": "불러오는 중...",
+      "countDesc": "총 {{count}}개",
+      "doneBtn": "완료",
+      "deleteSelectBtn": "선택삭제",
+      "loading": "관심종목을 불러오는 중입니다...",
+      "empty": "관심 종목이 없습니다.",
+      "deleteAriaLabel": "{{name}} 삭제"
+    },
+    "reports": {
+      "title": "내 리포트",
+      "loadingDesc": "불러오는 중...",
+      "countDesc": "최근 리포트 {{count}}개",
+      "filterAll": "전체",
+      "loading": "리포트 목록을 불러오는 중입니다...",
+      "empty": "저장된 리포트가 없습니다.",
+      "viewBtn": "보기",
+      "portfolioLabel": "포트폴리오",
+      "stockFallback": "종목"
+    },
+    "bugReport": {
+      "title": "버그제보 / 문의",
+      "desc": "이용 중 불편한 점을 알려주세요"
+    }
+  },
+  "basicInfo": {
+    "name": "이름",
+    "email": "아이디(이메일)",
+    "phone": "전화번호",
+    "birthdate": "생년월일",
+    "gender": "성별",
+    "genderMale": "남성",
+    "genderFemale": "여성"
+  },
+  "featureLabel": {
+    "FEATURE1": "기능1",
+    "FEATURE2": "기능2",
+    "FEATURE3": "기능3"
+  },
+  "riskProfileUnset": "미설정",
+  "reportDetail": {
+    "title": "리포트 상세",
+    "redownload": "PDF 재다운로드",
+    "snapshotNote": "저장된 분석 스냅샷 기준으로 재생성한 리포트입니다.",
+    "overallSummary": "종합 요약",
+    "risks": "리스크",
+    "sections": "세부 설명",
+    "notes": "참고"
+  },
+  "errors": {
+    "watchlistLoad": "관심종목을 불러오지 못했습니다.",
+    "watchlistDelete": "관심종목 삭제에 실패했습니다.",
+    "profileLoad": "내 정보를 불러오지 못했습니다.",
+    "investLevelSave": "투자레벨 저장에 실패했습니다.",
+    "riskProfileSave": "투자성향 저장에 실패했습니다.",
+    "glossarySave": "환경설정 저장에 실패했습니다.",
+    "reportsLoad": "리포트 목록을 불러오지 못했습니다.",
+    "reportDetailLoad": "리포트 상세를 불러오지 못했습니다.",
+    "pdfFailed": "PDF 재다운로드에 실패했습니다."
   }
 }

@@ -1,0 +1,63 @@
+{
+  "bars": {
+    "title": "투자지표 개요",
+    "subtitle": "밸류에이션 · 수익성 · 안정성 · 성장성 · 주당 지표",
+    "asOf": "기준일:",
+    "currency": "통화:",
+    "sections": {
+      "valuation": "밸류에이션",
+      "profitability": "수익성",
+      "stability": "안정성",
+      "growth": "성장성",
+      "perShare": "주당 지표"
+    },
+    "units": {
+      "multiple": "배",
+      "trillion": "조",
+      "hundredMillion": "억"
+    },
+    "items": {
+      "marketCap": "시가총액",
+      "operatingMargin": "영업이익률",
+      "netMargin": "순이익률",
+      "debtRatio": "부채비율",
+      "currentRatio": "유동비율",
+      "quickRatio": "당좌비율",
+      "interestCoverage": "이자보상배율",
+      "revenueGrowth": "매출 성장률",
+      "epsGrowth": "EPS 성장률",
+      "freeCashFlow": "잉여현금흐름"
+    }
+  },
+  "indicators": {
+    "title": "투자 보조지표 요약 (Indicator)",
+    "subtitle": "EMA · 볼린저 밴드 · 스토캐스틱",
+    "cards": {
+      "ema": "이동평균선 (EMA)",
+      "bb": "볼린저 밴드 (Bollinger Band)",
+      "stoch": "스토캐스틱 (Stochastic)"
+    },
+    "ema": {
+      "alignment": "정렬 상태",
+      "rising": "상승 정렬",
+      "falling": "하락 정렬",
+      "mixed": "혼합",
+      "unknown": "확인 불가"
+    },
+    "bb": {
+      "mid": "중심선:",
+      "width": "밴드폭:",
+      "upper": "상단선:",
+      "lower": "하단선:",
+      "position": "밴드 내 위치"
+    },
+    "stoch": {
+      "zone": "구간:",
+      "position": "오실레이터 위치",
+      "overbought": "과열",
+      "oversold": "침체",
+      "neutral": "중립",
+      "unknown": "확인 불가"
+    }
+  }
+}

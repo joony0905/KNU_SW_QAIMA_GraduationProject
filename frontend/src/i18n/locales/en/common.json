@@ -12,5 +12,9 @@
     "confirm": "Confirm",
     "edit": "Edit",
     "delete": "Delete"
+  },
+  "token": {
+    "label": "Tokens",
+    "badgeAriaLabel": "Check and top up token balance"
   }
 }
