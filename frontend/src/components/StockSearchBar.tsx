@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, ChevronUp, Plus, Minus } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import StockInputBox from "./StockInputBox";
 import StockCard from "./StockCard";
 import { fetchFeaturedStocks } from "../api/featuredStock";
@@ -16,15 +17,8 @@ interface StockItem {
   changeRate: string;
 }
 
-type TopicConfig = { code: FeaturedStockTopic; label: string };
-
-const TOPIC_CONFIG: TopicConfig[] = [
-  { code: "GAINERS",            label: "상승종목" },
-  { code: "LOSERS",             label: "하락종목" },
-  { code: "NEAR_NEW_HIGH",      label: "신고가 근접 종목" },
-  { code: "NEAR_NEW_LOW",       label: "신저가 근접 종목" },
-  { code: "TOP_TURNOVER",       label: "거래대금 상위종목" },
-  { code: "VOLUME_SURGE",       label: "거래량 급등종목" },
+const TOPIC_CODES: FeaturedStockTopic[] = [
+  "GAINERS", "LOSERS", "NEAR_NEW_HIGH", "NEAR_NEW_LOW", "TOP_TURNOVER", "VOLUME_SURGE",
 ];
 
 // 특징주 조회 실패 시 노출되는 임시 데이터
@@ -78,8 +72,9 @@ interface StockSearchBarProps {
 
 export default function StockSearchBar({
   onSearch,
-  placeholder = "종목을 입력해주세요",
+  placeholder,
 }: StockSearchBarProps) {
+  const { t } = useTranslation("stockSearch");
   const [topic, setTopic] = useState<FeaturedStockTopic>("GAINERS");
   const [isTopicOpen, setIsTopicOpen] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -92,7 +87,7 @@ export default function StockSearchBar({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const topicLabel = TOPIC_CONFIG.find((t) => t.code === topic)?.label ?? "";
+  const topicLabel = t(`featured.topics.${topic}` as `featured.topics.GAINERS`);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -104,14 +99,10 @@ export default function StockSearchBar({
       try {
         const data = await fetchFeaturedStocks(topic, 30);
         if (cancelled) return;
-        if (!Array.isArray(data) || data.length === 0) {
-          setStocks([]);
-          return;
-        }
+        if (!Array.isArray(data) || data.length === 0) { setStocks([]); return; }
         setStocks(data.map(dtoToStockItem));
       } catch (e) {
         if (cancelled) return;
-        // KIS 순위 조회 실패 시 fallback 노출
         clientLog.warn("Featured stock fallback used", e);
         setStocks(FALLBACK_STOCKS);
         setHasError(true);
@@ -121,17 +112,11 @@ export default function StockSearchBar({
     };
 
     load();
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
+    return () => { cancelled = true; controller.abort(); };
   }, [topic]);
 
   useEffect(() => {
-    if (isOpen && dropdownRef.current) {
-      dropdownRef.current.scrollTop = 0;
-    }
+    if (isOpen && dropdownRef.current) dropdownRef.current.scrollTop = 0;
   }, [isOpen]);
 
   useEffect(() => {
@@ -162,15 +147,10 @@ export default function StockSearchBar({
       {/* 특징주 카테고리 셀렉트 */}
       <div ref={topicRef} className="relative">
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsTopicOpen((prev) => !prev);
-          }}
-          className={`inline-flex items-center gap-2 px-3.5 w-full h-full min-h-[54px] bg-surface border border-line shadow-card text-sm ${
-            isTopicOpen ? "rounded-t-xl border-b-surface" : "rounded-xl"
-          }`}
+          onClick={(e) => { e.stopPropagation(); setIsTopicOpen((prev) => !prev); }}
+          className={`inline-flex items-center gap-2 px-3.5 w-full h-full min-h-[54px] bg-surface border border-line shadow-card text-sm ${isTopicOpen ? "rounded-t-xl border-b-surface" : "rounded-xl"}`}
         >
-          <span className="text-xs text-ink-3">특징주</span>
+          <span className="text-xs text-ink-3">{t("featured.label")}</span>
           <span className="flex-1 font-semibold text-base text-ink truncate">{topicLabel}</span>
           {isTopicOpen
             ? <ChevronUp size={16} className="text-ink-3 flex-shrink-0 pointer-events-none" />
@@ -179,20 +159,13 @@ export default function StockSearchBar({
 
         {isTopicOpen && (
           <div className="absolute w-full bg-surface border border-line border-t-0 rounded-b-xl shadow-pop z-50">
-            {TOPIC_CONFIG.map((item) => (
+            {TOPIC_CODES.map((code) => (
               <button
-                key={item.code}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setTopic(item.code);
-                  setIsTopicOpen(false);
-                  setIsOpen(true);
-                }}
-                className={`w-full text-left px-3.5 py-2.5 text-sm hover:bg-bg-sunk last:rounded-b-xl ${
-                  item.code === topic ? "text-accent font-semibold bg-accent-soft" : "text-ink"
-                }`}
+                key={code}
+                onClick={(e) => { e.stopPropagation(); setTopic(code); setIsTopicOpen(false); setIsOpen(true); }}
+                className={`w-full text-left px-3.5 py-2.5 text-sm hover:bg-bg-sunk last:rounded-b-xl ${code === topic ? "text-accent font-semibold bg-accent-soft" : "text-ink"}`}
               >
-                {item.label}
+                {t(`featured.topics.${code}` as `featured.topics.GAINERS`)}
               </button>
             ))}
           </div>
@@ -202,19 +175,12 @@ export default function StockSearchBar({
       {/* 특징주 카드 */}
       <div className="relative h-[54px]" ref={cardRef}>
         <div className="absolute top-0 left-0 right-0 flex gap-3 items-start z-10">
-          <div
-            className={`flex-1 min-w-0 ${
-              isOpen ? "rounded-xl border border-line shadow-pop overflow-hidden" : ""
-            }`}
-          >
-            <div
-              ref={dropdownRef}
-              className={isOpen ? "max-h-[400px] overflow-y-auto bg-surface" : ""}
-            >
+          <div className={`flex-1 min-w-0 ${isOpen ? "rounded-xl border border-line shadow-pop overflow-hidden" : ""}`}>
+            <div ref={dropdownRef} className={isOpen ? "max-h-[400px] overflow-y-auto bg-surface" : ""}>
               {!isOpen ? (
                 loading ? (
                   <div className="bg-surface border border-line shadow-card rounded-2xl px-3.5 py-[9px] h-[54px] flex items-center">
-                    <span className="text-xs text-ink-3 animate-pulse">불러오는 중...</span>
+                    <span className="text-xs text-ink-3 animate-pulse">{t("featured.loading")}</span>
                   </div>
                 ) : stocks[0] ? (
                   <StockCard
@@ -230,26 +196,22 @@ export default function StockSearchBar({
                   />
                 ) : (
                   <div className="bg-surface border border-line shadow-card rounded-2xl px-3.5 py-[9px] h-[54px] flex items-center">
-                    <span className="text-xs text-ink-3">표시할 종목이 없습니다.</span>
+                    <span className="text-xs text-ink-3">{t("featured.noStocks")}</span>
                   </div>
                 )
               ) : loading ? (
-                <div className="px-3.5 py-6 text-center text-xs text-ink-3 animate-pulse">
-                  불러오는 중...
-                </div>
+                <div className="px-3.5 py-6 text-center text-xs text-ink-3 animate-pulse">{t("featured.loading")}</div>
               ) : stocks.length === 0 ? (
-                <div className="px-3.5 py-6 text-center text-xs text-ink-3">
-                  표시할 종목이 없습니다.
-                </div>
+                <div className="px-3.5 py-6 text-center text-xs text-ink-3">{t("featured.noStocks")}</div>
               ) : (
                 <>
                   {hasError && (
                     <div className="px-3.5 py-1.5 bg-warn/10 text-[10px] text-warn border-b border-line">
-                      특징주 데이터를 불러오지 못해 임시 데이터를 표시 중입니다.
+                      {t("featured.fallbackNotice")}
                     </div>
                   )}
                   <div className="px-3.5 py-2 bg-bg-sunk text-[10px] leading-relaxed text-ink-3 border-b border-line">
-                     ETF/KONEX 등 QAIMA 미지원 상품은 제외되어, <br></br>실제 증권사와 랭킹에 다소 차이가 있을 수 있습니다. <br></br> 장외 시간에는 최근 거래일 마감 기준으로 표시됩니다.
+                    {t("featured.disclaimer")}
                   </div>
                   {stocks.map((stock) => (
                     <div
