@@ -1,0 +1,100 @@
+{
+  "header": {
+    "login": "로그인",
+    "logout": "로그아웃",
+    "toLight": "라이트모드로 변경",
+    "toDark": "다크모드로 변경"
+  },
+  "hero": {
+    "badge": "POWERED BY AI",
+    "titleLine1": "시장을 읽는 일,",
+    "titleLine2": "AI에게 맡기세요.",
+    "subtitle": "가격, 재무, 산업, 뉴스, 금리까지 — 흩어진 데이터를 하나의 분석 보고서로 정리합니다. 종목 하나만 입력하면 됩니다.",
+    "searchPlaceholder": "삼성전자, 005930, NVDA…"
+  },
+  "features": {
+    "eyebrow": "WHAT QAIMA DOES",
+    "title": "3가지 시선으로, 한 종목을 본다",
+    "sub": "가격만 본다고 시장이 보이지 않습니다. Qaima는 종목·환경·포트폴리오 세 축에서 동시에 분석합니다.",
+    "items": {
+      "deep": {
+        "tag": "FEATURE 01",
+        "title": "심층분석",
+        "en": "Deep Equity Analysis",
+        "desc": "단일 종목의 가격 흐름과 재무지표를 AI가 한 번에 정리합니다. 매수/매도 시점, 밸류에이션 평가, 주요 리스크까지.",
+        "bullet1": "실시간 캔들차트",
+        "bullet2": "재무지표 자동 해석",
+        "bullet3": "LLM 보고서 생성"
+      },
+      "external": {
+        "tag": "FEATURE 02",
+        "title": "외부요인",
+        "en": "Macro & Context",
+        "desc": "산업 지수, 금리, 뉴스, 공매도, 유사 종목 — 한 종목을 둘러싼 외부 환경을 모두 모아 분석합니다.",
+        "bullet1": "산업 유사 종목군",
+        "bullet2": "기준금리 시계열",
+        "bullet3": "실시간 뉴스 큐레이션"
+      },
+      "portfolio": {
+        "tag": "FEATURE 03",
+        "title": "포트폴리오",
+        "en": "Portfolio Health",
+        "desc": "보유 자산을 입력하면 위험·분산·효율을 진단합니다. 투자 성향에 맞춘 리밸런싱까지.",
+        "bullet1": "위험 수준 진단",
+        "bullet2": "분산 구조 분석",
+        "bullet3": "성향 기반 추천"
+      }
+    }
+  },
+  "workflow": {
+    "eyebrow": "HOW IT WORKS",
+    "title": "검색 한 번, 분석 30초",
+    "sub": "복잡한 설정 없이 — 종목명만 입력하면 흩어진 데이터를 모아 AI가 보고서를 작성합니다.",
+    "stepLabel": "STEP {{n}}",
+    "step1": {
+      "title": "검색",
+      "desc": "종목명·코드·티커 무엇이든. 한국·미국 시장을 모두 지원합니다."
+    },
+    "step2": {
+      "title": "AI 분석",
+      "desc": "Gemini · GPT 기반 LLM이 가격·재무·뉴스·산업·금리 데이터를 동시에 읽습니다."
+    },
+    "step3": {
+      "title": "인사이트",
+      "desc": "단순 수치가 아닌 \"왜 그런가\"의 해석. PDF로 저장해 가져갈 수 있습니다."
+    }
+  },
+  "sources": {
+    "eyebrow": "DATA YOU CAN TRUST",
+    "title": "공식 출처에서, 실시간으로",
+    "sub": "블로그 요약이 아닙니다. 거래소·중앙은행·공시 시스템에서 직접 가져온 1차 데이터를 분석합니다.",
+    "price": {
+      "label": "실시간 시세",
+      "source": "한국투자증권 KIS API",
+      "note": "코스피 · 코스닥 · NYSE · NASDAQ"
+    },
+    "financial": {
+      "label": "재무 데이터",
+      "source": "DART · SEC EDGAR",
+      "note": "분기/연간 재무제표, 공시 원본"
+    },
+    "macro": {
+      "label": "거시 지표",
+      "source": "한국은행 · FRED",
+      "note": "기준금리, 환율, 채권 수익률"
+    },
+    "news": {
+      "label": "뉴스 & 공시",
+      "source": "주요 미디어 · 거래소 공시",
+      "note": "공매도 · 외국인 매매 동향 포함"
+    }
+  },
+  "cta": {
+    "tag": "START FREE · 신용카드 불필요",
+    "titleLine1": "지금 분석을 시작하세요.",
+    "titleLine2": "가입하면 토큰 5개를 드립니다.",
+    "subtitle": "첫 분석은 무료입니다. 토큰을 다 쓰면 그때 결제하세요. 강제 유료화·자동 결제는 없습니다.",
+    "primary": "무료로 시작하기",
+    "loginButton": "로그인"
+  }
+}

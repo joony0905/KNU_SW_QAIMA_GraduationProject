@@ -1,0 +1,16 @@
+{
+  "language": {
+    "label": "Language / 언어",
+    "description": "Choose the display language for the service",
+    "ko": "한국어",
+    "en": "English"
+  },
+  "button": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "confirm": "Confirm",
+    "edit": "Edit",
+    "delete": "Delete"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "header": {
+    "eyebrow": "Equities · Deep Analysis",
+    "title": "심층분석",
+    "lightMode": "라이트 모드",
+    "darkMode": "다크 모드"
+  },
+  "price": {
+    "won": "원",
+    "prevDayDiff": "전일대비"
+  },
+  "chart": {
+    "indicators": "보조지표",
+    "markers": "마커",
+    "loading": "차트를 불러오는 중입니다...",
+    "noData": "차트 데이터가 없습니다.",
+    "loadFailed": "차트를 불러오지 못했습니다."
+  },
+  "indicators": {
+    "title": "투자지표",
+    "financialStatement": "재무제표",
+    "noFinancialData": "해당 조건의 재무제표 데이터가 없습니다."
+  },
+  "analysisPeriod": {
+    "title": "분석 기간",
+    "preset3Months": "3개월",
+    "preset6Months": "6개월",
+    "preset1Year": "1년",
+    "preset3Years": "3년"
+  },
+  "runCard": {
+    "tag": "✨ AI 심층분석",
+    "title": "선택한 기간을 한 번에 분석해 드릴게요",
+    "subtitle": "가격 흐름 · 재무 시계열 · 보조지표를 종합한 리포트",
+    "viewButton": "분석 결과 보기 →"
+  },
+  "emptyResult": {
+    "title": "분석 결과가 여기에 표시됩니다",
+    "subtitle": "분석을 실행해주세요"
+  },
+  "modal": {
+    "titleSuffix": "분석 결과"
+  },
+  "loadingStage": {
+    "preparing": "분석 준비 중",
+    "priceData": "가격 데이터를 불러오는 중",
+    "llmGenerating": "LLM 분석 결과를 생성하는 중",
+    "timeline": "재무 시계열을 정리하는 중",
+    "indicators": "투자 보조지표를 반영하는 중"
+  },
+  "errors": {
+    "needStockInput": "종목을 입력해주세요.",
+    "invalidStock": "유효하지 않은 종목입니다. 6자리 종목코드를 입력해주세요. (예: 005930)",
+    "needStockBeforeAnalyze": "먼저 종목을 검색한 뒤 분석을 실행해주세요.",
+    "analyzeFailed": "분석에 실패했습니다. 사용된 크레딧은 자동 환불됩니다."
+  },
+  "watchlist": {
+    "loginRequired": "로그인 후 이용할 수 있습니다.",
+    "removed": "관심종목에서 삭제되었습니다.",
+    "removeFailed": "관심종목 삭제에 실패했습니다.",
+    "stockNotLoaded": "종목 정보를 불러온 뒤 다시 시도해주세요.",
+    "added": "관심종목에 추가되었습니다.",
+    "addFailed": "관심종목 추가에 실패했습니다."
+  }
+}

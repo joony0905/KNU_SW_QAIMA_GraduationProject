@@ -1,0 +1,18 @@
+{
+  "home": "Home",
+  "openMenu": "Open menu",
+  "closeMenu": "Close menu",
+  "nav": {
+    "deepAnalysis": "Deep Analysis",
+    "externalFactors": "External Factors",
+    "portfolio": "Portfolio",
+    "dictionary": "Dictionary"
+  },
+  "account": {
+    "myInfo": "Account",
+    "login": "Log in",
+    "unknown": "Unknown",
+    "billing": "Plans / Top up",
+    "logout": "Log out"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "title": "Find your account",
+  "subtitle": "Forgot your ID or password?",
+  "findId": {
+    "eyebrow": "FIND ID",
+    "title": "Find ID",
+    "description": "We look up your ID using the name and date of birth you signed up with.",
+    "fields": {
+      "name": "Name",
+      "birthdate": "Date of birth (6 digits)",
+      "phone": "Phone (optional · disambiguation)"
+    },
+    "buttons": {
+      "submit": "Find ID",
+      "submitting": "Looking up..."
+    },
+    "result": {
+      "label": "Your account",
+      "maskNote": "Part of the email is masked for security."
+    },
+    "errors": {
+      "noName": "Please enter your name.",
+      "invalidBirthdate": "Please enter a 6-digit date of birth (YYMMDD).",
+      "notFound": "Could not find your account."
+    }
+  },
+  "reset": {
+    "eyebrow": "RESET PASSWORD",
+    "title": "Reset password",
+    "description": "We will send a password reset link to your registered email.",
+    "fields": {
+      "email": "Email"
+    },
+    "buttons": {
+      "submit": "Send reset link",
+      "submitting": "Sending..."
+    },
+    "successMessage": "If the email is registered, a password reset link has been sent. Please check your inbox. (Link valid for 30 minutes.)",
+    "errors": {
+      "noEmail": "Please enter your email.",
+      "invalidEmail": "The email format is invalid.",
+      "rateLimited": "Too many requests. Please try again later.",
+      "unknown": "An error occurred while processing your request."
+    }
+  },
+  "backToLogin": "← Back to login"
+}

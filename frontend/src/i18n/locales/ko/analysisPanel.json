@@ -1,0 +1,128 @@
+{
+  "trend": {
+    "rise": "상승",
+    "fall": "하락",
+    "flat": "보합",
+    "checking": "확인중"
+  },
+  "investorFlow": {
+    "buyBoth": "동반 순매수",
+    "sellBoth": "동반 순매도",
+    "foreignBuyInstSell": "외국인 매수·기관 매도",
+    "foreignSellInstBuy": "외국인 매도·기관 매수",
+    "mixed": "혼재"
+  },
+  "amountUnit": {
+    "trillion": "조원",
+    "hundredMillion": "억원",
+    "million": "백만원",
+    "won": "원"
+  },
+  "macro": {
+    "exchange": "환율",
+    "baseRate": "기준금리",
+    "domesticBond": "국내국채",
+    "usRates": "미국국채",
+    "shortSelling": "공매도"
+  },
+  "sentiment": {
+    "positive": "긍정",
+    "negative": "부정",
+    "neutral": "중립"
+  },
+  "timeAgo": {
+    "minutes": "{{n}}분 전",
+    "hours": "{{n}}시간 전",
+    "days": "{{n}}일 전"
+  },
+  "lead": {
+    "leading": "선행",
+    "lagging": "후행",
+    "coincident": "동행",
+    "neutral": "중립"
+  },
+  "peer": {
+    "industryAdjustedBasis": "산업조정 기준",
+    "industryAdjustedCorr": "산업조정 상관",
+    "rawCorr": "상관계수",
+    "clusterIncluded": "클러스터 포함",
+    "similarExcluded": "유사하지만 제외됨",
+    "lowCorr": "상관 낮음",
+    "industryAdjustedSimilar": "산업조정 기준 유사",
+    "rawCorrBased": "원시 상관 기준",
+    "rawCorrFallback": "원시 상관 대체",
+    "referenceCandidate": "참고 후보"
+  },
+  "section": {
+    "defaultTitle": "설명"
+  },
+  "buttons": {
+    "downloadPdf": "PDF로 다운로드",
+    "expand": "크게 보기",
+    "viewAnalysis": "분석 결과 보기"
+  },
+  "status": {
+    "loading": "분석 중입니다..."
+  },
+  "subject": "분석 종목",
+  "investorFlowCard": {
+    "title": "외국인·기관 수급",
+    "compare": "종목/시장 비교",
+    "stockDirection": "종목 방향",
+    "marketDirection": "시장 방향",
+    "tradingDays": "분석 거래일",
+    "dayUnit": "일",
+    "noMarketMapping": "시장 매핑 없음"
+  },
+  "peerCluster": {
+    "title": "유사 종목 반응 구조",
+    "selectedCount": "{{n}}개 선정",
+    "disclaimer": "산업조정 상관은 산업 공통 움직임을 단순 차감한 관측용 지표이며, 정교한 요인 모델이나 가격 방향 신호가 아닙니다.",
+    "relation": "관계",
+    "score": "점수",
+    "status": "상태",
+    "coreHeading": "핵심 유사 종목",
+    "additionalHeading": "추가 후보",
+    "empty": "선정된 유사 종목이 없습니다."
+  },
+  "news": {
+    "title": "뉴스 감성",
+    "scoredCount": "감성 점수 산출 뉴스 {{n}}건",
+    "recentAvg": "최근 평균 점수",
+    "scoredNews": "점수 산출 뉴스",
+    "ratio": "긍정/중립/부정",
+    "asOf": "기준일",
+    "scoredHeading": "감성 점수가 산출된 뉴스"
+  },
+  "macroSeries": {
+    "title": "기간 추이·시장환경",
+    "subtitle": "금리 · 국채 · 환율 · 공매도",
+    "krBaseRate": "한국 기준금리",
+    "usBaseRate": "미국 기준금리",
+    "baseRateChange": "기준금리 변동",
+    "shortSellingRatio": "공매도 거래대금 비율",
+    "shortSelling": "공매도"
+  },
+  "shortSelling": {
+    "titleSuffix": "현황",
+    "headerItem": "항목",
+    "headerValue": "값",
+    "asOf": "기준일",
+    "shortVolume": "공매도 거래량",
+    "totalVolume": "(총)",
+    "shortVolumeRatio": "공매도 거래량 비율",
+    "shortAmount": "공매도 거래대금",
+    "totalAmount": "(총)",
+    "shortAmountRatio": "공매도 거래대금 비율",
+    "volumeLabel": "거래량",
+    "amountLabel": "거래대금"
+  },
+  "overall": {
+    "title": "종합 요약",
+    "summary": "요약",
+    "highlights": "핵심 포인트",
+    "risks": "리스크",
+    "conclusion": "결론"
+  },
+  "notes": "참고"
+}

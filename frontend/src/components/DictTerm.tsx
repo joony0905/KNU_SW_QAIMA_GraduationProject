@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useDictionary } from "./DictContext";
+import { useDictTermOwner } from "./DictSeenScope";
 
 interface DictTermProps {
   term: string;
@@ -11,10 +12,16 @@ export default function DictTerm({ term, children }: DictTermProps) {
   const { terms, ready, glossaryHover } = useDictionary();
   const [hovered, setHovered] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const isOwner = useDictTermOwner(term);
 
   const entry = ready ? terms.get(term.toLowerCase()) : undefined;
 
   if (!entry) {
+    return <>{children}</>;
+  }
+
+  // 한 화면에 같은 용어가 여러 번 등장하면 첫 번째 instance 만 ? 툴팁을 표시한다.
+  if (!isOwner) {
     return <>{children}</>;
   }
 

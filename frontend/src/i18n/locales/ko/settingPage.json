@@ -1,0 +1,41 @@
+{
+  "title": "내 정보",
+  "section": {
+    "account": {
+      "title": "계정",
+      "description": "이메일과 기본 프로필을 확인합니다"
+    },
+    "investLevel": {
+      "title": "투자 성향",
+      "description": "분석 보고서 어조와 추천 강도가 조정됩니다"
+    },
+    "riskProfile": {
+      "title": "리스크 프로파일",
+      "description": "포트폴리오 분석에서 사용됩니다"
+    },
+    "watchlist": {
+      "title": "관심종목",
+      "description": "심층분석에서 별표를 눌러 추가할 수 있습니다",
+      "empty": "관심종목이 없습니다"
+    },
+    "myReports": {
+      "title": "내 리포트",
+      "descriptionLoading": "불러오는 중...",
+      "descriptionCount": "최근 리포트 {{count}}개"
+    },
+    "dictionary": {
+      "title": "용어 자동 설명",
+      "description": "본문의 단어 위에 마우스를 올리면 설명을 보여줍니다"
+    },
+    "help": {
+      "title": "도움말 / 문의",
+      "description": "사용 중 문제가 있을 때 연락주세요"
+    }
+  },
+  "buttons": {
+    "logout": "로그아웃",
+    "editProfile": "프로필 수정",
+    "viewReport": "상세보기",
+    "downloadReport": "PDF 다운로드"
+  }
+}

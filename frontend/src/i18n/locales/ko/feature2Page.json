@@ -1,0 +1,71 @@
+{
+  "header": {
+    "title": "외부요인",
+    "lightMode": "라이트 모드",
+    "darkMode": "다크 모드"
+  },
+  "price": {
+    "won": "원",
+    "prevDayDiff": "전일대비"
+  },
+  "chart": {
+    "loading": "차트를 불러오는 중입니다...",
+    "noData": "차트 데이터가 없습니다.",
+    "loadFailed": "차트를 불러오지 못했습니다."
+  },
+  "industry": {
+    "titlePrefix": "관련",
+    "noData": "산업 지수 데이터가 없습니다.",
+    "loadFailed": "산업 지수 차트를 불러오지 못했습니다."
+  },
+  "analysisWindow": {
+    "label": "최근 {{n}}거래일"
+  },
+  "analysisPeriod": {
+    "title": "분석 기간",
+    "preset3Months": "3개월",
+    "preset6Months": "6개월",
+    "preset9Months": "9개월",
+    "preset1Year": "1년",
+    "freqLabel": "주기",
+    "freqDay": "1일"
+  },
+  "runCard": {
+    "tag": "✨ AI 외부요인 분석",
+    "title": "선택한 기간을 한 번에 분석해 드릴게요",
+    "subtitle": "기준금리 · 산업지수 · 공매도 · 유사종목을 종합한 리포트",
+    "viewButton": "분석 결과 보기 →"
+  },
+  "emptyResult": {
+    "title": "분석 결과가 여기에 표시됩니다",
+    "subtitle": "분석을 실행해주세요"
+  },
+  "modal": {
+    "titleSuffix": "외부요인 분석"
+  },
+  "macroError": {
+    "missing": "환율/국채 데이터를 찾지 못했습니다.",
+    "fetchFailed": "환율/국채 데이터를 불러오지 못했습니다."
+  },
+  "news": {
+    "loadFailed": "뉴스를 불러오지 못했습니다."
+  },
+  "related": {
+    "loadFailed": "유사 종목을 불러오지 못했습니다."
+  },
+  "investorFlow": {
+    "loadFailed": "수급 데이터를 불러오지 못했습니다."
+  },
+  "errors": {
+    "analyzeFailed": "분석에 실패했습니다. 사용된 크레딧은 자동 환불됩니다.",
+    "subjectFallback": "분석종목"
+  },
+  "watchlist": {
+    "loginRequired": "로그인 후 이용할 수 있습니다.",
+    "removed": "관심종목에서 삭제되었습니다.",
+    "removeFailed": "관심종목 삭제에 실패했습니다.",
+    "stockNotLoaded": "종목 정보를 불러온 뒤 다시 시도해주세요.",
+    "added": "관심종목에 추가되었습니다.",
+    "addFailed": "관심종목 추가에 실패했습니다."
+  }
+}

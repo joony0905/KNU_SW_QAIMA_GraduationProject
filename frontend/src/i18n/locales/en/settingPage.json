@@ -1,0 +1,41 @@
+{
+  "title": "My Account",
+  "section": {
+    "account": {
+      "title": "Account",
+      "description": "Email and basic profile information"
+    },
+    "investLevel": {
+      "title": "Investment Style",
+      "description": "Adjusts the tone and depth of analysis reports"
+    },
+    "riskProfile": {
+      "title": "Risk Profile",
+      "description": "Used by portfolio analysis"
+    },
+    "watchlist": {
+      "title": "Watchlist",
+      "description": "Add stocks by tapping the star in Deep Analysis",
+      "empty": "Your watchlist is empty"
+    },
+    "myReports": {
+      "title": "My Reports",
+      "descriptionLoading": "Loading...",
+      "descriptionCount": "{{count}} recent report(s)"
+    },
+    "dictionary": {
+      "title": "Inline Term Explanations",
+      "description": "Show definitions when you hover over recognized terms"
+    },
+    "help": {
+      "title": "Help / Contact",
+      "description": "Reach out if you run into any issues"
+    }
+  },
+  "buttons": {
+    "logout": "Log out",
+    "editProfile": "Edit profile",
+    "viewReport": "View",
+    "downloadReport": "Download PDF"
+  }
+}

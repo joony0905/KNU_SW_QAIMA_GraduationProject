@@ -1,0 +1,41 @@
+{
+  "callback": {
+    "loading": "로그인 처리 중...",
+    "wait": "잠시만 기다려주세요.",
+    "failed": "로그인 처리에 실패했습니다. 다시 시도해주세요.",
+    "noToken": "인증 정보를 받아오지 못했습니다."
+  },
+  "socialComplete": {
+    "title": "추가정보 입력",
+    "fields": {
+      "name": "이름",
+      "phone": "전화번호 ( - 제외)",
+      "birthdate": "생년월일",
+      "birthdateSecond": "1",
+      "country": "국적 선택"
+    },
+    "buttons": {
+      "submit": "가입 완료",
+      "submitting": "저장 중..."
+    },
+    "errors": {
+      "invalid": "추가정보를 모두 올바르게 입력해 주세요.",
+      "saveFailed": "추가정보 저장 실패: {{message}}",
+      "saveUnknown": "추가정보 저장 중 오류가 발생했습니다."
+    },
+    "countries": {
+      "kr": "대한민국",
+      "us": "미국",
+      "jp": "일본",
+      "cn": "중국",
+      "gb": "영국",
+      "fr": "프랑스",
+      "de": "독일",
+      "sg": "싱가포르",
+      "hk": "홍콩",
+      "ca": "캐나다",
+      "au": "호주",
+      "other": "기타"
+    }
+  }
+}

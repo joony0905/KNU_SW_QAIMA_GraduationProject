@@ -1,0 +1,75 @@
+{
+  "title": "Sign up",
+  "fields": {
+    "email": "Email",
+    "verificationCode": "Verification code",
+    "password": "Password (8-20 chars, letters · numbers · symbols)",
+    "passwordConfirm": "Confirm password",
+    "name": "Name",
+    "phone": "Phone (digits only)",
+    "birthdate": "Date of birth",
+    "birthdateSecond": "1",
+    "country": "Select country"
+  },
+  "labels": {
+    "email": "Email",
+    "verificationCode": "Verification code",
+    "password": "Password",
+    "passwordConfirm": "Password confirmation",
+    "name": "Name",
+    "phone": "Phone",
+    "birthdate": "Date of birth",
+    "birthdateSecond": "RRN trailing digit",
+    "country": "Country"
+  },
+  "buttons": {
+    "requestCode": "Send code",
+    "resendCode": "Resend",
+    "processing": "Processing...",
+    "confirmCode": "Verify",
+    "verified": "✓ Verified",
+    "submit": "Sign up",
+    "submitting": "Signing up..."
+  },
+  "alerts": {
+    "emailFirst": "Please enter your email first.",
+    "codeSent": "Verification code has been sent. Please check your email.",
+    "codeSendFailed": "Failed to send verification code: {{message}}",
+    "codeSendUnknown": "An error occurred while sending the verification code.",
+    "codeEmpty": "Please enter the verification code.",
+    "verifiedOk": "Email verification complete.",
+    "verifyFailed": "Verification failed: {{message}}",
+    "verifyUnknown": "An error occurred during verification.",
+    "fieldRequired": "Please fill in the {{label}} field.",
+    "emailNotVerified": "Please complete email verification.",
+    "privacyRequired": "You must agree to the privacy policy to sign up.",
+    "signupDone": "Sign-up complete. Please log in.",
+    "signupFailedMessage": "Sign-up failed: {{message}}",
+    "signupConflict": "This email is already registered.",
+    "signupBadRequest": "Please review your information.",
+    "signupUnknown": "An error occurred during sign-up."
+  },
+  "validation": {
+    "emailFormat": "The email format is invalid.",
+    "passwordShort": "Password is too short.",
+    "passwordLong": "Password may be at most 20 characters.",
+    "passwordComposition": "Password must contain letters, numbers and a symbol.",
+    "passwordMismatch": "Passwords do not match.",
+    "birthdateInvalid": "Please enter a valid date of birth.",
+    "genderDigitInvalid": "Please enter a valid gender digit."
+  },
+  "codeHint": "Enter the code we just emailed, then press 'Verify'.",
+  "privacy": {
+    "agree": "I agree to the collection and use of personal information.",
+    "details": "View details",
+    "panelTitle": "Personal Information Collection & Use Notice",
+    "panelP1": "QAIMA collects and uses personal information to provide service, verify identity, analyze usage statistics, and improve personalized experiences.",
+    "panelP2": "Items collected: email, password, name, phone, date of birth, gender, country, IP address, browser info, service usage records.",
+    "panelP3": "Retention: stored until membership withdrawal; information required by law may be retained for the legal period.",
+    "panelP4": "You may refuse consent, but signing up requires agreement to the required personal information collection."
+  },
+  "loginLink": {
+    "intro": "Already have an account?",
+    "action": "Log in"
+  }
+}

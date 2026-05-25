@@ -1,0 +1,100 @@
+{
+  "header": {
+    "login": "Log in",
+    "logout": "Log out",
+    "toLight": "Switch to light mode",
+    "toDark": "Switch to dark mode"
+  },
+  "hero": {
+    "badge": "POWERED BY AI",
+    "titleLine1": "Let AI read the market",
+    "titleLine2": "so you don't have to.",
+    "subtitle": "Price, financials, industry, news, rates — we pull scattered data into a single analysis report. All you do is enter a ticker.",
+    "searchPlaceholder": "Samsung, 005930, NVDA…"
+  },
+  "features": {
+    "eyebrow": "WHAT QAIMA DOES",
+    "title": "Three lenses on a single stock",
+    "sub": "Price alone doesn't tell the story. Qaima analyzes a stock through three lenses: the company itself, its environment, and your portfolio.",
+    "items": {
+      "deep": {
+        "tag": "FEATURE 01",
+        "title": "Deep Analysis",
+        "en": "Deep Equity Analysis",
+        "desc": "AI sums up a single stock's price flow and financials in one pass — entry/exit signals, valuation read, key risks.",
+        "bullet1": "Live candlestick chart",
+        "bullet2": "Auto financial interpretation",
+        "bullet3": "LLM-written report"
+      },
+      "external": {
+        "tag": "FEATURE 02",
+        "title": "External Factors",
+        "en": "Macro & Context",
+        "desc": "Industry index, rates, news, short selling, peer stocks — every external factor around a stock in one view.",
+        "bullet1": "Industry peer cluster",
+        "bullet2": "Base rate time series",
+        "bullet3": "Live news curation"
+      },
+      "portfolio": {
+        "tag": "FEATURE 03",
+        "title": "Portfolio",
+        "en": "Portfolio Health",
+        "desc": "Enter your holdings and get a risk, diversification, and efficiency check — plus rebalancing tuned to your risk profile.",
+        "bullet1": "Risk-level diagnosis",
+        "bullet2": "Diversification analysis",
+        "bullet3": "Profile-aware recommendations"
+      }
+    }
+  },
+  "workflow": {
+    "eyebrow": "HOW IT WORKS",
+    "title": "One search, 30-second analysis",
+    "sub": "No setup. Type the ticker, and AI assembles the report from scattered data.",
+    "stepLabel": "STEP {{n}}",
+    "step1": {
+      "title": "Search",
+      "desc": "Name, code, or ticker — Korean and US markets are both supported."
+    },
+    "step2": {
+      "title": "AI Analysis",
+      "desc": "Gemini · GPT-based LLMs read price, financials, news, industry, and rate data together."
+    },
+    "step3": {
+      "title": "Insight",
+      "desc": "Not raw numbers, but the \"why\". Save the report to PDF and take it with you."
+    }
+  },
+  "sources": {
+    "eyebrow": "DATA YOU CAN TRUST",
+    "title": "From official sources, in real time",
+    "sub": "Not blog summaries. We pull primary data from exchanges, central banks, and disclosure systems.",
+    "price": {
+      "label": "Live quotes",
+      "source": "Korea Investment KIS API",
+      "note": "KOSPI · KOSDAQ · NYSE · NASDAQ"
+    },
+    "financial": {
+      "label": "Financial data",
+      "source": "DART · SEC EDGAR",
+      "note": "Quarterly/annual statements, original disclosures"
+    },
+    "macro": {
+      "label": "Macro indicators",
+      "source": "Bank of Korea · FRED",
+      "note": "Base rate, FX rate, treasury yields"
+    },
+    "news": {
+      "label": "News & disclosures",
+      "source": "Major media · exchange filings",
+      "note": "Includes short selling and foreign-investor flows"
+    }
+  },
+  "cta": {
+    "tag": "START FREE · NO CREDIT CARD",
+    "titleLine1": "Start analyzing now.",
+    "titleLine2": "Sign up and receive 5 free tokens.",
+    "subtitle": "Your first analysis is free. Pay only when you run out of tokens — no forced upgrades, no auto-billing.",
+    "primary": "Start for free",
+    "loginButton": "Log in"
+  }
+}
