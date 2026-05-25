@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type { AnalysisExplainSection, AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import type { PeerItem } from "../types/feature2";
 import { Download, Maximize2 } from "lucide-react";
@@ -13,30 +15,7 @@ import InvestorFlowTrendChart from "./InvestorFlowTrendChart";
 import { MultiLineTrendChart } from "./Feature2TrendCharts";
 import { usePdfExportReveal } from "../contexts/PdfExportContext";
 import ReportHeader, { type ReportHeaderMeta } from "./ReportHeader";
-
-export const LLM_VENDOR_OPTIONS = [
-  "GPT-5.4",
-  "GPT-5.2",
-  "GPT-5 mini",
-  "GPT-4.1",
-  "GPT-4o",
-  "Gemini 3.1 Pro",
-  "Gemini 3 Pro",
-  "Gemini 3 Flash",
-  "Gemini 3.1 Flash Lite",
-  "Gemini 2.5 Flash",
-  "Gemini 2.5 Pro",
-  "Claude Opus 4.6",
-  "Claude Opus 4.5",
-  "Claude Sonnet 4.6",
-  "Claude Sonnet 4",
-  "Claude Haiku 4.5",
-  "Grok 4",
-  "Grok 4.1 Fast",
-  "Grok 4 Fast",
-  "Grok 3",
-  "Grok 3 Mini",
-] as const;
+import { mapWarningsToNotes, expandWarningLines } from "../utils/warningNotes";
 
 interface AnalysisResultPanelProps {
   result: AnalysisPanelResult | null;
@@ -47,8 +26,6 @@ interface AnalysisResultPanelProps {
   onAnalyze: () => void;
   onDownload: () => void;
   onZoom: () => void;
-  llmVendor: string;
-  onLlmVendorChange: (vendor: string) => void;
   displayText: string;
   financialTimeline?: FinancialTimelineSection | null;
   priceFlowSummary?: PriceFlowSummary | null;
@@ -78,41 +55,43 @@ const formatRatio = (value?: number | null) => {
   return `${value.toFixed(2)}%`;
 };
 
-const trendDirectionText = (direction?: string | null) => {
+type AnalysisPanelTranslator = TFunction<"analysisPanel">;
+
+const trendDirectionText = (direction: string | null | undefined, t: AnalysisPanelTranslator) => {
   switch (direction) {
     case "UP":
-      return "상승";
+      return t("trend.rise");
     case "DOWN":
-      return "하락";
+      return t("trend.fall");
     case "FLAT":
-      return "보합";
+      return t("trend.flat");
     default:
-      return "확인중";
+      return t("trend.checking");
   }
 };
 
-const investorFlowDirectionText = (direction?: string | null) => {
+const investorFlowDirectionText = (direction: string | null | undefined, t: AnalysisPanelTranslator) => {
   switch (direction) {
     case "BOTH_NET_BUY":
-      return "동반 순매수";
+      return t("investorFlow.buyBoth");
     case "BOTH_NET_SELL":
-      return "동반 순매도";
+      return t("investorFlow.sellBoth");
     case "FOREIGN_BUY_INSTITUTION_SELL":
-      return "외국인 매수·기관 매도";
+      return t("investorFlow.foreignBuyInstSell");
     case "FOREIGN_SELL_INSTITUTION_BUY":
-      return "외국인 매도·기관 매수";
+      return t("investorFlow.foreignSellInstBuy");
     default:
-      return "혼재";
+      return t("investorFlow.mixed");
   }
 };
 
-const formatFlowAmount = (value?: number | null) => {
+const formatFlowAmount = (value: number | null | undefined, t: AnalysisPanelTranslator) => {
   if (value == null || !Number.isFinite(value)) return "-";
   const abs = Math.abs(value);
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
-  if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(1)}조원`;
-  if (abs >= 10_000) return `${sign}${(abs / 10_000).toFixed(1)}억원`;
-  return `${sign}${Math.round(abs).toLocaleString("ko-KR")}백만원`;
+  if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(1)}${t("amountUnit.trillion")}`;
+  if (abs >= 10_000) return `${sign}${(abs / 10_000).toFixed(1)}${t("amountUnit.hundredMillion")}`;
+  return `${sign}${Math.round(abs).toLocaleString("ko-KR")}${t("amountUnit.million")}`;
 };
 
 const formatRatePoint = (value?: number | null, unit = "%") => {
@@ -122,26 +101,26 @@ const formatRatePoint = (value?: number | null, unit = "%") => {
 
 type MacroChartMode = "exchange" | "baseRate" | "domesticBond" | "usRates" | "shortSelling";
 
-const MACRO_CHART_OPTIONS: { key: MacroChartMode; label: string }[] = [
-  { key: "exchange", label: "환율" },
-  { key: "baseRate", label: "기준금리" },
-  { key: "domesticBond", label: "국내국채" },
-  { key: "usRates", label: "미국국채" },
-  { key: "shortSelling", label: "공매도" },
+const MACRO_CHART_KEYS: MacroChartMode[] = [
+  "exchange",
+  "baseRate",
+  "domesticBond",
+  "usRates",
+  "shortSelling",
 ];
 
-const sentimentLabelText = (label?: string | null, score?: number | null) => {
+const sentimentLabelText = (label: string | null | undefined, score: number | null | undefined, t: AnalysisPanelTranslator) => {
   switch (label) {
     case "positive":
-      return "긍정";
+      return t("sentiment.positive");
     case "negative":
-      return "부정";
+      return t("sentiment.negative");
   }
   if (score != null && Number.isFinite(score)) {
-    if (score > 0.05) return "긍정";
-    if (score < -0.05) return "부정";
+    if (score > 0.05) return t("sentiment.positive");
+    if (score < -0.05) return t("sentiment.negative");
   }
-  return "중립";
+  return t("sentiment.neutral");
 };
 
 const sentimentBadgeClass = (score?: number | null) => {
@@ -161,30 +140,30 @@ const formatNewsDate = (value?: string | null) => {
   return date.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
 };
 
-const formatNewsTimeAgo = (value?: string | null): string => {
+const formatNewsTimeAgo = (value: string | null | undefined, t: AnalysisPanelTranslator): string => {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return formatNewsDate(value);
   const diff = Date.now() - date.getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${Math.max(0, mins)}분 전`;
+  if (mins < 60) return t("timeAgo.minutes", { n: Math.max(0, mins) });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}시간 전`;
+  if (hours < 24) return t("timeAgo.hours", { n: hours });
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}일 전`;
+  if (days < 7) return t("timeAgo.days", { n: days });
   return date.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
 };
 
-const formatRelationBadge = (relation: PeerItem["relation"]) => {
+const formatRelationBadge = (relation: PeerItem["relation"], t: AnalysisPanelTranslator) => {
   switch (relation) {
     case "LEADER":
-      return "선행";
+      return t("lead.leading");
     case "FOLLOWER":
-      return "후행";
+      return t("lead.lagging");
     case "COINCIDENT":
-      return "동행";
+      return t("lead.coincident");
     default:
-      return "중립";
+      return t("lead.neutral");
   }
 };
 
@@ -204,10 +183,10 @@ const displayPeerCorr = (peer: PeerItem): number | null => {
   return peer.corr == null || !Number.isFinite(peer.corr) ? null : peer.corr;
 };
 
-const displayPeerCorrLabel = (peer: PeerItem): string => {
-  if (peer.adjustedCorrValid && !peer.rawCorrValid) return "산업조정 기준";
-  if (peer.adjustedCorrValid) return "산업조정 상관";
-  return "상관계수";
+const displayPeerCorrLabel = (peer: PeerItem, t: AnalysisPanelTranslator): string => {
+  if (peer.adjustedCorrValid && !peer.rawCorrValid) return t("peer.industryAdjustedBasis");
+  if (peer.adjustedCorrValid) return t("peer.industryAdjustedCorr");
+  return t("peer.rawCorr");
 };
 
 const formatPeerScore = (peer: PeerItem): string => {
@@ -215,22 +194,22 @@ const formatPeerScore = (peer: PeerItem): string => {
   return value == null || !Number.isFinite(value) ? "-" : value.toFixed(2);
 };
 
-const formatDisplayStatus = (peer: PeerItem): string => {
+const formatDisplayStatus = (peer: PeerItem, t: AnalysisPanelTranslator): string => {
   switch (peer.displayStatus) {
     case "SELECTED":
-      return "클러스터 포함";
+      return t("peer.clusterIncluded");
     case "ELIGIBLE_NOT_SELECTED":
-      return "유사하지만 제외됨";
+      return t("peer.similarExcluded");
     case "LOW_CORR":
-      return "상관 낮음";
+      return t("peer.lowCorr");
     case "ADJUSTED_ONLY":
-      return "산업조정 기준 유사";
+      return t("peer.industryAdjustedSimilar");
     case "RAW_ONLY":
-      return "원시 상관 기준";
+      return t("peer.rawCorrBased");
     case "FALLBACK_RAW":
-      return "원시 상관 대체";
+      return t("peer.rawCorrFallback");
     default:
-      return "참고 후보";
+      return t("peer.referenceCandidate");
   }
 };
 
@@ -263,7 +242,7 @@ const relationColorClass = (relation: PeerItem["relation"]): string => {
   }
 };
 
-const renderExplainSection = (section?: ExplainSection | null) => {
+const renderExplainSection = (section: ExplainSection | null | undefined, t: AnalysisPanelTranslator) => {
   if (!section || (!section.summary && (!section.bullets || section.bullets.length === 0))) {
     return null;
   }
@@ -271,7 +250,7 @@ const renderExplainSection = (section?: ExplainSection | null) => {
   return (
     <div className="mt-3 rounded-2xl border border-line bg-bg-sunk px-4 py-4">
       <h4 className="text-sm font-semibold text-ink">
-        {section.title ?? "설명"}
+        {section.title ?? t("section.defaultTitle")}
       </h4>
       {section.summary ? (
         <p className="mt-2 text-sm sm:text-base text-ink-2">
@@ -291,59 +270,6 @@ const renderExplainSection = (section?: ExplainSection | null) => {
   );
 };
 
-const WARNING_MESSAGE_MAP: Array<[RegExp, string]> = [
-  [/^MARKET_SNAPSHOT_PARTIAL$/, "일부 투자지표는 데이터가 부족해 비어 있을 수 있어요.\n현재 보고서는 위쪽에 출력된 투자 지표들 기반으로 분석됐으니 참고해주세요."],
-  [/^INDICATOR_CALC_FAILED$/, "일부 보조지표는 분석 구간 또는 데이터 상태에 따라 계산되지 않을 수 있어요."],
-  [/^TTM_FALLBACK_TO_ANNUAL$/, "최근 4개 분기 데이터가 부족해 일부 지표는 연간 기준으로 보정될 수 있어요."],
-  [/^MARKET_SNAPSHOT_TTM_FALLBACK_TO_ANNUAL$/, "각 분기의 데이터가 부족해 일부 투자지표는 연간 실적 기준으로 계산될 수 있어요."],
-  [/^PRICE_STALE_USED$/, "실시간 가격 대신 최근 캐시 가격이 사용될 수 있어요."],
-  [/^PRICE_FETCH_FAILED$/, "실시간 가격을 가져오지 못해 일부 가격 기반 지표가 정확하지 않을 수 있어요."],
-  [/^PEER_CLUSTER_LOW_POSITIVE_CORR_CANDIDATES$/, "양의 동행성이 충분한 유사 종목 후보가 적어 표시 종목 수가 줄어들 수 있어요."],
-  [/^INDUSTRY_ADJUSTED_RETURN_FALLBACK_RAW$/, "산업지수 보정 수익률을 계산할 수 없어 원 수익률 기준으로 유사 종목을 비교했어요."],
-  [/^PEER_CORR_STABILITY_INSUFFICIENT_DATA$/, "구간별 상관 안정성을 판단하기에는 일부 종목의 데이터가 부족할 수 있어요."],
-  [/^PEER_FILTER_RELAXED$/, "요청한 유사 종목 수를 평가하기 위해 극단값 필터를 완화했어요."],
-  [/^PEER_COUNT_REDUCED_BY_CANDIDATE_SIZE$/, "동일 산업 내 비교 가능한 후보 수가 요청한 종목 수보다 적어 실제 표시 수가 줄었어요."],
-  [/^NEWS_FILTER_(APPLIED|EXPANDED_FETCH)$/, "종목 관련성이 높은 뉴스를 선별하기 위해 뉴스 검색 범위를 조정했어요."],
-  [/^NEWS_FILTER_INSUFFICIENT_RESULT$/, "조건에 맞는 관련 뉴스 수가 충분하지 않아 일부 뉴스 지표가 제한될 수 있어요."],
-  [/^NEWS_BODY_LOW_CONFIDENCE:/, "일부 뉴스는 본문 추출 신뢰도가 낮아 감성 점수 해석에 주의가 필요해요."],
-  [/^NEWS_BODY_FETCH_FAILED:/, "일부 뉴스는 본문을 가져오지 못해 감성 분석 대상에서 제외됐어요."],
-  [/^NEWS_SENTIMENT_LOCAL_/, "뉴스 감성 모델 처리 중 일부 결과가 제한됐어요."],
-  [/^NEWS_SENTIMENT_FAILED:/, "일부 뉴스는 감성 점수를 산출하지 못했어요."],
-  [/^NEWS_LIST_FETCH_FAILED$/, "뉴스 목록을 가져오지 못해 뉴스 기반 분석이 제한될 수 있어요."],
-  [/^NEWS_INVALID_ITEM_SKIPPED$/, "형식이 맞지 않는 뉴스 항목 일부를 제외했어요."],
-  [/^NEWS_PUBDATE_PARSE_FAILED$/, "일부 뉴스 발행시각을 해석하지 못해 현재 시각 기준으로 보정될 수 있어요."],
-  [/^LLM_EXPLAIN_TIMEOUT$/, "설명 생성이 지연되어 일부 해설이 생략될 수 있어요."],
-  [/^LLM_EXPLAIN_RATE_LIMITED$/, "설명 생성 요청이 많아 해설 생성이 제한될 수 있어요."],
-  [/^LLM_EXPLAIN_MAX_OUTPUT_TOKENS$/, "설명 생성 분량 제한으로 일부 해설이 축약될 수 있어요."],
-  [/^LLM_EXPLAIN_PARSE_FAILED$/, "설명 생성 결과를 구조화하는 과정에서 일부 내용이 누락될 수 있어요."],
-  [/^LLM_EXPLAIN_HTTP_500/, "설명 생성 서버가 일시적으로 불안정해 일부 해설이 제한될 수 있어요."],
-  [/^LLM_EXPLAIN_HTTP_/, "설명 생성 중 일시적인 오류가 발생해 일부 해설이 제한될 수 있어요."],
-  [/^LLM_EXPLAIN_INCOMPLETE:/, "설명 생성이 중간에 종료되어 일부 해설이 축약될 수 있어요."],
-  [/^LLM_EXPLAIN_REFUSAL$/, "설명 생성 정책에 따라 일부 응답이 제한될 수 있어요."],
-];
-
-const mapWarningsToNotes = (warnings?: string[] | null): string[] => {
-  if (!warnings || warnings.length === 0) return [];
-
-  const messages = warnings.flatMap((warning) => {
-    for (const [pattern, message] of WARNING_MESSAGE_MAP) {
-      if (pattern.test(warning)) {
-        return [message];
-      }
-    }
-    return [];
-  });
-
-  return Array.from(new Set(messages));
-};
-
-const expandWarningLines = (notes: string[]): string[] =>
-  notes.flatMap((note) =>
-    note
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean),
-  );
 
 export default function AnalysisResultPanel({
   result,
@@ -353,8 +279,6 @@ export default function AnalysisResultPanel({
   onAnalyze,
   onDownload,
   onZoom,
-  llmVendor,
-  onLlmVendorChange,
   displayText,
   financialTimeline = null,
   priceFlowSummary = null,
@@ -363,8 +287,13 @@ export default function AnalysisResultPanel({
 }: AnalysisResultPanelProps) {
   const isPanel = layout === "panel";
   const pdfExporting = usePdfExportReveal();
+  const { t } = useTranslation("analysisPanel");
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [macroChartMode, setMacroChartMode] = useState<MacroChartMode>("exchange");
+  const macroChartOptions = useMemo(
+    () => MACRO_CHART_KEYS.map((key) => ({ key, label: t(`macro.${key}`) })),
+    [t],
+  );
   const explainSections = result?.explain?.sections ?? null;
   const overallExplain = result?.explain?.overall ?? null;
   const warningNotes = expandWarningLines(mapWarningsToNotes(result?.warnings));
@@ -472,61 +401,42 @@ export default function AnalysisResultPanel({
             <div className="relative group">
               <button
                 onClick={onDownload}
-                aria-label="PDF로 다운로드"
-                title="PDF로 다운로드"
+                aria-label={t("buttons.downloadPdf")}
+                title={t("buttons.downloadPdf")}
                 className="w-8 h-8 grid place-items-center rounded-lg border border-line bg-surface text-ink-2 hover:bg-bg-sunk transition-colors"
               >
                 <Download size={16} />
               </button>
               <span className="pointer-events-none absolute bottom-full right-0 mb-2 whitespace-nowrap rounded-md bg-ink text-bg text-[11px] font-medium px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                PDF로 다운로드
+                {t("buttons.downloadPdf")}
               </span>
             </div>
             <div className="relative group">
               <button
                 onClick={onZoom}
-                aria-label="크게 보기"
-                title="크게 보기"
+                aria-label={t("buttons.expand")}
+                title={t("buttons.expand")}
                 className="w-8 h-8 grid place-items-center rounded-lg border border-line bg-surface text-ink-2 hover:bg-bg-sunk transition-colors"
               >
                 <Maximize2 size={16} />
               </button>
               <span className="pointer-events-none absolute bottom-full right-0 mb-2 whitespace-nowrap rounded-md bg-ink text-bg text-[11px] font-medium px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                크게 보기
+                {t("buttons.expand")}
               </span>
             </div>
           </div>
         </div>
       )}
 
-      {/* LLM 모델 선택 + 분석 실행 버튼 */}
+      {/* 분석 실행 버튼 */}
       {showAnalyzeButton && (
         <div className="flex flex-col items-center gap-3">
-          {/* LLM 모델 선택 드롭다운 */}
-          <div className="flex items-center gap-2">
-            <label className="text-sm text-ink-3 font-medium whitespace-nowrap">
-              분석 모델
-            </label>
-            <select
-              value={llmVendor}
-              onChange={(e) => onLlmVendorChange(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-line rounded-lg bg-surface text-ink focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent cursor-pointer"
-            >
-              {LLM_VENDOR_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 분석 실행 버튼 */}
           <button
             onClick={onAnalyze}
             disabled={loading}
             className="px-6 sm:px-8 py-2.5 bg-accent rounded-2xl text-white text-base sm:text-xl md:text-2xl font-medium"
           >
-            분석 결과 보기
+            {t("buttons.viewAnalysis")}
           </button>
         </div>
       )}
@@ -534,7 +444,7 @@ export default function AnalysisResultPanel({
       {/* 로딩 문구 */}
       {loading && (
         <div className="w-full rounded-2xl border-2 flex items-center justify-center py-24 bg-bg-sunk border-line">
-          <p className="text-base animate-pulse text-ink-3">분석 중입니다...</p>
+          <p className="text-base animate-pulse text-ink-3">{t("status.loading")}</p>
         </div>
       )}
 
@@ -552,7 +462,7 @@ export default function AnalysisResultPanel({
 
           {result.metrics?.stock && (
             <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
-              <p className="text-xs sm:text-sm font-medium text-ink-3">분석 종목</p>
+              <p className="text-xs sm:text-sm font-medium text-ink-3">{t("subject")}</p>
               <p className="mt-1 text-lg sm:text-xl font-bold text-ink">
                 {result.metrics.stock.companyName || result.metrics.stock.stockCode}
               </p>
@@ -562,37 +472,37 @@ export default function AnalysisResultPanel({
           {result.metrics?.investorFlow && (
             <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-ink">외국인·기관 수급</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-ink">{t("investorFlowCard.title")}</h3>
                 <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
-                  종목/시장 비교
+                  {t("investorFlowCard.compare")}
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-ink-3">종목 방향</p>
+                  <p className="text-[11px] sm:text-xs text-ink-3">{t("investorFlowCard.stockDirection")}</p>
                   <p className="text-base font-bold text-ink">
-                    {investorFlowDirectionText(result.metrics.investorFlow.stockSummary?.direction)}
+                    {investorFlowDirectionText(result.metrics.investorFlow.stockSummary?.direction, t)}
                   </p>
                   <p className="mt-1 text-xs text-ink-3">
-                    {formatFlowAmount(result.metrics.investorFlow.stockSummary?.combinedNetBuyValueMillionSum)}
+                    {formatFlowAmount(result.metrics.investorFlow.stockSummary?.combinedNetBuyValueMillionSum, t)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-ink-3">시장 방향</p>
+                  <p className="text-[11px] sm:text-xs text-ink-3">{t("investorFlowCard.marketDirection")}</p>
                   <p className="text-base font-bold text-ink">
-                    {investorFlowDirectionText(result.metrics.investorFlow.marketSummary?.direction)}
+                    {investorFlowDirectionText(result.metrics.investorFlow.marketSummary?.direction, t)}
                   </p>
                   <p className="mt-1 text-xs text-ink-3">
-                    {formatFlowAmount(result.metrics.investorFlow.marketSummary?.combinedNetBuyValueMillionSum)}
+                    {formatFlowAmount(result.metrics.investorFlow.marketSummary?.combinedNetBuyValueMillionSum, t)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-ink-3">분석 거래일</p>
+                  <p className="text-[11px] sm:text-xs text-ink-3">{t("investorFlowCard.tradingDays")}</p>
                   <p className="text-base font-bold text-ink">
-                    {result.metrics.investorFlow.stockSummary?.pointCount ?? "-"}일
+                    {result.metrics.investorFlow.stockSummary?.pointCount ?? "-"}{t("investorFlowCard.dayUnit")}
                   </p>
                   <p className="mt-1 text-xs text-ink-3">
-                    {result.metrics.investorFlow.marketCode ?? "시장 매핑 없음"}
+                    {result.metrics.investorFlow.marketCode ?? t("investorFlowCard.noMarketMapping")}
                   </p>
                 </div>
               </div>
@@ -601,20 +511,20 @@ export default function AnalysisResultPanel({
                   <InvestorFlowTrendChart points={result.metrics.investorFlow.stockSeries} height={230} />
                 </div>
               ) : null}
-              {renderExplainSection(explainSections?.investorFlow)}
+              {renderExplainSection(explainSections?.investorFlow, t)}
             </div>
           )}
 
           {result.metrics?.peerCluster && (
             <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-ink">유사 종목 반응 구조</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-ink">{t("peerCluster.title")}</h3>
                 <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
-                  {result.metrics.peerCluster.peers.length}개 선정
+                  {t("peerCluster.selectedCount", { n: result.metrics.peerCluster.peers.length })}
                 </span>
               </div>
               <p className="mt-1 text-xs sm:text-sm text-ink-3">
-                산업조정 상관은 산업 공통 움직임을 단순 차감한 관측용 지표이며, 정교한 요인 모델이나 가격 방향 신호가 아닙니다.
+                {t("peerCluster.disclaimer")}
               </p>
               {(() => {
                 const selectedCodes = new Set(result.metrics?.peerCluster?.peers.map((peer) => peer.stockCode) ?? []);
@@ -633,24 +543,24 @@ export default function AnalysisResultPanel({
                             <p className="text-[11px] sm:text-xs text-ink-4">{peer.stockCode}</p>
                           </div>
                           <div className="flex flex-col items-start sm:items-end flex-1 min-w-[80px]">
-                            <span className="text-[11px] sm:text-xs text-ink-4">{displayPeerCorrLabel(peer)}</span>
+                            <span className="text-[11px] sm:text-xs text-ink-4">{displayPeerCorrLabel(peer, t)}</span>
                             <span className={`text-sm sm:text-base font-bold ${correlationColorClass(displayPeerCorr(peer))}`}>
                               {displayPeerCorr(peer) == null ? "-" : displayPeerCorr(peer)?.toFixed(2)}
                             </span>
                           </div>
                           <div className="flex flex-col items-start sm:items-end flex-1 min-w-[70px]">
-                            <span className="text-[11px] sm:text-xs text-ink-4">관계</span>
+                            <span className="text-[11px] sm:text-xs text-ink-4">{t("peerCluster.relation")}</span>
                             <span className={`text-sm sm:text-base font-semibold ${relationColorClass(peer.relation)}`}>
-                              {formatRelationBadge(peer.relation)}
+                              {formatRelationBadge(peer.relation, t)}
                             </span>
                           </div>
                           <div className="flex flex-col items-start sm:items-end flex-1 min-w-[70px]">
-                            <span className="text-[11px] sm:text-xs text-ink-4">점수</span>
+                            <span className="text-[11px] sm:text-xs text-ink-4">{t("peerCluster.score")}</span>
                             <span className="text-sm sm:text-base font-bold text-ink">{formatPeerScore(peer)}</span>
                           </div>
                           <div className="flex flex-col items-start sm:items-end flex-1 min-w-[92px]">
-                            <span className="text-[11px] sm:text-xs text-ink-4">상태</span>
-                            <span className="text-xs sm:text-sm font-medium text-ink-2">{formatDisplayStatus(peer)}</span>
+                            <span className="text-[11px] sm:text-xs text-ink-4">{t("peerCluster.status")}</span>
+                            <span className="text-xs sm:text-sm font-medium text-ink-2">{formatDisplayStatus(peer, t)}</span>
                           </div>
                         </div>
                       </div>
@@ -664,12 +574,12 @@ export default function AnalysisResultPanel({
                   }`}>
                     <div className="flex flex-col gap-4">
                       <div>
-                        <h4 className="text-sm font-semibold text-ink">핵심 유사 종목</h4>
-                        <div className="mt-2">{selected.length > 0 ? renderRows(selected) : <p className="text-sm text-ink-3">선정된 유사 종목이 없습니다.</p>}</div>
+                        <h4 className="text-sm font-semibold text-ink">{t("peerCluster.coreHeading")}</h4>
+                        <div className="mt-2">{selected.length > 0 ? renderRows(selected) : <p className="text-sm text-ink-3">{t("peerCluster.empty")}</p>}</div>
                       </div>
                       {extra.length > 0 && (
                         <div>
-                          <h4 className="text-sm font-semibold text-ink">추가 후보</h4>
+                          <h4 className="text-sm font-semibold text-ink">{t("peerCluster.additionalHeading")}</h4>
                           <div className="mt-2">{renderRows(extra)}</div>
                         </div>
                       )}
@@ -677,44 +587,44 @@ export default function AnalysisResultPanel({
                   </div>
                 );
               })()}
-              {renderExplainSection(explainSections?.peerCluster)}
+              {renderExplainSection(explainSections?.peerCluster, t)}
             </div>
           )}
 
           {result.metrics?.newsSentimentSummary && (
             <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-ink">뉴스 감성</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-ink">{t("news.title")}</h3>
                 <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
-                  감성 점수 산출 뉴스 {result.metrics.newsSentimentSummary.scoredNewsCount}건
+                  {t("news.scoredCount", { n: result.metrics.newsSentimentSummary.scoredNewsCount })}
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-ink-3">최근 평균 점수</p>
+                  <p className="text-[11px] sm:text-xs text-ink-3">{t("news.recentAvg")}</p>
                   <p className={`text-lg font-bold ${result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore < -0.05 ? "text-blue-700" : result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore > 0.05 ? "text-rose-700" : "text-ink"}`}>
                     {formatSentimentScore(result.metrics.newsSentimentSummary.dailyAvgScore)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-ink-3">점수 산출 뉴스</p>
+                  <p className="text-[11px] sm:text-xs text-ink-3">{t("news.scoredNews")}</p>
                   <p className="text-lg font-bold text-ink">{result.metrics.newsSentimentSummary.scoredNewsCount}</p>
                 </div>
                 <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-ink-3">긍정/중립/부정</p>
+                  <p className="text-[11px] sm:text-xs text-ink-3">{t("news.ratio")}</p>
                   <p className="text-sm font-semibold text-ink">
                     {result.metrics.newsSentimentSummary.positiveCount} / {result.metrics.newsSentimentSummary.neutralCount} / {result.metrics.newsSentimentSummary.negativeCount}
                   </p>
                 </div>
                 <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                  <p className="text-[11px] sm:text-xs text-ink-3">기준일</p>
+                  <p className="text-[11px] sm:text-xs text-ink-3">{t("news.asOf")}</p>
                   <p className="text-sm font-semibold text-ink">{result.metrics.newsSentimentSummary.summaryDate ?? "-"}</p>
                 </div>
               </div>
 
               {(result.metrics?.newsList?.length ?? 0) > 0 && (
                 <div className="mt-4">
-                  <h4 className="text-sm font-semibold text-ink">감성 점수가 산출된 뉴스</h4>
+                  <h4 className="text-sm font-semibold text-ink">{t("news.scoredHeading")}</h4>
                   <div className={`mt-2 divide-y divide-line rounded-lg border border-line bg-surface pr-1 ${
                     pdfExporting ? "overflow-visible" : "max-h-[360px] overflow-y-auto"
                   }`}>
@@ -738,11 +648,11 @@ export default function AnalysisResultPanel({
                             </p>
                           </div>
                           <p className="text-[11px] sm:text-xs font-medium text-ink-3">
-                            {formatNewsTimeAgo(item.publishedAt)} · {item.publisher}
+                            {formatNewsTimeAgo(item.publishedAt, t)} · {item.publisher}
                           </p>
                         </div>
                         <div className={`flex min-w-[64px] flex-col items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold ${sentimentBadgeClass(item.sentimentScore)}`}>
-                          <span>{sentimentLabelText(item.sentimentLabel, item.sentimentScore)}</span>
+                          <span>{sentimentLabelText(item.sentimentLabel, item.sentimentScore, t)}</span>
                           <span>{formatSentimentScore(item.sentimentScore)}</span>
                         </div>
                       </a>
@@ -750,7 +660,7 @@ export default function AnalysisResultPanel({
                   </div>
                 </div>
               )}
-              {renderExplainSection(explainSections?.newsSentiment)}
+              {renderExplainSection(explainSections?.newsSentiment, t)}
             </div>
           )}
 
@@ -761,22 +671,22 @@ export default function AnalysisResultPanel({
             || result.metrics?.shortSellingSeries?.length) && (
             <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-semibold text-ink">기간 추이·시장환경</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-ink">{t("macroSeries.title")}</h3>
                 <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
-                  금리 · 국채 · 환율 · 공매도
+                  {t("macroSeries.subtitle")}
                 </span>
               </div>
               <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {result.metrics?.macroRates && (
                   <>
                     <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                      <p className="text-[11px] sm:text-xs text-ink-3">한국 기준금리</p>
+                      <p className="text-[11px] sm:text-xs text-ink-3">{t("macroSeries.krBaseRate")}</p>
                       <p className="text-lg font-bold text-ink">
                         {formatRatePoint(result.metrics.macroRates.krBaseRate?.value, result.metrics.macroRates.krBaseRate?.unit ?? "%")}
                       </p>
                     </div>
                     <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                      <p className="text-[11px] sm:text-xs text-ink-3">미국 기준금리</p>
+                      <p className="text-[11px] sm:text-xs text-ink-3">{t("macroSeries.usBaseRate")}</p>
                       <p className="text-lg font-bold text-ink">
                         {formatRatePoint(result.metrics.macroRates.usFedFundsRate?.value, result.metrics.macroRates.usFedFundsRate?.unit ?? "%")}
                       </p>
@@ -791,25 +701,25 @@ export default function AnalysisResultPanel({
                 )}
                 {result.metrics?.baseRateTrendSummary && (
                   <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                    <p className="text-[11px] sm:text-xs text-ink-3">기준금리 변동</p>
+                    <p className="text-[11px] sm:text-xs text-ink-3">{t("macroSeries.baseRateChange")}</p>
                     <p className="text-sm font-bold text-ink">
                       {result.metrics.baseRateTrendSummary.startValue ?? "-"}
                       {result.metrics.baseRateTrendSummary.unit ?? ""} → {result.metrics.baseRateTrendSummary.endValue ?? "-"}
                       {result.metrics.baseRateTrendSummary.unit ?? ""}
                     </p>
                     <p className="mt-1 text-xs text-ink-3">
-                      {formatSignedNumber(result.metrics.baseRateTrendSummary.change)} · {trendDirectionText(result.metrics.baseRateTrendSummary.direction)}
+                      {formatSignedNumber(result.metrics.baseRateTrendSummary.change)} · {trendDirectionText(result.metrics.baseRateTrendSummary.direction, t)}
                     </p>
                   </div>
                 )}
                 {result.metrics?.shortSellingTrendSummary && (
                   <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
-                    <p className="text-[11px] sm:text-xs text-ink-3">공매도 거래대금 비율</p>
+                    <p className="text-[11px] sm:text-xs text-ink-3">{t("macroSeries.shortSellingRatio")}</p>
                     <p className="text-sm font-bold text-ink">
                       {formatRatio(result.metrics.shortSellingTrendSummary.startShortAmountRatio)} → {formatRatio(result.metrics.shortSellingTrendSummary.endShortAmountRatio)}
                     </p>
                     <p className="mt-1 text-xs text-ink-3">
-                      {formatSignedNumber(result.metrics.shortSellingTrendSummary.shortAmountRatioChange)}% · {trendDirectionText(result.metrics.shortSellingTrendSummary.direction)}
+                      {formatSignedNumber(result.metrics.shortSellingTrendSummary.shortAmountRatioChange)}% · {trendDirectionText(result.metrics.shortSellingTrendSummary.direction, t)}
                     </p>
                   </div>
                 )}
@@ -819,10 +729,10 @@ export default function AnalysisResultPanel({
                   {pdfExporting ? (
                     <div className="flex flex-col gap-4">
                       {[
-                        { key: "exchange", label: "환율", seriesKeys: ["USD_KRW"], height: 190 },
-                        { key: "baseRate", label: "기준금리", seriesKeys: ["KR_BASE_RATE", "US_FED_FUNDS"], height: 230 },
-                        { key: "domesticBond", label: "국내국채", seriesKeys: ["KR3Y", "KR10Y"], height: 230 },
-                        { key: "usRates", label: "미국국채", seriesKeys: ["US2Y", "US5Y", "US10Y"], height: 230 },
+                        { key: "exchange", labelKey: "macro.exchange", seriesKeys: ["USD_KRW"], height: 190 },
+                        { key: "baseRate", labelKey: "macro.baseRate", seriesKeys: ["KR_BASE_RATE", "US_FED_FUNDS"], height: 230 },
+                        { key: "domesticBond", labelKey: "macro.domesticBond", seriesKeys: ["KR3Y", "KR10Y"], height: 230 },
+                        { key: "usRates", labelKey: "macro.usRates", seriesKeys: ["US2Y", "US5Y", "US10Y"], height: 230 },
                       ].map((chart) => {
                         const series = (result.metrics?.macroRatesSeries?.series ?? []).filter((item) =>
                           chart.seriesKeys.includes(item.key),
@@ -830,14 +740,14 @@ export default function AnalysisResultPanel({
                         if (series.length === 0) return null;
                         return (
                           <div key={chart.key} className="rounded-lg border border-line bg-bg-sunk/60 p-3">
-                            <h4 className="mb-2 text-sm font-semibold text-ink">{chart.label}</h4>
+                            <h4 className="mb-2 text-sm font-semibold text-ink">{t(chart.labelKey)}</h4>
                             <MultiLineTrendChart series={series} height={chart.height} />
                           </div>
                         );
                       })}
                       {(result.metrics?.shortSellingSeries?.length ?? 0) > 0 && (
                         <div className="rounded-lg border border-line bg-bg-sunk/60 p-3">
-                          <h4 className="mb-2 text-sm font-semibold text-ink">공매도</h4>
+                          <h4 className="mb-2 text-sm font-semibold text-ink">{t("macroSeries.shortSelling")}</h4>
                           <ShortSellingTrendChart points={result.metrics?.shortSellingSeries ?? []} />
                         </div>
                       )}
@@ -845,7 +755,7 @@ export default function AnalysisResultPanel({
                   ) : (
                     <>
                       <div className="flex flex-wrap gap-1.5">
-                        {MACRO_CHART_OPTIONS.map((option) => (
+                        {macroChartOptions.map((option) => (
                           <button
                             key={option.key}
                             type="button"
@@ -879,8 +789,8 @@ export default function AnalysisResultPanel({
                   )}
                 </div>
               ) : null}
-              {renderExplainSection(explainSections?.macroEnvironment)}
-              {renderExplainSection(explainSections?.trendSummary)}
+              {renderExplainSection(explainSections?.macroEnvironment, t)}
+              {renderExplainSection(explainSections?.trendSummary, t)}
             </div>
           )}
 
@@ -889,50 +799,50 @@ export default function AnalysisResultPanel({
             <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base sm:text-lg font-semibold text-ink">
-                  <DictTerm term="공매도">공매도</DictTerm> 현황
+                  <DictTerm term="공매도">{t("macroSeries.shortSelling")}</DictTerm> {t("shortSelling.titleSuffix")}
                 </h3>
               </div>
               <div className="overflow-x-auto mt-2">
                 <table className="min-w-full text-xs sm:text-sm text-ink-2 border border-line">
                   <thead className="bg-bg-sunk text-ink">
                     <tr>
-                      <th className="px-3 py-2 text-left border-b">항목</th>
-                      <th className="px-3 py-2 text-right border-b">값</th>
+                      <th className="px-3 py-2 text-left border-b">{t("shortSelling.headerItem")}</th>
+                      <th className="px-3 py-2 text-right border-b">{t("shortSelling.headerValue")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="px-3 py-2 border-b">기준일</td>
+                      <td className="px-3 py-2 border-b">{t("shortSelling.asOf")}</td>
                       <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.reportDate}</td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 border-b">공매도 거래량</td>
+                      <td className="px-3 py-2 border-b">{t("shortSelling.shortVolume")}</td>
                       <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.shortVolumeTotal)}</td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 border-b"><DictTerm term="거래량">거래량</DictTerm> (총)</td>
+                      <td className="px-3 py-2 border-b"><DictTerm term="거래량">{t("shortSelling.volumeLabel")}</DictTerm> {t("shortSelling.totalVolume")}</td>
                       <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.totalVolume)}</td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 border-b">공매도 거래량 비율</td>
+                      <td className="px-3 py-2 border-b">{t("shortSelling.shortVolumeRatio")}</td>
                       <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.shortVolumeRatio.toFixed(2)}%</td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 border-b">공매도 거래대금</td>
-                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.shortAmountTotal)}원</td>
+                      <td className="px-3 py-2 border-b">{t("shortSelling.shortAmount")}</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.shortAmountTotal)}{t("amountUnit.won")}</td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 border-b"><DictTerm term="거래대금">거래대금</DictTerm> (총)</td>
-                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.totalAmount)}원</td>
+                      <td className="px-3 py-2 border-b"><DictTerm term="거래대금">{t("shortSelling.amountLabel")}</DictTerm> {t("shortSelling.totalAmount")}</td>
+                      <td className="px-3 py-2 text-right border-b">{formatNumber(result.metrics.shortSelling.totalAmount)}{t("amountUnit.won")}</td>
                     </tr>
                     <tr>
-                      <td className="px-3 py-2 border-b">공매도 거래대금 비율</td>
+                      <td className="px-3 py-2 border-b">{t("shortSelling.shortAmountRatio")}</td>
                       <td className="px-3 py-2 text-right border-b">{result.metrics.shortSelling.shortAmountRatio.toFixed(2)}%</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              {renderExplainSection(explainSections?.shortSelling)}
+              {renderExplainSection(explainSections?.shortSelling, t)}
             </div>
           ) : null}
 
@@ -940,7 +850,7 @@ export default function AnalysisResultPanel({
           {priceFlowSummary && (
             <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <PriceFlowBars summary={priceFlowSummary} />
-              {renderExplainSection(explainSections?.priceFlow)}
+              {renderExplainSection(explainSections?.priceFlow, t)}
             </div>
           )}
 
@@ -948,7 +858,7 @@ export default function AnalysisResultPanel({
           {result.metrics?.marketSnapshot && (
             <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
               <MarketSnapshotBars snapshot={result.metrics.marketSnapshot} />
-              {renderExplainSection(explainSections?.marketSnapshot)}
+              {renderExplainSection(explainSections?.marketSnapshot, t)}
             </div>
           )}
 
@@ -958,7 +868,7 @@ export default function AnalysisResultPanel({
               <IndicatorSnapshotCards
                 indicators={result.metrics.indicators}
               />
-              {renderExplainSection(explainSections?.indicators)}
+              {renderExplainSection(explainSections?.indicators, t)}
             </div>
           )}
 
@@ -968,11 +878,11 @@ export default function AnalysisResultPanel({
                 period={financialTimeline.period}
                 points={financialTimeline.points}
               />
-              {renderExplainSection(explainSections?.financialTimeline)}
+              {renderExplainSection(explainSections?.financialTimeline, t)}
             </div>
           )}
 
-          {renderExplainSection(explainSections?.crossSignal)}
+          {renderExplainSection(explainSections?.crossSignal, t)}
 
           {(overallExplain?.summary
             || (overallExplain?.bullets && overallExplain.bullets.length > 0)
@@ -981,20 +891,20 @@ export default function AnalysisResultPanel({
             || result.explain?.text?.trim()) && (
             <div>
               <h3 className="text-base sm:text-lg font-semibold text-ink">
-                종합 요약
+                {t("overall.title")}
               </h3>
 
               {overallExplain ? (
                 <div className="mt-2 text-sm sm:text-base text-ink-2 flex flex-col gap-3">
                   {overallExplain.summary ? (
                     <div>
-                      <p className="font-medium text-ink">요약</p>
+                      <p className="font-medium text-ink">{t("overall.summary")}</p>
                       <p><DictionaryText text={overallExplain.summary} /></p>
                     </div>
                   ) : null}
                   {overallExplain.bullets && overallExplain.bullets.length > 0 ? (
                     <div>
-                      <p className="font-medium text-ink">핵심 포인트</p>
+                      <p className="font-medium text-ink">{t("overall.highlights")}</p>
                       <ul className="list-disc list-inside">
                         {overallExplain.bullets.map((item, idx) => (
                           <li key={`overall-bullet-${idx}`}>
@@ -1006,7 +916,7 @@ export default function AnalysisResultPanel({
                   ) : null}
                   {overallExplain.risks && overallExplain.risks.length > 0 ? (
                     <div>
-                      <p className="font-medium text-ink">리스크</p>
+                      <p className="font-medium text-ink">{t("overall.risks")}</p>
                       <ul className="list-disc list-inside">
                         {overallExplain.risks.map((item, idx) => (
                           <li key={`overall-risk-${idx}`}>
@@ -1018,7 +928,7 @@ export default function AnalysisResultPanel({
                   ) : null}
                   {overallExplain.conclusion ? (
                     <div>
-                      <p className="font-medium text-ink">결론</p>
+                      <p className="font-medium text-ink">{t("overall.conclusion")}</p>
                       <p><DictionaryText text={overallExplain.conclusion} /></p>
                     </div>
                   ) : null}
@@ -1034,7 +944,7 @@ export default function AnalysisResultPanel({
           {warningNotes.length > 0 && (
             <div>
               <h3 className="text-base sm:text-lg font-semibold text-ink">
-                참고
+                {t("notes")}
               </h3>
               <ul className="mt-2 list-disc list-inside text-sm sm:text-base text-ink-2 flex flex-col gap-1">
                 {warningNotes.map((item, idx) => (

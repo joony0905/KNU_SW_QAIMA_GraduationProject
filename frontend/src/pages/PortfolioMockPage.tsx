@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MouseEvent, ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Trash2, Plus, Info, ClipboardList, Sun, Moon, ChevronDown, ChevronUp, Lock, Save, Download, Maximize2 } from "lucide-react";
+import { Trash2, Plus, Info, ClipboardList, Sun, Moon, Lock, Save, Download, Maximize2 } from "lucide-react";
 import InvestLevelBadge from "../components/InvestLevelBadge";
 import { isLoggedIn } from "../utils/auth";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchCell from "../components/StockSearchCell";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
+import { refreshTokenBalance } from "../api/billingStore";
 import { useDictionary } from "../components/DictContext";
 import DictionaryText from "../components/DictionaryText";
 import { getMyRiskProfile } from "../api/user";
@@ -35,30 +36,6 @@ import { clientLog } from "../utils/clientLog";
 import { downloadElementAsPdf, waitForPdfCaptureReady } from "../utils/reportPdf";
 import ReportHeader from "../components/ReportHeader";
 import useReportUserName from "../hooks/useReportUserName";
-
-const LLM_VENDOR_OPTIONS = [
-  "GPT-5.4",
-  "GPT-5.2",
-  "GPT-5 mini",
-  "GPT-4.1",
-  "GPT-4o",
-  "Gemini 3.1 Pro",
-  "Gemini 3 Pro",
-  "Gemini 3 Flash",
-  "Gemini 3.1 Flash Lite",
-  "Gemini 2.5 Flash",
-  "Gemini 2.5 Pro",
-  "Claude Opus 4.6",
-  "Claude Opus 4.5",
-  "Claude Sonnet 4.6",
-  "Claude Sonnet 4",
-  "Claude Haiku 4.5",
-  "Grok 4",
-  "Grok 4.1 Fast",
-  "Grok 4 Fast",
-  "Grok 3",
-  "Grok 3 Mini",
-] as const;
 
 type AnalysisWindowPreset = {
   label: string;
@@ -868,9 +845,7 @@ export default function PortfolioMockPage() {
   const [err, setErr] = useState("");
   const [pdfExporting, setPdfExporting] = useState(false);
   const [isPortfolioZoomOpen, setIsPortfolioZoomOpen] = useState(false);
-  const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
-  const [isModelOpen, setIsModelOpen] = useState(false);
-  const modelRef = useRef<HTMLDivElement | null>(null);
+  const llmVendor = "GPT-5 mini";
   const portfolioPdfRef = useRef<HTMLElement | null>(null);
   const portfolioReportRef = useRef<HTMLDivElement | null>(null);
   const reportMeta = analysisResult
@@ -987,8 +962,11 @@ export default function PortfolioMockPage() {
       setAnalysisTab("BASIC");
       setOverlayPreview(null);
     } catch (e) {
-      setErr(getApiErrorMessage(e, "분석에 실패했습니다. 잠시 후 다시 시도해주세요."));
+      setErr(getApiErrorMessage(e, "분석에 실패했습니다. 사용된 크레딧은 자동 환불됩니다."));
     } finally {
+      // 성공/실패 무관하게 서버 잔액과 동기화 (백엔드가 실패 시 환불 처리하므로
+      // 환불된 잔액이 UI 에 즉시 반영되도록).
+      refreshTokenBalance().catch(() => {});
       setLoading(false);
     }
   };
@@ -1015,22 +993,6 @@ export default function PortfolioMockPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isModelOpen) return;
-
-    const handleClickOutside = (event: globalThis.MouseEvent) => {
-      if (
-        modelRef.current &&
-        !modelRef.current.contains(event.target as Node)
-      ) {
-        setIsModelOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isModelOpen]);
 
   useEffect(() => {
     document.body.classList.toggle("qaima-portfolio-zoom-active", isPortfolioZoomOpen);
@@ -1205,7 +1167,7 @@ export default function PortfolioMockPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px]">
+    <div className="min-h-screen bg-bg md:ml-[84px]">
       {saveModalOpen && createPortal(
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
           <div className="w-full max-w-sm rounded-2xl bg-surface border border-line shadow-card p-5">
@@ -1759,37 +1721,6 @@ export default function PortfolioMockPage() {
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <InvestLevelBadge />
                 <div className="flex items-center gap-3">
-                  <div ref={modelRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsModelOpen((prev) => !prev)}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-line text-sm"
-                  >
-                    <span className="text-ink-3 text-[11px]">모델</span>
-                    <span className="font-semibold text-ink">{llmVendor}</span>
-                    {isModelOpen
-                      ? <ChevronUp size={14} className="text-ink-3 pointer-events-none" />
-                      : <ChevronDown size={14} className="text-ink-3 pointer-events-none" />}
-                  </button>
-                  {isModelOpen && (
-                    <div className="absolute right-0 bottom-full mb-1 w-full min-w-44 bg-surface border border-line rounded-lg shadow-pop z-50 max-h-60 overflow-y-auto">
-                      {LLM_VENDOR_OPTIONS.map((vendor) => (
-                        <button
-                          key={vendor}
-                          type="button"
-                          onClick={() => { setLlmVendor(vendor); setIsModelOpen(false); }}
-                          className={`w-full text-left px-3.5 py-2.5 text-sm first:rounded-t-lg last:rounded-b-lg ${
-                            vendor === llmVendor
-                              ? "bg-accent-soft text-accent font-semibold"
-                              : "text-ink hover:bg-bg-sunk"
-                          }`}
-                        >
-                          {vendor}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  </div>
                   <button
                   type="button"
                   onClick={() => void handleAnalyzeClick()}
