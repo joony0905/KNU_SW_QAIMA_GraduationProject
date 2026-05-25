@@ -136,7 +136,7 @@ export default function EditProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px]">
+    <div className="min-h-screen bg-bg md:ml-[84px]">
       <form
         onSubmit={handleSubmit}
         className="qaima-stagger max-w-2xl mx-auto px-4 sm:px-6 py-5 sm:py-7 flex flex-col gap-5"

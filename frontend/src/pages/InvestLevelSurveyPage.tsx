@@ -140,7 +140,7 @@ export default function InvestLevelSurveyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px]">
+    <div className="min-h-screen bg-bg md:ml-[84px]">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
         {/* 헤더 */}
         <header className="w-full bg-surface border-b border-line px-4 py-3 flex items-center justify-between">

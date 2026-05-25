@@ -122,7 +122,7 @@ export default function DictionaryMockPage() {
   const searchPlaceholder = searchError ?? "키워드를 입력해주세요";
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px]">
+    <div className="min-h-screen bg-bg md:ml-[84px]">
       <div className="max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         {/* 헤더 */}
         <header className="flex items-center justify-between">
