@@ -793,8 +793,8 @@ export default function SettingPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => void openReportDetail(report.reportId)}
-                      disabled={reportDetailLoading}
+                      onClick={() => void handleReportDownload(report)}
+                      disabled={pdfExporting}
                       className={ghostBtn}
                     >
                       <Download size={14} />
@@ -836,6 +836,7 @@ export default function SettingPage() {
                 <button
                   type="button"
                   onClick={() => void handleReportDownload(selectedReport)}
+                  disabled={pdfExporting}
                   className={ghostBtn}
                 >
                   <Download size={14} />

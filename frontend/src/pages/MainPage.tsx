@@ -499,6 +499,12 @@ export default function MainPage() {
             <div className="max-w-[520px]">
               <StockInputBox placeholder={t("hero.searchPlaceholder")} onSearch={goAnalyze} showInterest={false} enableRecent={false} />
             </div>
+
+            <div className="mt-8 flex lg:hidden justify-center overflow-hidden">
+              <div className="w-full max-w-[320px] sm:max-w-[380px]">
+                <HeroVisual />
+              </div>
+            </div>
           </div>
 
           {/* 우측 — AI 비주얼 */}
