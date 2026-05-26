@@ -396,7 +396,7 @@ export default function AnalysisResultPanel({
     <div className={wrapperClass}>
       {/* 상단 헤더 바: 다운로드/확대 버튼 — result 있을 때만. data-pdf-exclude: PDF 캡처 시 제외 */}
       {result && (
-        <div data-pdf-exclude="true" className="w-[90%] max-w-4xl flex items-center justify-end">
+        <div data-pdf-exclude="true" className="w-full max-w-4xl px-3 sm:w-[90%] sm:px-0 flex items-center justify-end">
           <div className="flex items-center gap-2">
             <div className="relative group">
               <button
@@ -456,7 +456,7 @@ export default function AnalysisResultPanel({
         <div
           key={reportAnimationKey}
           ref={reportRef}
-          className={`${isFeature2Report ? "qaima-feature2-report " : ""}qaima-report-enter qaima-scroll-stagger w-[90%] max-w-4xl bg-surface rounded-2xl shadow-sm border border-line p-4 sm:p-6 flex flex-col gap-4`}
+          className={`${isFeature2Report ? "qaima-feature2-report " : ""}qaima-report-enter qaima-scroll-stagger w-full max-w-4xl sm:w-[90%] bg-surface rounded-2xl shadow-sm border border-line p-3 sm:p-6 flex flex-col gap-4 overflow-hidden`}
         >
           <ReportHeader meta={reportMeta} />
 

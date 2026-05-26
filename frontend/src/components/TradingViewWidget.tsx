@@ -494,7 +494,7 @@ function TradingViewWidget({
         horzLine: { labelVisible: true },
       },
       rightPriceScale: { borderColor: chartTheme.border },
-      timeScale: { timeVisible: true, visible: true },
+      timeScale: { timeVisible: false, visible: true },
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
@@ -646,7 +646,7 @@ function TradingViewWidget({
               horzLine: { labelVisible: false },
             },
             rightPriceScale: { borderColor: chartTheme.border },
-            timeScale: { timeVisible: true, visible: false },
+            timeScale: { timeVisible: false, visible: false },
           });
 
           sc.priceScale("right").applyOptions({ scaleMargins: { top: 0.15, bottom: 0.15 } });
@@ -686,7 +686,7 @@ function TradingViewWidget({
               horzLine: { labelVisible: false },
             },
             rightPriceScale: { borderColor: chartTheme.border },
-            timeScale: { timeVisible: true, visible: true },
+            timeScale: { timeVisible: false, visible: true },
           });
 
           const vs = vc.addSeries(HistogramSeries, { priceFormat: { type: "volume" }, priceScaleId: "volume" });

@@ -1753,7 +1753,7 @@ export default function PortfolioMockPage() {
           {analysisResult && (
             <section
               ref={portfolioPdfRef}
-              className={`qaima-portfolio-report qaima-report-enter flex flex-col gap-5 ${
+              className={`qaima-portfolio-report qaima-report-enter flex min-w-0 flex-col gap-5 overflow-hidden ${
                 isPortfolioZoomOpen
                   ? "fixed inset-x-4 top-4 bottom-4 z-[100] mx-auto w-auto max-w-6xl overflow-y-auto rounded-2xl bg-bg p-5 sm:p-7 shadow-pop"
                   : "w-full"
@@ -1812,7 +1812,7 @@ export default function PortfolioMockPage() {
 
               <ReportHeader meta={reportMeta} />
 
-              {analysisTab === "BASIC" && <div ref={portfolioReportRef} className="qaima-scroll-stagger flex flex-col gap-5">
+              {analysisTab === "BASIC" && <div ref={portfolioReportRef} className="qaima-scroll-stagger flex min-w-0 flex-col gap-5">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {/* 카드 1: 위험 수준 */}
                 <div className="rounded-2xl p-5 flex flex-col gap-3 bg-surface border border-line shadow-card">
@@ -2502,7 +2502,7 @@ export default function PortfolioMockPage() {
 
               </div>}
 
-              {analysisTab === "ADVANCED" && <div ref={portfolioReportRef} className="qaima-scroll-stagger rounded-2xl p-5 bg-surface border border-line shadow-card">
+              {analysisTab === "ADVANCED" && <div ref={portfolioReportRef} className="qaima-scroll-stagger min-w-0 overflow-hidden rounded-2xl p-3 sm:p-5 bg-surface border border-line shadow-card">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-bold text-ink"><DictionaryText text={t("advanced.title")} /></h3>
@@ -3497,10 +3497,10 @@ export default function PortfolioMockPage() {
                         setFrontierHover({ x: svgPoint.x, y: svgPoint.y });
                       };
                       return (
-                        <div className="mt-3 rounded-xl bg-bg-sunk border border-line p-3">
+                        <div className="mt-3 overflow-x-auto rounded-xl bg-bg-sunk border border-line p-3">
                           <svg
                             viewBox={`0 0 ${viewW} ${viewH}`}
-                            className="w-full h-[640px] cursor-crosshair"
+                            className="h-[420px] min-w-[760px] w-full cursor-crosshair sm:h-[640px]"
                             role="img"
                             aria-label={t("frontier.ariaLabel")}
                             onMouseMove={handleFrontierHover}
