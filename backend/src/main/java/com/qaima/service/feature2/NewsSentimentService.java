@@ -70,7 +70,6 @@ public class NewsSentimentService {
     private static final Duration NEWS_FOCUS_TTL = Duration.ofDays(7);
     private static final Duration NEWS_SENTIMENT_TTL = Duration.ofDays(7);
     private static final Duration REDIS_BLOCK_TIMEOUT = Duration.ofSeconds(2);
-    private static final int NEWS_FETCH_LIMIT = 30;
     private static final int NEWS_EXPORT_DISPLAY_LIMIT = 100;
     private static final int NEWS_FETCH_START = 1;
     private static final int NEWS_FETCH_STEP = 10;
@@ -130,6 +129,9 @@ public class NewsSentimentService {
 
     @Value("${feature2.news.sentiment.timeout-seconds:30}")
     private long sentimentTimeoutSeconds;
+
+    @Value("${feature2.news.limit:15}")
+    private int newsFetchLimit;
 
     public Mono<NewsLoadResult> loadNews(Stock stock) {
         return Mono.fromCallable(() -> loadNewsBlocking(stock))
@@ -393,7 +395,7 @@ public class NewsSentimentService {
     private List<News> loadLatestNewsEntities(Stock stock) {
         return newsSecurityMapRepository.findLatestNewsByStockId(
                 stock.getStockId(),
-                PageRequest.of(0, NEWS_FETCH_LIMIT)
+                PageRequest.of(0, resolvedNewsFetchLimit())
         );
     }
 
@@ -431,7 +433,8 @@ public class NewsSentimentService {
     }
 
     private List<NaverNewsClient.NaverNewsArticle> collectRelevantArticles(Stock stock, List<String> warnings) {
-        return collectRelevantArticles(stock, warnings, NEWS_FETCH_LIMIT, NEWS_FETCH_LIMIT, NEWS_FETCH_MAX_START);
+        int fetchLimit = resolvedNewsFetchLimit();
+        return collectRelevantArticles(stock, warnings, fetchLimit, fetchLimit, NEWS_FETCH_MAX_START);
     }
 
     private List<NaverNewsClient.NaverNewsArticle> collectRelevantArticles(
@@ -601,9 +604,16 @@ public class NewsSentimentService {
             return List.of();
         }
 
-        Map<Long, BigDecimal> sentimentScores = includeSentiment
-                ? resolveSentimentScores(latestNews, warnings, stockCode, forceRefresh)
-                : Map.of();
+        Map<Long, BigDecimal> sentimentScores = Map.of();
+        if (includeSentiment) {
+            try {
+                sentimentScores = resolveSentimentScores(latestNews, warnings, stockCode, forceRefresh);
+            } catch (Exception ex) {
+                log.warn("[NewsSentimentService] sentiment resolution failed. stockCode={}", stockCode, ex);
+                warnings.add(NewsWarningCodes.SENTIMENT_FAILED_PREFIX + stockCode);
+            }
+        }
+        Map<Long, BigDecimal> finalSentimentScores = sentimentScores;
         return latestNews.stream()
                 .sorted(Comparator.comparing(News::getPublishedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .filter(news -> isRenderableNews(news, warnings))
@@ -614,9 +624,13 @@ public class NewsSentimentService {
                         .publisher(news.getSource())
                         .publishedAt(news.getPublishedAt() != null ? news.getPublishedAt() : OffsetDateTime.now())
                         .summary(news.getSummary())
-                        .sentimentScore(sentimentScores.get(news.getNewsId()))
+                        .sentimentScore(finalSentimentScores.get(news.getNewsId()))
                         .build())
                 .toList();
+    }
+
+    private int resolvedNewsFetchLimit() {
+        return Math.max(1, Math.min(newsFetchLimit, 30));
     }
 
     private Map<Long, BigDecimal> resolveSentimentScores(List<News> latestNews, List<String> warnings, String stockCode) {

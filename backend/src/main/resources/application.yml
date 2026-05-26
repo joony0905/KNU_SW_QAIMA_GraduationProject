@@ -39,6 +39,7 @@ sec:
 
 feature2:
   news:
+    limit: ${FEATURE2_NEWS_LIMIT:15}
     article:
       max-in-memory-size-bytes: ${FEATURE2_NEWS_ARTICLE_MAX_IN_MEMORY_SIZE_BYTES:2097152}
     sentiment:
