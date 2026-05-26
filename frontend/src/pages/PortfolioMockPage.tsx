@@ -740,6 +740,7 @@ export default function PortfolioMockPage() {
   const [pdfExporting, setPdfExporting] = useState(false);
   const [isPortfolioZoomOpen, setIsPortfolioZoomOpen] = useState(false);
   const llmVendor = "GPT-5 mini";
+  const analysisInFlightRef = useRef(false);
   const portfolioPdfRef = useRef<HTMLElement | null>(null);
   const portfolioReportRef = useRef<HTMLDivElement | null>(null);
   const reportMeta = analysisResult
@@ -780,6 +781,7 @@ export default function PortfolioMockPage() {
     Object.fromEntries(overlays.map((overlay) => [overlay, overlayCachePolicies[overlay] ?? "REUSE_AVAILABLE"]));
 
   const handleAnalyzeClick = async (skipOverlayPreview = false) => {
+    if (analysisInFlightRef.current) return;
     if (!loggedIn) {
       goLogin();
       return;
@@ -793,9 +795,13 @@ export default function PortfolioMockPage() {
       setErr(t("runBanner.needRiskProfileError"));
       return;
     }
+    analysisInFlightRef.current = true;
     setLoading(true);
     setErr("");
     setAnalysisResult(null);
+    if (skipOverlayPreview) {
+      setOverlayPreview(null);
+    }
     try {
       const selectedOptions = Object.entries(extraOptions)
         .filter(([, v]) => v)
@@ -863,6 +869,7 @@ export default function PortfolioMockPage() {
       // 성공/실패 무관하게 서버 잔액과 동기화 (백엔드가 실패 시 환불 처리하므로
       // 환불된 잔액이 UI 에 즉시 반영되도록).
       refreshTokenBalance().catch(() => {});
+      analysisInFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -1713,17 +1720,21 @@ export default function PortfolioMockPage() {
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setOverlayPreview(null)}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-bg-sunk text-ink border border-line hover:bg-surface"
+                  onClick={() => {
+                    if (!loading) setOverlayPreview(null);
+                  }}
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-bg-sunk text-ink border border-line hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {t("overlayPreview.cancel")}
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleAnalyzeClick(true)}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-ink text-bg hover:opacity-90"
+                  disabled={loading}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold bg-ink text-bg hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t("overlayPreview.confirm")}
+                  {loading ? t("runBanner.analyzing") : t("overlayPreview.confirm")}
                 </button>
               </div>
             </section>
@@ -1753,17 +1764,17 @@ export default function PortfolioMockPage() {
           {analysisResult && (
             <section
               ref={portfolioPdfRef}
-              className={`qaima-portfolio-report qaima-report-enter flex min-w-0 flex-col gap-5 overflow-hidden ${
+              className={`qaima-portfolio-report qaima-report-enter flex w-full min-w-0 max-w-full flex-col gap-5 overflow-hidden ${
                 isPortfolioZoomOpen
-                  ? "fixed inset-x-4 top-4 bottom-4 z-[100] mx-auto w-auto max-w-6xl overflow-y-auto rounded-2xl bg-bg p-5 sm:p-7 shadow-pop"
+                  ? "fixed inset-x-2 top-2 bottom-2 z-[100] mx-auto w-auto max-w-6xl overflow-y-auto overflow-x-hidden rounded-2xl bg-bg p-3 sm:inset-x-4 sm:top-4 sm:bottom-4 sm:p-7 shadow-pop"
                   : "w-full"
               }`}
               onClick={(event) => {
                 if (isPortfolioZoomOpen) event.stopPropagation();
               }}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <h2 className="text-lg font-bold text-ink tracking-tight">{t("result.title")}</h2>
+              <div className="flex min-w-0 flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <h2 className="min-w-0 text-lg font-bold text-ink tracking-tight">{t("result.title")}</h2>
                 <div data-pdf-exclude="true" className="flex flex-wrap items-center gap-2">
                   <div className="inline-flex self-start sm:self-auto rounded-xl bg-bg-sunk border border-line p-1">
                     <button
@@ -2254,7 +2265,7 @@ export default function PortfolioMockPage() {
 
                         <div className="rounded-lg bg-bg-sunk border border-line p-3">
                           <h4 className="text-xs font-bold text-ink">{t("marketAnalysis.summaryTable")}</h4>
-                          <div className="mt-2 overflow-x-auto">
+                          <div className="mt-2 max-w-full overflow-x-auto">
                             <table className="w-full min-w-[460px] text-left text-[11px]">
                               <thead className="text-ink-4">
                                 <tr>
@@ -2502,15 +2513,15 @@ export default function PortfolioMockPage() {
 
               </div>}
 
-              {analysisTab === "ADVANCED" && <div ref={portfolioReportRef} className="qaima-scroll-stagger min-w-0 overflow-hidden rounded-2xl p-3 sm:p-5 bg-surface border border-line shadow-card">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
+              {analysisTab === "ADVANCED" && <div ref={portfolioReportRef} className="qaima-scroll-stagger w-full min-w-0 max-w-full overflow-hidden rounded-2xl p-3 sm:p-5 bg-surface border border-line shadow-card">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
                     <h3 className="text-base font-bold text-ink"><DictionaryText text={t("advanced.title")} /></h3>
                     <p className="mt-1 text-xs text-ink-4">
                       <DictionaryText text={analysisResult.freshness.userMessage ?? ""} />
                     </p>
                   </div>
-                  <span className="text-xs font-mono tabular text-ink-4">
+                  <span className="min-w-0 break-words text-xs font-mono tabular text-ink-4">
                     {t("advanced.includedCount", { count: analysisResult.policy.dataQuality.includedHoldingCount, excluded: analysisResult.policy.dataQuality.excludedHoldingCount })}
                   </span>
                 </div>
@@ -2789,7 +2800,7 @@ export default function PortfolioMockPage() {
                               {t("capmSection.blendDesc")}
                             </p>
                           </div>
-                          <div className="mt-2 overflow-x-auto">
+                          <div className="mt-2 max-w-full overflow-x-auto">
                           <table className="w-full min-w-[900px] text-left text-[11px]">
                             <thead className="text-ink-4">
                               <tr>
@@ -2947,7 +2958,7 @@ export default function PortfolioMockPage() {
                             )}
                               </>
                             )}
-                            <div className="mt-2 overflow-x-auto">
+                            <div className="mt-2 max-w-full overflow-x-auto">
                               <table className="w-full min-w-[560px] text-left text-[11px]">
                                 <thead className="text-ink-4">
                                   <tr>
@@ -3066,7 +3077,7 @@ export default function PortfolioMockPage() {
                                 </g>
                               )}
                             </svg>
-                            <div className="mt-2 overflow-x-auto">
+                            <div className="mt-2 max-w-full overflow-x-auto">
                               <table className="w-full min-w-[520px] text-left text-[11px]">
                                 <thead className="text-ink-4">
                                   <tr>
@@ -3116,7 +3127,7 @@ export default function PortfolioMockPage() {
                   );
                 })()}
 
-                <div className="mt-4 overflow-x-auto">
+                <div className="mt-4 max-w-full overflow-x-auto">
                   <table className="w-full min-w-[640px] text-left text-xs">
                     <thead className="text-ink-4">
                       <tr>
@@ -3143,9 +3154,9 @@ export default function PortfolioMockPage() {
 
                 {analysisResult.advanced?.frontier?.length ? (
                   <div className="mt-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <h4 className="text-sm font-bold text-ink">{t("frontier.title")}</h4>
-                      <p className="text-xs text-ink-4">
+                    <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                      <h4 className="min-w-0 text-sm font-bold text-ink">{t("frontier.title")}</h4>
+                      <p className="min-w-0 text-xs text-ink-4 sm:text-right">
                         {t("frontier.desc")}
                       </p>
                     </div>

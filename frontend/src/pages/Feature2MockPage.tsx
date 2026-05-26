@@ -1326,7 +1326,7 @@ export default function Feature2MockPage() {
         )}
 
         {(loading || !!err || !!analysisResult) && (
-          <div ref={pdfRef}>
+          <div ref={pdfRef} className="w-full min-w-0 overflow-hidden">
             <PdfExportContext.Provider value={pdfExporting}>
               <AnalysisResultPanel
                 result={analysisPanelResult}
@@ -1351,7 +1351,7 @@ export default function Feature2MockPage() {
             onClick={() => setIsAnalysisModalOpen(false)}
           >
             <div
-              className="bg-surface rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-pop"
+              className="bg-surface rounded-xl w-full min-w-0 max-w-5xl max-h-[90vh] flex flex-col overflow-hidden shadow-pop"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-5 py-3 border-b border-line">
@@ -1365,7 +1365,7 @@ export default function Feature2MockPage() {
                   x
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-5 sm:p-8">
+              <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-8">
                 <AnalysisResultPanel
                   result={analysisPanelResult}
                   loading={false}

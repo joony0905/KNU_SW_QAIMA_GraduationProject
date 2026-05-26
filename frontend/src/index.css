@@ -530,6 +530,7 @@ button:focus-visible {
   }
 
   .qaima-mobile-safe-panel,
+  .qaima-analysis-report,
   .qaima-feature2-report,
   .qaima-portfolio-report {
     width: 100% !important;
@@ -538,12 +539,14 @@ button:focus-visible {
   }
 
   .qaima-mobile-safe-panel > *,
+  .qaima-analysis-report > *,
   .qaima-feature2-report > *,
   .qaima-portfolio-report > * {
     min-width: 0;
   }
 
   .qaima-mobile-safe-panel *,
+  .qaima-analysis-report *,
   .qaima-feature2-report *,
   .qaima-portfolio-report * {
     box-sizing: border-box;
@@ -552,6 +555,7 @@ button:focus-visible {
   }
 
   .qaima-mobile-safe-panel .overflow-x-auto,
+  .qaima-analysis-report .overflow-x-auto,
   .qaima-feature2-report .overflow-x-auto,
   .qaima-portfolio-report .overflow-x-auto {
     max-width: 100%;
@@ -560,6 +564,7 @@ button:focus-visible {
   }
 
   .qaima-mobile-safe-panel svg,
+  .qaima-analysis-report svg,
   .qaima-feature2-report svg,
   .qaima-portfolio-report svg {
     display: block;

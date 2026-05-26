@@ -388,15 +388,15 @@ export default function AnalysisResultPanel({
   // --- 래퍼 클래스 ---
   const wrapperClass = isPanel
     ? result
-      ? "w-full bg-bg-sunk rounded-2xl border-2 border-line flex flex-col items-center py-6 sm:py-8 gap-4"
-      : "w-full bg-bg-sunk rounded-2xl border-2 border-line flex flex-col items-center justify-center py-[15rem] sm:py-[16rem] md:py-[17rem]"
-    : "w-full bg-bg-sunk rounded-2xl py-8 sm:py-10 flex flex-col items-center gap-4 mt-2";
+      ? "w-full min-w-0 overflow-hidden bg-bg-sunk rounded-2xl border-2 border-line flex flex-col items-center py-6 sm:py-8 gap-4"
+      : "w-full min-w-0 overflow-hidden bg-bg-sunk rounded-2xl border-2 border-line flex flex-col items-center justify-center py-[15rem] sm:py-[16rem] md:py-[17rem]"
+    : "w-full min-w-0 overflow-hidden bg-bg-sunk rounded-2xl py-8 sm:py-10 flex flex-col items-center gap-4 mt-2";
 
   return (
     <div className={wrapperClass}>
       {/* 상단 헤더 바: 다운로드/확대 버튼 — result 있을 때만. data-pdf-exclude: PDF 캡처 시 제외 */}
       {result && (
-        <div data-pdf-exclude="true" className="w-full max-w-4xl px-3 sm:w-[90%] sm:px-0 flex items-center justify-end">
+        <div data-pdf-exclude="true" className="w-full min-w-0 max-w-4xl px-3 sm:w-[90%] sm:px-0 flex items-center justify-end">
           <div className="flex items-center gap-2">
             <div className="relative group">
               <button
@@ -456,7 +456,7 @@ export default function AnalysisResultPanel({
         <div
           key={reportAnimationKey}
           ref={reportRef}
-          className={`${isFeature2Report ? "qaima-feature2-report " : ""}qaima-report-enter qaima-scroll-stagger w-full max-w-4xl sm:w-[90%] bg-surface rounded-2xl shadow-sm border border-line p-3 sm:p-6 flex flex-col gap-4 overflow-hidden`}
+          className={`qaima-analysis-report ${isFeature2Report ? "qaima-feature2-report " : ""}qaima-report-enter qaima-scroll-stagger w-full min-w-0 max-w-4xl sm:w-[90%] bg-surface rounded-2xl shadow-sm border border-line p-3 sm:p-6 flex flex-col gap-4 overflow-hidden`}
         >
           <ReportHeader meta={reportMeta} />
 
@@ -802,7 +802,7 @@ export default function AnalysisResultPanel({
                   <DictTerm term="공매도">{t("macroSeries.shortSelling")}</DictTerm> {t("shortSelling.titleSuffix")}
                 </h3>
               </div>
-              <div className="overflow-x-auto mt-2">
+              <div className="mt-2 max-w-full overflow-x-auto">
                 <table className="min-w-full text-xs sm:text-sm text-ink-2 border border-line">
                   <thead className="bg-bg-sunk text-ink">
                     <tr>

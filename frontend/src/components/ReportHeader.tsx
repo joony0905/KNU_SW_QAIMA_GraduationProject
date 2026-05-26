@@ -58,12 +58,12 @@ export default function ReportHeader({ meta }: { meta?: ReportHeaderMeta | null 
   ].filter(([, value]) => value !== null);
 
   return (
-    <div className="rounded-xl border border-line bg-bg-sunk px-4 py-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
+    <div className="min-w-0 overflow-hidden rounded-xl border border-line bg-bg-sunk px-3 py-3 sm:px-4">
+      <div className="grid min-w-0 grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
         {rows.map(([label, value]) => (
-          <div key={label} className="flex items-start justify-between gap-3 text-xs sm:text-sm">
+          <div key={label} className="flex min-w-0 flex-col items-start gap-1 text-xs sm:flex-row sm:justify-between sm:gap-3 sm:text-sm">
             <span className="shrink-0 font-medium text-ink-3">{label}</span>
-            <span className="min-w-0 text-right font-semibold text-ink break-words">{value}</span>
+            <span className="min-w-0 max-w-full break-words text-left font-semibold text-ink sm:text-right">{value}</span>
           </div>
         ))}
       </div>
