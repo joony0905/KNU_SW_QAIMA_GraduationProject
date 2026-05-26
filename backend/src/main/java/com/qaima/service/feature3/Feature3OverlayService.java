@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -65,6 +66,9 @@ public class Feature3OverlayService {
     private final IndustryIndexService industryIndexService;
     private final PeerClusterService peerClusterService;
     private final NewsSentimentService newsSentimentService;
+
+    @Value("${feature2.news.limit:15}")
+    private int newsFetchLimit;
 
     public Mono<Feature3OverlayCachePreviewResponseDto> preview(Feature3OverlayCachePreviewRequestDto req) {
         List<String> overlays = req.selectedOverlays() != null ? req.selectedOverlays() : List.of();
@@ -630,7 +634,7 @@ public class Feature3OverlayService {
                 overlayTitle("news", holding),
                 newsList.isEmpty()
                         ? "뉴스 데이터가 부족합니다."
-                        : "최근 뉴스 최대 30개의 Feature2 news sentiment 데이터를 core risk와 분리된 뉴스 흐름 참고 정보로 표시합니다.",
+                        : "최근 뉴스 최대 " + resolvedNewsFetchLimit() + "개의 Feature2 news sentiment 데이터를 core risk와 분리된 뉴스 흐름 참고 정보로 표시합니다.",
                 severity,
                 "FEATURE2_NEWS",
                 cacheStatus,
@@ -646,6 +650,10 @@ public class Feature3OverlayService {
                 cacheStatus
         );
         return new OverlayBundle(List.of(card), List.of(row), List.of(exposure(card, row)));
+    }
+
+    private int resolvedNewsFetchLimit() {
+        return Math.max(1, Math.min(newsFetchLimit, 30));
     }
 
     private Mono<SourceCacheInspection> inspectFeature1MetricsCache(String stockCode) {
