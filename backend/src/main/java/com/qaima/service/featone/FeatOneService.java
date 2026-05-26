@@ -48,6 +48,7 @@ import java.math.RoundingMode;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -73,6 +74,7 @@ public class FeatOneService {
     private static final Logger log = LoggerFactory.getLogger(FeatOneService.class);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final String KRX_MARKET = "KRX";
+    private static final LocalTime DAILY_CANDLE_CONFIRM_AFTER = LocalTime.of(16, 0);
 
     private static final int DEFAULT_FINANCIAL_LIMIT = 12;
     private static final String SCHEMA_VERSION = "0.1"; //network에서 0.1로 떨어지면 백엔드 오류
@@ -234,8 +236,16 @@ public class FeatOneService {
                                             .map(dto -> toPriceOhlcvEntity(stock, freq, dto))
                                             .collect(Collectors.toList());
 
+                                    List<PriceOhlcv> persistable = entities.stream()
+                                            .filter(this::isPersistableDailyCandle)
+                                            .toList();
+                                    if (persistable.size() != entities.size()) {
+                                        log.info("[FeatOneService][candles] skip persisting unconfirmed daily candle. stockCode={}, freq={}, fetchedSize={}, persistableSize={}",
+                                                stockCode, freq, entities.size(), persistable.size());
+                                    }
+
                                     List<PriceOhlcv> merged = mergeCandles(existing, entities);
-                                    List<PriceOhlcv> missingOnly = filterMissingCandles(existing, entities);
+                                    List<PriceOhlcv> missingOnly = filterMissingCandles(existing, persistable);
 
                                     if (missingOnly.isEmpty()) {
                                         log.info("[FeatOneService][candles] external returned only existing rows. stockCode={}, freq={}, fetchedSize={}",
@@ -246,7 +256,7 @@ public class FeatOneService {
                                     List<PriceOhlcv> saved = priceOhlcvRepository.saveAll(missingOnly);
                                     log.info("[FeatOneService][candles] persisted missing rows only. stockCode={}, freq={}, existingSize={}, fetchedSize={}, insertedSize={}",
                                             stockCode, freq, existing.size(), entities.size(), saved.size());
-                                    return mergeCandles(existing, saved);
+                                    return merged;
                                 })
                                 .subscribeOn(Schedulers.boundedElastic());
                     });
@@ -325,6 +335,20 @@ public class FeatOneService {
         }
 
         return id.getStockId() + "|" + id.getFreq() + "|" + id.getTs().toInstant();
+    }
+
+    private boolean isPersistableDailyCandle(PriceOhlcv entity) {
+        if (entity == null || entity.getId() == null || entity.getId().getFreq() != Freq.ONE_D) {
+            return true;
+        }
+
+        LocalDate tradingDate = entity.getId().getTs().atZoneSameInstant(KST).toLocalDate();
+        ZonedDateTime now = ZonedDateTime.now(KST);
+        if (!tradingDate.equals(now.toLocalDate())) {
+            return true;
+        }
+
+        return !now.toLocalTime().isBefore(DAILY_CANDLE_CONFIRM_AFTER);
     }
 
     private PriceOhlcv toPriceOhlcvEntity(Stock stock, Freq reqFreq, PriceOhlcvDto dto) {

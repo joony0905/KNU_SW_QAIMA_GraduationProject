@@ -7,8 +7,9 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, time as datetime_time, timedelta
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 try:
     from dotenv import load_dotenv
@@ -67,6 +68,11 @@ DEFAULT_LIMIT = int(os.getenv("PRICE_OHLCV_LIMIT", "0"))
 DEFAULT_MAX_DAILY_RANGE_DAYS = int(os.getenv("KIS_MAX_DAILY_RANGE_DAYS", "100"))
 DEFAULT_MIN_INTERVAL_MS = int(os.getenv("BOOTSTRAP_MIN_INTERVAL_MS", "300"))
 DEFAULT_RATE_LIMIT_BACKOFF_SEC = int(os.getenv("BOOTSTRAP_RATE_LIMIT_BACKOFF_SEC", "30"))
+KST = ZoneInfo("Asia/Seoul")
+DAILY_CANDLE_CONFIRM_AFTER = datetime_time(
+    int(os.getenv("PRICE_OHLCV_CONFIRM_AFTER_HOUR", "16")),
+    int(os.getenv("PRICE_OHLCV_CONFIRM_AFTER_MINUTE", "0")),
+)
 
 
 # ============================================================
@@ -530,6 +536,10 @@ class PriceOhlcvBootstrapRepository:
         if not rows:
             return 0
 
+        rows = [r for r in rows if is_persistable_daily_row(r, freq)]
+        if not rows:
+            return 0
+
         sql = """
         INSERT INTO price_ohlcv(
             stock_id,
@@ -573,6 +583,17 @@ class PriceOhlcvBootstrapRepository:
             return cur.rowcount
         finally:
             cur.close()
+
+
+def is_persistable_daily_row(row: CandleRow, freq: int = DEFAULT_FREQ_ONE_D) -> bool:
+    if row is None or freq != DEFAULT_FREQ_ONE_D:
+        return True
+
+    now = datetime.now(KST)
+    if row.trade_date != now.date():
+        return True
+
+    return now.time() >= DAILY_CANDLE_CONFIRM_AFTER
 
 
 # ============================================================

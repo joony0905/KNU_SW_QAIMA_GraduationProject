@@ -18,6 +18,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -34,6 +35,7 @@ import java.util.Comparator;
 public class CandleLoadService {
 
     private static final String KRX_MARKET = "KRX";
+    private static final LocalTime DAILY_CANDLE_CONFIRM_AFTER = LocalTime.of(16, 0);
 
     private final PriceOhlcvRepository priceOhlcvRepository;
     private final StockClient stockClient;
@@ -193,7 +195,15 @@ public class CandleLoadService {
                             .collect(Collectors.toList());
 
                     ZoneId tradingZone = CandleTimePolicy.tradingZone(stock);
-                    List<PriceOhlcv> missingOnly = filterMissingCandles(existing, entities, tradingZone);
+                    List<PriceOhlcv> persistable = entities.stream()
+                            .filter(entity -> isPersistableDailyCandle(entity, tradingZone))
+                            .toList();
+                    if (persistable.size() != entities.size()) {
+                        log.info("[CANDLE] skip persisting unconfirmed daily candle. stockCode={}, freq={}, fetchedSize={}, persistableSize={}",
+                                stock.getStockCode(), freq, entities.size(), persistable.size());
+                    }
+
+                    List<PriceOhlcv> missingOnly = filterMissingCandles(existing, persistable, tradingZone);
                     if (missingOnly.isEmpty()) {
                         log.info("[CANDLE] external returned only existing rows. stockCode={}, freq={}, fetchedSize={}",
                                 stock.getStockCode(), freq, entities.size());
@@ -203,7 +213,7 @@ public class CandleLoadService {
                     List<PriceOhlcv> saved = priceOhlcvRepository.saveAll(missingOnly);
                     log.info("[CANDLE] persisted missing rows only. stockCode={}, freq={}, existingSize={}, fetchedSize={}, insertedSize={}",
                             stock.getStockCode(), freq, existing == null ? 0 : existing.size(), entities.size(), saved.size());
-                    return mergeCandles(existing, saved, tradingZone);
+                    return mergeCandles(existing, entities, tradingZone);
                 })
                 .subscribeOn(Schedulers.boundedElastic());
     }
@@ -355,6 +365,21 @@ public class CandleLoadService {
         }
 
         return id.getStockId() + "|" + id.getFreq() + "|" + id.getTs().toInstant();
+    }
+
+    private boolean isPersistableDailyCandle(PriceOhlcv entity, ZoneId tradingZone) {
+        if (entity == null || entity.getId() == null || entity.getId().getFreq() != Freq.ONE_D) {
+            return true;
+        }
+
+        ZoneId zone = tradingZone == null ? CandleTimePolicy.DEFAULT_TRADING_ZONE : tradingZone;
+        LocalDate tradingDate = CandleTimePolicy.tradingDate(entity, zone);
+        ZonedDateTime now = ZonedDateTime.now(zone);
+        if (tradingDate == null || !tradingDate.equals(now.toLocalDate())) {
+            return true;
+        }
+
+        return !now.toLocalTime().isBefore(DAILY_CANDLE_CONFIRM_AFTER);
     }
 
     /**

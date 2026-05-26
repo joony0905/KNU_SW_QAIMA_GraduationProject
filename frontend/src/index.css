@@ -521,6 +521,43 @@ button:focus-visible {
   line-height: 1.55;
 }
 
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .qaima-mobile-safe-panel,
+  .qaima-feature2-report,
+  .qaima-portfolio-report {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0;
+  }
+
+  .qaima-mobile-safe-panel > *,
+  .qaima-feature2-report > *,
+  .qaima-portfolio-report > * {
+    min-width: 0;
+  }
+
+  .qaima-mobile-safe-panel .overflow-x-auto,
+  .qaima-feature2-report .overflow-x-auto,
+  .qaima-portfolio-report .overflow-x-auto {
+    max-width: 100%;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .qaima-mobile-safe-panel svg,
+  .qaima-feature2-report svg,
+  .qaima-portfolio-report svg {
+    display: block;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .qaima-report-enter,
   .qaima-report-stagger > *,
