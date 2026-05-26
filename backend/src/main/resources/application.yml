@@ -15,6 +15,15 @@ finra:
     daily-cron: "0 0 9 * * *"
     lookback-days: 7
 
+krx:
+  data:
+    base-url: "https://data.krx.co.kr"
+  short-selling:
+    sync:
+      enabled: true
+      daily-cron: "0 30 18 * * MON-FRI"
+      lookback-days: 5
+
 sec:
   edgar:
     base-url: "https://www.sec.gov"
