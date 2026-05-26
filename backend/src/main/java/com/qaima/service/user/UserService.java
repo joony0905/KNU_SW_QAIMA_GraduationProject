@@ -1,6 +1,7 @@
 package com.qaima.service.user;
 
 import com.qaima.common.Blocking;
+import com.qaima.domain.InvestmentLevel;
 import com.qaima.domain.User;
 import com.qaima.dto.user.SocialProfileCompleteRequestDto;
 import com.qaima.dto.user.UserProfileUpdateRequestDto;
@@ -53,10 +54,19 @@ public class UserService {
                     String nextExperience = trimToNull(requestDto.getExperience());
                     if (nextExperience != null) {
                         user.setExperience(nextExperience);
+                        InvestmentLevel level = InvestmentLevel.fromDisplayName(nextExperience);
+                        if (level != null) {
+                            user.setInvestmentLevel(level);
+                        }
                     }
 
                     if (requestDto.getGlossaryHover() != null) {
                         user.setGlossaryHover(requestDto.getGlossaryHover());
+                    }
+
+                    if (requestDto.getInvestmentLevel() != null) {
+                        user.setInvestmentLevel(requestDto.getInvestmentLevel());
+                        user.setExperience(requestDto.getInvestmentLevel().getDisplayName());
                     }
 
                     return userRepository.save(user);
