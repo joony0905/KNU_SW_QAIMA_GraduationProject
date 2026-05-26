@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Feature2TrendSeries } from "../types/feature2";
 
 type TrendColor = "zinc" | "rose" | "blue" | "emerald" | "amber" | "violet";
@@ -106,6 +107,7 @@ export function MultiLineTrendChart({
   series: Feature2TrendSeries[];
   height?: number;
 }) {
+  const { t } = useTranslation("analysisPanel");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const validSeries = useMemo(
     () => series
@@ -144,7 +146,7 @@ export function MultiLineTrendChart({
   if (!chart) {
     return (
       <div className="rounded-lg border border-line bg-bg-sunk px-4 py-8 text-sm text-ink-3">
-        추세 데이터가 없습니다.
+        {t("external.empty.trends")}
       </div>
     );
   }

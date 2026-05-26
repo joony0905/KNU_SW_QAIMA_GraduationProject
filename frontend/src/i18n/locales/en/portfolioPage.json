@@ -10,11 +10,14 @@
     "exchangeRateLoading": "Loading exchange rate",
     "exchangeRateNone": "No exchange rate",
     "exchangeRateFailed": "Failed to load exchange rate",
+    "exchangeRateValue": "FX {{value}} · {{asOf}}",
     "centerLabel": "Total Value",
     "emptyTitle": "No holdings to display",
     "emptyBodyLoggedIn": "Enter name, quantity, and avg price to reflect instantly.",
     "emptyBodyGuest": "Log in and enter stocks to see allocation."
   },
+  "chartAria": { "compositionPie": "{{label}} allocation pie chart" },
+  "reportMeta": { "subjectDetail": "{{name}} and {{count}} more holdings" },
   "manager": {
     "subtitle": "Add or edit your holdings",
     "save": "Save",

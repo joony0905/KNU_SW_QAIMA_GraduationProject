@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePdfExportReveal } from "../contexts/PdfExportContext";
 import type { PriceFlowSummary } from "../types/analysisPanel";
 import { formatKstDateTimeDisplay } from "../utils/kst";
@@ -22,8 +23,11 @@ const fmtPercent = (value: number | null | undefined) => {
   return `${value.toFixed(2)}%`;
 };
 
-const fmtVolume = (value: number | null | undefined) => {
+const isEnglish = (language?: string) => (language ?? "").toLowerCase().startsWith("en");
+
+const fmtVolume = (value: number | null | undefined, language?: string) => {
   if (value == null || !Number.isFinite(value)) return "-";
+  if (isEnglish(language)) return `${value.toLocaleString("en-US")} shares`;
   const abs = Math.abs(value);
   if (abs >= 1e8) return `${(value / 1e8).toFixed(2)}억주`;
   if (abs >= 1e4) return `${(value / 1e4).toFixed(1)}만주`;
@@ -31,6 +35,7 @@ const fmtVolume = (value: number | null | undefined) => {
 };
 
 export default function PriceFlowBars({ summary }: Props) {
+  const { t, i18n } = useTranslation("analysisPanel");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [hasAnimated, setHasAnimated] = useState(false);
   const forceReveal = usePdfExportReveal();
@@ -108,11 +113,11 @@ export default function PriceFlowBars({ summary }: Props) {
   return (
     <div ref={rootRef}>
       <div className="flex flex-col gap-1">
-        <h3 className="text-base sm:text-lg font-semibold text-ink">가격 흐름 요약</h3>
-        <p className="text-sm text-ink-3">분석 기간 내 종가 변화 · 가격 범위 · 평균 거래량</p>
+        <h3 className="text-base sm:text-lg font-semibold text-ink">{t("priceFlow.title")}</h3>
+        <p className="text-sm text-ink-3">{t("priceFlow.subtitle")}</p>
         <div className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm text-zinc-700">
-          <div>시작일: {formatKstDateTimeDisplay(summary.from) || "-"}</div>
-          <div>종료일: {formatKstDateTimeDisplay(summary.to) || "-"}</div>
+          <div>{t("priceFlow.startDate")}: {formatKstDateTimeDisplay(summary.from) || "-"}</div>
+          <div>{t("priceFlow.endDate")}: {formatKstDateTimeDisplay(summary.to) || "-"}</div>
         </div>
       </div>
 
@@ -127,23 +132,23 @@ export default function PriceFlowBars({ summary }: Props) {
         >
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: returnFillColor }} />
-            <h4 className="text-sm font-semibold text-ink">수익률 흐름</h4>
+            <h4 className="text-sm font-semibold text-ink">{t("priceFlow.returnFlow")}</h4>
           </div>
           <div className="mt-3 flex items-end justify-between gap-3">
             <div>
-              <p className="text-xs text-ink-3">시작 종가</p>
+              <p className="text-xs text-ink-3">{t("priceFlow.startClose")}</p>
               <p className="text-sm font-medium text-ink">{fmtNumber(summary.startClose)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-ink-3">마지막 종가</p>
+              <p className="text-xs text-ink-3">{t("priceFlow.endClose")}</p>
               <p className="text-sm font-medium text-ink">{fmtNumber(summary.endClose)}</p>
             </div>
           </div>
           <div className="mt-4">
             <div className="flex items-center justify-between text-xs text-ink-3">
-              <span>하락</span>
-              <span>중립</span>
-              <span>상승</span>
+              <span>{t("priceFlow.down")}</span>
+              <span>{t("priceFlow.neutral")}</span>
+              <span>{t("priceFlow.up")}</span>
             </div>
             <div className="relative mt-1 h-3 rounded-full bg-line overflow-hidden">
               <div className="absolute inset-y-0 left-1/2 w-px bg-line-strong" />
@@ -179,15 +184,15 @@ export default function PriceFlowBars({ summary }: Props) {
         >
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: RANGE_COLOR }} />
-            <h4 className="text-sm font-semibold text-ink">가격 범위</h4>
+            <h4 className="text-sm font-semibold text-ink">{t("priceFlow.priceRange")}</h4>
           </div>
           <div className="mt-3 flex items-end justify-between gap-3">
             <div>
-              <p className="text-xs text-ink-3">최저가</p>
+              <p className="text-xs text-ink-3">{t("priceFlow.low")}</p>
               <p className="text-sm font-medium text-ink">{fmtNumber(summary.low)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-ink-3">최고가</p>
+              <p className="text-xs text-ink-3">{t("priceFlow.high")}</p>
               <p className="text-sm font-medium text-ink">{fmtNumber(summary.high)}</p>
             </div>
           </div>
@@ -208,7 +213,7 @@ export default function PriceFlowBars({ summary }: Props) {
                       left: `${animated ? startMarker : 0}%`,
                       transition: "left 950ms cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
-                    title="시작 종가"
+                    title={t("priceFlow.startClose")}
                   />
                 )}
                 {endMarker != null && (
@@ -218,17 +223,17 @@ export default function PriceFlowBars({ summary }: Props) {
                       left: `${animated ? endMarker : 0}%`,
                       transition: "left 1000ms cubic-bezier(0.22, 1, 0.36, 1)",
                     }}
-                    title="마지막 종가"
+                    title={t("priceFlow.endClose")}
                   />
                 )}
               </div>
             </div>
             <div className="mt-2 flex items-center justify-between text-xs text-ink-3">
-              <span>시작 종가</span>
-              <span>마지막 종가</span>
+              <span>{t("priceFlow.startClose")}</span>
+              <span>{t("priceFlow.endClose")}</span>
             </div>
             <p className="mt-2 text-sm font-semibold text-emerald-700">
-              변동폭 {fmtPercent(rangePct)}
+              {t("priceFlow.rangePct", { value: fmtPercent(rangePct) })}
             </p>
           </div>
         </div>
@@ -244,11 +249,11 @@ export default function PriceFlowBars({ summary }: Props) {
         >
           <div className="flex items-center gap-2">
             <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: VOLUME_COLOR }} />
-            <h4 className="text-sm font-semibold text-ink">거래량 강도</h4>
+            <h4 className="text-sm font-semibold text-ink">{t("priceFlow.volumeStrength")}</h4>
           </div>
           <div className="mt-3">
-            <p className="text-xs text-ink-3">평균 거래량</p>
-            <p className="text-sm font-medium text-ink">{fmtVolume(summary.avgVolume)}</p>
+            <p className="text-xs text-ink-3">{t("priceFlow.avgVolume")}</p>
+            <p className="text-sm font-medium text-ink">{fmtVolume(summary.avgVolume, i18n.language)}</p>
           </div>
           <div className="mt-4">
             <div className="h-3 rounded-full bg-line overflow-hidden">
@@ -262,11 +267,11 @@ export default function PriceFlowBars({ summary }: Props) {
               />
             </div>
             <div className="mt-2 flex items-center justify-between text-xs text-ink-3">
-              <span>낮음</span>
-              <span>활발</span>
+              <span>{t("priceFlow.lowActivity")}</span>
+              <span>{t("priceFlow.active")}</span>
             </div>
             <p className="mt-2 text-sm font-semibold text-violet-700">
-              고가-저가 범위 {fmtNumber(rangeSpan)}
+              {t("priceFlow.highLowRange", { value: fmtNumber(rangeSpan) })}
             </p>
           </div>
         </div>

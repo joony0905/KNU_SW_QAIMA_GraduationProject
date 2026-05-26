@@ -536,6 +536,11 @@ button:focus-visible {
     width: 100% !important;
     max-width: 100% !important;
     min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .qaima-feature2-report {
+    max-width: calc(100vw - 1.5rem) !important;
   }
 
   .qaima-mobile-safe-panel > *,

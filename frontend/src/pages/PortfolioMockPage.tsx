@@ -726,6 +726,7 @@ export default function PortfolioMockPage() {
   const [extraOptions, setExtraOptions] = useState<Record<string, boolean>>(
     Object.fromEntries(EXTRA_OPTIONS.map((o) => [o.key, false])),
   );
+  const [activeExtraInfoKey, setActiveExtraInfoKey] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<PortfolioAnalyzeResponse | null>(null);
   const [analysisTab, setAnalysisTab] = useState<"BASIC" | "ADVANCED">("BASIC");
   const [overlayPreview, setOverlayPreview] = useState<Feature3OverlayCachePreviewResponse | null>(null);
@@ -745,11 +746,18 @@ export default function PortfolioMockPage() {
   const portfolioReportRef = useRef<HTMLDivElement | null>(null);
   const riskProfileTypeLabel = (profileType?: string | null) =>
     profileType ? t(`riskProfileType.${profileType}` as `riskProfileType.${string}`, profileType) : "-";
+  const portfolioSubjectDetail = analysisResult
+    ? t("reportMeta.subjectDetail", {
+        name: rows[0]?.name || analysisResult.currentPortfolio.weights[0]?.companyName || t("result.subjectLabel"),
+        count: Math.max(0, rows.length - 1),
+      })
+    : "";
+  const pieChartLabel = (label: string) => t("chartAria.compositionPie", { label });
   const reportMeta = analysisResult
     ? {
         featureType: "FEATURE3" as const,
         subjectLabel: t("result.subjectLabel"),
-        subjectDetail: `${rows[0]?.name || analysisResult.currentPortfolio.weights[0]?.companyName || t("result.subjectLabel")} 외 ${Math.max(0, rows.length - 1)}개 종목`,
+        subjectDetail: portfolioSubjectDetail,
         generatedAt: new Date().toISOString(),
         analysisModel: llmVendor,
         investLevel,
@@ -767,6 +775,7 @@ export default function PortfolioMockPage() {
   const toggleExtraOption = (key: string) => {
     setOverlayPreview(null);
     setOverlayCachePolicies({});
+    setActiveExtraInfoKey(null);
     setExtraOptions((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
@@ -1191,7 +1200,7 @@ export default function PortfolioMockPage() {
                     </p>
                     <p className="text-[11px] text-ink-4">
                       {exchangeRate
-                        ? `환율 ${exchangeRate.toLocaleString()} · ${usdKrwRate?.date ?? usdKrwRate?.source ?? ""}`
+                        ? t("assetRatio.exchangeRateValue", { value: exchangeRate.toLocaleString(), asOf: usdKrwRate?.date ?? usdKrwRate?.source ?? "" })
                         : exchangeRateError || t("assetRatio.exchangeRateLoading")}
                     </p>
                   </div>
@@ -1480,8 +1489,28 @@ export default function PortfolioMockPage() {
                         />
                         <span className="text-sm font-medium text-ink-2">{t(`analysisOptions.extraOption.${opt.key}.label` as `analysisOptions.extraOption.${string}.label`)}</span>
                         <div className="group relative flex-shrink-0">
-                          <Info size={14} className="transition-colors text-ink-4 group-hover:text-ink-3" />
-                          <div className="fixed left-3 right-3 top-20 z-[80] w-auto max-w-[calc(100vw-1.5rem)] p-2.5 text-xs rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity leading-relaxed bg-ink text-bg sm:absolute sm:left-5 sm:right-auto sm:top-0 sm:z-30 sm:w-64 sm:max-w-none">
+                          <button
+                            type="button"
+                            aria-label={t(`analysisOptions.extraOption.${opt.key}.label` as `analysisOptions.extraOption.${string}.label`)}
+                            aria-expanded={activeExtraInfoKey === opt.key}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setActiveExtraInfoKey((current) => (current === opt.key ? null : opt.key));
+                            }}
+                            onBlur={() => setActiveExtraInfoKey((current) => (current === opt.key ? null : current))}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-ink-4 transition-colors hover:bg-bg-sunk hover:text-ink-2 focus-visible:bg-bg-sunk focus-visible:text-ink-2"
+                          >
+                            <Info size={14} />
+                          </button>
+                          <div
+                            className={`fixed left-3 right-3 top-20 z-[160] w-auto max-w-[calc(100vw-1.5rem)] rounded-lg bg-ink p-2.5 text-xs leading-relaxed text-bg shadow-lg transition-opacity sm:absolute sm:left-5 sm:right-auto sm:top-0 sm:z-30 sm:w-64 sm:max-w-none ${
+                              activeExtraInfoKey === opt.key
+                                ? "opacity-100 pointer-events-auto"
+                                : "opacity-0 pointer-events-none group-hover:opacity-100"
+                            }`}
+                            onMouseDown={(event) => event.preventDefault()}
+                          >
                             {[0, 1].map((i) => (
                               <p key={i} className={i > 0 ? "mt-1" : ""}>{t(`analysisOptions.extraOption.${opt.key}.desc${i}` as `analysisOptions.extraOption.${string}.desc0`)}</p>
                             ))}
@@ -1959,14 +1988,14 @@ export default function PortfolioMockPage() {
                             {pdfExporting ? (
                               <SvgPortfolioPieChart
                                 weights={portfolio.weights}
-                                label={`${portfolio.label} 비중 차트`}
+                                label={pieChartLabel(portfolio.label)}
                                 className="w-20 h-20 flex-shrink-0"
                               />
                             ) : (
                               <div
                                 className="w-20 h-20 rounded-full border border-line flex-shrink-0"
                                 style={portfolioPieStyle(portfolio.weights)}
-                                aria-label={`${portfolio.label} 비중 차트`}
+                                aria-label={pieChartLabel(portfolio.label)}
                               />
                             )}
                             <div className="flex-1 min-w-0">
@@ -2049,14 +2078,14 @@ export default function PortfolioMockPage() {
                             {pdfExporting ? (
                               <SvgPortfolioPieChart
                                 weights={portfolio.weights}
-                                label={`${portfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
+                                label={pieChartLabel(portfolioLabel(portfolio.type, portfolio.label))}
                                 className="w-20 h-20 flex-shrink-0"
                               />
                             ) : (
                               <div
                                 className="w-20 h-20 rounded-full border border-line flex-shrink-0"
                                 style={portfolioPieStyle(portfolio.weights)}
-                                aria-label={`${portfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
+                                aria-label={pieChartLabel(portfolioLabel(portfolio.type, portfolio.label))}
                               />
                             )}
                             <div className="min-w-0 flex-1">
@@ -2125,17 +2154,17 @@ export default function PortfolioMockPage() {
 	                        </div>
 	                        <div className="mt-3 flex items-center gap-3">
 	                          {pdfExporting ? (
-	                            <SvgPortfolioPieChart
-	                              weights={theoreticalPortfolio.weights}
-	                              label={`${theoreticalBasicLabel} 구성비 파이차트`}
-	                              className="w-20 h-20 flex-shrink-0"
-	                            />
+	                              <SvgPortfolioPieChart
+	                                weights={theoreticalPortfolio.weights}
+	                                label={pieChartLabel(theoreticalBasicLabel)}
+	                                className="w-20 h-20 flex-shrink-0"
+	                              />
 	                          ) : (
 	                            <div
-	                              className="w-20 h-20 rounded-full border border-line flex-shrink-0"
-	                              style={portfolioPieStyle(theoreticalPortfolio.weights)}
-	                              aria-label={`${theoreticalBasicLabel} 구성비 파이차트`}
-	                            />
+	                                className="w-20 h-20 rounded-full border border-line flex-shrink-0"
+	                                style={portfolioPieStyle(theoreticalPortfolio.weights)}
+	                                aria-label={pieChartLabel(theoreticalBasicLabel)}
+	                              />
 	                          )}
 	                          <div className="min-w-0 flex-1">
 	                            <div className="grid grid-cols-3 gap-2 text-[10px] text-ink-4">
@@ -2186,14 +2215,28 @@ export default function PortfolioMockPage() {
                 const excludedCount = capm?.excludedAssetCount ?? 0;
                 const aiSummary = analysisResult.explain?.sections?.efficiencyAnalysis?.summary;
                 const plainSummary = aiSummary
-                  ?.replaceAll("CAPM", "시장 기준")
-                  .replaceAll("historical", "과거 흐름")
-                  .replaceAll("Historical", "과거 흐름")
-                  .replaceAll("blended expected return", "최종 기대 흐름")
-                  .replaceAll("blendedExpectedReturn", "최종 기대 흐름")
-                  .replaceAll("blended E[R]", "최종 기대 흐름")
-                  .replaceAll("E[R]", "기대 흐름")
-                  .replaceAll("SCL/SML", "시장 민감도 진단");
+                  ? (i18n.language.startsWith("en")
+                    ? aiSummary
+                      .replaceAll("CAPM", "market-based estimate")
+                      .replaceAll("historical", "historical trend")
+                      .replaceAll("Historical", "historical trend")
+                      .replaceAll("blended expected return", "final expected trend")
+                      .replaceAll("blendedExpectedReturn", "final expected trend")
+                      .replaceAll("blended E[R]", "final expected trend")
+                      .replaceAll("E[R]", "expected trend")
+                      .replaceAll("SCL/SML", "market-sensitivity diagnostic")
+                      .replaceAll("유사종목", "peer stocks")
+                      .replaceAll("유사 종목", "peer stocks")
+                    : aiSummary
+                      .replaceAll("CAPM", "시장 기준")
+                      .replaceAll("historical", "과거 흐름")
+                      .replaceAll("Historical", "과거 흐름")
+                      .replaceAll("blended expected return", "최종 기대 흐름")
+                      .replaceAll("blendedExpectedReturn", "최종 기대 흐름")
+                      .replaceAll("blended E[R]", "최종 기대 흐름")
+                      .replaceAll("E[R]", "기대 흐름")
+                      .replaceAll("SCL/SML", "시장 민감도 진단"))
+                  : null;
                 return (
                   <section className="rounded-2xl p-5 bg-surface border border-line shadow-card">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2437,14 +2480,14 @@ export default function PortfolioMockPage() {
                           {pdfExporting ? (
                             <SvgPortfolioPieChart
                               weights={portfolio.weights}
-                              label={`${portfolio.label} 구성비 파이차트`}
+                              label={pieChartLabel(t(`portfolioType.${portfolio.type}` as `portfolioType.${string}`, portfolio.label ?? portfolio.type))}
                               className="w-16 h-16 flex-shrink-0"
                             />
                           ) : (
                             <div
                               className="w-16 h-16 rounded-full border border-line flex-shrink-0"
                               style={portfolioPieStyle(portfolio.weights)}
-                              aria-label={`${portfolio.label} 구성비 파이차트`}
+                              aria-label={pieChartLabel(t(`portfolioType.${portfolio.type}` as `portfolioType.${string}`, portfolio.label ?? portfolio.type))}
                             />
                           )}
                           <div className="min-w-0">
@@ -3829,14 +3872,14 @@ export default function PortfolioMockPage() {
                                     {pdfExporting ? (
                                       <SvgPortfolioPieChart
                                         weights={portfolio.weights}
-                                        label={`${advancedPortfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
+                                        label={pieChartLabel(advancedPortfolioLabel(portfolio.type, portfolio.label))}
                                         className="w-20 h-20 flex-shrink-0"
                                       />
                                     ) : (
                                       <div
                                         className="w-20 h-20 rounded-full border border-line flex-shrink-0"
                                         style={portfolioPieStyle(portfolio.weights)}
-                                        aria-label={`${advancedPortfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
+                                        aria-label={pieChartLabel(advancedPortfolioLabel(portfolio.type, portfolio.label))}
                                       />
                                     )}
                                     <div className="min-w-0 w-full flex-1">
@@ -3907,14 +3950,14 @@ export default function PortfolioMockPage() {
                                   {pdfExporting ? (
                                     <SvgPortfolioPieChart
                                       weights={theoreticalUtility.weights}
-                                      label="이론적 효용접점 구성비 파이차트"
+                                      label={pieChartLabel(t("theoreticalAdvanced.title"))}
                                       className="w-20 h-20 flex-shrink-0"
                                     />
                                   ) : (
                                     <div
                                       className="w-20 h-20 rounded-full border border-line flex-shrink-0"
                                       style={portfolioPieStyle(theoreticalUtility.weights)}
-                                      aria-label="이론적 효용접점 구성비 파이차트"
+                                      aria-label={pieChartLabel(t("theoreticalAdvanced.title"))}
                                     />
                                   )}
                                   <div className="min-w-0 w-full flex-1">

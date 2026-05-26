@@ -110,24 +110,26 @@ const formatSignedPct = (value?: number | null) => {
   return `${sign}${(value * 100).toFixed(1)}%`;
 };
 
-const flowStatusText = (delta?: number | null) => {
-  if (delta == null || !Number.isFinite(delta)) return "잠금";
-  if (delta > 0.02) return "상승";
-  if (delta < -0.02) return "하락";
-  return "혼재";
+type FlowStatus = "LOCKED" | "UP" | "DOWN" | "MIXED";
+
+const flowStatusText = (delta?: number | null): FlowStatus => {
+  if (delta == null || !Number.isFinite(delta)) return "LOCKED";
+  if (delta > 0.02) return "UP";
+  if (delta < -0.02) return "DOWN";
+  return "MIXED";
 };
 
-const flowStatusClass = (status: string) => {
-  if (status === "상승") return "text-rise bg-rise-soft border-rise/30";
-  if (status === "하락") return "text-fall bg-fall-soft border-fall/30";
-  if (status === "혼재") return "text-ink-2 bg-bg-sunk border-line";
+const flowStatusClass = (status: FlowStatus) => {
+  if (status === "UP") return "text-rise bg-rise-soft border-rise/30";
+  if (status === "DOWN") return "text-fall bg-fall-soft border-fall/30";
+  if (status === "MIXED") return "text-ink-2 bg-bg-sunk border-line";
   return "text-ink-3 bg-bg-sunk border-line";
 };
 
-const flowStatusLabel = (status: string, t: (key: string) => string) => {
-  if (status === "상승") return t("external.peer.status.up");
-  if (status === "하락") return t("external.peer.status.down");
-  if (status === "혼재") return t("external.peer.status.mixed");
+const flowStatusLabel = (status: FlowStatus, t: (key: string) => string) => {
+  if (status === "UP") return t("external.peer.status.up");
+  if (status === "DOWN") return t("external.peer.status.down");
+  if (status === "MIXED") return t("external.peer.status.mixed");
   return t("external.peer.status.locked");
 };
 
@@ -298,7 +300,7 @@ export default function Feature2ExternalFactorPanel({
         />
       </div>
       <div className="rounded-lg border border-line bg-surface px-3 py-3">
-        <p className="text-xs font-semibold text-ink-2">금리 환경</p>
+        <p className="text-xs font-semibold text-ink-2">{t("external.summary.rateEnvironment")}</p>
         <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 text-xs sm:grid-cols-2">
           {[...krBondYields, ...usBondYields].slice(0, 4).map((item) => (
             <div key={item.instrumentCode} className="flex items-center justify-between gap-2">
@@ -314,7 +316,7 @@ export default function Feature2ExternalFactorPanel({
         </div>
       </div>
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-semibold text-ink-2">간단 추세</p>
+        <p className="text-xs font-semibold text-ink-2">{t("external.summary.simpleTrend")}</p>
         {summaryTrendSeries.slice(0, 7).map((series, index) => (
           <MiniTrendRow
             key={series.key}
@@ -624,8 +626,10 @@ export default function Feature2ExternalFactorPanel({
   return (
     <section className="qaima-mobile-safe-panel w-full min-w-0 flex-1 overflow-hidden bg-surface rounded-2xl border border-line shadow-card px-3 py-4 sm:px-4 flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h3 className="text-ink text-lg font-semibold">외부요인 패널</h3>
-        <p className="text-xs text-ink-3 truncate">{stockName || "선택 종목"} 기준</p>
+        <h3 className="text-ink text-lg font-semibold">{t("external.panel.title")}</h3>
+        <p className="text-xs text-ink-3 truncate">
+          {t("external.panel.basedOn", { name: stockName || t("external.panel.subjectFallback") })}
+        </p>
       </div>
       <div className="grid grid-cols-3 gap-1.5 min-w-0">
         {tabs.map((tab) => (
@@ -660,7 +664,7 @@ function PeerFlowSummaryCard({
 }: {
   t: (key: string, options?: Record<string, unknown>) => string;
   locked: boolean;
-  peerStatus: string;
+  peerStatus: FlowStatus;
   peerDelta: number | null;
   anchorDelta: number | null;
   anchorVsPeer: number | null;

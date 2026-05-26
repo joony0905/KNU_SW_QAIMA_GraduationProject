@@ -1006,8 +1006,8 @@ export default function Feature2MockPage() {
   }, [mainStock.symbol]);
 
   return (
-    <div className="min-h-screen bg-bg md:ml-[84px]">
-      <div className="qaima-stagger max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
+    <div className="min-h-screen w-full min-w-0 overflow-x-hidden bg-bg md:ml-[84px]">
+      <div className="qaima-stagger mx-auto flex w-full min-w-0 max-w-full flex-col gap-4 overflow-x-hidden px-3 py-4 sm:max-w-3xl sm:gap-6 sm:px-4 sm:py-6 lg:max-w-5xl lg:px-6 xl:max-w-6xl 2xl:max-w-7xl">
         <header className="flex items-center justify-between">
           <div>
             <div className="text-xs font-medium text-ink-3 tracking-tight">

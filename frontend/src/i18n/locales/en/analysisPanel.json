@@ -125,6 +125,78 @@
     "risks": "Risks",
     "conclusion": "Conclusion"
   },
+  "priceFlow": {
+    "title": "Price flow summary",
+    "subtitle": "Close-price change · price range · average volume during the analysis period",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "returnFlow": "Return flow",
+    "startClose": "Start close",
+    "endClose": "Final close",
+    "down": "Down",
+    "neutral": "Neutral",
+    "up": "Up",
+    "priceRange": "Price range",
+    "low": "Low",
+    "high": "High",
+    "rangePct": "Range {{value}}",
+    "volumeStrength": "Volume strength",
+    "avgVolume": "Average volume",
+    "lowActivity": "Low",
+    "active": "Active",
+    "highLowRange": "High-low range {{value}}"
+  },
+  "relativeLine": {
+    "legend": {
+      "anchor": "Selected stock",
+      "industryIndex": "Industry index",
+      "peerCentroid": "Peer-group center line",
+      "peerBand": "Peer-group range (p20-p80)"
+    },
+    "summary": "The selected stock, related industry index, and peer-group average are rebased to 0% on the same base date. The shaded area shows the peer group's p20-p80 range; higher daily peer coverage is shown with stronger shading. Treat low-coverage segments with less confidence because the sample is thinner.",
+    "latestCoverage": "Latest coverage {{value}}",
+    "openInfo": "Open peer-group explanation",
+    "tooltip": {
+      "peerAverage": "Peer average"
+    },
+    "coverage": {
+      "label": "Coverage",
+      "peerCoverage": "Peer coverage",
+      "unknown": "Coverage unavailable",
+      "high": "High coverage",
+      "medium": "Medium coverage",
+      "low": "Low coverage"
+    },
+    "modal": {
+      "title": "Peer-group explanation",
+      "paragraph1": "The selected stock, related industry index, and peer-group average are rebased to 0% on the same base date. The shaded area shows the peer group's p20-p80 range; higher daily peer coverage is shown with stronger shading.",
+      "paragraph2": "Low coverage means fewer peer stocks were included on that date, so the band and center line should be treated as reference context.",
+      "currentValues": "Current point values",
+      "selectDate": "Select date",
+      "dateHelp": "Select a date to inspect the values at that point.",
+      "includedPeers": "Included peers",
+      "peerCount": "{{count}}",
+      "emptyPeers": "No included peer details are available."
+    },
+    "relation": {
+      "leader": "Leading",
+      "follower": "Lagging",
+      "coincident": "Coincident",
+      "neutral": "Neutral"
+    },
+    "adjustment": {
+      "industryAdjustedSimilar": "Similar on industry-adjusted basis",
+      "industryAdjustedCorr": "Industry-adjusted correlation",
+      "rawCorrBased": "Based on raw correlation"
+    },
+    "peer": {
+      "correlation": "Co-movement correlation",
+      "score": "Similarity score",
+      "lag": "Lag",
+      "lagDays": "{{value}} d",
+      "avgTurnover": "Average turnover"
+    }
+  },
   "notes": "Notes",
   "external": {
     "tabs": {
@@ -166,6 +238,15 @@
       "foreignAccum": "Foreign accumulated",
       "institutionAccum": "Institution accumulated",
       "combined": "Foreign + Institution"
+    },
+    "summary": {
+      "rateEnvironment": "Rate environment",
+      "simpleTrend": "Simple trend"
+    },
+    "panel": {
+      "title": "External factors",
+      "subjectFallback": "Selected stock",
+      "basedOn": "{{name}} basis"
     },
     "macro": {
       "fxAsOf": "FX as of",

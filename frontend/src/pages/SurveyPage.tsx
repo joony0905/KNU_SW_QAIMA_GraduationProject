@@ -203,9 +203,9 @@ export default function SurveyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px]">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
-        <header className="w-full bg-surface border-b border-line px-4 py-3 flex items-center justify-between">
+    <div className="min-h-screen bg-bg overflow-x-hidden md:ml-[84px]">
+      <div className="w-full max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
+        <header className="w-full bg-surface border-b border-line px-3 sm:px-4 py-3 flex items-center justify-between gap-3">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-ink">
             {t("title")}
           </h1>
@@ -222,7 +222,7 @@ export default function SurveyPage() {
         <div ref={formTopRef} />
 
         {/* 안내 + 진행 현황 */}
-        <section className="w-full bg-surface rounded-2xl border border-line px-5 py-4 flex flex-col gap-3">
+        <section className="w-full bg-surface rounded-xl sm:rounded-2xl border border-line px-4 sm:px-5 py-4 flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <p className="text-sm text-ink-2">
               {t("progress.intro", { count: QUESTIONS.length })}
@@ -248,7 +248,7 @@ export default function SurveyPage() {
             <section
               key={q.id}
               id={`survey-q-${q.id}`}
-              className={`w-full bg-surface rounded-2xl border-2 transition-colors p-5 sm:p-6 flex flex-col gap-4 scroll-mt-6 ${
+              className={`w-full bg-surface rounded-xl sm:rounded-2xl border-2 transition-colors p-4 sm:p-6 flex flex-col gap-4 scroll-mt-6 ${
                 showWarning ? "border-danger" : "border-line"
               }`}
             >
@@ -277,7 +277,7 @@ export default function SurveyPage() {
                         key={idx}
                         type="button"
                         onClick={() => handleToggleMulti(q.id, idx)}
-                        className={`text-left px-4 py-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                        className={`min-w-0 text-left px-3 sm:px-4 py-3 rounded-xl border-2 transition-all flex items-center gap-2.5 sm:gap-3 ${
                           selected ? "border-accent bg-accent/10" : "border-line bg-surface hover:border-line-strong"
                         }`}
                       >
@@ -288,7 +288,7 @@ export default function SurveyPage() {
                             </svg>
                           )}
                         </span>
-                        <span className={`text-sm sm:text-base ${selected ? "text-ink font-medium" : "text-ink-2"}`}>{label}</span>
+                        <span className={`min-w-0 break-words text-sm sm:text-base ${selected ? "text-ink font-medium" : "text-ink-2"}`}>{label}</span>
                       </button>
                     );
                   }
@@ -299,14 +299,14 @@ export default function SurveyPage() {
                       key={idx}
                       type="button"
                       onClick={() => handleSelectSingle(q.id, idx)}
-                      className={`text-left px-4 py-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                      className={`min-w-0 text-left px-3 sm:px-4 py-3 rounded-xl border-2 transition-all flex items-center gap-2.5 sm:gap-3 ${
                         selected ? "border-accent bg-accent/10" : "border-line bg-surface hover:border-line-strong"
                       }`}
                     >
                       <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${selected ? "border-accent" : "border-line-strong"}`}>
                         {selected && <span className="w-2.5 h-2.5 rounded-full bg-accent" />}
                       </span>
-                      <span className={`text-sm sm:text-base ${selected ? "text-ink font-medium" : "text-ink-2"}`}>{label}</span>
+                      <span className={`min-w-0 break-words text-sm sm:text-base ${selected ? "text-ink font-medium" : "text-ink-2"}`}>{label}</span>
                     </button>
                   );
                 })}

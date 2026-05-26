@@ -289,7 +289,7 @@ export default function AnalysisResultPanel({
 }: AnalysisResultPanelProps) {
   const isPanel = layout === "panel";
   const pdfExporting = usePdfExportReveal();
-  const { t } = useTranslation("analysisPanel");
+  const { t, i18n } = useTranslation("analysisPanel");
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [macroChartMode, setMacroChartMode] = useState<MacroChartMode>("exchange");
   const macroChartOptions = useMemo(
@@ -298,7 +298,7 @@ export default function AnalysisResultPanel({
   );
   const explainSections = result?.explain?.sections ?? null;
   const overallExplain = result?.explain?.overall ?? null;
-  const warningNotes = expandWarningLines(mapWarningsToNotes(result?.warnings));
+  const warningNotes = expandWarningLines(mapWarningsToNotes(result?.warnings, i18n.language));
   const hasResult = Boolean(result);
   const isFeature2Report = Boolean(
     result?.metrics?.peerCluster

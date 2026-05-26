@@ -1,5 +1,6 @@
 import React, { memo, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import {
   createChart,
   AreaSeries,
@@ -86,24 +87,24 @@ const formatScore = (value?: number | null) => {
   return value.toFixed(3);
 };
 
-const formatRelationLabel = (relation?: PeerItem["relation"] | null) => {
+const formatRelationLabel = (relation: PeerItem["relation"] | null | undefined, t: (key: string) => string) => {
   switch (relation) {
     case "LEADER":
-      return "선행";
+      return t("relativeLine.relation.leader");
     case "FOLLOWER":
-      return "후행";
+      return t("relativeLine.relation.follower");
     case "COINCIDENT":
-      return "동행";
+      return t("relativeLine.relation.coincident");
     default:
-      return "중립";
+      return t("relativeLine.relation.neutral");
   }
 };
 
-const formatAdjustmentBasis = (peer: PeerItem) => {
-  if (peer.adjustedCorrValid && !peer.rawCorrValid) return "산업조정 기준 유사";
-  if (peer.adjustmentBasis === "SIMPLE_SUBTRACTION") return "산업조정 상관";
-  if (peer.adjustmentBasis === "FALLBACK_RAW") return "원시 상관 기준";
-  return "원시 상관 기준";
+const formatAdjustmentBasis = (peer: PeerItem, t: (key: string) => string) => {
+  if (peer.adjustedCorrValid && !peer.rawCorrValid) return t("relativeLine.adjustment.industryAdjustedSimilar");
+  if (peer.adjustmentBasis === "SIMPLE_SUBTRACTION") return t("relativeLine.adjustment.industryAdjustedCorr");
+  if (peer.adjustmentBasis === "FALLBACK_RAW") return t("relativeLine.adjustment.rawCorrBased");
+  return t("relativeLine.adjustment.rawCorrBased");
 };
 
 function RelativeLineWidget({
@@ -121,6 +122,7 @@ function RelativeLineWidget({
   onHoverDayKeyChange,
 }: Props) {
   const { theme } = useTheme();
+  const { t } = useTranslation("analysisPanel");
   // 차트 캔버스 배경/격자/축 색 — 다크모드 대응 (카드 surface 색과 맞춤)
   const chartTheme = useMemo(
     () =>
@@ -371,10 +373,10 @@ function RelativeLineWidget({
   const latestCoverage = latestCoveragePoint ? Number(latestCoveragePoint.value) : null;
 
   const coverageLabel = (coverage?: number | null) => {
-    if (coverage == null || !Number.isFinite(coverage)) return "반영률 확인 불가";
-    if (coverage >= 0.75) return "반영률 높음";
-    if (coverage >= 0.5) return "반영률 보통";
-    return "반영률 낮음";
+    if (coverage == null || !Number.isFinite(coverage)) return t("relativeLine.coverage.unknown");
+    if (coverage >= 0.75) return t("relativeLine.coverage.high");
+    if (coverage >= 0.5) return t("relativeLine.coverage.medium");
+    return t("relativeLine.coverage.low");
   };
 
   const formatCoverage = (coverage?: number | null) => {
@@ -696,22 +698,22 @@ function RelativeLineWidget({
         {showPeerOverlay && (
           <div className="flex items-center gap-2">
             <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#0f766e" }} />
-            <span>선택 종목</span>
+            <span>{t("relativeLine.legend.anchor")}</span>
           </div>
         )}
         <div className="flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: lineColor }} />
-          <span>산업 지수</span>
+          <span>{t("relativeLine.legend.industryIndex")}</span>
         </div>
         {showPeerOverlay && (
           <>
             <div className="flex items-center gap-2">
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#d97706" }} />
-              <span>유사 종목군 중심선</span>
+              <span>{t("relativeLine.legend.peerCentroid")}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "rgba(217, 119, 6, 0.35)" }} />
-              <span>유사 종목군 범위 (p20-p80)</span>
+              <span>{t("relativeLine.legend.peerBand")}</span>
             </div>
           </>
         )}
@@ -719,18 +721,16 @@ function RelativeLineWidget({
       {showPeerOverlay && (
         <div className="px-1 pb-3 flex items-start justify-between gap-3 text-[11px] sm:text-xs text-zinc-500">
           <p className="leading-relaxed">
-            선택 종목, 관련 산업지수, 유사 종목군 평균을 동일 기준일 0%로 환산해 비교합니다.
-            음영은 유사 종목군의 p20~p80 범위이며, 날짜별 유사 종목 반영률이 높을수록 진하게 표시됩니다.
-            낮은 반영률 구간은 표본이 줄어든 구간이라 참고 강도를 낮춰 해석해야 합니다.
+            {t("relativeLine.summary")}
           </p>
           <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
-            최근 반영률 {formatCoverage(latestCoverage)}
+            {t("relativeLine.latestCoverage", { value: formatCoverage(latestCoverage) })}
             {latestCoverageDayKey ? ` · ${latestCoverageDayKey}` : ""}
           </span>
           <div className="shrink-0">
             <button
               type="button"
-              aria-label="유사 종목군 설명 보기"
+              aria-label={t("relativeLine.openInfo")}
               aria-expanded={isInfoOpen}
               onClick={() => {
                 if (isInfoOpen) {
@@ -755,11 +755,11 @@ function RelativeLineWidget({
       {showPeerOverlay && tooltipDayKey && (
         <div className="pointer-events-none absolute right-4 top-20 z-10 rounded-lg border border-zinc-200 bg-white/95 px-3 py-2 text-[11px] text-zinc-600 shadow-sm">
           <p className="font-semibold text-zinc-900">{tooltipDayKey}</p>
-          <p>선택 종목 {formatPct(anchorDayMap.get(tooltipDayKey) ?? null)}</p>
-          <p>산업지수 {formatPct(dayMap.get(tooltipDayKey)?.value ?? null)}</p>
-          <p>유사 평균 {formatPct(centroidDayMap.get(tooltipDayKey) ?? null)}</p>
+          <p>{t("relativeLine.legend.anchor")} {formatPct(anchorDayMap.get(tooltipDayKey) ?? null)}</p>
+          <p>{t("relativeLine.legend.industryIndex")} {formatPct(dayMap.get(tooltipDayKey)?.value ?? null)}</p>
+          <p>{t("relativeLine.tooltip.peerAverage")} {formatPct(centroidDayMap.get(tooltipDayKey) ?? null)}</p>
           <p>p20 / p80 {formatPct(tooltipBand?.p20 ?? null)} / {formatPct(tooltipBand?.p80 ?? null)}</p>
-          <p>반영률 {formatCoverage(tooltipCoverage)} · {coverageLabel(tooltipCoverage)}</p>
+          <p>{t("relativeLine.coverage.label")} {formatCoverage(tooltipCoverage)} · {coverageLabel(tooltipCoverage)}</p>
         </div>
       )}
       {showPeerOverlay && isInfoOpen && createPortal(
@@ -772,7 +772,7 @@ function RelativeLineWidget({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-              <h2 className="text-lg font-semibold text-accent">유사 종목군 설명</h2>
+              <h2 className="text-lg font-semibold text-accent">{t("relativeLine.modal.title")}</h2>
               <button
                 onClick={() => setIsInfoOpen(false)}
                 className="text-ink-4 hover:text-ink-2 text-xl leading-none"
@@ -783,21 +783,20 @@ function RelativeLineWidget({
 
             <div className="px-5 py-4 overflow-y-auto flex-1">
               <p className="text-sm text-ink-2 leading-relaxed">
-                선택 종목, 관련 산업지수, 유사 종목군 평균을 동일 기준일 0%로 환산해 비교합니다.
-                음영은 유사 종목군의 p20~p80 범위이며, 날짜별 유사 종목 반영률이 높을수록 더 진하게 표시됩니다.
+                {t("relativeLine.modal.paragraph1")}
               </p>
               <p className="mt-3 text-sm text-ink-2 leading-relaxed">
-                반영률이 낮은 구간은 해당 날짜에 반영된 유사 종목 수가 적다는 뜻이므로, 밴드폭과 중심선을 참고용으로 해석해야 합니다.
+                {t("relativeLine.modal.paragraph2")}
               </p>
 
               <div className="mt-5 rounded-2xl border border-line bg-bg-sunk p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-ink">현재 시점 값</h3>
+                  <h3 className="text-sm font-semibold text-ink">{t("relativeLine.modal.currentValues")}</h3>
                   <span className="text-xs text-ink-3">{activeDetailDayKey ?? "-"}</span>
                 </div>
 
                 <div className="mt-3">
-                  <label className="block text-xs text-ink-3 mb-1">날짜 선택</label>
+                  <label className="block text-xs text-ink-3 mb-1">{t("relativeLine.modal.selectDate")}</label>
                   <select
                     value={activeDetailDayKey ?? ""}
                     onChange={(e) => setSelectedDetailDayKey(e.target.value || null)}
@@ -813,15 +812,15 @@ function RelativeLineWidget({
 
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div className="rounded-xl border border-line bg-surface px-3 py-2">
-                    <p className="text-xs text-ink-3">선택 종목</p>
+                    <p className="text-xs text-ink-3">{t("relativeLine.legend.anchor")}</p>
                     <p className="mt-1 text-sm font-semibold text-ink">{formatPct(activeAnchorValue)}</p>
                   </div>
                   <div className="rounded-xl border border-line bg-surface px-3 py-2">
-                    <p className="text-xs text-ink-3">산업 지수</p>
+                    <p className="text-xs text-ink-3">{t("relativeLine.legend.industryIndex")}</p>
                     <p className="mt-1 text-sm font-semibold text-ink">{formatPct(activeIndustryValue)}</p>
                   </div>
                   <div className="rounded-xl border border-line bg-surface px-3 py-2">
-                    <p className="text-xs text-ink-3">유사 종목군 평균</p>
+                    <p className="text-xs text-ink-3">{t("relativeLine.legend.peerCentroid")}</p>
                     <p className="mt-1 text-sm font-semibold text-ink">{formatPct(activeCentroidValue)}</p>
                   </div>
                   <div className="rounded-xl border border-line bg-surface px-3 py-2">
@@ -833,21 +832,21 @@ function RelativeLineWidget({
                     <p className="mt-1 text-sm font-semibold text-ink">{formatPct(activeBand?.p80 ?? null)}</p>
                   </div>
                   <div className="rounded-xl border border-line bg-surface px-3 py-2">
-                    <p className="text-xs text-ink-3">유사 종목 반영률</p>
+                    <p className="text-xs text-ink-3">{t("relativeLine.coverage.peerCoverage")}</p>
                     <p className="mt-1 text-sm font-semibold text-ink">{formatCoverage(activeCoverage)}</p>
                     <p className="mt-0.5 text-[11px] text-ink-4">{coverageLabel(activeCoverage)}</p>
                   </div>
                 </div>
 
                 <p className="mt-3 text-xs text-ink-3">
-                  여기서 날짜를 직접 선택해 해당 시점 기준 값을 확인할 수 있어요.
+                  {t("relativeLine.modal.dateHelp")}
                 </p>
               </div>
 
               <div className="mt-5 rounded-2xl border border-line bg-bg-sunk p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-ink">반영된 유사 종목</h3>
-                  <span className="text-xs text-ink-3">{overlayPeers?.length ?? 0}개</span>
+                  <h3 className="text-sm font-semibold text-ink">{t("relativeLine.modal.includedPeers")}</h3>
+                  <span className="text-xs text-ink-3">{t("relativeLine.modal.peerCount", { count: overlayPeers?.length ?? 0 })}</span>
                 </div>
 
                 {overlayPeers && overlayPeers.length > 0 ? (
@@ -863,29 +862,29 @@ function RelativeLineWidget({
                             <p className="text-xs text-ink-3">{peer.stockCode}</p>
                           </div>
                           <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-2">
-                            {formatRelationLabel(peer.relation)}
+                            {formatRelationLabel(peer.relation, t)}
                           </span>
                         </div>
                         <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-ink-3">
                           <div>
-                            <span className="text-ink-4">동행 상관도</span>
+                            <span className="text-ink-4">{t("relativeLine.peer.correlation")}</span>
                             <p className="font-medium text-ink-2">
                               {formatScore(peer.adjustedCorrValid ? peer.adjustedCorr : peer.corr)}
                             </p>
-                            <p className="mt-0.5 text-[11px] text-ink-4">{formatAdjustmentBasis(peer)}</p>
+                            <p className="mt-0.5 text-[11px] text-ink-4">{formatAdjustmentBasis(peer, t)}</p>
                           </div>
                           <div>
-                            <span className="text-ink-4">유사도 점수</span>
+                            <span className="text-ink-4">{t("relativeLine.peer.score")}</span>
                             <p className="font-medium text-ink-2">{formatScore(peer.peerScore ?? peer.score)}</p>
                           </div>
                           <div>
-                            <span className="text-ink-4">시차</span>
+                            <span className="text-ink-4">{t("relativeLine.peer.lag")}</span>
                             <p className="font-medium text-ink-2">
-                              {peer.bestLag == null ? "-" : `${peer.bestLag}일`}
+                              {peer.bestLag == null ? "-" : t("relativeLine.peer.lagDays", { value: peer.bestLag })}
                             </p>
                           </div>
                           <div>
-                            <span className="text-ink-4">평균 거래대금</span>
+                            <span className="text-ink-4">{t("relativeLine.peer.avgTurnover")}</span>
                             <p className="font-medium text-ink-2">{formatNumber(peer.avgTurnover)}</p>
                           </div>
                         </div>
@@ -893,7 +892,7 @@ function RelativeLineWidget({
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-3 text-sm text-ink-3">반영된 유사 종목 정보가 없습니다.</p>
+                  <p className="mt-3 text-sm text-ink-3">{t("relativeLine.modal.emptyPeers")}</p>
                 )}
               </div>
             </div>

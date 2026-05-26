@@ -124,7 +124,7 @@ const isReportWithinRetention = (report: AnalysisReportSummary | AnalysisReportD
 };
 
 function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
-  const { t } = useTranslation("settingPage");
+  const { t, i18n } = useTranslation("settingPage");
   const snapshot = report.resultSnapshot as {
     explain?: {
       text?: string | null;
@@ -148,7 +148,7 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
     : Array.isArray(snapshot?.warnings)
       ? snapshot.warnings
       : [];
-  const warnings = expandWarningLines(mapWarningsToNotes(rawWarnings));
+  const warnings = expandWarningLines(mapWarningsToNotes(rawWarnings, i18n.language));
 
   return (
     <div className="w-[900px] max-w-full bg-surface text-ink p-6 flex flex-col gap-4">

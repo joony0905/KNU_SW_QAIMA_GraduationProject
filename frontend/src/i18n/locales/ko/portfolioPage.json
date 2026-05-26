@@ -10,11 +10,14 @@
     "exchangeRateLoading": "환율 로딩중",
     "exchangeRateNone": "환율 없음",
     "exchangeRateFailed": "환율 로드 실패",
+    "exchangeRateValue": "환율 {{value}} · {{asOf}}",
     "centerLabel": "총 평가액",
     "emptyTitle": "표시할 보유 비중이 없습니다",
     "emptyBodyLoggedIn": "종목명, 수량, 평균단가를 입력하면 바로 반영됩니다.",
     "emptyBodyGuest": "로그인 후 종목을 입력하면 비중이 표시됩니다."
   },
+  "chartAria": { "compositionPie": "{{label}} 구성비 파이차트" },
+  "reportMeta": { "subjectDetail": "{{name}} 외 {{count}}개 종목" },
   "manager": {
     "subtitle": "보유 종목을 추가하거나 수정하세요",
     "save": "저장",

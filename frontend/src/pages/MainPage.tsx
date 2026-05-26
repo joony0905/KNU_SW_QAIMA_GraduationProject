@@ -12,6 +12,8 @@ import { clearUser } from "../api/userStore";
 import { clearTokenBalance } from "../api/billingStore";
 import { LANGUAGE_STORAGE_KEY, type SupportedLanguage } from "../i18n";
 import qaimaLogo from "../assets/qaima-final.png";
+import koreaFlag from "../assets/korea.png";
+import usFlag from "../assets/us.png";
 
 // ───────────────────────────────────────────────────────────────
 // Hero AI 비주얼 — 6 streams convergence (Qaima 로고 자리 포함)
@@ -274,33 +276,13 @@ function SectionHead({ eyebrow, title, sub }: { eyebrow: string; title: string; 
 }
 
 function FlagIcon({ lang }: { lang: SupportedLanguage }) {
-  if (lang === "en") {
-    return (
-      <svg viewBox="0 0 60 42" className="h-6 w-8 rounded-[3px] shadow-sm ring-1 ring-black/10" aria-hidden="true">
-        <rect width="60" height="42" fill="#b22234" />
-        {Array.from({ length: 6 }).map((_, i) => (
-          <rect key={i} y={3.23 + i * 6.46} width="60" height="3.23" fill="#fff" />
-        ))}
-        <rect width="27" height="22.6" fill="#3c3b6e" />
-        {Array.from({ length: 5 }).map((_, row) =>
-          Array.from({ length: 6 }).map((_, col) => (
-            <circle key={`${row}-${col}`} cx={3.4 + col * 4.1} cy={3.1 + row * 4} r="0.75" fill="#fff" />
-          ))
-        )}
-      </svg>
-    );
-  }
-
   return (
-    <svg viewBox="0 0 60 42" className="h-6 w-8 rounded-[3px] shadow-sm ring-1 ring-black/10" aria-hidden="true">
-      <rect width="60" height="42" fill="#fff" />
-      <circle cx="30" cy="21" r="9" fill="#cd2e3a" />
-      <path d="M21 21a9 9 0 0 0 18 0a4.5 4.5 0 0 0-9 0a4.5 4.5 0 0 1-9 0Z" fill="#0047a0" />
-      <g stroke="#111" strokeWidth="2">
-        <path d="M13 9l8 5M15 6l8 5M37 31l8 5M39 28l8 5" />
-        <path d="M39 6l-8 5M45 9l-8 5M15 36l8-5M13 33l8-5" />
-      </g>
-    </svg>
+    <img
+      src={lang === "ko" ? koreaFlag : usFlag}
+      alt=""
+      className="h-6 w-8 rounded-[3px] object-cover shadow-sm ring-1 ring-black/10"
+      aria-hidden="true"
+    />
   );
 }
 
@@ -557,7 +539,6 @@ export default function MainPage() {
                       }`}
                     >
                       <FlagIcon lang={lang} />
-                      <span className="text-xs font-semibold">{lang === "ko" ? "KR" : "US"}</span>
                     </button>
                   );
                 })}
