@@ -214,10 +214,10 @@ export default function FinancialTimelineChart({
         </p>
       </div>
 
-      <div className="mt-3 overflow-x-auto rounded-2xl border border-line bg-bg-sunk px-3 py-4">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-line bg-bg-sunk px-3 py-4 sm:overflow-x-auto">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="min-w-[720px] w-full"
+          className="w-full min-w-0 sm:min-w-[720px]"
           role="img"
           aria-label={`${title} 차트`}
           onMouseLeave={() => setHoveredIndex(null)}

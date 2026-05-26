@@ -146,10 +146,10 @@ function MetricTile({
   sub?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-line bg-bg-sunk px-3 py-2">
       <p className="text-[11px] font-medium text-ink-3">{label}</p>
-      <p className="mt-1 text-base font-bold text-ink">{value}</p>
-      {sub && <p className="mt-0.5 text-[11px] text-ink-3">{sub}</p>}
+      <p className="mt-1 min-w-0 break-words text-base font-bold text-ink">{value}</p>
+      {sub && <p className="mt-0.5 min-w-0 break-words text-[11px] text-ink-3">{sub}</p>}
     </div>
   );
 }
@@ -231,7 +231,7 @@ export default function Feature2ExternalFactorPanel({
           {macroRatesError}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
         <MetricTile
           label={<DictTerm term="기준금리">기준금리</DictTerm>}
           value={formatRate(krBaseRate?.value, krBaseRate?.unit ?? "%")}
@@ -296,7 +296,7 @@ export default function Feature2ExternalFactorPanel({
       </div>
       <div className="rounded-lg border border-line bg-surface px-3 py-3">
         <p className="text-xs font-semibold text-ink-2">금리 환경</p>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+        <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 text-xs sm:grid-cols-2">
           {[...krBondYields, ...usBondYields].slice(0, 4).map((item) => (
             <div key={item.instrumentCode} className="flex items-center justify-between gap-2">
               <span className="text-ink-3">{item.instrumentCode}</span>
@@ -335,7 +335,7 @@ export default function Feature2ExternalFactorPanel({
           {macroRatesError}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
         <MetricTile
           label="한국 기준금리"
           value={formatRate(krBaseRate?.value, krBaseRate?.unit ?? "%")}
@@ -395,7 +395,7 @@ export default function Feature2ExternalFactorPanel({
       )}
       {!investorFlowLoading && !investorFlowError && hasInvestorFlowData && investorFlow && (
         <>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
             <MetricTile
               label="외국인 누적"
               value={formatFlowAmount(investorFlow.stockSummary?.foreignNetBuyValueMillionSum)}

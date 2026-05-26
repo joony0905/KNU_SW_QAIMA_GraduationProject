@@ -1061,9 +1061,9 @@ export default function Feature2MockPage() {
               : "0.00%";
           const mainColorClass = getColorClassByNumber(mainNumericChange);
           return (
-        <main className="w-full flex flex-col xl:flex-row justify-center xl:items-stretch gap-6">
-          <div className="flex-1 flex flex-col gap-5">
-            <section className="w-full bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4">
+        <main className="w-full min-w-0 overflow-hidden flex flex-col xl:flex-row justify-center xl:items-stretch gap-6">
+          <div className="min-w-0 flex-1 flex flex-col gap-5">
+            <section className="w-full min-w-0 overflow-hidden bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -1216,7 +1216,7 @@ export default function Feature2MockPage() {
             </section>
           </div>
 
-          <div className="w-full xl:w-[440px] 2xl:w-[480px] flex flex-col">
+          <div className="w-full min-w-0 xl:w-[440px] 2xl:w-[480px] flex flex-col">
             <Feature2ExternalFactorPanel
               stockName={mainStock.name}
               baseRateMetrics={baseRateMetrics}

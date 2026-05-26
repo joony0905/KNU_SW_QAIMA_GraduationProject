@@ -163,10 +163,10 @@ export function MultiLineTrendChart({
           </span>
         ))}
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-hidden sm:overflow-x-auto">
         <svg
           viewBox={`0 0 ${chart.width} ${height}`}
-          className="min-w-[620px] w-full"
+          className="w-full min-w-0 sm:min-w-[620px]"
           onMouseLeave={() => setHoveredIndex(null)}
         >
           {chart.tickValues.map((tick) => (

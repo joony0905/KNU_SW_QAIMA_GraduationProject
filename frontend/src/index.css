@@ -543,6 +543,14 @@ button:focus-visible {
     min-width: 0;
   }
 
+  .qaima-mobile-safe-panel *,
+  .qaima-feature2-report *,
+  .qaima-portfolio-report * {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .qaima-mobile-safe-panel .overflow-x-auto,
   .qaima-feature2-report .overflow-x-auto,
   .qaima-portfolio-report .overflow-x-auto {

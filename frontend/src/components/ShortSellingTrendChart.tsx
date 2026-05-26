@@ -135,10 +135,10 @@ export default function ShortSellingTrendChart({ points }: Props) {
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 overflow-hidden sm:overflow-x-auto">
         <svg
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-          className="min-w-[680px] w-full"
+          className="w-full min-w-0 sm:min-w-[680px]"
           onMouseLeave={() => setHoveredIndex(null)}
         >
           {chart.tickValues.map((tick) => (

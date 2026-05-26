@@ -3497,10 +3497,10 @@ export default function PortfolioMockPage() {
                         setFrontierHover({ x: svgPoint.x, y: svgPoint.y });
                       };
                       return (
-                        <div className="mt-3 overflow-x-auto rounded-xl bg-bg-sunk border border-line p-3">
+                        <div className="mt-3 overflow-hidden rounded-xl bg-bg-sunk border border-line p-2 sm:overflow-x-auto sm:p-3">
                           <svg
                             viewBox={`0 0 ${viewW} ${viewH}`}
-                            className="h-[420px] min-w-[760px] w-full cursor-crosshair sm:h-[640px]"
+                            className="h-[360px] w-full min-w-0 cursor-crosshair sm:h-[640px] sm:min-w-[760px]"
                             role="img"
                             aria-label={t("frontier.ariaLabel")}
                             onMouseMove={handleFrontierHover}
