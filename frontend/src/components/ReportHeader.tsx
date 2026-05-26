@@ -48,7 +48,6 @@ export default function ReportHeader({ meta }: { meta?: ReportHeaderMeta | null 
     [t("rows.subject"), meta.subjectDetail ? `${meta.subjectLabel} · ${meta.subjectDetail}` : meta.subjectLabel],
     [t("rows.feature"), featureLabel(meta.featureType, t)],
     [t("rows.generatedAt"), `${formatDateTime(meta.generatedAt)} KST`],
-    [t("rows.model"), meta.analysisModel || "-"],
     [t("rows.investLevel"), investLevelLabel(meta.investLevel, i18n.language)],
     [t("rows.user"), meta.userName || t("userFallback")],
     [t("rows.window"), meta.analysisWindow || null],

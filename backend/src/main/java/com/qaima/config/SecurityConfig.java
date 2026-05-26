@@ -131,17 +131,27 @@ public class SecurityConfig {
         var response = exchange.getResponse();
         response.setStatusCode(errorCode.status());
         response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+        String message = localizedErrorMessage(exchange, errorCode);
 
         try {
-            byte[] bytes = objectMapper.writeValueAsBytes(ApiResponse.error(errorCode.code(), errorCode.defaultMessage()));
+            byte[] bytes = objectMapper.writeValueAsBytes(ApiResponse.error(errorCode.code(), message));
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));
         } catch (Exception e) {
             byte[] bytes = ("{\"meta\":{\"status\":\"failure\"},\"data\":null,\"errors\":[{\"code\":\""
-                    + errorCode.code() + "\",\"message\":\"" + errorCode.defaultMessage() + "\"}]}")
+                    + errorCode.code() + "\",\"message\":\"" + message + "\"}]}")
                     .getBytes(java.nio.charset.StandardCharsets.UTF_8);
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
             return response.writeWith(Mono.just(buffer));
         }
+    }
+
+    private static String localizedErrorMessage(org.springframework.web.server.ServerWebExchange exchange,
+                                                ErrorCode errorCode) {
+        String language = exchange.getRequest().getHeaders().getFirst("Accept-Language");
+        if (language != null && language.toLowerCase().startsWith("en")) {
+            return com.qaima.common.GlobalExceptionHandler.englishDefaultMessage(errorCode);
+        }
+        return errorCode.defaultMessage();
     }
 }

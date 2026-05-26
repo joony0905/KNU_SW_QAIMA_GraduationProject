@@ -7,6 +7,7 @@ import re
 from typing import List, Optional
 
 from app.services.llm.factory import get_llm_client
+from app.services.llm.invest_level import normalize_language_code
 
 from app.models.feature1 import (
     Feature1Explain,
@@ -107,7 +108,7 @@ async def analyze_feature2_explain(req: Feature2ExplainRequest) -> Feature2Expla
             ],
         )
         if explain is not None:
-            _sanitize_feature2_explain(explain)
+            _sanitize_feature2_explain(explain, req.language_code)
             explain.text = text.strip()
         else:
             warnings.append("LLM_EXPLAIN_PARSE_FAILED")
@@ -127,7 +128,7 @@ async def analyze_feature2_explain(req: Feature2ExplainRequest) -> Feature2Expla
                 ],
             )
             if explain is not None:
-                _sanitize_feature2_explain(explain)
+                _sanitize_feature2_explain(explain, req.language_code)
                 explain.text = compact_text.strip()
             else:
                 warnings.append("LLM_EXPLAIN_PARSE_FAILED")
@@ -178,24 +179,57 @@ _FEATURE2_INTERNAL_TERM_REPLACEMENTS = [
     (re.compile(r"\bSELECTED\b", re.IGNORECASE), "선정"),
 ]
 
+_FEATURE2_INTERNAL_TERM_REPLACEMENTS_EN = [
+    (re.compile(r"\banchor_return_pct\b", re.IGNORECASE), "anchor stock return"),
+    (re.compile(r"\banchor return pct\b", re.IGNORECASE), "anchor stock return"),
+    (re.compile(r"\banchor_return\b", re.IGNORECASE), "anchor stock return"),
+    (re.compile(r"\bpeer_cluster_summary\b", re.IGNORECASE), "similar-stock reaction summary"),
+    (re.compile(r"\btop_peers\b", re.IGNORECASE), "major similar stocks"),
+    (re.compile(r"\bpeer_centroid\b", re.IGNORECASE), "average similar-stock flow"),
+    (re.compile(r"\bpeer centroid\b", re.IGNORECASE), "average similar-stock flow"),
+    (re.compile(r"\bcentroid\b", re.IGNORECASE), "average flow"),
+    (re.compile(r"\bpeer_band\b", re.IGNORECASE), "similar-stock range"),
+    (re.compile(r"\bpeer band\b", re.IGNORECASE), "similar-stock range"),
+    (re.compile(r"\bpeer_coverage\b", re.IGNORECASE), "similar-stock data coverage"),
+    (re.compile(r"\bpeers\b", re.IGNORECASE), "similar stocks"),
+    (re.compile(r"\bpeer\b", re.IGNORECASE), "similar stock"),
+    (re.compile(r"\braw_corr\b", re.IGNORECASE), "raw correlation"),
+    (re.compile(r"\badjusted_corr\b", re.IGNORECASE), "industry-adjusted correlation"),
+    (re.compile(r"\bbest_lag\b", re.IGNORECASE), "clearest lag"),
+    (re.compile(r"\blead_lag_corr\b", re.IGNORECASE), "lead-lag correlation"),
+    (re.compile(r"\blag_confidence\b", re.IGNORECASE), "lag confidence"),
+    (re.compile(r"\bdisplay_status\b", re.IGNORECASE), "display status"),
+    (re.compile(r"\bCOINCIDENT\b", re.IGNORECASE), "moving together"),
+    (re.compile(r"\bLEADER\b", re.IGNORECASE), "leading"),
+    (re.compile(r"\bFOLLOWER\b", re.IGNORECASE), "lagging"),
+    (re.compile(r"\bRAW_ONLY\b", re.IGNORECASE), "raw-correlation basis"),
+    (re.compile(r"\bADJUSTED_ONLY\b", re.IGNORECASE), "industry-adjusted basis"),
+    (re.compile(r"\bFALLBACK_RAW\b", re.IGNORECASE), "raw-correlation fallback"),
+    (re.compile(r"\bSELECTED\b", re.IGNORECASE), "selected"),
+]
 
-def _sanitize_feature2_explain(explain: ExplainResult) -> None:
+def _sanitize_feature2_explain(explain: ExplainResult, language_code: str | None = None) -> None:
     if explain.sections:
         for section in explain.sections.values():
-            section.title = _sanitize_feature2_text(section.title)
-            section.summary = _sanitize_feature2_text(section.summary)
-            section.bullets = [_sanitize_feature2_text(item) for item in section.bullets]
+            section.title = _sanitize_feature2_text(section.title, language_code)
+            section.summary = _sanitize_feature2_text(section.summary, language_code)
+            section.bullets = [_sanitize_feature2_text(item, language_code) for item in section.bullets]
     if explain.overall:
-        explain.overall.summary = _sanitize_feature2_text(explain.overall.summary)
-        explain.overall.bullets = [_sanitize_feature2_text(item) for item in explain.overall.bullets]
-        explain.overall.risks = [_sanitize_feature2_text(item) for item in explain.overall.risks]
+        explain.overall.summary = _sanitize_feature2_text(explain.overall.summary, language_code)
+        explain.overall.bullets = [_sanitize_feature2_text(item, language_code) for item in explain.overall.bullets]
+        explain.overall.risks = [_sanitize_feature2_text(item, language_code) for item in explain.overall.risks]
         if explain.overall.conclusion:
-            explain.overall.conclusion = _sanitize_feature2_text(explain.overall.conclusion)
+            explain.overall.conclusion = _sanitize_feature2_text(explain.overall.conclusion, language_code)
 
 
-def _sanitize_feature2_text(text: str) -> str:
+def _sanitize_feature2_text(text: str, language_code: str | None = None) -> str:
     sanitized = text
-    for pattern, replacement in _FEATURE2_INTERNAL_TERM_REPLACEMENTS:
+    replacements = (
+        _FEATURE2_INTERNAL_TERM_REPLACEMENTS_EN
+        if normalize_language_code(language_code) == "en"
+        else _FEATURE2_INTERNAL_TERM_REPLACEMENTS
+    )
+    for pattern, replacement in replacements:
         sanitized = pattern.sub(replacement, sanitized)
     return sanitized
 

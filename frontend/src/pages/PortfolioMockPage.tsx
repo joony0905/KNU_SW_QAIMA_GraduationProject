@@ -38,7 +38,7 @@ import { clientLog } from "../utils/clientLog";
 import { downloadElementAsPdf, waitForPdfCaptureReady } from "../utils/reportPdf";
 import ReportHeader from "../components/ReportHeader";
 import useReportUserName from "../hooks/useReportUserName";
-import { isEnglishLanguage } from "../utils/displayLabels";
+import { localizeBackendText } from "../utils/localizeBackendText";
 
 type AnalysisWindowPreset = {
   label: string;
@@ -166,47 +166,6 @@ const capmWeightReasonText = (asset: Feature3CapmAsset, t: TFunction<"portfolioP
 
 type OverlayCachePolicy = "REUSE_AVAILABLE" | "FORCE_REFRESH";
 type OverlayCachePolicyMap = Record<string, OverlayCachePolicy>;
-
-const EN_BACKEND_TEXT_REPLACEMENTS: Array<[RegExp, string]> = [
-  [/유사\s*종목군/g, "peer group"],
-  [/유사\s*종목/g, "peer stocks"],
-  [/보조\s*관측/g, "overlay observations"],
-  [/최적화\s*관측/g, "optimization view"],
-  [/공격적/g, "aggressive"],
-  [/안정적/g, "conservative"],
-  [/중립형/g, "balanced"],
-  [/공격형/g, "aggressive"],
-  [/보수형/g, "conservative"],
-  [/균형형/g, "balanced"],
-  [/현재\s*구성/g, "current portfolio"],
-  [/기준\s*시각/g, "reference time"],
-  [/최근\s*결과/g, "recent result"],
-  [/새로\s*분석/g, "re-analyze"],
-  [/새\s*분석/g, "new analysis"],
-  [/원천\s*데이터/g, "source data"],
-  [/캐시/g, "cache"],
-  [/크레딧/g, "credit"],
-  [/성향보다 공격적/g, "more aggressive than profile"],
-  [/성향보다 안정적/g, "more conservative than profile"],
-  [/목표 변동성 초과/g, "above target volatility"],
-  [/위험 기여도 높음/g, "high risk contribution"],
-  [/\bAGGRESSIVE_THAN_PROFILE\b/g, "more aggressive than profile"],
-  [/\bCONSERVATIVE_THAN_PROFILE\b/g, "more conservative than profile"],
-  [/\bABOVE_TARGET_VOLATILITY\b/g, "above target volatility"],
-  [/\bHIGH_RISK_CONTRIBUTION\b/g, "high risk contribution"],
-  [/Core 분석만 실행하면 1 credit이 차감됩니다\./g, "Running core analysis only deducts 1 credit."],
-  [/Core 분석은 1 credit이며, 캐시가 없는 체크 항목마다 1 credit이 추가됩니다\./g, "Core analysis costs 1 credit, and each selected item without cache adds 1 credit."],
-  [/최근 결과가 있지만 새로 분석하도록 선택되어 1 credit이 추가됩니다\./g, "A recent result exists, but re-analysis was selected, so 1 credit is added."],
-  [/기존 원천 데이터를 재사용할 수 있어 추가 credit이 필요하지 않습니다\./g, "Existing source data can be reused, so no additional credit is required."],
-  [/원천 데이터가 부족해 새로 분석하며 1 credit이 추가됩니다\./g, "Source data is insufficient, so new analysis adds 1 credit."],
-  [/최근 뉴스 최대 (\d+)개의 Feature2 news sentiment 데이터를 core risk와 분리된 뉴스 흐름 참고 정보로 표시합니다\./g, "Shows up to $1 recent Feature2 news sentiment items as separate news-flow context, outside core risk."],
-];
-
-const localizeBackendText = (value?: string | null, language?: string | null): string => {
-  if (!value) return "";
-  if (!isEnglishLanguage(language)) return value;
-  return EN_BACKEND_TEXT_REPLACEMENTS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
-};
 
 const overlayPreviewMessage = (message?: string | null, language?: string | null): string => {
   if (!message) return "";
@@ -368,20 +327,28 @@ const explainSections = (explain?: PortfolioAnalyzeResponse["explain"] | null) =
   ].filter((section): section is NonNullable<PortfolioExplainSection> => Boolean(section?.summary || section?.bullets?.length));
 };
 
-const renderExplainSection = (section: PortfolioExplainSection | null | undefined, options: { hideTitle?: boolean } | undefined, t: TFunction<"portfolioPage">) => {
+const renderExplainSection = (
+  section: PortfolioExplainSection | null | undefined,
+  options: { hideTitle?: boolean } | undefined,
+  t: TFunction<"portfolioPage">,
+  language?: string | null,
+) => {
   if (!section?.summary && !section?.bullets?.length) return null;
+  const title = localizeBackendText(section.title, language) || t("explainSummary.fallbackTitle");
+  const summary = localizeBackendText(section.summary, language);
+  const bullets = (section.bullets ?? []).map((bullet) => localizeBackendText(bullet, language));
   return (
     <div className="rounded-xl bg-bg-sunk border border-line p-4">
-      {!options?.hideTitle ? <h4 className="text-sm font-bold text-ink">{section.title ?? t("explainSummary.fallbackTitle")}</h4> : null}
-      {section.summary ? (
+      {!options?.hideTitle ? <h4 className="text-sm font-bold text-ink">{title}</h4> : null}
+      {summary ? (
         <p className={`${options?.hideTitle ? "" : "mt-1"} text-xs leading-relaxed text-ink-3`}>
-          <DictionaryText text={section.summary} />
+          <DictionaryText text={summary} />
         </p>
       ) : null}
-      {!section.summary && section.bullets?.length ? (
+      {!summary && bullets.length ? (
         <ul className={`${options?.hideTitle ? "" : "mt-2"} flex flex-col gap-1`}>
-          {section.bullets.slice(0, 4).map((bullet, index) => (
-            <li key={`${section.title ?? "explain"}-${index}`} className="text-xs leading-relaxed text-ink-4">
+          {bullets.slice(0, 4).map((bullet, index) => (
+            <li key={`${title}-${index}`} className="text-xs leading-relaxed text-ink-4">
               <DictionaryText text={bullet} />
             </li>
           ))}
@@ -2015,7 +1982,7 @@ export default function PortfolioMockPage() {
 
               {analysisResult.explain?.sections?.coreRisk ? (
                 <div>
-                  {renderExplainSection(analysisResult.explain.sections.coreRisk, undefined, t)}
+                  {renderExplainSection(analysisResult.explain.sections.coreRisk, undefined, t, i18n.language)}
                 </div>
               ) : null}
 
@@ -2035,7 +2002,7 @@ export default function PortfolioMockPage() {
                       {t("volatilitySection.desc2")}
                     </p>
                     <div className="mt-3">
-                      {renderExplainSection(analysisResult.explain?.sections?.volatilityAnalysis, { hideTitle: true }, t)}
+                      {renderExplainSection(analysisResult.explain?.sections?.volatilityAnalysis, { hideTitle: true }, t, i18n.language)}
                     </div>
                     <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
                       {basicPortfolioCards.map((portfolio) => (
@@ -2095,7 +2062,7 @@ export default function PortfolioMockPage() {
                       {portfolio.weights.map((weight) => (
                               <div key={`${portfolio.type}-${weight.stockCode}`} className="flex items-center gap-2">
                                 <span className="w-20 truncate text-xs text-ink-3">
-                                  {weight.companyName ?? weight.stockCode}
+                                  {localizeBackendText(weight.companyName ?? weight.stockCode, i18n.language)}
                                 </span>
                                 <div className="flex-1 h-2 rounded-full bg-bg-sunk overflow-hidden">
                                   <div
@@ -2140,7 +2107,7 @@ export default function PortfolioMockPage() {
                       {t("efficiencySection.desc2")}
                     </p>
                     <div className="mt-3">
-                      {renderExplainSection(analysisResult.explain?.sections?.efficiencyAnalysis, { hideTitle: true }, t)}
+                      {renderExplainSection(analysisResult.explain?.sections?.efficiencyAnalysis, { hideTitle: true }, t, i18n.language)}
                     </div>
                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                       {portfolioCards.map((portfolio) => (
@@ -2189,7 +2156,7 @@ export default function PortfolioMockPage() {
                                         style={{ backgroundColor: weight.assetType === "CASH" ? CASH_COLOR : pieColorForIndex(index) }}
                                       />
                                       <span className="min-w-0 flex-1 truncate text-ink-3">
-                                        {weight.companyName ?? weight.stockCode}
+                                        {localizeBackendText(weight.companyName ?? weight.stockCode, i18n.language)}
                                       </span>
                                       <span className="font-mono tabular text-ink">
                                         {formatPct(weight.weight)}
@@ -2266,7 +2233,7 @@ export default function PortfolioMockPage() {
 	                                    style={{ backgroundColor: weight.assetType === "CASH" ? CASH_COLOR : pieColorForIndex(index) }}
 	                                  />
 	                                  <span className="min-w-0 flex-1 truncate text-ink-3">
-	                                    {weight.companyName ?? weight.stockCode}
+	                                    {localizeBackendText(weight.companyName ?? weight.stockCode, i18n.language)}
 	                                  </span>
 	                                  <span className="font-mono tabular text-ink">{formatPct(weight.weight)}</span>
 	                                </div>
@@ -2370,7 +2337,7 @@ export default function PortfolioMockPage() {
                               return (
                                 <div key={`capm-basic-bar-${asset.stockCode}`}>
                                   <div className="flex items-center justify-between gap-2 text-[11px]">
-                                    <span className="font-semibold text-ink truncate">{asset.companyName ?? asset.stockCode}</span>
+                                    <span className="font-semibold text-ink truncate">{localizeBackendText(asset.companyName ?? asset.stockCode, i18n.language)}</span>
                                     <span className="font-mono tabular text-ink-4">
                                       {t("marketAnalysis.blendRatioLabel", { historical: formatPct(historicalWeight, 0), capm: formatPct(capmWeight, 0) })}
                                     </span>
@@ -2405,7 +2372,7 @@ export default function PortfolioMockPage() {
                               <tbody>
                                 {capmAssets.slice(0, 8).map((asset) => (
                                   <tr key={`capm-basic-table-${asset.stockCode}`} className="border-t border-line text-ink-3">
-                                    <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
+                                    <td className="py-2 pr-3 font-medium text-ink">{localizeBackendText(asset.companyName ?? asset.stockCode, i18n.language)}</td>
                                     <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.capmWeight)}</td>
                                     <td className="py-2 pr-3 font-mono tabular text-ink">{formatPct(asset.blendedExpectedReturn)}</td>
                                     <td className="py-2 pr-3">{t(`capmAssetStatus.${asset.status ?? ""}` as `capmAssetStatus.${string}`, "-")}</td>
@@ -2434,7 +2401,7 @@ export default function PortfolioMockPage() {
                       <div key={contribution.stockCode}>
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-sm font-medium text-ink truncate">
-                            {contribution.companyName ?? contribution.stockCode}
+                            {localizeBackendText(contribution.companyName ?? contribution.stockCode, i18n.language)}
                           </span>
                           <span className="text-sm font-mono tabular text-ink-3">
                             {formatPct(contribution.riskContributionPct)}
@@ -2490,7 +2457,7 @@ export default function PortfolioMockPage() {
                             {viz.items.map((item) => {
                               return (
                                 <div key={`${viz.type}-${item.stockCode}`} className="grid grid-cols-[96px_1fr_48px] items-center gap-2">
-                                  <span className="text-xs text-ink-3 truncate">{item.companyName ?? item.stockCode}</span>
+                                  <span className="text-xs text-ink-3 truncate">{localizeBackendText(item.companyName ?? item.stockCode, i18n.language)}</span>
                                   <div className="relative h-2.5 rounded-full bg-surface overflow-hidden">
                                     <div className="absolute left-1/2 top-0 h-full w-px bg-line" />
                                     <div
@@ -2512,7 +2479,7 @@ export default function PortfolioMockPage() {
                   ) : null}
 
                   <div className="mt-5">
-                    {renderExplainSection(analysisResult.explain?.sections?.overlayObservations, undefined, t)}
+                    {renderExplainSection(analysisResult.explain?.sections?.overlayObservations, undefined, t, i18n.language)}
                   </div>
 
                   {analysisResult.overlays.explanations?.length ? (
@@ -2524,7 +2491,7 @@ export default function PortfolioMockPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="text-[11px] font-semibold text-ink-4 truncate">
-                                {item.companyName ?? item.stockCode}
+                                {localizeBackendText(item.companyName ?? item.stockCode, i18n.language)}
                                 {item.companyName && item.stockCode ? <span className="ml-1 font-mono tabular">({item.stockCode})</span> : null}
                               </p>
                               <p className="mt-0.5 text-sm font-bold text-ink">{localizeBackendText(item.title, i18n.language)}</p>
@@ -2593,7 +2560,7 @@ export default function PortfolioMockPage() {
                                   : "text-danger";
                               return (
 	                            <div key={`${portfolio.type}-${weight.stockCode}`} className="flex items-center gap-2">
-	                              <span className="w-20 truncate text-xs text-ink-3">{weight.companyName ?? weight.stockCode}</span>
+	                              <span className="w-20 truncate text-xs text-ink-3">{localizeBackendText(weight.companyName ?? weight.stockCode, i18n.language)}</span>
 	                              <div className="flex-1 h-2 rounded-full bg-surface overflow-hidden">
 	                                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, weight.weight * 100))}%` }} />
 	                              </div>
@@ -2611,12 +2578,12 @@ export default function PortfolioMockPage() {
 	                  </div>
 
                   <div className="mt-5">
-                    {renderExplainSection(analysisResult.explain?.sections?.portfolioComparison, undefined, t)}
+                    {renderExplainSection(analysisResult.explain?.sections?.portfolioComparison, undefined, t, i18n.language)}
                   </div>
 
                   {analysisResult.explain?.sections?.finalJudgement ? (
                     <div className="mt-5">
-                      {renderExplainSection(analysisResult.explain.sections.finalJudgement, undefined, t)}
+                      {renderExplainSection(analysisResult.explain.sections.finalJudgement, undefined, t, i18n.language)}
                     </div>
                   ) : analysisResult.explain?.text && !explainSections(analysisResult.explain).length ? (
                     <div className="mt-5 rounded-xl bg-bg-sunk border border-line p-4">
@@ -2625,7 +2592,7 @@ export default function PortfolioMockPage() {
                         <span className="text-[11px] font-bold text-ink-4">{analysisResult.explain.provider}</span>
                       </div>
                       <p className="mt-3 text-sm leading-relaxed text-ink-3">
-                        <DictionaryText text={analysisResult.explain.text} />
+                        <DictionaryText text={localizeBackendText(analysisResult.explain.text, i18n.language)} />
                       </p>
                     </div>
                   ) : null}
@@ -2955,7 +2922,7 @@ export default function PortfolioMockPage() {
                             <tbody>
                               {capmAssets.map((asset) => (
                                 <tr key={`capm-${asset.stockCode}`} className="border-t border-line text-ink-3">
-                                  <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
+                                  <td className="py-2 pr-3 font-medium text-ink">{localizeBackendText(asset.companyName ?? asset.stockCode, i18n.language)}</td>
                                   <td className="py-2 pr-3">{asset.benchmarkName ?? asset.benchmarkCode ?? "-"}</td>
                                   <td className="py-2 pr-3">{asset.status ? t(`capmAssetStatus.${asset.status}` as `capmAssetStatus.${string}`, asset.status) : "-"}</td>
                                   <td className="py-2 pr-3 font-mono tabular">{asset.commonSampleSize ?? 0}</td>
@@ -3108,7 +3075,7 @@ export default function PortfolioMockPage() {
                                 <tbody>
                                   {capmAssets.map((asset) => (
                                     <tr key={`scl-${asset.stockCode}`} className="border-t border-line text-ink-3">
-                                      <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
+                                      <td className="py-2 pr-3 font-medium text-ink">{localizeBackendText(asset.companyName ?? asset.stockCode, i18n.language)}</td>
                                       <td className="py-2 pr-3 font-mono tabular">{asset.beta?.toFixed(3) ?? "-"}</td>
                                       <td className="py-2 pr-3 font-mono tabular">{asset.dailyAlpha !== null && asset.dailyAlpha !== undefined ? formatPct(asset.dailyAlpha, 3) : "-"}</td>
                                       <td className="py-2 pr-3 font-mono tabular">{asset.annualAlpha !== null && asset.annualAlpha !== undefined ? formatPct(asset.annualAlpha) : "-"}</td>
@@ -3191,7 +3158,7 @@ export default function PortfolioMockPage() {
                                   <g key={`sml-point-${asset.stockCode}`}>
                                     <circle cx={xPoint} cy={yPoint} r="4.5" fill={pieColorForIndex(index)} stroke="white" strokeWidth="1.5" />
                                     <text x={xPoint + 6} y={yPoint - 6} className="fill-ink text-[9px] font-semibold">
-                                      {asset.companyName ?? asset.stockCode}
+                                      {localizeBackendText(asset.companyName ?? asset.stockCode, i18n.language)}
                                     </text>
                                   </g>
                                 );
@@ -3226,7 +3193,7 @@ export default function PortfolioMockPage() {
                                 <tbody>
                                   {smlAssets.map((asset) => (
                                     <tr key={`sml-${asset.stockCode}`} className="border-t border-line text-ink-3">
-                                      <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
+                                      <td className="py-2 pr-3 font-medium text-ink">{localizeBackendText(asset.companyName ?? asset.stockCode, i18n.language)}</td>
                                       <td className="py-2 pr-3 font-mono tabular">{asset.beta?.toFixed(3) ?? "-"}</td>
                                       <td className="py-2 pr-3 font-mono tabular">{asset.capmExpectedReturn !== null && asset.capmExpectedReturn !== undefined ? formatPct(asset.capmExpectedReturn) : "-"}</td>
                                       <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.historicalExpectedReturn)}</td>
@@ -3986,7 +3953,7 @@ export default function PortfolioMockPage() {
                                                 style={{ backgroundColor: weight.assetType === "CASH" ? CASH_COLOR : pieColorForIndex(index) }}
                                               />
                                               <span className="min-w-0 flex-1 truncate text-ink-3">
-                                                {weight.companyName ?? weight.stockCode}
+                                                {localizeBackendText(weight.companyName ?? weight.stockCode, i18n.language)}
                                               </span>
                                               <span className="font-mono tabular text-ink">
                                                 {formatPct(weight.weight)}
@@ -4067,7 +4034,7 @@ export default function PortfolioMockPage() {
                                             style={{ backgroundColor: weight.assetType === "CASH" ? CASH_COLOR : pieColorForIndex(index) }}
                                           />
                                           <span className="min-w-0 flex-1 truncate text-ink-3">
-                                            {weight.companyName ?? weight.stockCode}
+                                            {localizeBackendText(weight.companyName ?? weight.stockCode, i18n.language)}
                                           </span>
                                           <span className="font-mono tabular text-ink">{formatPct(weight.weight)}</span>
                                         </div>

@@ -590,14 +590,14 @@ export default function StocksMockPage() {
       setSnapshot(snap);
       if (Array.isArray(singleData) && singleData.length > 0) {
         setFinancial(singleData[0]);
-        setSections(buildSectionsFromDto(singleData[0], snap));
+        setSections(buildSectionsFromDto(singleData[0], snap, i18n.language));
       } else if (singleData && !Array.isArray(singleData)) {
         const dto = singleData as unknown as FinancialDto;
         setFinancial(dto);
-        setSections(buildSectionsFromDto(dto, snap));
+        setSections(buildSectionsFromDto(dto, snap, i18n.language));
       } else {
         // financial 데이터 없어도 snapshot만으로 투자지표 표시
-        setSections(buildSectionsFromDto(null, snap));
+        setSections(buildSectionsFromDto(null, snap, i18n.language));
       }
       setTrendData(Array.isArray(trend) ? trend : []);
     } catch (e) {

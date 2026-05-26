@@ -1162,7 +1162,7 @@ export default function Feature2MockPage() {
             {/* [좌측 하단] 산업 지수 차트 카드 */}
             <section className="w-full bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4">
               <h2 className="text-ink text-lg sm:text-2xl font-semibold tracking-tight">
-                {mainStock.name} {t("industry.titlePrefix")} <DictTerm term="산업 지수">산업 지수</DictTerm>
+                {mainStock.name} {t("industry.titlePrefix")} <DictTerm term="산업 지수">{t("industry.indexLabel")}</DictTerm>
               </h2>
 
               {/* 헤더와 차트 사이 divider */}

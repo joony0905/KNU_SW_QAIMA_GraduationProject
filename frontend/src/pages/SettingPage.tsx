@@ -54,6 +54,7 @@ import {
   riskProfileDescription,
   riskProfileLabel as formatRiskProfileLabel,
 } from "../utils/displayLabels";
+import { localizeBackendText } from "../utils/localizeBackendText";
 
 const formatPhone = (v: string): string => {
   const d = (v ?? "").replace(/[^0-9]/g, "");
@@ -66,6 +67,9 @@ const formatBirthdate = (v: string): string =>
   /^\d{6,7}$/.test(v ?? "")
     ? `${v.slice(0, 2)}.${v.slice(2, 4)}.${v.slice(4, 6)}`
     : v || "-";
+
+const reportPortfolioSummary = (value?: string | null, language?: string | null): string | null =>
+  value ? localizeBackendText(value, language) : null;
 
 
 type CardProps = {
@@ -158,7 +162,7 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
           subjectLabel: report.subjectType === "PORTFOLIO"
             ? t("cards.reports.portfolioLabel")
             : `${report.companyName || report.stockCode || t("cards.reports.stockFallback")} (${report.stockCode || "-"})`,
-          subjectDetail: report.portfolioSummary,
+          subjectDetail: reportPortfolioSummary(report.portfolioSummary, i18n.language),
           generatedAt: report.generatedAt,
           analysisModel: report.analysisModel,
           investLevel: report.investLevel,
@@ -170,7 +174,7 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
         }}
       />
       <div className="rounded-xl border border-line bg-bg-sunk p-4">
-        <h3 className="text-base font-bold text-ink">{report.title}</h3>
+        <h3 className="text-base font-bold text-ink">{localizeBackendText(report.title, i18n.language)}</h3>
         <p className="mt-1 text-sm text-ink-3">
           {t("reportDetail.snapshotNote")}
         </p>
@@ -179,23 +183,23 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
         <section className="rounded-xl border border-line bg-bg-sunk p-4">
           <h3 className="text-base font-bold text-ink">{t("reportDetail.overallSummary")}</h3>
           <p className="mt-2 text-sm leading-relaxed text-ink-2">
-            {explain?.overall?.summary || explain?.text || snapshot?.summary}
+            {localizeBackendText(explain?.overall?.summary || explain?.text || snapshot?.summary, i18n.language)}
           </p>
           {explain?.overall?.bullets?.length ? (
             <ul className="mt-3 list-disc list-inside text-sm text-ink-2">
-              {explain.overall.bullets.map((item, idx) => <li key={`bullet-${idx}`}>{item}</li>)}
+              {explain.overall.bullets.map((item, idx) => <li key={`bullet-${idx}`}>{localizeBackendText(item, i18n.language)}</li>)}
             </ul>
           ) : null}
           {explain?.overall?.risks?.length ? (
             <div className="mt-3">
               <p className="text-sm font-semibold text-ink">{t("reportDetail.risks")}</p>
               <ul className="mt-1 list-disc list-inside text-sm text-ink-2">
-                {explain.overall.risks.map((item, idx) => <li key={`risk-${idx}`}>{item}</li>)}
+                {explain.overall.risks.map((item, idx) => <li key={`risk-${idx}`}>{localizeBackendText(item, i18n.language)}</li>)}
               </ul>
             </div>
           ) : null}
           {explain?.overall?.conclusion ? (
-            <p className="mt-3 text-sm leading-relaxed text-ink-2">{explain.overall.conclusion}</p>
+            <p className="mt-3 text-sm leading-relaxed text-ink-2">{localizeBackendText(explain.overall.conclusion, i18n.language)}</p>
           ) : null}
         </section>
       ) : null}
@@ -205,11 +209,11 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
           <div className="mt-3 flex flex-col gap-3">
             {sections.map(([key, section]) => (
               <div key={key} className="rounded-lg border border-line bg-surface p-3">
-                <p className="text-sm font-bold text-ink">{section?.title || key}</p>
-                {section?.summary ? <p className="mt-1 text-sm text-ink-2">{section.summary}</p> : null}
+                <p className="text-sm font-bold text-ink">{localizeBackendText(section?.title, i18n.language) || key}</p>
+                {section?.summary ? <p className="mt-1 text-sm text-ink-2">{localizeBackendText(section.summary, i18n.language)}</p> : null}
                 {section?.bullets?.length ? (
                   <ul className="mt-2 list-disc list-inside text-sm text-ink-2">
-                    {section.bullets.map((item, idx) => <li key={`${key}-${idx}`}>{item}</li>)}
+                    {section.bullets.map((item, idx) => <li key={`${key}-${idx}`}>{localizeBackendText(item, i18n.language)}</li>)}
                   </ul>
                 ) : null}
               </div>
@@ -813,12 +817,12 @@ export default function SettingPage() {
                         </span>
                         <p className="text-sm font-bold text-ink truncate">
                           {report.subjectType === "PORTFOLIO"
-                            ? report.portfolioSummary || t("settingPage:cards.reports.portfolioLabel")
+                            ? reportPortfolioSummary(report.portfolioSummary, i18n.language) || t("settingPage:cards.reports.portfolioLabel")
                             : `${report.companyName || report.stockCode || t("settingPage:cards.reports.stockFallback")} (${report.stockCode || "-"})`}
                         </p>
                       </div>
                       <p className="mt-1 text-xs text-ink-3">
-                        {formatKstDateTime(report.generatedAt)} · {report.analysisModel || "-"} · {investLevelLabel(report.investLevel, i18n.language)}
+                        {formatKstDateTime(report.generatedAt)} · {investLevelLabel(report.investLevel, i18n.language)}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">

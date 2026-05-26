@@ -16,6 +16,7 @@ import { MultiLineTrendChart } from "./Feature2TrendCharts";
 import { usePdfExportReveal } from "../contexts/PdfExportContext";
 import ReportHeader, { type ReportHeaderMeta } from "./ReportHeader";
 import { mapWarningsToNotes, expandWarningLines } from "../utils/warningNotes";
+import { localizeBackendText } from "../utils/localizeBackendText";
 
 interface AnalysisResultPanelProps {
   result: AnalysisPanelResult | null;
@@ -252,25 +253,29 @@ const relationColorClass = (relation: PeerItem["relation"]): string => {
 
 const reportSectionClass = "min-w-0 max-w-full overflow-hidden border-t border-line pt-4 first:border-t-0 first:pt-0";
 
-const renderExplainSection = (section: ExplainSection | null | undefined, t: AnalysisPanelTranslator) => {
+const renderExplainSection = (section: ExplainSection | null | undefined, t: AnalysisPanelTranslator, language?: string | null) => {
   if (!section || (!section.summary && (!section.bullets || section.bullets.length === 0))) {
     return null;
   }
 
+  const title = localizeBackendText(section.title, language) || t("section.defaultTitle");
+  const summary = localizeBackendText(section.summary, language);
+  const bullets = (section.bullets ?? []).map((item) => localizeBackendText(item, language));
+
   return (
     <div className="mt-3 min-w-0 max-w-full overflow-hidden rounded-2xl border border-line bg-bg-sunk px-4 py-4">
       <h4 className="text-sm font-semibold text-ink">
-        {section.title ?? t("section.defaultTitle")}
+        {title}
       </h4>
-      {section.summary ? (
+      {summary ? (
         <p className="mt-2 text-sm sm:text-base text-ink-2">
-          <DictionaryText text={section.summary} />
+          <DictionaryText text={summary} />
         </p>
       ) : null}
-      {section.bullets && section.bullets.length > 0 ? (
+      {bullets.length > 0 ? (
         <ul className="mt-2 list-disc list-inside text-sm sm:text-base text-ink-2 flex flex-col gap-1">
-          {section.bullets.map((item, idx) => (
-            <li key={`${section.title ?? "section"}-${idx}`}>
+          {bullets.map((item, idx) => (
+            <li key={`${title}-${idx}`}>
               <DictionaryText text={item} />
             </li>
           ))}
@@ -521,7 +526,7 @@ export default function AnalysisResultPanel({
                   <InvestorFlowTrendChart points={result.metrics.investorFlow.stockSeries} height={230} />
                 </div>
               ) : null}
-              {renderExplainSection(explainSections?.investorFlow, t)}
+              {renderExplainSection(explainSections?.investorFlow, t, i18n.language)}
             </div>
           )}
 
@@ -597,7 +602,7 @@ export default function AnalysisResultPanel({
                   </div>
                 );
               })()}
-              {renderExplainSection(explainSections?.peerCluster, t)}
+              {renderExplainSection(explainSections?.peerCluster, t, i18n.language)}
             </div>
           )}
 
@@ -670,7 +675,7 @@ export default function AnalysisResultPanel({
                   </div>
                 </div>
               )}
-              {renderExplainSection(explainSections?.newsSentiment, t)}
+              {renderExplainSection(explainSections?.newsSentiment, t, i18n.language)}
             </div>
           )}
 
@@ -799,8 +804,8 @@ export default function AnalysisResultPanel({
                   )}
                 </div>
               ) : null}
-              {renderExplainSection(explainSections?.macroEnvironment, t)}
-              {renderExplainSection(explainSections?.trendSummary, t)}
+              {renderExplainSection(explainSections?.macroEnvironment, t, i18n.language)}
+              {renderExplainSection(explainSections?.trendSummary, t, i18n.language)}
             </div>
           )}
 
@@ -852,7 +857,7 @@ export default function AnalysisResultPanel({
                   </tbody>
                 </table>
               </div>
-              {renderExplainSection(explainSections?.shortSelling, t)}
+              {renderExplainSection(explainSections?.shortSelling, t, i18n.language)}
             </div>
           ) : null}
 
@@ -860,7 +865,7 @@ export default function AnalysisResultPanel({
           {priceFlowSummary && (
             <div className={reportSectionClass}>
               <PriceFlowBars summary={priceFlowSummary} />
-              {renderExplainSection(explainSections?.priceFlow, t)}
+              {renderExplainSection(explainSections?.priceFlow, t, i18n.language)}
             </div>
           )}
 
@@ -868,7 +873,7 @@ export default function AnalysisResultPanel({
           {result.metrics?.marketSnapshot && (
             <div className={reportSectionClass}>
               <MarketSnapshotBars snapshot={result.metrics.marketSnapshot} />
-              {renderExplainSection(explainSections?.marketSnapshot, t)}
+              {renderExplainSection(explainSections?.marketSnapshot, t, i18n.language)}
             </div>
           )}
 
@@ -878,7 +883,7 @@ export default function AnalysisResultPanel({
               <IndicatorSnapshotCards
                 indicators={result.metrics.indicators}
               />
-              {renderExplainSection(explainSections?.indicators, t)}
+              {renderExplainSection(explainSections?.indicators, t, i18n.language)}
             </div>
           )}
 
@@ -888,11 +893,11 @@ export default function AnalysisResultPanel({
                 period={financialTimeline.period}
                 points={financialTimeline.points}
               />
-              {renderExplainSection(explainSections?.financialTimeline, t)}
+              {renderExplainSection(explainSections?.financialTimeline, t, i18n.language)}
             </div>
           )}
 
-          {renderExplainSection(explainSections?.crossSignal, t)}
+          {renderExplainSection(explainSections?.crossSignal, t, i18n.language)}
 
           {(overallExplain?.summary
             || (overallExplain?.bullets && overallExplain.bullets.length > 0)
@@ -909,7 +914,7 @@ export default function AnalysisResultPanel({
                   {overallExplain.summary ? (
                     <div>
                       <p className="font-medium text-ink">{t("overall.summary")}</p>
-                      <p><DictionaryText text={overallExplain.summary} /></p>
+                      <p><DictionaryText text={localizeBackendText(overallExplain.summary, i18n.language)} /></p>
                     </div>
                   ) : null}
                   {overallExplain.bullets && overallExplain.bullets.length > 0 ? (
@@ -918,7 +923,7 @@ export default function AnalysisResultPanel({
                       <ul className="list-disc list-inside">
                         {overallExplain.bullets.map((item, idx) => (
                           <li key={`overall-bullet-${idx}`}>
-                            <DictionaryText text={item} />
+                            <DictionaryText text={localizeBackendText(item, i18n.language)} />
                           </li>
                         ))}
                       </ul>
@@ -930,7 +935,7 @@ export default function AnalysisResultPanel({
                       <ul className="list-disc list-inside">
                         {overallExplain.risks.map((item, idx) => (
                           <li key={`overall-risk-${idx}`}>
-                            <DictionaryText text={item} />
+                            <DictionaryText text={localizeBackendText(item, i18n.language)} />
                           </li>
                         ))}
                       </ul>
@@ -939,13 +944,13 @@ export default function AnalysisResultPanel({
                   {overallExplain.conclusion ? (
                     <div>
                       <p className="font-medium text-ink">{t("overall.conclusion")}</p>
-                      <p><DictionaryText text={overallExplain.conclusion} /></p>
+                      <p><DictionaryText text={localizeBackendText(overallExplain.conclusion, i18n.language)} /></p>
                     </div>
                   ) : null}
                 </div>
               ) : result.explain?.text?.trim() ? (
                 <p className="text-sm sm:text-base text-ink-2 whitespace-pre-wrap mt-2">
-                  <DictionaryText text={displayText} />
+                  <DictionaryText text={localizeBackendText(displayText, i18n.language)} />
                 </p>
               ) : null}
             </div>

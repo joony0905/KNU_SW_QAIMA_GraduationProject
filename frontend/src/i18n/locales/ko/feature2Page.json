@@ -15,6 +15,7 @@
   },
   "industry": {
     "titlePrefix": "관련",
+    "indexLabel": "산업 지수",
     "noData": "산업 지수 데이터가 없습니다.",
     "loadFailed": "산업 지수 차트를 불러오지 못했습니다."
   },

@@ -20,12 +20,12 @@ public class GlobalExceptionHandler {
         ErrorCode ec = e.getErrorCode();
         exchange.getAttributes().put("errorCode", ec.code());
         return Mono.just(ResponseEntity.status(ec.status())
-                .body(ApiResponse.error(ec.code(), e.getMessage())));
+                .body(ApiResponse.error(ec.code(), localizedMessage(ec, e.getMessage(), exchange))));
     }
 
     @ExceptionHandler(AnalysisApiException.class)
     public Mono<ResponseEntity<ApiResponse<Void>>> handleAnalysisApi(AnalysisApiException e, ServerWebExchange exchange) {
-        return error(ErrorCode.ANALYSIS_API_FAILED, "분석 결과를 불러올 수 없습니다.", exchange);
+        return error(ErrorCode.ANALYSIS_API_FAILED, ErrorCode.ANALYSIS_API_FAILED.defaultMessage(), exchange);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -65,7 +65,7 @@ public class GlobalExceptionHandler {
         ErrorCode errorCode = ErrorCode.fromHttpStatus(statusValue);
         exchange.getAttributes().put("errorCode", errorCode.code());
         return Mono.just(ResponseEntity.status(status)
-                .body(ApiResponse.error(errorCode.code(), safeMessage(e.getReason(), errorCode.defaultMessage()))));
+                .body(ApiResponse.error(errorCode.code(), localizedMessage(errorCode, e.getReason(), exchange))));
     }
 
     @ExceptionHandler(Exception.class)
@@ -76,7 +76,7 @@ public class GlobalExceptionHandler {
     private Mono<ResponseEntity<ApiResponse<Void>>> error(ErrorCode errorCode, String message, ServerWebExchange exchange) {
         exchange.getAttributes().put("errorCode", errorCode.code());
         return Mono.just(ResponseEntity.status(errorCode.status())
-                .body(ApiResponse.error(errorCode.code(), safeMessage(message, errorCode.defaultMessage()))));
+                .body(ApiResponse.error(errorCode.code(), localizedMessage(errorCode, message, exchange))));
     }
 
     private static String firstValidationMessage(WebExchangeBindException e) {
@@ -89,5 +89,34 @@ public class GlobalExceptionHandler {
 
     private static String safeMessage(String msg, String fallback) {
         return (msg == null || msg.isBlank()) ? fallback : msg;
+    }
+
+    private static String localizedMessage(ErrorCode errorCode, String message, ServerWebExchange exchange) {
+        if (!isEnglish(exchange)) {
+            return safeMessage(message, errorCode.defaultMessage());
+        }
+        return englishDefaultMessage(errorCode);
+    }
+
+    private static boolean isEnglish(ServerWebExchange exchange) {
+        String language = exchange.getRequest().getHeaders().getFirst("Accept-Language");
+        return language != null && language.toLowerCase().startsWith("en");
+    }
+
+    public static String englishDefaultMessage(ErrorCode errorCode) {
+        return switch (errorCode) {
+            case VALIDATION_ERROR, BAD_REQUEST -> "The request values are invalid.";
+            case UNAUTHORIZED, INVALID_TOKEN -> "Login is required.";
+            case FORBIDDEN -> "You do not have permission to access this.";
+            case INSUFFICIENT_CREDIT -> "Not enough analysis credits.";
+            case RESOURCE_NOT_FOUND, META_NOT_FOUND -> "The requested information could not be found.";
+            case ANALYSIS_API_FAILED, FEATURE1_ANALYZE_FAILED, FEATURE2_ANALYZE_FAILED, FEATURE3_ANALYZE_FAILED,
+                    PEER_CLUSTER_FAILED, NEWS_SENTIMENT_FAILED ->
+                    "An error occurred during analysis. Please try again shortly.";
+            case EXTERNAL_API_FAILED, EXTERNAL_DECODE_FAILED, KIS_HTTP_ERROR, KIS_DECODE_ERROR, KIS_BIZ_ERROR ->
+                    "An external data integration error occurred. Please try again shortly.";
+            case CONFIGURATION_ERROR, INTERNAL_ERROR -> "A server error occurred. Please try again shortly.";
+            case KIS_MARKET_CLOSED -> "The market is currently closed.";
+        };
     }
 }

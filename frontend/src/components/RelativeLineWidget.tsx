@@ -38,8 +38,12 @@ interface Props {
   onHoverDayKeyChange?: (dayKey: string | null) => void;
 }
 
-const isoToEpochSeconds = (iso: string) =>
-  Math.floor(new Date(iso).getTime() / 1000);
+const isoToEpochSeconds = (iso: string) => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return NaN;
+  const kstDate = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  return Math.floor(Date.UTC(kstDate.getUTCFullYear(), kstDate.getUTCMonth(), kstDate.getUTCDate()) / 1000);
+};
 
 /**
  * epoch seconds를 KST 날짜 키(YYYY-MM-DD)로 변환한다.
@@ -165,6 +169,7 @@ function RelativeLineWidget({
         (p) =>
           p &&
           typeof p.t === "string" &&
+          Number.isFinite(isoToEpochSeconds(p.t)) &&
           Number.isFinite(Number(p.value))
       )
       .map((p) => ({
@@ -395,7 +400,7 @@ function RelativeLineWidget({
     if (chartRef.current) return;
 
     const rect = el.getBoundingClientRect();
-    const width = Math.floor(rect.width || el.clientWidth || 600);
+    const width = Math.max(280, Math.floor(rect.width || el.clientWidth || 600));
 
     const chart = createChart(el, {
       width,
@@ -534,7 +539,7 @@ function RelativeLineWidget({
 
       const r = target.getBoundingClientRect();
       const w = Math.floor(r.width);
-      const h = Math.floor(r.height);
+      const h = Math.floor(r.height || height);
 
       if (w < 80 || h < 80) return;
 
@@ -542,11 +547,27 @@ function RelativeLineWidget({
         width: w,
         height: h,
       });
+      currentChart.timeScale().fitContent();
     });
 
     ro.observe(el);
 
+    const syncSize = () => {
+      const target = containerRef.current;
+      const currentChart = chartRef.current;
+      if (!target || !currentChart) return;
+      const r = target.getBoundingClientRect();
+      const w = Math.max(280, Math.floor(r.width || target.clientWidth || width));
+      const h = Math.max(160, Math.floor(r.height || height));
+      currentChart.applyOptions({ width: w, height: h });
+      currentChart.timeScale().fitContent();
+    };
+    const raf = requestAnimationFrame(syncSize);
+    const timeout = window.setTimeout(syncSize, 250);
+
     return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timeout);
       try {
         ro.disconnect();
       } catch {}

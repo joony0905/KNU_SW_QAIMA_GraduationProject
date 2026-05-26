@@ -121,15 +121,23 @@ const WARNING_MESSAGE_MAP_EN: WarningMessageMap = [
 
 const isEnglish = (language?: string | null) => (language ?? "").toLowerCase().startsWith("en");
 
+const warningCode = (raw: unknown): string | null => {
+  if (typeof raw === "string") return raw;
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  return typeof record.code === "string" ? record.code : null;
+};
+
 export function mapWarningsToNotes(warnings?: unknown[] | string[] | null, language?: string | null): string[] {
   if (!warnings || warnings.length === 0) return [];
   const messageMap = isEnglish(language) ? WARNING_MESSAGE_MAP_EN : WARNING_MESSAGE_MAP_KO;
   const messages: string[] = [];
   for (const raw of warnings) {
-    if (typeof raw !== "string") continue;
+    const code = warningCode(raw);
+    if (!code) continue;
     let matched = false;
     for (const [pattern, message] of messageMap) {
-      if (pattern.test(raw)) {
+      if (pattern.test(code)) {
         messages.push(message);
         matched = true;
         break;

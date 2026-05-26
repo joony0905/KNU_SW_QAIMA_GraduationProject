@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 type Props = {
   loading: boolean;
   error: string | null | undefined;
@@ -5,9 +7,12 @@ type Props = {
 };
 
 export default function ApiResultBox({ loading, error, data }: Props) {
-  if (loading) return <div>불러오는 중...</div>;
-  if (error) return <div style={{ color: "red" }}>에러: {error}</div>;
-  if (!data) return <div>아직 응답이 없습니다.</div>;
+  const { i18n } = useTranslation();
+  const english = i18n.language.toLowerCase().startsWith("en");
+
+  if (loading) return <div>{english ? "Loading..." : "불러오는 중..."}</div>;
+  if (error) return <div style={{ color: "red" }}>{english ? "Error" : "에러"}: {error}</div>;
+  if (!data) return <div>{english ? "No response yet." : "아직 응답이 없습니다."}</div>;
 
   return (
     <pre

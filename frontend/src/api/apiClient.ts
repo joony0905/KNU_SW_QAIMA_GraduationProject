@@ -2,6 +2,7 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { getErrorMessage } from "../utils/errorMessage";
 import { clientLog } from "../utils/clientLog";
 import { clearAccessToken, getAccessToken, setAccessToken } from "./tokenStore";
+import i18n from "../i18n";
 
 declare module "axios" {
   export interface AxiosRequestConfig {
@@ -24,9 +25,10 @@ const api = axios.create({
 
 // 1) 요청 인터셉터: 메모리 AT 자동 첨부
 api.interceptors.request.use((config) => {
+  config.headers = config.headers ?? {};
+  config.headers["Accept-Language"] = i18n.language?.toLowerCase().startsWith("en") ? "en" : "ko";
   const token = getAccessToken();
   if (token) {
-    config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;

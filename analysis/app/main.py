@@ -64,7 +64,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         content={
             "meta": {"status": "failure"},
             "data": None,
-            "errors": [{"code": "INTERNAL_ERROR", "message": "분석 API 내부 오류"}],
+            "errors": [{"code": "INTERNAL_ERROR", "message": _error_message("INTERNAL_ERROR", request)}],
         },
     )
 
@@ -78,7 +78,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content={
             "meta": {"status": "failure"},
             "data": None,
-            "errors": [{"code": code, "message": _error_message(code)}],
+            "errors": [{"code": code, "message": _error_message(code, request)}],
         },
     )
 
@@ -91,8 +91,22 @@ def _error_code_from_detail(detail: object) -> str:
     return "ANALYSIS_API_FAILED"
 
 
-def _error_message(code: str) -> str:
+def _is_english_request(request: Request) -> bool:
+    lang = request.headers.get("accept-language", "")
+    return lang.lower().startswith("en")
+
+
+def _error_message(code: str, request: Request) -> str:
+    if _is_english_request(request):
+        return {
+            "INTERNAL_ERROR": "Internal analysis API error.",
+            "PEER_CLUSTER_FAILED": "Similar-stock analysis failed.",
+            "NEWS_SENTIMENT_FAILED": "News sentiment analysis failed.",
+            "FEATURE2_ANALYZE_FAILED": "Feature 2 explanation generation failed.",
+            "FEATURE3_ANALYZE_FAILED": "Feature 3 portfolio analysis failed.",
+        }.get(code, "Analysis API request failed.")
     return {
+        "INTERNAL_ERROR": "분석 API 내부 오류",
         "PEER_CLUSTER_FAILED": "유사 종목 분석에 실패했습니다.",
         "NEWS_SENTIMENT_FAILED": "뉴스 감성 분석에 실패했습니다.",
         "FEATURE2_ANALYZE_FAILED": "Feature2 설명 생성에 실패했습니다.",
