@@ -103,6 +103,58 @@
     "shortSellingRatio": "공매도 거래대금 비율",
     "shortSelling": "공매도"
   },
+  "trendSeries": {
+    "USD_KRW": "USD/KRW",
+    "KR_BASE_RATE": "한국 기준금리",
+    "US_FED_FUNDS": "미국 기준금리",
+    "KR3Y": "국고채 3년",
+    "KR10Y": "국고채 10년",
+    "US2Y": "미국채 2년",
+    "US5Y": "미국채 5년",
+    "US10Y": "미국채 10년",
+    "SHORT_SELLING_VOLUME_RATIO": "공매도 거래량 비율",
+    "SHORT_SELLING_AMOUNT_RATIO": "공매도 거래대금 비율"
+  },
+  "baseRateChart": {
+    "empty": "기준금리 추이 데이터가 없습니다.",
+    "latestRate": "최신 금리",
+    "change": "변화 폭",
+    "startDate": "시작일",
+    "observedDate": "관측일",
+    "asOf": "기준일"
+  },
+  "shortSellingChart": {
+    "empty": "공매도 추이 데이터가 없습니다.",
+    "latestVolumeRatio": "최신 거래량 비율",
+    "latestAmountRatio": "최신 거래대금 비율",
+    "startDate": "시작일",
+    "asOf": "기준일",
+    "volumeRatioLine": "공매도 거래량 비율 선",
+    "amountRatioLayer": "공매도 거래대금 비율 레이어"
+  },
+  "investorFlowChart": {
+    "empty": "수급 시계열 데이터가 없습니다.",
+    "foreign": "외국인",
+    "institution": "기관",
+    "hover": "{{date}} · 외국인 {{foreign}} · 기관 {{institution}}"
+  },
+  "financialTimeline": {
+    "title": "재무 시계열",
+    "subtitle": "매출·영업이익·순이익·영업이익률",
+    "empty": "표시할 재무 시계열 데이터가 없습니다.",
+    "chartAria": "{{title}} 차트",
+    "period": {
+      "A": "연간 기준",
+      "H": "반기 기준",
+      "Q": "분기 기준"
+    },
+    "legend": {
+      "revenue": "매출",
+      "operatingIncome": "영업이익",
+      "netIncome": "순이익",
+      "operatingMargin": "영업이익률"
+    }
+  },
   "shortSelling": {
     "shortSelling": "공매도",
     "titleSuffix": "현황",

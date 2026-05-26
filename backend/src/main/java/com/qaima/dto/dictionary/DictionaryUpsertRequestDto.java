@@ -20,6 +20,8 @@ public class DictionaryUpsertRequestDto {
     @NotBlank(message = "description is required")
     private String description;
 
+    private String descriptionEn;
+
     private String source;
 
     private String sourceOrg;

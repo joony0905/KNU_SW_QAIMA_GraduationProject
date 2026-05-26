@@ -17,6 +17,7 @@ public class DictionaryTermDto {
     private String term;
     private String initial;
     private String description;
+    private String descriptionEn;
     private String source;
     private String sourceOrg;
     private String sourceUrl;

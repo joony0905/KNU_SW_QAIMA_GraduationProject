@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ShortSellingSeriesPoint } from "../types/feature2";
 
 type Props = {
@@ -20,6 +21,7 @@ const fmtPct = (value: number | null | undefined) => {
 };
 
 export default function ShortSellingTrendChart({ points }: Props) {
+  const { t } = useTranslation("analysisPanel");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const validPoints = useMemo(
     () => points.filter((point) => point.shortVolumeRatio != null || point.shortAmountRatio != null),
@@ -103,7 +105,7 @@ export default function ShortSellingTrendChart({ points }: Props) {
   if (!chart) {
     return (
       <div className="mt-2 rounded-2xl border border-line bg-bg-sunk px-4 py-8 text-sm text-ink-3">
-        공매도 추이 데이터가 없습니다.
+        {t("shortSellingChart.empty")}
       </div>
     );
   }
@@ -118,19 +120,19 @@ export default function ShortSellingTrendChart({ points }: Props) {
     <div className="mt-2 rounded-2xl border border-line bg-bg-sunk px-4 py-4">
       <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4 sm:text-sm">
         <div>
-          <p className="text-ink-3">최신 거래량 비율</p>
+          <p className="text-ink-3">{t("shortSellingChart.latestVolumeRatio")}</p>
           <p className="font-semibold" style={{ color: VOLUME_COLOR }}>{fmtPct(latest.shortVolumeRatio)}</p>
         </div>
         <div>
-          <p className="text-ink-3">최신 거래대금 비율</p>
+          <p className="text-ink-3">{t("shortSellingChart.latestAmountRatio")}</p>
           <p className="font-semibold" style={{ color: AMOUNT_COLOR }}>{fmtPct(latest.shortAmountRatio)}</p>
         </div>
         <div>
-          <p className="text-ink-3">시작일</p>
+          <p className="text-ink-3">{t("shortSellingChart.startDate")}</p>
           <p className="font-medium text-ink-2">{first.reportDate}</p>
         </div>
         <div>
-          <p className="text-ink-3">기준일</p>
+          <p className="text-ink-3">{t("shortSellingChart.asOf")}</p>
           <p className="font-medium text-ink-2">{latest.reportDate}</p>
         </div>
       </div>
@@ -262,11 +264,11 @@ export default function ShortSellingTrendChart({ points }: Props) {
       <div className="mt-3 flex flex-wrap gap-4 text-xs sm:text-sm">
         <div className="flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: VOLUME_COLOR }} />
-          <span className="text-ink-2">공매도 거래량 비율 선</span>
+          <span className="text-ink-2">{t("shortSellingChart.volumeRatioLine")}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: AMOUNT_COLOR }} />
-          <span className="text-ink-2">공매도 거래대금 비율 레이어</span>
+          <span className="text-ink-2">{t("shortSellingChart.amountRatioLayer")}</span>
         </div>
       </div>
     </div>

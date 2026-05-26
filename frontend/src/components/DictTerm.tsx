@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { useDictionary } from "./DictContext";
 import { useDictTermOwner } from "./DictSeenScope";
+import { dictionaryDescription, isEnglishLanguage } from "../utils/dictionaryDisplay";
 
 interface DictTermProps {
   term: string;
@@ -9,12 +11,15 @@ interface DictTermProps {
 }
 
 export default function DictTerm({ term, children }: DictTermProps) {
+  const { i18n } = useTranslation();
   const { terms, ready, glossaryHover } = useDictionary();
   const [hovered, setHovered] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const isOwner = useDictTermOwner(term);
 
   const entry = ready ? terms.get(term.toLowerCase()) : undefined;
+  const description = dictionaryDescription(entry, i18n.language);
+  const isEnglish = isEnglishLanguage(i18n.language);
 
   if (!entry) {
     return <>{children}</>;
@@ -57,10 +62,10 @@ export default function DictTerm({ term, children }: DictTermProps) {
               {entry.term}
             </span>
             <span className="block text-xs text-ink-2 leading-relaxed max-h-32 overflow-hidden whitespace-pre-wrap">
-              {entry.description}
+              {description}
             </span>
             <span className="block mt-1.5 text-[11px] text-ink-4">
-              ? 클릭 시 전체 설명
+              {isEnglish ? "Click ? for full description" : "? 클릭 시 전체 설명"}
             </span>
           </span>
         )}
@@ -87,10 +92,12 @@ export default function DictTerm({ term, children }: DictTermProps) {
 
             <div className="px-5 py-4 overflow-y-auto flex-1">
               <p className="text-sm text-ink-2 leading-relaxed whitespace-pre-wrap">
-                {entry.description}
+                {description}
               </p>
               {entry.source && (
-                <p className="mt-3 text-xs text-ink-4">출처: {entry.source}</p>
+                <p className="mt-3 text-xs text-ink-4">
+                  {isEnglish ? "Source" : "출처"}: {entry.source}
+                </p>
               )}
             </div>
           </div>

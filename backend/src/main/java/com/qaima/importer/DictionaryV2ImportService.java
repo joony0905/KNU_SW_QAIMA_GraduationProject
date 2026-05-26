@@ -40,6 +40,7 @@ public class DictionaryV2ImportService {
             "display_term",
             "canonical_term",
             "description",
+            "description_en",
             "source",
             "source_org",
             "source_url",
@@ -94,6 +95,7 @@ public class DictionaryV2ImportService {
                         : new DictionaryTerm(termKey);
                 entity.setTerm(termKey);
                 entity.setDescription(row.description());
+                entity.setDescriptionEn(normalizeOptional(row.descriptionEn()));
                 entity.setSource(row.source());
                 entity.setSourceOrg(row.sourceOrg());
                 entity.setSourceUrl(row.sourceUrl());
@@ -303,6 +305,7 @@ public class DictionaryV2ImportService {
 
     private void validateAliasCopiesCanonicalFields(FlatRow row, FlatRow canonical, ValidationResult result) {
         compareAliasField(row, canonical, "description", row.description(), canonical.description(), result);
+        compareAliasField(row, canonical, "description_en", row.descriptionEn(), canonical.descriptionEn(), result);
         compareAliasField(row, canonical, "source", row.source(), canonical.source(), result);
         compareAliasField(row, canonical, "source_org", row.sourceOrg(), canonical.sourceOrg(), result);
         compareAliasField(row, canonical, "source_url", row.sourceUrl(), canonical.sourceUrl(), result);
@@ -531,6 +534,7 @@ public class DictionaryV2ImportService {
             String displayTerm,
             String canonicalTerm,
             String description,
+            String descriptionEn,
             String source,
             String sourceOrg,
             String sourceUrl,
@@ -555,6 +559,7 @@ public class DictionaryV2ImportService {
                     get(cols, idx, "display_term"),
                     get(cols, idx, "canonical_term"),
                     get(cols, idx, "description"),
+                    get(cols, idx, "description_en"),
                     get(cols, idx, "source"),
                     get(cols, idx, "source_org"),
                     get(cols, idx, "source_url"),

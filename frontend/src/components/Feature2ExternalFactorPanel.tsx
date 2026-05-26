@@ -70,9 +70,35 @@ const formatNumber = (value?: number | null, digits = 2) => {
   });
 };
 
-const formatRate = (value?: number | null, unit = "%") => {
+const isEnglish = (language?: string | null) => (language ?? "").toLowerCase().startsWith("en");
+
+const formatRateUnit = (unit = "%", language?: string | null) => {
+  if (!isEnglish(language)) return unit;
+  if (unit === "연%") return "%";
+  return unit;
+};
+
+const formatRate = (value?: number | null, unit = "%", language?: string | null) => {
   if (value == null || !Number.isFinite(value)) return "-";
-  return `${value.toFixed(2)}${unit}`;
+  return `${value.toFixed(2)}${formatRateUnit(unit, language)}`;
+};
+
+const instrumentNameLabel = (code?: string | null, name?: string | null, language?: string | null) => {
+  if (!isEnglish(language)) return name ?? "-";
+  switch (code) {
+    case "KR3Y":
+      return "Korea Treasury 3Y";
+    case "KR10Y":
+      return "Korea Treasury 10Y";
+    case "US2Y":
+      return "US Treasury 2Y";
+    case "US5Y":
+      return "US Treasury 5Y";
+    case "US10Y":
+      return "US Treasury 10Y";
+    default:
+      return name ?? "-";
+  }
 };
 
 const formatDate = (value?: string | null) => {
@@ -178,7 +204,7 @@ export default function Feature2ExternalFactorPanel({
   peerCluster,
   onSelectRelatedStock,
 }: Props) {
-  const { t } = useTranslation("analysisPanel");
+  const { t, i18n } = useTranslation("analysisPanel");
   const [activeTab, setActiveTab] = useState<ExternalFactorTab>("summary");
   const tabs = tabKeys.map((key) => ({ key, label: t(`external.tabs.${key}`) }));
   const hasInvestorFlowData = Boolean(
@@ -239,7 +265,7 @@ export default function Feature2ExternalFactorPanel({
       <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
         <MetricTile
           label={<DictTerm term="기준금리">{t("macroSeries.krBaseRate")}</DictTerm>}
-          value={formatRate(krBaseRate?.value, krBaseRate?.unit ?? "%")}
+          value={formatRate(krBaseRate?.value, krBaseRate?.unit ?? "%", i18n.language)}
           sub={formatDate(krBaseRate?.date)}
         />
         <MetricTile
@@ -305,7 +331,7 @@ export default function Feature2ExternalFactorPanel({
           {[...krBondYields, ...usBondYields].slice(0, 4).map((item) => (
             <div key={item.instrumentCode} className="flex items-center justify-between gap-2">
               <span className="text-ink-3">{item.instrumentCode}</span>
-              <span className="font-semibold text-ink">{formatRate(item.value, item.unit)}</span>
+              <span className="font-semibold text-ink">{formatRate(item.value, item.unit, i18n.language)}</span>
             </div>
           ))}
           {krBondYields.length + usBondYields.length === 0 && (
@@ -343,12 +369,12 @@ export default function Feature2ExternalFactorPanel({
       <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
         <MetricTile
           label={t("macroSeries.krBaseRate")}
-          value={formatRate(krBaseRate?.value, krBaseRate?.unit ?? "%")}
+          value={formatRate(krBaseRate?.value, krBaseRate?.unit ?? "%", i18n.language)}
           sub={formatDate(krBaseRate?.date)}
         />
         <MetricTile
           label={t("macroSeries.usBaseRate")}
-          value={formatRate(macroRates?.usFedFundsRate?.value, macroRates?.usFedFundsRate?.unit ?? "%")}
+          value={formatRate(macroRates?.usFedFundsRate?.value, macroRates?.usFedFundsRate?.unit ?? "%", i18n.language)}
           sub={formatDate(macroRates?.usFedFundsRate?.date)}
         />
         <MetricTile
@@ -362,8 +388,8 @@ export default function Feature2ExternalFactorPanel({
           sub={usdKrw?.source ?? "-"}
         />
       </div>
-      <BondYieldList title={t("external.macro.krRates")} items={krBondYields} emptyText={t("external.empty.data")} countUnit={t("external.countUnit")} />
-      <BondYieldList title={t("external.macro.usRates")} items={usBondYields} emptyText={t("external.empty.data")} countUnit={t("external.countUnit")} />
+      <BondYieldList title={t("external.macro.krRates")} items={krBondYields} emptyText={t("external.empty.data")} countUnit={t("external.countUnit")} language={i18n.language} />
+      <BondYieldList title={t("external.macro.usRates")} items={usBondYields} emptyText={t("external.empty.data")} countUnit={t("external.countUnit")} language={i18n.language} />
       <div className="flex flex-col gap-3">
         <div>
           <p className="mb-2 text-sm font-semibold text-ink">{t("external.macro.fxTrend")}</p>
@@ -730,11 +756,13 @@ function BondYieldList({
   items,
   emptyText,
   countUnit,
+  language,
 }: {
   title: string;
   items: NonNullable<Feature2MacroRates["bondYields"]>;
   emptyText: string;
   countUnit: string;
+  language?: string | null;
 }) {
   return (
     <div className="rounded-lg border border-line bg-surface px-3 py-3">
@@ -747,9 +775,9 @@ function BondYieldList({
           <div key={item.instrumentCode} className="flex items-center justify-between gap-3 py-2">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-ink-2">{item.instrumentCode}</p>
-              <p className="text-[11px] text-ink-3">{item.instrumentName} · {formatDate(item.date)}</p>
+              <p className="text-[11px] text-ink-3">{instrumentNameLabel(item.instrumentCode, item.instrumentName, language)} · {formatDate(item.date)}</p>
             </div>
-            <p className="text-sm font-bold text-ink">{formatRate(item.value, item.unit)}</p>
+            <p className="text-sm font-bold text-ink">{formatRate(item.value, item.unit, language)}</p>
           </div>
         ))}
         {items.length === 0 && (

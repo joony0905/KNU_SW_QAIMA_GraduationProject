@@ -6,6 +6,7 @@ import type { DictionaryTermDto } from "../types/dictionary";
 import { fetchDictionaryTerms, fetchDictionaryTerm } from "../api/dictionary";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { useTheme } from "../hooks/useTheme";
+import { dictionaryDescription } from "../utils/dictionaryDisplay";
 
 const HANGUL_LETTERS = [
   "ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ",
@@ -16,7 +17,7 @@ const ALPHABET_ROW1 = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L
 const ALPHABET_ROW2 = ["N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"];
 
 export default function DictionaryMockPage() {
-  const { t } = useTranslation("dictionaryPage");
+  const { t, i18n } = useTranslation("dictionaryPage");
   const { theme, toggle } = useTheme();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,7 +45,11 @@ export default function DictionaryMockPage() {
     return terms.filter((term) => {
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
-        const haystack = (term.term + " " + (term.description ?? "")).toLowerCase();
+        const haystack = [
+          term.term,
+          term.description,
+          term.descriptionEn,
+        ].filter(Boolean).join(" ").toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
@@ -114,7 +119,7 @@ export default function DictionaryMockPage() {
                 </h2>
                 <div className="mt-1 flex-1 overflow-y-auto">
                   <p className="text-[11px] sm:text-xs md:text-sm leading-relaxed text-ink-2 font-normal">
-                    {selectedTerm.description}
+                    {dictionaryDescription(selectedTerm, i18n.language)}
                   </p>
                 </div>
               </>

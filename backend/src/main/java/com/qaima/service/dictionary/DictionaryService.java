@@ -148,6 +148,7 @@ public class DictionaryService {
         if (term == null) return Mono.error(new IllegalArgumentException("term is required"));
 
         String description = normalizeRequired(dto.getDescription(), "description is required");
+        String descriptionEn = normalizeOptional(dto.getDescriptionEn());
         String source = normalizeOptional(dto.getSource());
         String sourceOrg = normalizeOptional(dto.getSourceOrg());
         String sourceUrl = normalizeOptional(dto.getSourceUrl());
@@ -164,6 +165,7 @@ public class DictionaryService {
             DictionaryTerm entity = dictionaryRepository.findById(term).orElseGet(() -> new DictionaryTerm(term));
             entity.setTerm(term);
             entity.setDescription(description);
+            entity.setDescriptionEn(descriptionEn);
             entity.setSource(source);
             entity.setSourceOrg(sourceOrg);
             entity.setSourceUrl(sourceUrl);
@@ -253,6 +255,7 @@ public class DictionaryService {
                 .term(entity.getTerm())
                 .initial(entity.getInitial())
                 .description(entity.getDescription())
+                .descriptionEn(entity.getDescriptionEn())
                 .source(entity.getSource())
                 .sourceOrg(entity.getSourceOrg())
                 .sourceUrl(entity.getSourceUrl())

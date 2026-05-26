@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePdfExportReveal } from "../contexts/PdfExportContext";
 
 export type FinancialTimelinePeriod = "A" | "H" | "Q";
@@ -25,10 +26,18 @@ const COLORS = {
   operatingMargin: "#d97706",
 } as const;
 
-const fmtAmount = (value: number | null | undefined) => {
+const isEnglish = (language?: string | null) => (language ?? "").toLowerCase().startsWith("en");
+
+const fmtAmount = (value: number | null | undefined, language?: string | null) => {
   if (value == null) return "-";
   const abs = Math.abs(value);
   const sign = value < 0 ? "-" : "";
+  if (isEnglish(language)) {
+    if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(1)}T`;
+    if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(1)}B`;
+    if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)}M`;
+    return `${sign}${abs.toLocaleString("en-US")}`;
+  }
   if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(1)}조`;
   if (abs >= 1e8) return `${sign}${(abs / 1e8).toFixed(0)}억`;
   return `${sign}${abs.toLocaleString("ko-KR")}`;
@@ -39,28 +48,21 @@ const fmtPercent = (value: number | null | undefined) => {
   return `${value.toFixed(1)}%`;
 };
 
-const periodLabel = (period: FinancialTimelinePeriod) => {
-  switch (period) {
-    case "Q":
-      return "분기 기준";
-    case "H":
-      return "반기 기준";
-    default:
-      return "연간 기준";
-  }
-};
-
 export default function FinancialTimelineChart({
-  title = "재무 시계열",
-  subtitle = "매출·영업이익·순이익·영업이익률",
+  title,
+  subtitle,
   period,
   points,
 }: Props) {
+  const { t, i18n } = useTranslation("analysisPanel");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [hasAnimated, setHasAnimated] = useState(false);
   const forceReveal = usePdfExportReveal();
   const animated = hasAnimated || forceReveal;
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const displayTitle = title ?? t("financialTimeline.title");
+  const displaySubtitle = subtitle ?? t("financialTimeline.subtitle");
+  const periodText = t(`financialTimeline.period.${period}` as `financialTimeline.period.${FinancialTimelinePeriod}`);
 
   useEffect(() => {
     setHasAnimated(false);
@@ -117,9 +119,9 @@ export default function FinancialTimelineChart({
   if (!points.length) {
     return (
       <div>
-        <h3 className="text-base sm:text-lg font-semibold text-ink">{title}</h3>
-        <p className="text-sm text-ink-3 mt-1">{subtitle}</p>
-        <p className="text-sm text-ink-3 mt-3">표시할 재무 시계열 데이터가 없습니다.</p>
+        <h3 className="text-base sm:text-lg font-semibold text-ink">{displayTitle}</h3>
+        <p className="text-sm text-ink-3 mt-1">{displaySubtitle}</p>
+        <p className="text-sm text-ink-3 mt-3">{t("financialTimeline.empty")}</p>
       </div>
     );
   }
@@ -189,10 +191,10 @@ export default function FinancialTimelineChart({
   }, [linePoints]);
 
   const legendItems = [
-    { color: COLORS.revenue, label: "매출" },
-    { color: COLORS.operatingIncome, label: "영업이익" },
-    { color: COLORS.netIncome, label: "순이익" },
-    { color: COLORS.operatingMargin, label: "영업이익률" },
+    { color: COLORS.revenue, label: t("financialTimeline.legend.revenue") },
+    { color: COLORS.operatingIncome, label: t("financialTimeline.legend.operatingIncome") },
+    { color: COLORS.netIncome, label: t("financialTimeline.legend.netIncome") },
+    { color: COLORS.operatingMargin, label: t("financialTimeline.legend.operatingMargin") },
   ];
   const hoveredPoint = hoveredIndex == null ? null : points[hoveredIndex] ?? null;
 
@@ -208,9 +210,9 @@ export default function FinancialTimelineChart({
       }}
     >
       <div className="flex flex-col gap-1">
-        <h3 className="text-base sm:text-lg font-semibold text-ink">{title}</h3>
+        <h3 className="text-base sm:text-lg font-semibold text-ink">{displayTitle}</h3>
         <p className="text-sm text-ink-3">
-          {subtitle} · {periodLabel(period)}
+          {displaySubtitle} · {periodText}
         </p>
       </div>
 
@@ -219,7 +221,7 @@ export default function FinancialTimelineChart({
           viewBox={`0 0 ${width} ${height}`}
           className="w-full min-w-0 sm:min-w-[720px]"
           role="img"
-          aria-label={`${title} 차트`}
+          aria-label={t("financialTimeline.chartAria", { title: displayTitle })}
           onMouseLeave={() => setHoveredIndex(null)}
         >
           <line
@@ -250,7 +252,7 @@ export default function FinancialTimelineChart({
                   fontSize="10"
                   style={{ fill: "rgb(var(--color-ink-3))" }}
                 >
-                  {fmtAmount(value)}
+                  {fmtAmount(value, i18n.language)}
                 </text>
               </g>
             );

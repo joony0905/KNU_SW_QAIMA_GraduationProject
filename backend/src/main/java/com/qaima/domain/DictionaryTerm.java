@@ -37,6 +37,10 @@ public class DictionaryTerm {
     @Column(name = "description", nullable = false)
     private String description;
 
+    @Lob
+    @Column(name = "description_en")
+    private String descriptionEn;
+
     @Column(name = "source", length = 255)
     private String source;
 

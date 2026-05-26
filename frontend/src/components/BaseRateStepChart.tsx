@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { BaseRateSeriesPoint } from "../types/feature2";
 
 type Props = {
@@ -13,12 +14,22 @@ const PADDING_BOTTOM = 34;
 const LINE_COLOR = "#7c3aed";
 const FILL_COLOR = "rgba(124, 58, 237, 0.16)";
 
-const fmtRate = (value: number | null | undefined, unit?: string | null) => {
+const isEnglish = (language?: string | null) => (language ?? "").toLowerCase().startsWith("en");
+
+const formatUnit = (unit?: string | null, language?: string | null) => {
+  if (!unit) return "";
+  if (!isEnglish(language)) return unit;
+  if (unit === "연%") return "%";
+  return unit;
+};
+
+const fmtRate = (value: number | null | undefined, unit?: string | null, language?: string | null) => {
   if (value == null || !Number.isFinite(value)) return "-";
-  return `${value.toFixed(2)}${unit ?? ""}`;
+  return `${value.toFixed(2)}${formatUnit(unit, language)}`;
 };
 
 export default function BaseRateStepChart({ points }: Props) {
+  const { t, i18n } = useTranslation("analysisPanel");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const validPoints = useMemo(
     () => points.filter((point) => point.value != null && Number.isFinite(point.value)),
@@ -72,7 +83,7 @@ export default function BaseRateStepChart({ points }: Props) {
   if (!chart) {
     return (
       <div className="mt-2 rounded-2xl border border-line bg-bg-sunk px-4 py-8 text-sm text-ink-3">
-        기준금리 추이 데이터가 없습니다.
+        {t("baseRateChart.empty")}
       </div>
     );
   }
@@ -88,19 +99,19 @@ export default function BaseRateStepChart({ points }: Props) {
     <div className="mt-2 rounded-2xl border border-line bg-bg-sunk px-4 py-4">
       <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4 sm:text-sm">
         <div>
-          <p className="text-ink-3">최신 금리</p>
-          <p className="font-semibold" style={{ color: LINE_COLOR }}>{fmtRate(latest.value, latest.unit)}</p>
+          <p className="text-ink-3">{t("baseRateChart.latestRate")}</p>
+          <p className="font-semibold" style={{ color: LINE_COLOR }}>{fmtRate(latest.value, latest.unit, i18n.language)}</p>
         </div>
         <div>
-          <p className="text-ink-3">변화 폭</p>
-          <p className="font-medium text-ink-2">{hasRange ? fmtRate(latest.value - first.value, latest.unit) : "-"}</p>
+          <p className="text-ink-3">{t("baseRateChart.change")}</p>
+          <p className="font-medium text-ink-2">{hasRange ? fmtRate(latest.value - first.value, latest.unit, i18n.language) : "-"}</p>
         </div>
         <div>
-          <p className="text-ink-3">{hasRange ? "시작일" : "관측일"}</p>
+          <p className="text-ink-3">{hasRange ? t("baseRateChart.startDate") : t("baseRateChart.observedDate")}</p>
           <p className="font-medium text-ink-2">{first.date}</p>
         </div>
         <div>
-          <p className="text-ink-3">기준일</p>
+          <p className="text-ink-3">{t("baseRateChart.asOf")}</p>
           <p className="font-medium text-ink-2">{hasRange ? latest.date : "-"}</p>
         </div>
       </div>
@@ -122,7 +133,7 @@ export default function BaseRateStepChart({ points }: Props) {
                 strokeDasharray="4 4"
               />
               <text x={2} y={chart.toY(tick) + 4} fontSize="11" style={{ fill: "rgb(var(--color-ink-3))" }}>
-                {fmtRate(tick, latest.unit)}
+                {fmtRate(tick, latest.unit, i18n.language)}
               </text>
             </g>
           ))}

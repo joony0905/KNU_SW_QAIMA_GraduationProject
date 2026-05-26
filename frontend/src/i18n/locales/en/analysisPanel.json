@@ -103,6 +103,58 @@
     "shortSellingRatio": "Short selling value ratio",
     "shortSelling": "Short selling"
   },
+  "trendSeries": {
+    "USD_KRW": "USD/KRW",
+    "KR_BASE_RATE": "Korea base rate",
+    "US_FED_FUNDS": "US federal funds rate",
+    "KR3Y": "Korea Treasury 3Y",
+    "KR10Y": "Korea Treasury 10Y",
+    "US2Y": "US Treasury 2Y",
+    "US5Y": "US Treasury 5Y",
+    "US10Y": "US Treasury 10Y",
+    "SHORT_SELLING_VOLUME_RATIO": "Short-selling volume ratio",
+    "SHORT_SELLING_AMOUNT_RATIO": "Short-selling value ratio"
+  },
+  "baseRateChart": {
+    "empty": "No base-rate trend data.",
+    "latestRate": "Latest rate",
+    "change": "Change",
+    "startDate": "Start date",
+    "observedDate": "Observed date",
+    "asOf": "As of"
+  },
+  "shortSellingChart": {
+    "empty": "No short-selling trend data.",
+    "latestVolumeRatio": "Latest volume ratio",
+    "latestAmountRatio": "Latest value ratio",
+    "startDate": "Start date",
+    "asOf": "As of",
+    "volumeRatioLine": "Short-selling volume ratio line",
+    "amountRatioLayer": "Short-selling value ratio layer"
+  },
+  "investorFlowChart": {
+    "empty": "No investor-flow time series data.",
+    "foreign": "Foreign",
+    "institution": "Institutional",
+    "hover": "{{date}} · Foreign {{foreign}} · Institutional {{institution}}"
+  },
+  "financialTimeline": {
+    "title": "Financial timeline",
+    "subtitle": "Revenue · operating income · net income · operating margin",
+    "empty": "No financial timeline data to display.",
+    "chartAria": "{{title}} chart",
+    "period": {
+      "A": "Annual basis",
+      "H": "Half-year basis",
+      "Q": "Quarterly basis"
+    },
+    "legend": {
+      "revenue": "Revenue",
+      "operatingIncome": "Operating income",
+      "netIncome": "Net income",
+      "operatingMargin": "Operating margin"
+    }
+  },
   "shortSelling": {
     "shortSelling": "Short selling",
     "titleSuffix": "status",

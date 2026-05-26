@@ -1,10 +1,18 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { InvestorFlowPoint } from "../types/feature2";
 
-const formatValue = (value?: number | null) => {
+const isEnglish = (language?: string | null) => (language ?? "").toLowerCase().startsWith("en");
+
+const formatValue = (value?: number | null, language?: string | null) => {
   if (value == null || !Number.isFinite(value)) return "-";
   const abs = Math.abs(value);
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  if (isEnglish(language)) {
+    if (abs >= 100_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}T KRW`;
+    if (abs >= 10_000) return `${sign}${(abs / 1_000).toFixed(1)}B KRW`;
+    return `${sign}${Math.round(abs).toLocaleString("en-US")}M KRW`;
+  }
   if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(1)}조`;
   if (abs >= 10_000) return `${sign}${(abs / 10_000).toFixed(1)}억`;
   return `${sign}${Math.round(abs).toLocaleString("ko-KR")}백만`;
@@ -49,6 +57,7 @@ export default function InvestorFlowTrendChart({
   points: InvestorFlowPoint[];
   height?: number;
 }) {
+  const { t, i18n } = useTranslation("analysisPanel");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const chart = useMemo(() => {
     const rows = (points ?? []).filter((point) => point?.tradeDate);
@@ -91,7 +100,7 @@ export default function InvestorFlowTrendChart({
   if (!chart) {
     return (
       <div className={`rounded-lg border px-4 py-8 text-center text-sm ${chartThemeClass} border-[var(--flow-panel-border)] bg-[var(--flow-panel-bg)] text-[var(--flow-muted)]`}>
-        수급 시계열 데이터가 없습니다.
+        {t("investorFlowChart.empty")}
       </div>
     );
   }
@@ -106,16 +115,20 @@ export default function InvestorFlowTrendChart({
         <div className="flex flex-wrap gap-3 text-[11px] font-medium text-[var(--flow-muted)]">
           <span className="inline-flex items-center gap-1">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--flow-foreign-pos)" }} />
-            외국인
+            {t("investorFlowChart.foreign")}
           </span>
           <span className="inline-flex items-center gap-1">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "var(--flow-institution-pos)" }} />
-            기관
+            {t("investorFlowChart.institution")}
           </span>
         </div>
         {hovered && (
           <span className="text-[11px] font-semibold text-[var(--flow-text)]">
-            {formatDate(hovered.tradeDate)} · 외국인 {formatValue(hovered.foreignNetBuyValueMillion)} · 기관 {formatValue(hovered.institutionNetBuyValueMillion)}
+            {t("investorFlowChart.hover", {
+              date: formatDate(hovered.tradeDate),
+              foreign: formatValue(hovered.foreignNetBuyValueMillion, i18n.language),
+              institution: formatValue(hovered.institutionNetBuyValueMillion, i18n.language),
+            })}
           </span>
         )}
       </div>
@@ -144,7 +157,7 @@ export default function InvestorFlowTrendChart({
                 strokeDasharray="4 4"
               />
               <text x={2} y={chart.toY(tick) + 4} fontSize="11" fill="var(--flow-muted)">
-                {formatValue(tick)}
+                {formatValue(tick, i18n.language)}
               </text>
             </g>
           ))}

@@ -38,6 +38,7 @@ import { clientLog } from "../utils/clientLog";
 import { downloadElementAsPdf, waitForPdfCaptureReady } from "../utils/reportPdf";
 import ReportHeader from "../components/ReportHeader";
 import useReportUserName from "../hooks/useReportUserName";
+import { isEnglishLanguage } from "../utils/displayLabels";
 
 type AnalysisWindowPreset = {
   label: string;
@@ -166,9 +167,50 @@ const capmWeightReasonText = (asset: Feature3CapmAsset, t: TFunction<"portfolioP
 type OverlayCachePolicy = "REUSE_AVAILABLE" | "FORCE_REFRESH";
 type OverlayCachePolicyMap = Record<string, OverlayCachePolicy>;
 
-const overlayPreviewMessage = (message?: string | null): string => {
+const EN_BACKEND_TEXT_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/유사\s*종목군/g, "peer group"],
+  [/유사\s*종목/g, "peer stocks"],
+  [/보조\s*관측/g, "overlay observations"],
+  [/최적화\s*관측/g, "optimization view"],
+  [/공격적/g, "aggressive"],
+  [/안정적/g, "conservative"],
+  [/중립형/g, "balanced"],
+  [/공격형/g, "aggressive"],
+  [/보수형/g, "conservative"],
+  [/균형형/g, "balanced"],
+  [/현재\s*구성/g, "current portfolio"],
+  [/기준\s*시각/g, "reference time"],
+  [/최근\s*결과/g, "recent result"],
+  [/새로\s*분석/g, "re-analyze"],
+  [/새\s*분석/g, "new analysis"],
+  [/원천\s*데이터/g, "source data"],
+  [/캐시/g, "cache"],
+  [/크레딧/g, "credit"],
+  [/성향보다 공격적/g, "more aggressive than profile"],
+  [/성향보다 안정적/g, "more conservative than profile"],
+  [/목표 변동성 초과/g, "above target volatility"],
+  [/위험 기여도 높음/g, "high risk contribution"],
+  [/\bAGGRESSIVE_THAN_PROFILE\b/g, "more aggressive than profile"],
+  [/\bCONSERVATIVE_THAN_PROFILE\b/g, "more conservative than profile"],
+  [/\bABOVE_TARGET_VOLATILITY\b/g, "above target volatility"],
+  [/\bHIGH_RISK_CONTRIBUTION\b/g, "high risk contribution"],
+  [/Core 분석만 실행하면 1 credit이 차감됩니다\./g, "Running core analysis only deducts 1 credit."],
+  [/Core 분석은 1 credit이며, 캐시가 없는 체크 항목마다 1 credit이 추가됩니다\./g, "Core analysis costs 1 credit, and each selected item without cache adds 1 credit."],
+  [/최근 결과가 있지만 새로 분석하도록 선택되어 1 credit이 추가됩니다\./g, "A recent result exists, but re-analysis was selected, so 1 credit is added."],
+  [/기존 원천 데이터를 재사용할 수 있어 추가 credit이 필요하지 않습니다\./g, "Existing source data can be reused, so no additional credit is required."],
+  [/원천 데이터가 부족해 새로 분석하며 1 credit이 추가됩니다\./g, "Source data is insufficient, so new analysis adds 1 credit."],
+  [/최근 뉴스 최대 (\d+)개의 Feature2 news sentiment 데이터를 core risk와 분리된 뉴스 흐름 참고 정보로 표시합니다\./g, "Shows up to $1 recent Feature2 news sentiment items as separate news-flow context, outside core risk."],
+];
+
+const localizeBackendText = (value?: string | null, language?: string | null): string => {
+  if (!value) return "";
+  if (!isEnglishLanguage(language)) return value;
+  return EN_BACKEND_TEXT_REPLACEMENTS.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
+};
+
+const overlayPreviewMessage = (message?: string | null, language?: string | null): string => {
   if (!message) return "";
-  return message;
+  return localizeBackendText(message, language);
 };
 
 type OverlayValueItem = {
@@ -1504,7 +1546,7 @@ export default function PortfolioMockPage() {
                             <Info size={14} />
                           </button>
                           <div
-                            className={`fixed left-3 right-3 top-20 z-[160] w-auto max-w-[calc(100vw-1.5rem)] rounded-lg bg-ink p-2.5 text-xs leading-relaxed text-bg shadow-lg transition-opacity sm:absolute sm:left-5 sm:right-auto sm:top-0 sm:z-30 sm:w-64 sm:max-w-none ${
+                            className={`hidden rounded-lg bg-ink p-2.5 text-xs leading-relaxed text-bg shadow-lg transition-opacity sm:absolute sm:left-5 sm:top-0 sm:z-30 sm:block sm:w-64 ${
                               activeExtraInfoKey === opt.key
                                 ? "opacity-100 pointer-events-auto"
                                 : "opacity-0 pointer-events-none group-hover:opacity-100"
@@ -1520,6 +1562,41 @@ export default function PortfolioMockPage() {
                     ))}
                   </div>
                 </div>
+                {activeExtraInfoKey && createPortal(
+                  <div
+                    className="fixed inset-0 z-[220] flex items-center justify-center bg-black/45 px-4 py-6 sm:hidden"
+                    role="dialog"
+                    aria-modal="true"
+                    onMouseDown={() => setActiveExtraInfoKey(null)}
+                  >
+                    <div
+                      className="w-full max-w-sm rounded-2xl border border-line bg-surface p-4 text-left shadow-pop"
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="text-sm font-bold text-ink">
+                          {t(`analysisOptions.extraOption.${activeExtraInfoKey}.label` as `analysisOptions.extraOption.${string}.label`)}
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setActiveExtraInfoKey(null)}
+                          className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-full bg-bg-sunk text-ink-3"
+                          aria-label="Close"
+                        >
+                          x
+                        </button>
+                      </div>
+                      <div className="mt-3 text-sm leading-relaxed text-ink-2">
+                        {[0, 1].map((i) => (
+                          <p key={i} className={i > 0 ? "mt-2" : ""}>
+                            {t(`analysisOptions.extraOption.${activeExtraInfoKey}.desc${i}` as `analysisOptions.extraOption.${string}.desc0`)}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>,
+                  document.body,
+                )}
                 <div>
                   <p className="text-xs mb-2 text-ink-4">{t("analysisOptions.periodLabel")}</p>
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -1682,7 +1759,7 @@ export default function PortfolioMockPage() {
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div>
                   <h3 className="text-base font-bold text-ink">{t("overlayPreview.title")}</h3>
-                  <p className="mt-1 text-sm text-ink-3">{overlayPreviewMessage(overlayPreview.userMessage)}</p>
+                  <p className="mt-1 text-sm text-ink-3">{overlayPreviewMessage(overlayPreview.userMessage, i18n.language)}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-ink-4">{t("overlayPreview.estimatedCharge")}</p>
@@ -1698,7 +1775,7 @@ export default function PortfolioMockPage() {
                       <p className="text-sm font-bold text-ink">{overlay.overlayType}</p>
                       <span className="text-xs font-bold text-ink-4">{t(`cacheStatus.${overlay.cacheStatus ?? ""}` as `cacheStatus.${string}`, overlay.cacheStatus ?? "")}</span>
                     </div>
-                    <p className="mt-1 text-xs text-ink-3">{overlayPreviewMessage(overlay.userMessage)}</p>
+                    <p className="mt-1 text-xs text-ink-3">{overlayPreviewMessage(overlay.userMessage, i18n.language)}</p>
                     <p className="mt-2 text-[11px] text-ink-4">
                       {overlay.cacheStatus === "MISS"
                         ? t("overlayPreview.newAfterAnalysis")
@@ -1968,7 +2045,7 @@ export default function PortfolioMockPage() {
                               <p className="text-sm font-bold text-ink">
                                 {t(`portfolioType.${portfolio.type}` as `portfolioType.${string}`, portfolio.label ?? portfolio.type)}
                               </p>
-                              <p className="text-xs mt-1 text-ink-4">{portfolio.userDescription}</p>
+                              <p className="text-xs mt-1 text-ink-4">{localizeBackendText(portfolio.userDescription, i18n.language)}</p>
                             </div>
                             <span
                               title={t("volatilitySection.desc2")}
@@ -2380,10 +2457,10 @@ export default function PortfolioMockPage() {
                     {analysisResult.riskDrivers.map((driver) => (
                       <div key={driver.code} className="rounded-xl bg-bg-sunk border border-line p-3">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-bold text-ink">{driver.title}</p>
+                          <p className="text-sm font-bold text-ink">{localizeBackendText(driver.title, i18n.language)}</p>
                           <span className="text-[11px] font-bold text-ink-4">{t(`featureSource.${driver.source}` as `featureSource.${string}`, driver.source)}</span>
                         </div>
-                        <p className="mt-1 text-xs leading-relaxed text-ink-3">{driver.description}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-ink-3">{localizeBackendText(driver.description, i18n.language)}</p>
                       </div>
                     ))}
                   </div>
@@ -2440,7 +2517,9 @@ export default function PortfolioMockPage() {
 
                   {analysisResult.overlays.explanations?.length ? (
                     <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
-                      {analysisResult.overlays.explanations.map((item, index) => (
+                      {analysisResult.overlays.explanations.map((item, index) => {
+                        const renderedDescription = renderOverlayValue(item.overlayType, item.description, t);
+                        return (
                         <div key={`${item.overlayType}-${item.stockCode}-${index}`} className="rounded-xl bg-bg-sunk border border-line p-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
@@ -2448,15 +2527,20 @@ export default function PortfolioMockPage() {
                                 {item.companyName ?? item.stockCode}
                                 {item.companyName && item.stockCode ? <span className="ml-1 font-mono tabular">({item.stockCode})</span> : null}
                               </p>
-                              <p className="mt-0.5 text-sm font-bold text-ink">{item.title}</p>
+                              <p className="mt-0.5 text-sm font-bold text-ink">{localizeBackendText(item.title, i18n.language)}</p>
                             </div>
                             <span className={`flex-shrink-0 text-xs font-mono tabular ${item.score >= 0 ? "text-success" : "text-danger"}`}>
                               {item.score.toFixed(2)}
                             </span>
                           </div>
-                          <div className="mt-1 text-xs leading-relaxed text-ink-3">{renderOverlayValue(item.overlayType, item.description, t)}</div>
+                          <div className="mt-1 text-xs leading-relaxed text-ink-3">
+                            {typeof renderedDescription === "string"
+                              ? localizeBackendText(renderedDescription, i18n.language)
+                              : renderedDescription}
+                          </div>
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   ) : null}
 
@@ -2472,7 +2556,7 @@ export default function PortfolioMockPage() {
 	                        <div className="flex items-start justify-between gap-3">
 	                          <div>
 	                            <p className="text-sm font-bold text-ink">{t(`portfolioType.${portfolio.type}` as `portfolioType.${string}`, portfolio.label ?? portfolio.type)}</p>
-	                            <p className="mt-1 text-xs leading-relaxed text-ink-3">{portfolio.userDescription}</p>
+	                            <p className="mt-1 text-xs leading-relaxed text-ink-3">{localizeBackendText(portfolio.userDescription, i18n.language)}</p>
 	                          </div>
 	                          <span className="text-[11px] font-bold text-ink-4">{t(`riskLevel.${portfolio.riskLevel}` as `riskLevel.${string}`, portfolio.riskLevel)}</span>
 	                        </div>
@@ -2554,7 +2638,7 @@ export default function PortfolioMockPage() {
                   <div className="mt-2 flex flex-col gap-1">
                     {analysisResult.warnings.slice(0, 4).map((warning) => (
                       <p key={`${warning.code}-${warning.target ?? "global"}`} className="text-xs text-ink-3">
-                        {warning.userMessage ?? warning.message}
+                        {localizeBackendText(warning.userMessage ?? warning.message, i18n.language)}
                       </p>
                     ))}
                   </div>
@@ -2568,7 +2652,7 @@ export default function PortfolioMockPage() {
                   <div className="min-w-0">
                     <h3 className="text-base font-bold text-ink"><DictionaryText text={t("advanced.title")} /></h3>
                     <p className="mt-1 text-xs text-ink-4">
-                      <DictionaryText text={analysisResult.freshness.userMessage ?? ""} />
+                        <DictionaryText text={localizeBackendText(analysisResult.freshness.userMessage, i18n.language)} />
                     </p>
                   </div>
                   <span className="min-w-0 break-words text-xs font-mono tabular text-ink-4">

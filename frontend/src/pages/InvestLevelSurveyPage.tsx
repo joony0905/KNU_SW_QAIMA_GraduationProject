@@ -25,6 +25,9 @@ type Stage = {
   terms: string[];
 };
 
+const termLabel = (term: string, t: (key: string, options?: { defaultValue?: string }) => string) =>
+  t(`terms.${term}`, { defaultValue: term });
+
 const STAGES: Stage[] = [
   {
     index: 1,
@@ -161,7 +164,7 @@ export default function InvestLevelSurveyPage() {
                       {selected && <Check size={14} className="text-white" />}
                     </span>
                     <span className={`min-w-0 break-words text-sm sm:text-base ${selected ? "text-ink font-medium" : "text-ink-2"}`}>
-                      {term}
+                      {termLabel(term, t)}
                     </span>
                   </button>
                 );

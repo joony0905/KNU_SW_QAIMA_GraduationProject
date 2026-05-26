@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type { Feature2TrendSeries } from "../types/feature2";
 
 type TrendColor = "zinc" | "rose" | "blue" | "emerald" | "amber" | "violet";
@@ -15,16 +16,31 @@ const colorMap: Record<TrendColor, string> = {
 
 const defaultColors: TrendColor[] = ["blue", "rose", "emerald", "amber", "violet", "zinc"];
 
-const fmtValue = (value: number | null | undefined, unit?: string | null) => {
-  if (value == null || !Number.isFinite(value)) return "-";
-  const digits = unit === "원" ? 2 : 2;
-  return `${value.toLocaleString("ko-KR", { maximumFractionDigits: digits })}${unit ?? ""}`;
+const isEnglish = (language?: string | null) => (language ?? "").toLowerCase().startsWith("en");
+
+const translateTrendLabel = (
+  series: Feature2TrendSeries,
+  t: TFunction<"analysisPanel">,
+): string => t(`trendSeries.${series.key}`, { defaultValue: series.label });
+
+const formatUnit = (unit?: string | null, language?: string | null) => {
+  if (!unit) return "";
+  if (!isEnglish(language)) return unit;
+  if (unit === "원") return " KRW";
+  if (unit === "연%") return "%";
+  return unit;
 };
 
-const fmtDelta = (value: number | null | undefined, unit?: string | null) => {
+const fmtValue = (value: number | null | undefined, unit?: string | null, language?: string | null) => {
+  if (value == null || !Number.isFinite(value)) return "-";
+  const digits = unit === "원" ? 2 : 2;
+  return `${value.toLocaleString(isEnglish(language) ? "en-US" : "ko-KR", { maximumFractionDigits: digits })}${formatUnit(unit, language)}`;
+};
+
+const fmtDelta = (value: number | null | undefined, unit?: string | null, language?: string | null) => {
   if (value == null || !Number.isFinite(value)) return "-";
   const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)}${unit ?? ""}`;
+  return `${sign}${value.toFixed(2)}${formatUnit(unit, language)}`;
 };
 
 const toValidPoints = (series: Feature2TrendSeries) =>
@@ -80,6 +96,7 @@ export function MiniTrendRow({
   series: Feature2TrendSeries;
   color?: TrendColor;
 }) {
+  const { t, i18n } = useTranslation("analysisPanel");
   const points = toValidPoints(series);
   const first = points[0] ?? null;
   const latest = points[points.length - 1] ?? null;
@@ -89,10 +106,10 @@ export function MiniTrendRow({
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface px-3 py-2">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-ink">{series.label}</p>
+        <p className="truncate text-sm font-semibold text-ink">{translateTrendLabel(series, t)}</p>
         <p className="text-[11px] text-ink-3">
-          {latest ? fmtValue(latest.value, series.unit) : "-"}
-          <span className={`ml-2 font-semibold ${deltaClass}`}>{fmtDelta(delta, series.unit)}</span>
+          {latest ? fmtValue(latest.value, series.unit, i18n.language) : "-"}
+          <span className={`ml-2 font-semibold ${deltaClass}`}>{fmtDelta(delta, series.unit, i18n.language)}</span>
         </p>
       </div>
       <Sparkline series={series} color={color} />
@@ -107,7 +124,7 @@ export function MultiLineTrendChart({
   series: Feature2TrendSeries[];
   height?: number;
 }) {
-  const { t } = useTranslation("analysisPanel");
+  const { t, i18n } = useTranslation("analysisPanel");
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const validSeries = useMemo(
     () => series
@@ -161,7 +178,7 @@ export function MultiLineTrendChart({
         {validSeries.map((item, index) => (
           <span key={item.key} className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-3">
             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: colorMap[defaultColors[index % defaultColors.length]] }} />
-            {item.label}
+            {translateTrendLabel(item, t)}
           </span>
         ))}
       </div>
@@ -182,7 +199,7 @@ export function MultiLineTrendChart({
                 strokeDasharray="4 4"
               />
               <text x={2} y={chart.toY(tick) + 4} fontSize="11" fill="rgb(var(--color-ink-3))">
-                {fmtValue(tick, validSeries[0]?.unit)}
+                {fmtValue(tick, validSeries[0]?.unit, i18n.language)}
               </text>
             </g>
           ))}

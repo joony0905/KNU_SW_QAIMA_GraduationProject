@@ -94,9 +94,17 @@ const formatFlowAmount = (value: number | null | undefined, t: AnalysisPanelTran
   return `${sign}${Math.round(abs).toLocaleString("ko-KR")}${t("amountUnit.million")}`;
 };
 
-const formatRatePoint = (value?: number | null, unit = "%") => {
+const isEnglish = (language?: string | null) => (language ?? "").toLowerCase().startsWith("en");
+
+const formatRateUnit = (unit = "%", language?: string | null) => {
+  if (!isEnglish(language)) return unit;
+  if (unit === "연%") return "%";
+  return unit;
+};
+
+const formatRatePoint = (value?: number | null, unit = "%", language?: string | null) => {
   if (value == null || !Number.isFinite(value)) return "-";
-  return `${value.toFixed(2)}${unit}`;
+  return `${value.toFixed(2)}${formatRateUnit(unit, language)}`;
 };
 
 type MacroChartMode = "exchange" | "baseRate" | "domesticBond" | "usRates" | "shortSelling";
@@ -684,13 +692,13 @@ export default function AnalysisResultPanel({
                     <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
                       <p className="text-[11px] sm:text-xs text-ink-3">{t("macroSeries.krBaseRate")}</p>
                       <p className="text-lg font-bold text-ink">
-                        {formatRatePoint(result.metrics.macroRates.krBaseRate?.value, result.metrics.macroRates.krBaseRate?.unit ?? "%")}
+                        {formatRatePoint(result.metrics.macroRates.krBaseRate?.value, result.metrics.macroRates.krBaseRate?.unit ?? "%", i18n.language)}
                       </p>
                     </div>
                     <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
                       <p className="text-[11px] sm:text-xs text-ink-3">{t("macroSeries.usBaseRate")}</p>
                       <p className="text-lg font-bold text-ink">
-                        {formatRatePoint(result.metrics.macroRates.usFedFundsRate?.value, result.metrics.macroRates.usFedFundsRate?.unit ?? "%")}
+                        {formatRatePoint(result.metrics.macroRates.usFedFundsRate?.value, result.metrics.macroRates.usFedFundsRate?.unit ?? "%", i18n.language)}
                       </p>
                     </div>
                     <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
@@ -706,8 +714,8 @@ export default function AnalysisResultPanel({
                     <p className="text-[11px] sm:text-xs text-ink-3">{t("macroSeries.baseRateChange")}</p>
                     <p className="text-sm font-bold text-ink">
                       {result.metrics.baseRateTrendSummary.startValue ?? "-"}
-                      {result.metrics.baseRateTrendSummary.unit ?? ""} → {result.metrics.baseRateTrendSummary.endValue ?? "-"}
-                      {result.metrics.baseRateTrendSummary.unit ?? ""}
+                      {formatRateUnit(result.metrics.baseRateTrendSummary.unit ?? "", i18n.language)} → {result.metrics.baseRateTrendSummary.endValue ?? "-"}
+                      {formatRateUnit(result.metrics.baseRateTrendSummary.unit ?? "", i18n.language)}
                     </p>
                     <p className="mt-1 text-xs text-ink-3">
                       {formatSignedNumber(result.metrics.baseRateTrendSummary.change)} · {trendDirectionText(result.metrics.baseRateTrendSummary.direction, t)}
