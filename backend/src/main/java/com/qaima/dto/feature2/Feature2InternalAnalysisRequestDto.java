@@ -16,7 +16,8 @@ public record Feature2InternalAnalysisRequestDto(
                         null,
                         request.getInvestLevel(),
                         request.getLlmVendor(),
-                        true
+                        true,
+                        request.getLanguageCode()
                 ),
                 new Subject(request.getStockCode(), null, null, null),
                 new InputData(request.getMetrics()),
@@ -30,7 +31,8 @@ public record Feature2InternalAnalysisRequestDto(
             String asOf,
             String investLevel,
             String llmVendor,
-            Boolean includeLlmExplain
+            Boolean includeLlmExplain,
+            String languageCode
     ) {
     }
 

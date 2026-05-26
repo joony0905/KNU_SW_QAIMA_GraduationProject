@@ -24,6 +24,7 @@ export type FeatOneAnalyzeRequest = {
   includeExplain: boolean;
   llmVendor?: string;
   investLevel?: InvestLevel;
+  languageCode?: "ko" | "en";
 };
 
 export const fetchAnalysis = async (
@@ -40,6 +41,7 @@ export const fetchAnalysis = async (
       includeExplain: req.includeExplain,
       llmVendor: req.llmVendor,
       investLevel: req.investLevel,
+      languageCode: req.languageCode,
     }
   );
 

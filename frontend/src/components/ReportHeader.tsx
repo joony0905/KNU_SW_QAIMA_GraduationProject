@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { ReportFeatureType } from "../types/report";
+import { investLevelLabel, riskProfileLabel } from "../utils/displayLabels";
 
 export interface ReportHeaderMeta {
   featureType: ReportFeatureType;
@@ -40,7 +41,7 @@ const formatDateTime = (value?: string | null) => {
 };
 
 export default function ReportHeader({ meta }: { meta?: ReportHeaderMeta | null }) {
-  const { t } = useTranslation("reportHeader");
+  const { t, i18n } = useTranslation("reportHeader");
   if (!meta) return null;
 
   const rows = [
@@ -48,11 +49,11 @@ export default function ReportHeader({ meta }: { meta?: ReportHeaderMeta | null 
     [t("rows.feature"), featureLabel(meta.featureType, t)],
     [t("rows.generatedAt"), `${formatDateTime(meta.generatedAt)} KST`],
     [t("rows.model"), meta.analysisModel || "-"],
-    [t("rows.investLevel"), meta.investLevel || "-"],
+    [t("rows.investLevel"), investLevelLabel(meta.investLevel, i18n.language)],
     [t("rows.user"), meta.userName || t("userFallback")],
     [t("rows.window"), meta.analysisWindow || null],
     [t("rows.dataAsOf"), meta.dataAsOf || null],
-    [t("rows.riskProfile"), meta.riskProfile || null],
+    [t("rows.riskProfile"), meta.riskProfile ? riskProfileLabel(meta.riskProfile, i18n.language) : null],
     [t("rows.priceBasis"), meta.priceBasis || null],
     [t("rows.covarianceModel"), meta.covarianceModel || null],
   ].filter(([, value]) => value !== null);

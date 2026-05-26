@@ -52,6 +52,7 @@ public record Feature3FastApiAnalyzeRequestDto(
             Boolean includeDiagnostics,
             Boolean includeLlmExplain,
             String llmVendor,
+            String languageCode,
             Double riskFreeRate,
             String riskFreeRateSource,
             String riskFreeRateAsOf,

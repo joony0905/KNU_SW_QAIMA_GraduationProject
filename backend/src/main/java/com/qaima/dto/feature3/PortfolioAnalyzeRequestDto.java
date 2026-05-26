@@ -58,6 +58,7 @@ public record PortfolioAnalyzeRequestDto(
             Boolean includeDiagnostics,
             Boolean includeLlmExplain,
             String llmVendor,
+            String languageCode,
             @DecimalMin("0.0") @DecimalMax("1.0") Double maxCashWeight
     ) {
     }

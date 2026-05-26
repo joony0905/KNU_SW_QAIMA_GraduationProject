@@ -96,7 +96,8 @@ public class FeatOneService {
             String marketDivCode,
             Boolean includeExplain,
             String llmVendor,
-            String investLevel
+            String investLevel,
+            String languageCode
     ) {
         if (stockCode == null || stockCode.isBlank()
                 || freq == null
@@ -145,7 +146,7 @@ public class FeatOneService {
                     MarketSnapshotDto marketSnapshot = tuple.getT4().orElse(null);
 
                     FeatOneRequestDto requestDto =
-                            buildFeatOneRequestDto(stock, freq, from, to, candles, financials, marketSnapshot, includeExplain, llmVendor, investLevel);
+                            buildFeatOneRequestDto(stock, freq, from, to, candles, financials, marketSnapshot, includeExplain, llmVendor, investLevel, languageCode);
 
                     log.info("[FeatOneService][analysis-request] stockCode={}, freq={}, ohlcvSize={}, financialsSize={}, includeExplain={}, llmVendor={}, investLevel={}",
                             requestDto.getStockCode(),
@@ -430,7 +431,8 @@ public class FeatOneService {
             MarketSnapshotDto marketSnapshot,
             Boolean includeExplain,
             String llmVendor,
-            String investLevel
+            String investLevel,
+            String languageCode
     ) {
         List<OhlcvItemDto> ohlcvDtos =
                 mergeCandles(candles, null).stream()
@@ -462,7 +464,15 @@ public class FeatOneService {
                 .includeExplain(explain)
                 .llmVendor(llmVendor)
                 .investLevel(normalizeInvestLevel(investLevel))
+                .languageCode(normalizeLanguageCode(languageCode))
                 .build();
+    }
+
+    private static String normalizeLanguageCode(String languageCode) {
+        if (languageCode == null || languageCode.isBlank()) {
+            return "ko";
+        }
+        return languageCode.trim().toLowerCase().startsWith("en") ? "en" : "ko";
     }
 
     private static String normalizeInvestLevel(String investLevel) {

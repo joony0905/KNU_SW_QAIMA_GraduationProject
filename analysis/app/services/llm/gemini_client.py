@@ -12,7 +12,7 @@ from app.services.llm.base import LLMClient
 from app.models.feature1 import Feature1Request, Feature1Metrics, FinancialPointItem
 from app.models.feature2 import Feature2ExplainRequest
 from app.services.llm.feature2_prompt import build_feature2_prompt
-from app.services.llm.invest_level import invest_level_prompt
+from app.services.llm.invest_level import invest_level_prompt, normalize_language_code, output_language_prompt
 
 
 # v1 사용
@@ -171,10 +171,12 @@ class GeminiClient(LLMClient):
         market_snapshot = metrics.market_snapshot
         indicator_summary = metrics.indicator_summary or "indicator summary unavailable"
         financial_summary = _build_financial_summary(req)
+        titles = _feature1_titles(normalize_language_code(req.language_code) == "en")
         return (
             "아래 규칙을 반드시 지키고 JSON 객체만 출력하세요.\n"
             "마크다운/코드블록(```) 사용 금지.\n"
             "출력은 { 로 시작해서 } 로 끝나야 합니다.\n\n"
+            f"{output_language_prompt(req.language_code)}\n"
 
             "규칙:\n"
             "1) 각 섹션 설명은 해당 섹션 데이터만 근거로 작성\n"
@@ -186,14 +188,15 @@ class GeminiClient(LLMClient):
             "7) 키 이름은 반드시 sections.price_flow / sections.market_snapshot / sections.indicators / sections.financial_timeline / overall 을 정확히 유지\n"
             "8) 키를 번역하거나 camelCase로 바꾸지 말 것\n\n"
             f"{invest_level_prompt(req.invest_level)}\n"
+            f"{output_language_prompt(req.language_code)}"
 
             "출력 JSON 스키마:\n"
             "{"
             "\"sections\":{"
-              "\"price_flow\":{\"title\":\"가격 흐름\",\"summary\":\"string\",\"bullets\":[]},"
-              "\"market_snapshot\":{\"title\":\"시장 스냅샷\",\"summary\":\"string\",\"bullets\":[]},"
-              "\"indicators\":{\"title\":\"보조지표\",\"summary\":\"string\",\"bullets\":[]},"
-              "\"financial_timeline\":{\"title\":\"재무 흐름\",\"summary\":\"string\",\"bullets\":[]}"
+              f"\"price_flow\":{{\"title\":\"{titles['price_flow']}\",\"summary\":\"string\",\"bullets\":[]}},"
+              f"\"market_snapshot\":{{\"title\":\"{titles['market_snapshot']}\",\"summary\":\"string\",\"bullets\":[]}},"
+              f"\"indicators\":{{\"title\":\"{titles['indicators']}\",\"summary\":\"string\",\"bullets\":[]}},"
+              f"\"financial_timeline\":{{\"title\":\"{titles['financial_timeline']}\",\"summary\":\"string\",\"bullets\":[]}}"
             "},"
             "\"overall\":{"
               "\"summary\":\"string\","
@@ -233,6 +236,22 @@ class GeminiClient(LLMClient):
             "\n[FINANCIAL_SUMMARY]\n"
             f"{financial_summary}\n"
         )
+
+
+def _feature1_titles(is_english: bool) -> dict[str, str]:
+    if is_english:
+        return {
+            "price_flow": "Price Flow",
+            "market_snapshot": "Market Snapshot",
+            "indicators": "Indicators",
+            "financial_timeline": "Financial Trend",
+        }
+    return {
+        "price_flow": "가격 흐름",
+        "market_snapshot": "시장 스냅샷",
+        "indicators": "보조지표",
+        "financial_timeline": "재무 흐름",
+    }
 
 
 def _build_financial_summary(req: Feature1Request) -> str:

@@ -10,6 +10,7 @@ import { logout } from "../api/auth";
 import { clearAccessToken } from "../api/tokenStore";
 import { clearUser } from "../api/userStore";
 import { clearTokenBalance } from "../api/billingStore";
+import { LANGUAGE_STORAGE_KEY, type SupportedLanguage } from "../i18n";
 import qaimaLogo from "../assets/qaima-final.png";
 
 // ───────────────────────────────────────────────────────────────
@@ -272,6 +273,37 @@ function SectionHead({ eyebrow, title, sub }: { eyebrow: string; title: string; 
   );
 }
 
+function FlagIcon({ lang }: { lang: SupportedLanguage }) {
+  if (lang === "en") {
+    return (
+      <svg viewBox="0 0 60 42" className="h-6 w-8 rounded-[3px] shadow-sm ring-1 ring-black/10" aria-hidden="true">
+        <rect width="60" height="42" fill="#b22234" />
+        {Array.from({ length: 6 }).map((_, i) => (
+          <rect key={i} y={3.23 + i * 6.46} width="60" height="3.23" fill="#fff" />
+        ))}
+        <rect width="27" height="22.6" fill="#3c3b6e" />
+        {Array.from({ length: 5 }).map((_, row) =>
+          Array.from({ length: 6 }).map((_, col) => (
+            <circle key={`${row}-${col}`} cx={3.4 + col * 4.1} cy={3.1 + row * 4} r="0.75" fill="#fff" />
+          ))
+        )}
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 60 42" className="h-6 w-8 rounded-[3px] shadow-sm ring-1 ring-black/10" aria-hidden="true">
+      <rect width="60" height="42" fill="#fff" />
+      <circle cx="30" cy="21" r="9" fill="#cd2e3a" />
+      <path d="M21 21a9 9 0 0 0 18 0a4.5 4.5 0 0 0-9 0a4.5 4.5 0 0 1-9 0Z" fill="#0047a0" />
+      <g stroke="#111" strokeWidth="2">
+        <path d="M13 9l8 5M15 6l8 5M37 31l8 5M39 28l8 5" />
+        <path d="M39 6l-8 5M45 9l-8 5M15 36l8-5M13 33l8-5" />
+      </g>
+    </svg>
+  );
+}
+
 // ───────────────────────────────────────────────────────────────
 // Feature card glyphs
 // ───────────────────────────────────────────────────────────────
@@ -386,8 +418,18 @@ function WorkflowIcon({ kind }: { kind: "search" | "ai" | "doc" }) {
 export default function MainPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
-  const { t } = useTranslation("mainPage");
+  const { t, i18n } = useTranslation("mainPage");
   const loggedIn = isLoggedIn();
+  const activeLanguage: SupportedLanguage = i18n.language.startsWith("en") ? "en" : "ko";
+
+  const setLanguage = (lang: SupportedLanguage) => {
+    void i18n.changeLanguage(lang);
+    try {
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+    } catch {
+      // localStorage 사용 불가 환경에서는 i18next 메모리 상태만 반영한다.
+    }
+  };
 
   const handleLogin = () => {
     // 로그인 후 메인으로 복귀(미지정 시 LoginPage 기본값 /feature/1).
@@ -497,6 +539,29 @@ export default function MainPage() {
 
             {/* 검색박스 — 심층분석과 동일한 자동완성 검색 컴포넌트 */}
             <div className="max-w-[520px]">
+              <div className="mb-3 flex items-center justify-center sm:justify-start gap-2">
+                {(["ko", "en"] as const).map((lang) => {
+                  const selected = activeLanguage === lang;
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setLanguage(lang)}
+                      aria-label={t(`languageSwitcher.${lang}`)}
+                      aria-pressed={selected}
+                      title={t(`languageSwitcher.${lang}`)}
+                      className={`h-10 px-3 inline-flex items-center gap-2 rounded-full border transition-colors ${
+                        selected
+                          ? "border-accent bg-accent-soft text-accent-ink"
+                          : "border-line bg-surface text-ink-2 hover:bg-bg-sunk"
+                      }`}
+                    >
+                      <FlagIcon lang={lang} />
+                      <span className="text-xs font-semibold">{lang === "ko" ? "KR" : "US"}</span>
+                    </button>
+                  );
+                })}
+              </div>
               <StockInputBox placeholder={t("hero.searchPlaceholder")} onSearch={goAnalyze} showInterest={false} enableRecent={false} />
             </div>
 

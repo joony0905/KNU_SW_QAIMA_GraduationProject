@@ -21,8 +21,9 @@ export default function StockInputBox({
   showInterest = true,
   enableRecent = true,
 }: StockInputBoxProps) {
-  const { t } = useTranslation("stockSearch");
+  const { t, i18n } = useTranslation("stockSearch");
   const resolvedPlaceholder = placeholder ?? t("inputPlaceholder");
+  const showEnglishCodeHint = i18n.language.toLowerCase().startsWith("en");
 
   const [inputValue, setInputValue] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -204,48 +205,56 @@ export default function StockInputBox({
   const showDropdown = showSuggestions || showRecentSearches || isInterestListOpen || !!guideMessage;
 
   return (
-    <div ref={wrapperRef} className={`w-full relative flex items-center gap-2 px-3 py-[9px] bg-surface border border-line shadow-card ${showDropdown ? "rounded-t-2xl border-b-surface" : "rounded-2xl"}`}>
-      {showInterest && (
+    <div ref={wrapperRef} className="w-full relative">
+      <div className={`w-full flex items-center gap-2 px-3 py-[9px] bg-surface border border-line shadow-card ${showDropdown ? "rounded-t-2xl border-b-surface" : "rounded-2xl"}`}>
+        {showInterest && (
+          <button
+            onClick={() => {
+              const interestVisible = isInterestListOpen && !showSuggestions && !showRecentSearches && !guideMessage;
+              setShowSuggestions(false);
+              setShowRecentSearches(false);
+              setGuideMessage("");
+              if (interestVisible) {
+                setIsInterestListOpen(false);
+              } else {
+                setIsInterestListOpen(true);
+                void loadInterests();
+              }
+            }}
+            type="button"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-sunk text-ink-2 font-semibold text-sm flex-shrink-0"
+          >
+            {t("interest")}
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 24 24" className="text-warn">
+              <path d="M12 17.75l-6.16 3.73 1.18-6.88L2 9.77l6.92-1L12 2.5l3.08 6.27 6.92 1-5.02 4.83 1.18 6.88z" />
+            </svg>
+          </button>
+        )}
+
+        <input
+          type="text"
+          value={inputValue}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onKeyDown={handleKeyDown}
+          placeholder={resolvedPlaceholder}
+          className="flex-1 py-1 text-base font-medium text-ink bg-transparent placeholder:text-ink-4 focus:outline-none"
+        />
+
         <button
-          onClick={() => {
-            const interestVisible = isInterestListOpen && !showSuggestions && !showRecentSearches && !guideMessage;
-            setShowSuggestions(false);
-            setShowRecentSearches(false);
-            setGuideMessage("");
-            if (interestVisible) {
-              setIsInterestListOpen(false);
-            } else {
-              setIsInterestListOpen(true);
-              void loadInterests();
-            }
-          }}
           type="button"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-bg-sunk text-ink-2 font-semibold text-sm flex-shrink-0"
+          onClick={submitSearch}
+          className="w-9 h-9 grid place-items-center rounded-xl bg-accent text-white hover:opacity-90 transition-opacity flex-shrink-0"
         >
-          {t("interest")}
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 24 24" className="text-warn">
-            <path d="M12 17.75l-6.16 3.73 1.18-6.88L2 9.77l6.92-1L12 2.5l3.08 6.27 6.92 1-5.02 4.83 1.18 6.88z" />
-          </svg>
+          <Search size={16} strokeWidth={2.5} />
         </button>
+      </div>
+
+      {showEnglishCodeHint && !showDropdown && (
+        <p className="mt-1.5 px-1 text-[11px] leading-snug text-ink-3 sm:text-xs">
+          {t("englishCodeHint")}
+        </p>
       )}
-
-      <input
-        type="text"
-        value={inputValue}
-        onChange={handleChange}
-        onFocus={handleFocus}
-        onKeyDown={handleKeyDown}
-        placeholder={resolvedPlaceholder}
-        className="flex-1 py-1 text-base font-medium text-ink bg-transparent placeholder:text-ink-4 focus:outline-none"
-      />
-
-      <button
-        type="button"
-        onClick={submitSearch}
-        className="w-9 h-9 grid place-items-center rounded-xl bg-accent text-white hover:opacity-90 transition-opacity flex-shrink-0"
-      >
-        <Search size={16} strokeWidth={2.5} />
-      </button>
 
       {showDropdown && (
         <div className="absolute top-full left-0 w-full z-50">

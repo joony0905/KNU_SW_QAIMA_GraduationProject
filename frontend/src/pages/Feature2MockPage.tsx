@@ -237,7 +237,7 @@ const isMacroRatesEmpty = (data: Feature2MacroRates | null | undefined) =>
 export default function Feature2MockPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
-  const { t } = useTranslation("feature2Page");
+  const { t, i18n } = useTranslation("feature2Page");
   const { investLevel } = useDictionary();
   const reportUserName = useReportUserName();
   const searchRequestIdRef = useRef(0);
@@ -947,6 +947,7 @@ export default function Feature2MockPage() {
           analysisDateRange.from,
           analysisDateRange.to,
           investLevel,
+          i18n.language.startsWith("en") ? "en" : "ko",
         ),
         fetchFeature2ShortSellingSeries(mainStock.symbol, selectedWindow),
         fetchFeature2BaseRateSeries(Math.max(selectedWindow, 365)),

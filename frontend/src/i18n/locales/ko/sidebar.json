@@ -12,6 +12,7 @@
     "myInfo": "내정보",
     "login": "로그인",
     "unknown": "알 수 없음",
+    "loading": "사용자 정보 불러오는 중",
     "billing": "요금제 / 토큰 결제",
     "logout": "로그아웃"
   }

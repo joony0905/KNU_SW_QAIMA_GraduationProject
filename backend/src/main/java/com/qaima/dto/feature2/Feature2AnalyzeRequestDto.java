@@ -22,4 +22,5 @@ public class Feature2AnalyzeRequestDto {
     private Integer displayLimit;
     private String llmVendor;
     private String investLevel;
+    private String languageCode;
 }

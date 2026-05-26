@@ -242,13 +242,15 @@ const relationColorClass = (relation: PeerItem["relation"]): string => {
   }
 };
 
+const reportSectionClass = "min-w-0 max-w-full overflow-hidden border-t border-line pt-4 first:border-t-0 first:pt-0";
+
 const renderExplainSection = (section: ExplainSection | null | undefined, t: AnalysisPanelTranslator) => {
   if (!section || (!section.summary && (!section.bullets || section.bullets.length === 0))) {
     return null;
   }
 
   return (
-    <div className="mt-3 rounded-2xl border border-line bg-bg-sunk px-4 py-4">
+    <div className="mt-3 min-w-0 max-w-full overflow-hidden rounded-2xl border border-line bg-bg-sunk px-4 py-4">
       <h4 className="text-sm font-semibold text-ink">
         {section.title ?? t("section.defaultTitle")}
       </h4>
@@ -461,7 +463,7 @@ export default function AnalysisResultPanel({
           <ReportHeader meta={reportMeta} />
 
           {result.metrics?.stock && (
-            <div className="rounded-lg border border-line bg-bg-sunk px-4 py-3">
+            <div className="min-w-0 max-w-full overflow-hidden rounded-lg border border-line bg-bg-sunk px-4 py-3">
               <p className="text-xs sm:text-sm font-medium text-ink-3">{t("subject")}</p>
               <p className="mt-1 text-lg sm:text-xl font-bold text-ink">
                 {result.metrics.stock.companyName || result.metrics.stock.stockCode}
@@ -470,7 +472,7 @@ export default function AnalysisResultPanel({
           )}
 
           {result.metrics?.investorFlow && (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className={reportSectionClass}>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base sm:text-lg font-semibold text-ink">{t("investorFlowCard.title")}</h3>
                 <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
@@ -516,7 +518,7 @@ export default function AnalysisResultPanel({
           )}
 
           {result.metrics?.peerCluster && (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className={reportSectionClass}>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base sm:text-lg font-semibold text-ink">{t("peerCluster.title")}</h3>
                 <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
@@ -536,29 +538,29 @@ export default function AnalysisResultPanel({
                 const renderRows = (peers: PeerItem[]) => (
                   <div className="grid grid-cols-1 gap-2">
                     {peers.map((peer) => (
-                      <div key={peer.stockCode} className={`rounded-lg border px-4 py-3 ${peerCardClass(peer)}`}>
-                        <div className="flex flex-wrap items-center gap-3">
-                          <div className="min-w-0 w-[120px] sm:w-[170px] flex-shrink-0">
-                            <p className="text-sm sm:text-base font-semibold text-ink truncate">{peer.companyName ?? "-"}</p>
+                      <div key={peer.stockCode} className={`min-w-0 max-w-full overflow-hidden rounded-lg border px-4 py-3 ${peerCardClass(peer)}`}>
+                        <div className="grid min-w-0 grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center">
+                          <div className="col-span-2 min-w-0 sm:w-[170px] sm:flex-shrink-0">
+                            <p className="truncate text-sm sm:text-base font-semibold text-ink">{peer.companyName ?? "-"}</p>
                             <p className="text-[11px] sm:text-xs text-ink-4">{peer.stockCode}</p>
                           </div>
-                          <div className="flex flex-col items-start sm:items-end flex-1 min-w-[80px]">
+                          <div className="min-w-0 flex flex-col items-start sm:flex-1 sm:items-end">
                             <span className="text-[11px] sm:text-xs text-ink-4">{displayPeerCorrLabel(peer, t)}</span>
                             <span className={`text-sm sm:text-base font-bold ${correlationColorClass(displayPeerCorr(peer))}`}>
                               {displayPeerCorr(peer) == null ? "-" : displayPeerCorr(peer)?.toFixed(2)}
                             </span>
                           </div>
-                          <div className="flex flex-col items-start sm:items-end flex-1 min-w-[70px]">
+                          <div className="min-w-0 flex flex-col items-start sm:flex-1 sm:items-end">
                             <span className="text-[11px] sm:text-xs text-ink-4">{t("peerCluster.relation")}</span>
                             <span className={`text-sm sm:text-base font-semibold ${relationColorClass(peer.relation)}`}>
                               {formatRelationBadge(peer.relation, t)}
                             </span>
                           </div>
-                          <div className="flex flex-col items-start sm:items-end flex-1 min-w-[70px]">
+                          <div className="min-w-0 flex flex-col items-start sm:flex-1 sm:items-end">
                             <span className="text-[11px] sm:text-xs text-ink-4">{t("peerCluster.score")}</span>
                             <span className="text-sm sm:text-base font-bold text-ink">{formatPeerScore(peer)}</span>
                           </div>
-                          <div className="flex flex-col items-start sm:items-end flex-1 min-w-[92px]">
+                          <div className="min-w-0 flex flex-col items-start sm:flex-1 sm:items-end">
                             <span className="text-[11px] sm:text-xs text-ink-4">{t("peerCluster.status")}</span>
                             <span className="text-xs sm:text-sm font-medium text-ink-2">{formatDisplayStatus(peer, t)}</span>
                           </div>
@@ -569,7 +571,7 @@ export default function AnalysisResultPanel({
                 );
 
                 return (
-                  <div className={`mt-3 rounded-lg border border-line bg-bg-sunk/60 p-3 pr-2 ${
+                  <div className={`mt-3 min-w-0 max-w-full rounded-lg border border-line bg-bg-sunk/60 p-3 pr-2 ${
                     pdfExporting ? "overflow-visible" : "max-h-[420px] overflow-y-auto"
                   }`}>
                     <div className="flex flex-col gap-4">
@@ -592,14 +594,14 @@ export default function AnalysisResultPanel({
           )}
 
           {result.metrics?.newsSentimentSummary && (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className={reportSectionClass}>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base sm:text-lg font-semibold text-ink">{t("news.title")}</h3>
                 <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
                   {t("news.scoredCount", { n: result.metrics.newsSentimentSummary.scoredNewsCount })}
                 </span>
               </div>
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-4">
                 <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
                   <p className="text-[11px] sm:text-xs text-ink-3">{t("news.recentAvg")}</p>
                   <p className={`text-lg font-bold ${result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore < -0.05 ? "text-blue-700" : result.metrics.newsSentimentSummary.dailyAvgScore != null && result.metrics.newsSentimentSummary.dailyAvgScore > 0.05 ? "text-rose-700" : "text-ink"}`}>
@@ -623,9 +625,9 @@ export default function AnalysisResultPanel({
               </div>
 
               {(result.metrics?.newsList?.length ?? 0) > 0 && (
-                <div className="mt-4">
+                <div className="mt-4 min-w-0 max-w-full overflow-hidden">
                   <h4 className="text-sm font-semibold text-ink">{t("news.scoredHeading")}</h4>
-                  <div className={`mt-2 divide-y divide-line rounded-lg border border-line bg-surface pr-1 ${
+                  <div className={`mt-2 min-w-0 max-w-full divide-y divide-line rounded-lg border border-line bg-surface pr-1 ${
                     pdfExporting ? "overflow-visible" : "max-h-[360px] overflow-y-auto"
                   }`}>
                     {result.metrics?.newsList?.map((item, idx) => (
@@ -634,13 +636,13 @@ export default function AnalysisResultPanel({
                         href={item.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`flex items-center gap-4 px-3 py-3 hover:bg-bg-sunk transition-colors ${
+                        className={`flex min-w-0 flex-col items-start gap-2 px-3 py-3 transition-colors hover:bg-bg-sunk sm:flex-row sm:items-center sm:gap-4 ${
                           idx === 0 ? "rounded-t-lg" : ""
                         } ${idx === (result.metrics?.newsList?.length ?? 0) - 1 ? "rounded-b-lg" : ""}`}
                       >
                         <div className="min-w-0 flex-1 flex flex-col gap-2">
                           <div className="flex flex-col">
-                            <h5 className="truncate text-sm sm:text-base font-semibold text-ink">
+                            <h5 className="max-w-full truncate text-sm font-semibold text-ink sm:text-base">
                               {item.title}
                             </h5>
                             <p className="line-clamp-2 text-xs sm:text-sm leading-snug text-ink-2">
@@ -651,7 +653,7 @@ export default function AnalysisResultPanel({
                             {formatNewsTimeAgo(item.publishedAt, t)} · {item.publisher}
                           </p>
                         </div>
-                        <div className={`flex min-w-[64px] flex-col items-center justify-center rounded-md border px-2 py-1 text-xs font-semibold ${sentimentBadgeClass(item.sentimentScore)}`}>
+                        <div className={`flex w-full min-w-0 flex-row items-center justify-between rounded-md border px-2 py-1 text-xs font-semibold sm:w-auto sm:min-w-[64px] sm:flex-col sm:justify-center ${sentimentBadgeClass(item.sentimentScore)}`}>
                           <span>{sentimentLabelText(item.sentimentLabel, item.sentimentScore, t)}</span>
                           <span>{formatSentimentScore(item.sentimentScore)}</span>
                         </div>
@@ -669,14 +671,14 @@ export default function AnalysisResultPanel({
             || result.metrics?.baseRateTrendSummary
             || result.metrics?.shortSellingTrendSummary
             || result.metrics?.shortSellingSeries?.length) && (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className={reportSectionClass}>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base sm:text-lg font-semibold text-ink">{t("macroSeries.title")}</h3>
                 <span className="rounded-full bg-bg-sunk px-2 py-1 text-[11px] font-medium text-ink-3">
                   {t("macroSeries.subtitle")}
                 </span>
               </div>
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-4">
                 {result.metrics?.macroRates && (
                   <>
                     <div className="rounded-lg border border-line bg-bg-sunk px-3 py-2">
@@ -725,7 +727,7 @@ export default function AnalysisResultPanel({
                 )}
               </div>
               {(result.metrics?.macroRatesSeries?.series?.length || result.metrics?.shortSellingSeries?.length) ? (
-                <div className="mt-3 flex flex-col gap-3">
+                <div className="mt-3 flex min-w-0 max-w-full flex-col gap-3 overflow-hidden">
                   {pdfExporting ? (
                     <div className="flex flex-col gap-4">
                       {[
@@ -754,7 +756,7 @@ export default function AnalysisResultPanel({
                     </div>
                   ) : (
                     <>
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex min-w-0 flex-wrap gap-1.5">
                         {macroChartOptions.map((option) => (
                           <button
                             key={option.key}
@@ -770,7 +772,7 @@ export default function AnalysisResultPanel({
                           </button>
                         ))}
                       </div>
-                      <div>
+                      <div className="min-w-0 max-w-full overflow-hidden">
                         {macroChartMode === "shortSelling" ? (
                           <ShortSellingTrendChart points={result.metrics?.shortSellingSeries ?? []} />
                         ) : (
@@ -796,7 +798,7 @@ export default function AnalysisResultPanel({
 
           {/* 공매도 현황 */}
           {result.metrics?.shortSelling ? (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className={reportSectionClass}>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="text-base sm:text-lg font-semibold text-ink">
                   <DictTerm term="공매도">{t("macroSeries.shortSelling")}</DictTerm> {t("shortSelling.titleSuffix")}
@@ -848,7 +850,7 @@ export default function AnalysisResultPanel({
 
           {/* 가격 흐름 요약 */}
           {priceFlowSummary && (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className={reportSectionClass}>
               <PriceFlowBars summary={priceFlowSummary} />
               {renderExplainSection(explainSections?.priceFlow, t)}
             </div>
@@ -856,7 +858,7 @@ export default function AnalysisResultPanel({
 
           {/* 시장 스냅샷 */}
           {result.metrics?.marketSnapshot && (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className={reportSectionClass}>
               <MarketSnapshotBars snapshot={result.metrics.marketSnapshot} />
               {renderExplainSection(explainSections?.marketSnapshot, t)}
             </div>
@@ -864,7 +866,7 @@ export default function AnalysisResultPanel({
 
           {/* 보조지표 요약 */}
           {result.metrics?.indicators && (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className={reportSectionClass}>
               <IndicatorSnapshotCards
                 indicators={result.metrics.indicators}
               />
@@ -873,7 +875,7 @@ export default function AnalysisResultPanel({
           )}
 
           {financialTimeline && financialTimeline.points.length > 0 && (
-            <div className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+            <div className={reportSectionClass}>
               <FinancialTimelineChart
                 period={financialTimeline.period}
                 points={financialTimeline.points}

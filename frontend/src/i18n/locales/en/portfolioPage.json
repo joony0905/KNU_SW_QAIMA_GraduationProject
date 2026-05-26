@@ -90,6 +90,14 @@
     "cashLimitRight": "Cash · 100%",
     "cashLimitDesc": "Set how much cash to keep at most. Adjusting the risk tolerance index also updates the default limit, and you can fine-tune it here. This value is applied in the analysis."
   },
+  "riskProfileType": {
+    "CONSERVATIVE": "Conservative",
+    "NEUTRAL": "Neutral",
+    "MODERATE": "Moderate",
+    "BALANCED": "Balanced",
+    "AGGRESSIVE": "Aggressive",
+    "AGGRESIVE": "Aggressive"
+  },
   "runBanner": {
     "tag": "✨ AI Portfolio Analysis",
     "title": "We'll analyze your portfolio in one shot",

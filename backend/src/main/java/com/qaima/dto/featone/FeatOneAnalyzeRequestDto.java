@@ -25,4 +25,6 @@ public class FeatOneAnalyzeRequestDto {
     private String llmVendor;
 
     private String investLevel;
+
+    private String languageCode;
 }

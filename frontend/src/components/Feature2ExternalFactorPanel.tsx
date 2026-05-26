@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Lock } from "lucide-react";
 import DictTerm from "./DictTerm";
 import InvestorFlowTrendChart from "./InvestorFlowTrendChart";
@@ -49,23 +50,16 @@ interface Props {
   onSelectRelatedStock: (stockCode: string) => void;
 }
 
-const tabs: { key: ExternalFactorTab; label: string }[] = [
-  { key: "summary", label: "요약" },
-  { key: "macro", label: "금리·환율" },
-  { key: "flow", label: "수급" },
-  { key: "news", label: "뉴스" },
-  { key: "peer", label: "유사종목" },
-  { key: "risk", label: "공매도" },
-];
+const tabKeys: ExternalFactorTab[] = ["summary", "macro", "flow", "news", "peer", "risk"];
 
-const formatTimeAgo = (isoStr: string): string => {
+const formatTimeAgo = (isoStr: string, t: (key: string, options?: Record<string, unknown>) => string): string => {
   const diff = Date.now() - new Date(isoStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${Math.max(0, mins)}분 전`;
+  if (mins < 60) return t("timeAgo.minutes", { n: Math.max(0, mins) });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}시간 전`;
+  if (hours < 24) return t("timeAgo.hours", { n: hours });
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}일 전`;
+  if (days < 7) return t("timeAgo.days", { n: days });
   return new Date(isoStr).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
 };
 
@@ -86,27 +80,27 @@ const formatDate = (value?: string | null) => {
   return value.slice(0, 10);
 };
 
-const formatFlowAmount = (value?: number | null) => {
+const formatFlowAmount = (value: number | null | undefined, t: (key: string) => string) => {
   if (value == null || !Number.isFinite(value)) return "-";
   const abs = Math.abs(value);
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
-  if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(1)}조원`;
-  if (abs >= 10_000) return `${sign}${(abs / 10_000).toFixed(1)}억원`;
-  return `${sign}${Math.round(abs).toLocaleString("ko-KR")}백만원`;
+  if (abs >= 100_000_000) return `${sign}${(abs / 100_000_000).toFixed(1)}${t("amountUnit.trillion")}`;
+  if (abs >= 10_000) return `${sign}${(abs / 10_000).toFixed(1)}${t("amountUnit.hundredMillion")}`;
+  return `${sign}${Math.round(abs).toLocaleString("ko-KR")}${t("amountUnit.million")}`;
 };
 
-const investorFlowDirectionText = (direction?: string | null) => {
+const investorFlowDirectionText = (direction: string | null | undefined, t: (key: string) => string) => {
   switch (direction) {
     case "BOTH_NET_BUY":
-      return "동반 순매수";
+      return t("investorFlow.buyBoth");
     case "BOTH_NET_SELL":
-      return "동반 순매도";
+      return t("investorFlow.sellBoth");
     case "FOREIGN_BUY_INSTITUTION_SELL":
-      return "외국인 매수·기관 매도";
+      return t("investorFlow.foreignBuyInstSell");
     case "FOREIGN_SELL_INSTITUTION_BUY":
-      return "외국인 매도·기관 매수";
+      return t("investorFlow.foreignSellInstBuy");
     default:
-      return "혼재";
+      return t("investorFlow.mixed");
   }
 };
 
@@ -128,6 +122,13 @@ const flowStatusClass = (status: string) => {
   if (status === "하락") return "text-fall bg-fall-soft border-fall/30";
   if (status === "혼재") return "text-ink-2 bg-bg-sunk border-line";
   return "text-ink-3 bg-bg-sunk border-line";
+};
+
+const flowStatusLabel = (status: string, t: (key: string) => string) => {
+  if (status === "상승") return t("external.peer.status.up");
+  if (status === "하락") return t("external.peer.status.down");
+  if (status === "혼재") return t("external.peer.status.mixed");
+  return t("external.peer.status.locked");
 };
 
 const seriesDelta = (series?: RelativePoint[] | null) => {
@@ -175,7 +176,9 @@ export default function Feature2ExternalFactorPanel({
   peerCluster,
   onSelectRelatedStock,
 }: Props) {
+  const { t } = useTranslation("analysisPanel");
   const [activeTab, setActiveTab] = useState<ExternalFactorTab>("summary");
+  const tabs = tabKeys.map((key) => ({ key, label: t(`external.tabs.${key}`) }));
   const hasInvestorFlowData = Boolean(
     investorFlow?.stockSummary
       || investorFlow?.marketSummary
@@ -233,65 +236,65 @@ export default function Feature2ExternalFactorPanel({
       )}
       <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
         <MetricTile
-          label={<DictTerm term="기준금리">기준금리</DictTerm>}
+          label={<DictTerm term="기준금리">{t("macroSeries.krBaseRate")}</DictTerm>}
           value={formatRate(krBaseRate?.value, krBaseRate?.unit ?? "%")}
           sub={formatDate(krBaseRate?.date)}
         />
         <MetricTile
           label="USD/KRW"
-          value={macroRatesLoading ? "조회중" : usdKrw ? formatNumber(usdKrw.value, 2) : "-"}
-          sub={usdKrw ? formatDate(usdKrw.date) : "데이터 없음"}
+          value={macroRatesLoading ? t("external.loading.short") : usdKrw ? formatNumber(usdKrw.value, 2) : "-"}
+          sub={usdKrw ? formatDate(usdKrw.date) : t("external.empty.data")}
         />
         <MetricTile
-          label="외국인/기관"
+          label={t("external.flow.foreignInstitution")}
           value={
             investorFlowLoading
-              ? "조회중"
+              ? t("external.loading.short")
               : investorFlow?.stockSummary
-                ? investorFlowDirectionText(investorFlow.stockSummary.direction)
+                ? investorFlowDirectionText(investorFlow.stockSummary.direction, t)
                 : "-"
           }
           sub={
             investorFlow?.stockSummary
-              ? formatFlowAmount(investorFlow.stockSummary.combinedNetBuyValueMillionSum)
-              : "데이터 없음"
+              ? formatFlowAmount(investorFlow.stockSummary.combinedNetBuyValueMillionSum, t)
+              : t("external.empty.data")
           }
         />
         <MetricTile
-          label="시장 수급"
+          label={t("external.flow.marketFlow")}
           value={
             investorFlowLoading
-              ? "조회중"
+              ? t("external.loading.short")
               : investorFlow?.marketSummary
-                ? formatFlowAmount(investorFlow.marketSummary.combinedNetBuyValueMillionSum)
+                ? formatFlowAmount(investorFlow.marketSummary.combinedNetBuyValueMillionSum, t)
                 : "-"
           }
-          sub={investorFlow?.marketCode ?? "시장 매핑 없음"}
+          sub={investorFlow?.marketCode ?? t("investorFlowCard.noMarketMapping")}
         />
         <MetricTile
-          label="유사종목 흐름"
+          label={t("external.peer.flowTitle")}
           value={
             peerFlowLocked ? (
               <span className="inline-flex items-center gap-1 text-ink-3">
                 <Lock size={14} aria-hidden="true" />
-                잠금
+                {t("external.peer.status.locked")}
               </span>
             ) : (
               <span className={`inline-flex rounded-full border px-2 py-0.5 text-sm ${flowStatusClass(peerStatus)}`}>
-                {peerStatus}
+                {flowStatusLabel(peerStatus, t)}
               </span>
             )
           }
           sub={
             peerFlowLocked
-              ? "분석 결과 보기 후 활성화"
-              : `유사 종목군 평균 ${formatSignedPct(peerDelta)}`
+              ? t("external.peer.unlockAfterAnalysis")
+              : t("external.peer.avgFlow", { value: formatSignedPct(peerDelta) })
           }
         />
         <MetricTile
-          label={<DictTerm term="공매도">공매도</DictTerm>}
+          label={<DictTerm term="공매도">{t("shortSelling.shortSelling")}</DictTerm>}
           value={shortSellingMetrics ? `${shortSellingMetrics.shortAmountRatio.toFixed(2)}%` : "-"}
-          sub={shortSellingMetrics ? formatDate(shortSellingMetrics.reportDate) : "데이터 없음"}
+          sub={shortSellingMetrics ? formatDate(shortSellingMetrics.reportDate) : t("external.empty.data")}
         />
       </div>
       <div className="rounded-lg border border-line bg-surface px-3 py-3">
@@ -305,7 +308,7 @@ export default function Feature2ExternalFactorPanel({
           ))}
           {krBondYields.length + usBondYields.length === 0 && (
             <p className="col-span-2 text-ink-3">
-              {macroRatesLoading ? "국채 데이터를 확인하는 중입니다." : "국채 데이터가 없습니다."}
+              {macroRatesLoading ? t("external.loading.bonds") : t("external.empty.bonds")}
             </p>
           )}
         </div>
@@ -321,7 +324,7 @@ export default function Feature2ExternalFactorPanel({
         ))}
         {summaryTrendSeries.length === 0 && (
           <div className="rounded-lg border border-line bg-bg-sunk px-3 py-5 text-center text-sm text-ink-3">
-            {macroRatesLoading ? "추세 데이터를 확인하는 중입니다." : "표시할 추세 데이터가 없습니다."}
+            {macroRatesLoading ? t("external.loading.trends") : t("external.empty.trends")}
           </div>
         )}
       </div>
@@ -337,39 +340,39 @@ export default function Feature2ExternalFactorPanel({
       )}
       <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
         <MetricTile
-          label="한국 기준금리"
+          label={t("macroSeries.krBaseRate")}
           value={formatRate(krBaseRate?.value, krBaseRate?.unit ?? "%")}
           sub={formatDate(krBaseRate?.date)}
         />
         <MetricTile
-          label="미국 기준금리"
+          label={t("macroSeries.usBaseRate")}
           value={formatRate(macroRates?.usFedFundsRate?.value, macroRates?.usFedFundsRate?.unit ?? "%")}
           sub={formatDate(macroRates?.usFedFundsRate?.date)}
         />
         <MetricTile
           label="USD/KRW"
           value={usdKrw ? formatNumber(usdKrw.value, 2) : "-"}
-          sub={usdKrw ? `${usdKrw.baseCurrency}/${usdKrw.quoteCurrency}` : "데이터 없음"}
+          sub={usdKrw ? `${usdKrw.baseCurrency}/${usdKrw.quoteCurrency}` : t("external.empty.data")}
         />
         <MetricTile
-          label="환율 기준일"
+          label={t("external.macro.fxAsOf")}
           value={formatDate(usdKrw?.date)}
           sub={usdKrw?.source ?? "-"}
         />
       </div>
-      <BondYieldList title="국내 금리" items={krBondYields} />
-      <BondYieldList title="미국 금리" items={usBondYields} />
+      <BondYieldList title={t("external.macro.krRates")} items={krBondYields} emptyText={t("external.empty.data")} countUnit={t("external.countUnit")} />
+      <BondYieldList title={t("external.macro.usRates")} items={usBondYields} emptyText={t("external.empty.data")} countUnit={t("external.countUnit")} />
       <div className="flex flex-col gap-3">
         <div>
-          <p className="mb-2 text-sm font-semibold text-ink">환율 추세</p>
+          <p className="mb-2 text-sm font-semibold text-ink">{t("external.macro.fxTrend")}</p>
           <MultiLineTrendChart series={exchangeSeries} height={190} />
         </div>
         <div>
-          <p className="mb-2 text-sm font-semibold text-ink">국내 금리 추세</p>
+          <p className="mb-2 text-sm font-semibold text-ink">{t("external.macro.krRateTrend")}</p>
           <MultiLineTrendChart series={domesticMacroSeries} height={210} />
         </div>
         <div>
-          <p className="mb-2 text-sm font-semibold text-ink">미국 금리 추세</p>
+          <p className="mb-2 text-sm font-semibold text-ink">{t("external.macro.usRateTrend")}</p>
           <MultiLineTrendChart series={usMacroSeries} height={210} />
         </div>
       </div>
@@ -380,7 +383,7 @@ export default function Feature2ExternalFactorPanel({
     <div className="flex flex-col gap-3">
       {investorFlowLoading && (
         <div className="h-40 flex items-center justify-center text-sm text-ink-3">
-          수급 데이터를 불러오는 중입니다…
+          {t("external.loading.flow")}
         </div>
       )}
       {investorFlowError && !investorFlowLoading && (
@@ -390,48 +393,48 @@ export default function Feature2ExternalFactorPanel({
       )}
       {!investorFlowLoading && !investorFlowError && !hasInvestorFlowData && (
         <div className="min-h-[360px] flex items-center justify-center text-sm text-ink-3 rounded-lg border border-line bg-bg-sunk">
-          수급 데이터가 없습니다.
+          {t("external.empty.flow")}
         </div>
       )}
       {!investorFlowLoading && !investorFlowError && hasInvestorFlowData && investorFlow && (
         <>
           <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
             <MetricTile
-              label="외국인 누적"
-              value={formatFlowAmount(investorFlow.stockSummary?.foreignNetBuyValueMillionSum)}
-              sub={investorFlow.stockSummary ? `${investorFlow.stockSummary.pointCount}거래일` : "종목 데이터 없음"}
+              label={t("external.flow.foreignAccum")}
+              value={formatFlowAmount(investorFlow.stockSummary?.foreignNetBuyValueMillionSum, t)}
+              sub={investorFlow.stockSummary ? t("external.flow.tradingDays", { count: investorFlow.stockSummary.pointCount }) : t("external.empty.stockData")}
             />
             <MetricTile
-              label="기관 누적"
-              value={formatFlowAmount(investorFlow.stockSummary?.institutionNetBuyValueMillionSum)}
-              sub={investorFlow.stockSummary ? investorFlowDirectionText(investorFlow.stockSummary.direction) : "종목 데이터 없음"}
+              label={t("external.flow.institutionAccum")}
+              value={formatFlowAmount(investorFlow.stockSummary?.institutionNetBuyValueMillionSum, t)}
+              sub={investorFlow.stockSummary ? investorFlowDirectionText(investorFlow.stockSummary.direction, t) : t("external.empty.stockData")}
             />
             <MetricTile
-              label="외국인+기관"
-              value={formatFlowAmount(investorFlow.stockSummary?.combinedNetBuyValueMillionSum)}
+              label={t("external.flow.combined")}
+              value={formatFlowAmount(investorFlow.stockSummary?.combinedNetBuyValueMillionSum, t)}
               sub={investorFlow.stockSummary
                 ? `${formatDate(investorFlow.stockSummary.startDate)} ~ ${formatDate(investorFlow.stockSummary.endDate)}`
-                : "종목 데이터 없음"}
+                : t("external.empty.stockData")}
             />
             <MetricTile
-              label="시장 수급"
+              label={t("external.flow.marketFlow")}
               value={
                 investorFlow.marketSummary
-                  ? formatFlowAmount(investorFlow.marketSummary.combinedNetBuyValueMillionSum)
+                  ? formatFlowAmount(investorFlow.marketSummary.combinedNetBuyValueMillionSum, t)
                   : "-"
               }
-              sub={investorFlow.marketCode ?? "시장 매핑 없음"}
+              sub={investorFlow.marketCode ?? t("investorFlowCard.noMarketMapping")}
             />
           </div>
           {investorFlow.stockSeries?.length > 0 && (
             <div>
-              <p className="mb-2 text-sm font-semibold text-ink">종목 외국인/기관 순매수</p>
+              <p className="mb-2 text-sm font-semibold text-ink">{t("external.flow.stockChart")}</p>
               <InvestorFlowTrendChart points={investorFlow.stockSeries} height={210} />
             </div>
           )}
           {investorFlow.marketSeries?.length > 0 && (
             <div>
-              <p className="mb-2 text-sm font-semibold text-ink">시장 외국인/기관 순매수</p>
+              <p className="mb-2 text-sm font-semibold text-ink">{t("external.flow.marketChart")}</p>
               <InvestorFlowTrendChart points={investorFlow.marketSeries} height={190} />
             </div>
           )}
@@ -444,13 +447,13 @@ export default function Feature2ExternalFactorPanel({
     <div className="flex flex-col gap-3">
       {newsLoading && (
         <div className="h-40 flex items-center justify-center text-sm text-ink-3">
-          뉴스를 불러오는 중입니다…
+          {t("external.loading.news")}
         </div>
       )}
 
       {newsError && !newsLoading && (
         <div className="h-40 flex items-center justify-center text-sm text-danger">
-          {newsError ?? "뉴스를 불러오지 못했습니다."}
+          {newsError ?? t("external.error.news")}
         </div>
       )}
 
@@ -476,7 +479,7 @@ export default function Feature2ExternalFactorPanel({
                   </p>
                 </div>
                 <p className="text-ink-3 text-[11px] font-medium">
-                  {formatTimeAgo(item.publishedAt)} · {item.publisher}
+                  {formatTimeAgo(item.publishedAt, t)} · {item.publisher}
                 </p>
               </div>
             </a>
@@ -484,7 +487,7 @@ export default function Feature2ExternalFactorPanel({
 
           {newsItems.length === 0 && (
             <div className="flex-1 flex items-center justify-center text-sm text-ink-3">
-              표시할 뉴스가 없습니다.
+              {t("external.empty.news")}
             </div>
           )}
         </div>
@@ -495,6 +498,7 @@ export default function Feature2ExternalFactorPanel({
   const renderPeer = () => (
     <div className="flex flex-col gap-3">
       <PeerFlowSummaryCard
+        t={t}
         locked={peerFlowLocked}
         peerStatus={peerStatus}
         peerDelta={peerDelta}
@@ -504,13 +508,13 @@ export default function Feature2ExternalFactorPanel({
       />
       {relatedLoading && (
         <div className="h-40 flex items-center justify-center text-sm text-ink-3">
-          유사 종목을 불러오는 중입니다…
+          {t("external.loading.peer")}
         </div>
       )}
 
       {relatedError && !relatedLoading && (
         <div className="h-40 flex items-center justify-center text-sm text-danger">
-          {relatedError ?? "유사 종목을 불러오지 못했습니다."}
+          {relatedError ?? t("external.error.peer")}
         </div>
       )}
 
@@ -560,7 +564,7 @@ export default function Feature2ExternalFactorPanel({
 
           {relatedStocks.length === 0 && (
             <div className="flex-1 flex items-center justify-center text-sm text-ink-3">
-              표시할 유사 종목이 없습니다.
+              {t("external.empty.peer")}
             </div>
           )}
         </div>
@@ -573,19 +577,19 @@ export default function Feature2ExternalFactorPanel({
     if (!ss) {
       return (
         <div className="min-h-[360px] flex items-center justify-center text-sm text-ink-3 rounded-lg border border-line bg-bg-sunk">
-          공매도 데이터가 없습니다.
+          {t("external.empty.shortSelling")}
         </div>
       );
     }
 
     const rows: { label: ReactNode; value: string }[] = [
-      { label: "기준일", value: ss.reportDate },
-      { label: "공매도 거래량", value: formatNumber(ss.shortVolumeTotal, 0) },
-      { label: <><DictTerm term="거래량">거래량</DictTerm> (총)</>, value: formatNumber(ss.totalVolume, 0) },
-      { label: "공매도 거래량 비율", value: `${ss.shortVolumeRatio.toFixed(2)}%` },
-      { label: "공매도 거래대금", value: `${formatNumber(ss.shortAmountTotal, 0)}원` },
-      { label: <><DictTerm term="거래대금">거래대금</DictTerm> (총)</>, value: `${formatNumber(ss.totalAmount, 0)}원` },
-      { label: "공매도 거래대금 비율", value: `${ss.shortAmountRatio.toFixed(2)}%` },
+      { label: t("shortSelling.asOf"), value: ss.reportDate },
+      { label: t("shortSelling.shortVolume"), value: formatNumber(ss.shortVolumeTotal, 0) },
+      { label: <><DictTerm term="거래량">{t("shortSelling.volumeLabel")}</DictTerm> {t("shortSelling.totalVolume")}</>, value: formatNumber(ss.totalVolume, 0) },
+      { label: t("shortSelling.shortVolumeRatio"), value: `${ss.shortVolumeRatio.toFixed(2)}%` },
+      { label: t("shortSelling.shortAmount"), value: `${formatNumber(ss.shortAmountTotal, 0)}${t("amountUnit.won")}` },
+      { label: <><DictTerm term="거래대금">{t("shortSelling.amountLabel")}</DictTerm> {t("shortSelling.totalAmount")}</>, value: `${formatNumber(ss.totalAmount, 0)}${t("amountUnit.won")}` },
+      { label: t("shortSelling.shortAmountRatio"), value: `${ss.shortAmountRatio.toFixed(2)}%` },
     ];
 
     return (
@@ -646,6 +650,7 @@ export default function Feature2ExternalFactorPanel({
 }
 
 function PeerFlowSummaryCard({
+  t,
   locked,
   peerStatus,
   peerDelta,
@@ -653,6 +658,7 @@ function PeerFlowSummaryCard({
   anchorVsPeer,
   peerCount,
 }: {
+  t: (key: string, options?: Record<string, unknown>) => string;
   locked: boolean;
   peerStatus: string;
   peerDelta: number | null;
@@ -665,12 +671,12 @@ function PeerFlowSummaryCard({
       <div className="rounded-lg border border-dashed border-line bg-bg-sunk px-3 py-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-ink-2">유사종목 흐름</p>
-            <p className="mt-1 text-xs text-ink-3">분석 결과 보기 후 유사 종목군 평균 흐름이 활성화됩니다.</p>
+            <p className="text-sm font-semibold text-ink-2">{t("external.peer.flowTitle")}</p>
+            <p className="mt-1 text-xs text-ink-3">{t("external.peer.unlockDescription")}</p>
           </div>
           <span className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-ink-3">
             <Lock size={13} aria-hidden="true" />
-            잠금
+            {t("external.peer.status.locked")}
           </span>
         </div>
       </div>
@@ -679,36 +685,36 @@ function PeerFlowSummaryCard({
 
   const relativeText =
     anchorVsPeer == null
-      ? "종목 대비 데이터 없음"
+      ? t("external.peer.noComparison")
       : anchorVsPeer > 0.01
-        ? `분석 종목이 유사 종목군 평균보다 ${formatSignedPct(anchorVsPeer)} 강함`
+        ? t("external.peer.anchorStronger", { value: formatSignedPct(anchorVsPeer) })
         : anchorVsPeer < -0.01
-          ? `분석 종목이 유사 종목군 평균보다 ${formatSignedPct(Math.abs(anchorVsPeer))} 약함`
-          : "분석 종목과 유사 종목군 평균 흐름이 유사";
+          ? t("external.peer.anchorWeaker", { value: formatSignedPct(Math.abs(anchorVsPeer)) })
+          : t("external.peer.similarFlow");
 
   return (
     <div className="rounded-lg border border-line bg-surface px-3 py-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-ink">유사종목 흐름</p>
+          <p className="text-sm font-semibold text-ink">{t("external.peer.flowTitle")}</p>
           <p className="mt-1 text-xs text-ink-3">{relativeText}</p>
         </div>
         <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${flowStatusClass(peerStatus)}`}>
-          {peerStatus}
+          {flowStatusLabel(peerStatus, t)}
         </span>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
         <div className="rounded-md bg-bg-sunk px-2 py-2">
-          <p className="text-ink-3">유사 종목군 평균</p>
+          <p className="text-ink-3">{t("external.peer.peerAverage")}</p>
           <p className="mt-0.5 font-bold text-ink">{formatSignedPct(peerDelta)}</p>
         </div>
         <div className="rounded-md bg-bg-sunk px-2 py-2">
-          <p className="text-ink-3">분석 종목</p>
+          <p className="text-ink-3">{t("external.peer.anchorStock")}</p>
           <p className="mt-0.5 font-bold text-ink">{formatSignedPct(anchorDelta)}</p>
         </div>
         <div className="rounded-md bg-bg-sunk px-2 py-2">
-          <p className="text-ink-3">유사 종목 수</p>
-          <p className="mt-0.5 font-bold text-ink">{peerCount}개</p>
+          <p className="text-ink-3">{t("external.peer.peerCount")}</p>
+          <p className="mt-0.5 font-bold text-ink">{t("external.peer.countUnit", { count: peerCount })}</p>
         </div>
       </div>
     </div>
@@ -718,15 +724,19 @@ function PeerFlowSummaryCard({
 function BondYieldList({
   title,
   items,
+  emptyText,
+  countUnit,
 }: {
   title: string;
   items: NonNullable<Feature2MacroRates["bondYields"]>;
+  emptyText: string;
+  countUnit: string;
 }) {
   return (
     <div className="rounded-lg border border-line bg-surface px-3 py-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-ink">{title}</p>
-        <span className="text-[11px] text-ink-4">{items.length}개</span>
+        <span className="text-[11px] text-ink-4">{items.length}{countUnit}</span>
       </div>
       <div className="mt-2 flex flex-col divide-y divide-line">
         {items.map((item) => (
@@ -739,7 +749,7 @@ function BondYieldList({
           </div>
         ))}
         {items.length === 0 && (
-          <p className="py-5 text-center text-sm text-ink-3">데이터가 없습니다.</p>
+          <p className="py-5 text-center text-sm text-ink-3">{emptyText}</p>
         )}
       </div>
     </div>

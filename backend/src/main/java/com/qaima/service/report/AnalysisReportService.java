@@ -31,6 +31,7 @@ import reactor.core.publisher.Mono;
 @Service
 @RequiredArgsConstructor
 public class AnalysisReportService {
+    private static final java.time.Duration REPORT_RETENTION = java.time.Duration.ofDays(7);
 
     private final AnalysisReportRepository reportRepository;
     private final UserRepository userRepository;
@@ -150,13 +151,15 @@ public class AnalysisReportService {
 
     public Mono<java.util.List<AnalysisReportSummaryDto>> listMine(Long userId, String featureType, int page, int size) {
         return Blocking.call(() -> {
+            Instant cutoff = retentionCutoff();
+            reportRepository.deleteByUser_UserIdAndGeneratedAtBefore(userId, cutoff);
             int safePage = Math.max(0, page);
             int safeSize = Math.max(1, Math.min(size, 50));
             PageRequest pageable = PageRequest.of(safePage, safeSize);
             String normalizedFeature = blankToNull(featureType);
             return (normalizedFeature == null
-                    ? reportRepository.findByUser_UserIdOrderByGeneratedAtDesc(userId, pageable)
-                    : reportRepository.findByUser_UserIdAndFeatureTypeOrderByGeneratedAtDesc(userId, normalizedFeature, pageable))
+                    ? reportRepository.findByUser_UserIdAndGeneratedAtGreaterThanEqualOrderByGeneratedAtDesc(userId, cutoff, pageable)
+                    : reportRepository.findByUser_UserIdAndFeatureTypeAndGeneratedAtGreaterThanEqualOrderByGeneratedAtDesc(userId, normalizedFeature, cutoff, pageable))
                     .stream()
                     .map(this::toSummary)
                     .toList();
@@ -164,9 +167,17 @@ public class AnalysisReportService {
     }
 
     public Mono<AnalysisReportDetailDto> getMine(Long userId, Long reportId) {
-        return Blocking.call(() -> reportRepository.findByReportIdAndUser_UserId(reportId, userId)
+        return Blocking.call(() -> {
+            Instant cutoff = retentionCutoff();
+            reportRepository.deleteByUser_UserIdAndGeneratedAtBefore(userId, cutoff);
+            return reportRepository.findByReportIdAndUser_UserIdAndGeneratedAtGreaterThanEqual(reportId, userId, cutoff)
                 .map(this::toDetail)
-                .orElseThrow(() -> new ErrorException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found.")));
+                .orElseThrow(() -> new ErrorException(ErrorCode.RESOURCE_NOT_FOUND, "Report not found."));
+        });
+    }
+
+    public Mono<Long> deleteExpiredReports() {
+        return Blocking.call(() -> reportRepository.deleteByGeneratedAtBefore(retentionCutoff()));
     }
 
     private AnalysisReportSummaryDto toSummary(AnalysisReport report) {
@@ -227,6 +238,10 @@ public class AnalysisReportService {
         } catch (JsonProcessingException e) {
             return objectMapper.createObjectNode();
         }
+    }
+
+    private Instant retentionCutoff() {
+        return Instant.now().minus(REPORT_RETENTION);
     }
 
     private String feature2DataAsOf(Feature2MetricsDto metrics) {

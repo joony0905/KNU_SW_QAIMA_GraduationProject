@@ -172,6 +172,7 @@ public class Feature3AnalyzeController {
                                 options != null && Boolean.TRUE.equals(options.includeDiagnostics()),
                                 options != null && Boolean.TRUE.equals(options.includeLlmExplain()),
                                 options != null ? options.llmVendor() : null,
+                                normalizeLanguageCode(options != null ? options.languageCode() : null),
                                 riskFree.rate(),
                                 riskFree.source(),
                                 riskFree.asOf(),
@@ -181,6 +182,13 @@ public class Feature3AnalyzeController {
                         inputData
                 );
                 });
+    }
+
+    private String normalizeLanguageCode(String languageCode) {
+        if (languageCode == null || languageCode.isBlank()) {
+            return "ko";
+        }
+        return languageCode.trim().toLowerCase().startsWith("en") ? "en" : "ko";
     }
 
     private Feature3FastApiAnalyzeRequestDto withOverlaySignals(

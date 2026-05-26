@@ -212,7 +212,7 @@ const buildPriceFlowSummary = (
 export default function StocksMockPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { t } = useTranslation("stocksPage");
+  const { t, i18n } = useTranslation("stocksPage");
   const { investLevel } = useDictionary();
   const reportUserName = useReportUserName();
   const currentTime = useKSTTime();
@@ -686,6 +686,7 @@ export default function StocksMockPage() {
         includeExplain,
         llmVendor,
         investLevel,
+        languageCode: i18n.language.startsWith("en") ? "en" : "ko",
       });
 
       setAnalysisResult(result);

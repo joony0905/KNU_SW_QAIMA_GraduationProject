@@ -13,6 +13,7 @@ public record Feature2Command(
         int maxLag,
         int displayLimit,
         String llmVendor,
-        String investLevel
+        String investLevel,
+        String languageCode
 ) {
 }

@@ -12,6 +12,10 @@
     "subtitle": "가격, 재무, 산업, 뉴스, 금리까지 — 흩어진 데이터를 하나의 분석 보고서로 정리합니다. 종목 하나만 입력하면 됩니다.",
     "searchPlaceholder": "삼성전자, 005930, NVDA…"
   },
+  "languageSwitcher": {
+    "ko": "한국어로 보기",
+    "en": "영어로 보기"
+  },
   "features": {
     "eyebrow": "WHAT QAIMA DOES",
     "title": "3가지 시선으로, 한 종목을 본다",

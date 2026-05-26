@@ -90,6 +90,14 @@
     "cashLimitRight": "현금 O · 100%",
     "cashLimitDesc": "포트폴리오에 현금을 최대로 얼마나 남길지 설정해요. 투자 성향 지수를 조정하면 기본 한도가 함께 갱신되고, 여기서 직접 조정할 수도 있어요. 해당 값이 분석에 반영돼요."
   },
+  "riskProfileType": {
+    "CONSERVATIVE": "보수형",
+    "NEUTRAL": "중립형",
+    "MODERATE": "중립형",
+    "BALANCED": "균형형",
+    "AGGRESSIVE": "공격형",
+    "AGGRESIVE": "공격형"
+  },
   "runBanner": {
     "tag": "✨ AI 포트폴리오 분석",
     "title": "포트폴리오를 한 번에 분석해 드릴게요",

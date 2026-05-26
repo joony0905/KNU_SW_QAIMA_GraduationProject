@@ -569,6 +569,20 @@ button:focus-visible {
   .qaima-portfolio-report svg {
     display: block;
   }
+
+  .qaima-portfolio-report,
+  .qaima-feature3-advanced {
+    max-width: calc(100vw - 1.5rem) !important;
+  }
+
+  .qaima-feature3-advanced table {
+    width: max-content;
+    max-width: none;
+  }
+
+  .qaima-feature3-advanced .qaima-frontier-chart-shell svg {
+    max-width: 100%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

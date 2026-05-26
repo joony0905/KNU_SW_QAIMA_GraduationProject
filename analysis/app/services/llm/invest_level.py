@@ -22,3 +22,24 @@ def invest_level_prompt(value: str | None) -> str:
         "'시사한다', '점검할 만하다', '가능성이 있다', '보조 신호로 볼 수 있다'처럼 근거 수준을 드러내는 표현을 사용한다.\n"
         f"설명 방식: {policies[level]}\n"
     )
+
+
+def normalize_language_code(value: str | None) -> str:
+    if value and value.strip().lower().startswith("en"):
+        return "en"
+    return "ko"
+
+
+def output_language_prompt(value: str | None) -> str:
+    if normalize_language_code(value) == "en":
+        return (
+            "Output language: English.\n"
+            "All user-facing JSON string values such as title, summary, bullets, risks, and conclusion must be written in English.\n"
+            "Keep JSON keys unchanged.\n"
+            "Do not use Korean except for proper nouns, original company names, and market names when necessary.\n"
+        )
+    return (
+        "출력 언어: 한국어.\n"
+        "title, summary, bullets, risks, conclusion 같은 사용자 표시 문구는 모두 한국어로 작성한다.\n"
+        "JSON 키 이름은 그대로 유지한다.\n"
+    )

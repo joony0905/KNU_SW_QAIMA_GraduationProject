@@ -237,6 +237,7 @@ class Feature2ExplainRequest(BaseModel):
     window: Optional[int] = None
     llm_vendor: Optional[str] = None
     invest_level: Optional[str] = None
+    language_code: Optional[str] = None
     metrics: Feature2ExplainMetrics = Field(default_factory=Feature2ExplainMetrics)
 
 
@@ -249,6 +250,7 @@ class Feature2RequestContext(BaseModel):
     invest_level: Optional[str] = None
     llm_vendor: Optional[str] = None
     include_llm_explain: bool = True
+    language_code: Optional[str] = None
 
 
 class Feature2Subject(BaseModel):
@@ -288,6 +290,7 @@ class Feature2AnalysisRequest(BaseModel):
             window=self.options.window,
             llm_vendor=self.request_context.llm_vendor,
             invest_level=self.request_context.invest_level,
+            language_code=self.request_context.language_code,
             metrics=self.input_data.metrics,
         )
 

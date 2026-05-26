@@ -134,6 +134,7 @@ class Feature1Request(BaseModel):
     include_explain: bool = False
     llm_vendor: Optional[str] = None
     invest_level: Optional[str] = None
+    language_code: Optional[str] = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -145,6 +146,7 @@ class Feature1RequestContext(BaseModel):
     invest_level: Optional[str] = None
     llm_vendor: Optional[str] = None
     include_llm_explain: bool = False
+    language_code: Optional[str] = None
 
 
 class Feature1Subject(BaseModel):
@@ -190,6 +192,7 @@ class Feature1AnalysisRequest(BaseModel):
             include_explain=self.request_context.include_llm_explain,
             llm_vendor=self.request_context.llm_vendor,
             invest_level=self.request_context.invest_level,
+            language_code=self.request_context.language_code,
         )
 
 

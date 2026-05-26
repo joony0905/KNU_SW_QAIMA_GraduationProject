@@ -370,6 +370,7 @@ public class Feature2AnalyzeService {
                 .window(command.window())
                 .llmVendor(command.llmVendor())
                 .investLevel(command.investLevel())
+                .languageCode(command.languageCode())
                 .metrics(explainMetrics)
                 .build();
 

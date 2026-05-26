@@ -13,6 +13,13 @@
     "edit": "수정",
     "delete": "삭제"
   },
+  "investLevelBadge": {
+    "retakeTitle": "투자레벨 설문 다시하기",
+    "label": "투자레벨 기준 분석",
+    "loading": "불러오는 중",
+    "modalTitle": "투자 레벨 설문을 할까요?",
+    "modalBody": "투자 레벨에 맞춰 분석 보고서의 설명 방식이 조정돼요."
+  },
   "token": {
     "label": "토큰",
     "badgeAriaLabel": "토큰 잔량 확인 및 충전"

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import { completeSocialProfile, getMyProfile } from "../api/user";
+import { setUser } from "../api/userStore";
 
 const inputClass =
   "w-full px-4 py-3 rounded-lg bg-bg-sunk border border-line text-ink placeholder:text-ink-4 text-sm outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-colors";
@@ -74,12 +75,13 @@ export default function SocialProfileCompletePage() {
 
     setLoading(true);
     try {
-      await completeSocialProfile({
+      const profile = await completeSocialProfile({
         name: form.name.trim(),
         phone: form.phone,
         birthdate: form.birthdate + form.birthdateSecond,
         country: form.country,
       });
+      setUser({ email: profile.email, name: profile.name });
       navigate("/feature/1", { replace: true });
     } catch (err: unknown) {
       if (err instanceof Error) alert(t("socialComplete.errors.saveFailed", { message: err.message }));

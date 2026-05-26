@@ -82,7 +82,8 @@
       "empty": "저장된 리포트가 없습니다.",
       "viewBtn": "보기",
       "portfolioLabel": "포트폴리오",
-      "stockFallback": "종목"
+      "stockFallback": "종목",
+      "retentionNotice": "리포트는 생성일 기준 7일 동안만 보관되며, 기간이 지나면 자동 삭제됩니다."
     },
     "bugReport": {
       "title": "버그제보 / 문의",
@@ -122,6 +123,7 @@
     "glossarySave": "환경설정 저장에 실패했습니다.",
     "reportsLoad": "리포트 목록을 불러오지 못했습니다.",
     "reportDetailLoad": "리포트 상세를 불러오지 못했습니다.",
+    "reportExpired": "보관 기간이 지난 리포트입니다. 목록에서 제거되었습니다.",
     "pdfFailed": "PDF 재다운로드에 실패했습니다."
   }
 }

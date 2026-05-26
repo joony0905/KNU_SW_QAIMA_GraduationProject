@@ -4,13 +4,23 @@ import json
 import logging
 
 from app.models.feature2 import Feature2ExplainRequest
-from app.services.llm.invest_level import invest_level_prompt
+from app.services.llm.invest_level import invest_level_prompt, normalize_language_code, output_language_prompt
 
 log = logging.getLogger(__name__)
 
 
 def build_feature2_prompt(req: Feature2ExplainRequest, compact: bool = False) -> str:
     metrics = req.metrics
+    is_english = normalize_language_code(req.language_code) == "en"
+    titles = _section_titles(is_english)
+    term_rule = (
+        "- Rewrite internal names into plain English meanings. Examples: anchor_return_pct=anchor stock return, peer_centroid=average peer flow, peer_band=peer range, COINCIDENT=moving together, LEADER=leading, FOLLOWER=lagging.\n"
+        "- Do not use awkward literal internal phrases like 'peer centroid', 'peer band', or 'anchor return pct' in user-facing text. Use natural phrases such as similar stocks, average similar-stock flow, similar-stock range, or anchor stock return.\n"
+        if is_english
+        else
+        "- 내부명은 의미 중심 한국어로 바꿔 쓰세요. 예: anchor_return_pct=기준 종목 수익률, peer_centroid=유사종목 평균 흐름, peer_band=유사종목 분포 범위, COINCIDENT=동행, LEADER=선행, FOLLOWER=후행.\n"
+        "- 'peer', 'peer centroid', 'peer band', 'anchor return pct' 같은 영문 직역 표현도 금지하고, '유사종목', '유사종목 평균 흐름', '유사종목 분포 범위', '기준 종목 수익률'처럼 작성하세요.\n"
+    )
     peer_summary = metrics.peer_cluster_summary or {}
     recent_news = metrics.recent_news or []
     news_sentiment_summary = _llm_news_sentiment_summary(metrics.news_sentiment_summary)
@@ -47,18 +57,19 @@ def build_feature2_prompt(req: Feature2ExplainRequest, compact: bool = False) ->
         "아래 규칙을 반드시 지키고 JSON 객체만 출력하세요.\n"
         "마크다운, 표, 코드블록 사용 금지.\n"
         "출력은 { 로 시작해서 } 로 끝나야 합니다.\n"
+        f"{output_language_prompt(req.language_code)}"
         "제공된 데이터만 근거로 작성하고 외부 지식은 사용하지 마세요.\n"
         "직접적인 투자 권유, 매수/매도 추천은 금지하세요.\n"
         "외부요인 관점에서 금리/국채/환율, 외국인·기관 수급, 공매도, 산업지수, 유사종목, 뉴스심리를 종합하세요.\n"
         "데이터가 부족한 항목은 한계를 짧게 밝히되, 확인 가능한 신호 간 관계와 점검 포인트는 설명하세요.\n"
         "같은 방향의 신호는 신호 일관성으로, 반대 방향의 신호는 상충 또는 확인 필요 지점으로 해석하세요.\n\n"
         f"{invest_level_prompt(req.invest_level)}\n"
+        f"{output_language_prompt(req.language_code)}"
         "사용자 설명 용어 규칙:\n"
         "- 입력 JSON의 내부 필드명, snake_case 키, enum 값, 구현 변수명을 최종 설명에 그대로 쓰지 마세요.\n"
         "- anchor_return_pct, peer, peer_cluster_summary, top_peers, peer_centroid, peer_band, peer_coverage, raw_corr, adjusted_corr, best_lag, lead_lag_corr, lag_confidence, display_status 같은 내부명은 금지합니다.\n"
         "- COINCIDENT, LEADER, FOLLOWER, RAW_ONLY, ADJUSTED_ONLY, FALLBACK_RAW, SELECTED 같은 enum 값도 그대로 쓰지 마세요.\n"
-        "- 내부명은 의미 중심 한국어로 바꿔 쓰세요. 예: anchor_return_pct=기준 종목 수익률, peer_centroid=유사종목 평균 흐름, peer_band=유사종목 분포 범위, COINCIDENT=동행, LEADER=선행, FOLLOWER=후행.\n"
-        "- 'peer', 'peer centroid', 'peer band', 'anchor return pct' 같은 영문 직역 표현도 금지하고, '유사종목', '유사종목 평균 흐름', '유사종목 분포 범위', '기준 종목 수익률'처럼 작성하세요.\n"
+        f"{term_rule}"
         "- JSON 출력 키 이름은 스키마를 위해 snake_case로 유지하되, title/summary/bullets/overall 값 안에는 내부 필드명을 쓰지 마세요.\n\n"
         "작성 규칙:\n"
         "1) 각 섹션은 title, summary, bullets 키를 포함하고 summary는 해당 섹션 데이터만 근거로 1~2문장 작성\n"
@@ -74,18 +85,38 @@ def build_feature2_prompt(req: Feature2ExplainRequest, compact: bool = False) ->
         "출력 JSON 스키마:\n"
         "{"
         "\"sections\":{"
-        "\"macro_environment\":{\"title\":\"시장환경\",\"summary\":\"string\",\"bullets\":[]},"
-        "\"investor_flow\":{\"title\":\"수급\",\"summary\":\"string\",\"bullets\":[]},"
-        "\"short_selling\":{\"title\":\"공매도\",\"summary\":\"string\",\"bullets\":[]},"
-        "\"peer_cluster\":{\"title\":\"유사종목 반응구조\",\"summary\":\"string\",\"bullets\":[]},"
-        "\"news_sentiment\":{\"title\":\"뉴스감성\",\"summary\":\"string\",\"bullets\":[]},"
-        "\"cross_signal\":{\"title\":\"신호 조합\",\"summary\":\"string\",\"bullets\":[]}"
+        f"\"macro_environment\":{{\"title\":\"{titles['macro_environment']}\",\"summary\":\"string\",\"bullets\":[]}},"
+        f"\"investor_flow\":{{\"title\":\"{titles['investor_flow']}\",\"summary\":\"string\",\"bullets\":[]}},"
+        f"\"short_selling\":{{\"title\":\"{titles['short_selling']}\",\"summary\":\"string\",\"bullets\":[]}},"
+        f"\"peer_cluster\":{{\"title\":\"{titles['peer_cluster']}\",\"summary\":\"string\",\"bullets\":[]}},"
+        f"\"news_sentiment\":{{\"title\":\"{titles['news_sentiment']}\",\"summary\":\"string\",\"bullets\":[]}},"
+        f"\"cross_signal\":{{\"title\":\"{titles['cross_signal']}\",\"summary\":\"string\",\"bullets\":[]}}"
         "},"
         "\"overall\":{\"summary\":\"string\",\"bullets\":[\"string\"],\"risks\":[\"string\"],\"conclusion\":\"string\"}"
         "}\n\n"
         "입력 데이터:\n"
         f"{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
+
+
+def _section_titles(is_english: bool) -> dict[str, str]:
+    if is_english:
+        return {
+            "macro_environment": "Market Environment",
+            "investor_flow": "Investor Flow",
+            "short_selling": "Short Selling",
+            "peer_cluster": "Similar Stock Reaction Structure",
+            "news_sentiment": "News Sentiment",
+            "cross_signal": "Signal Mix",
+        }
+    return {
+        "macro_environment": "시장환경",
+        "investor_flow": "수급",
+        "short_selling": "공매도",
+        "peer_cluster": "유사종목 반응구조",
+        "news_sentiment": "뉴스감성",
+        "cross_signal": "신호 조합",
+    }
 
 
 def _llm_news_sentiment_summary(summary: dict | None) -> dict | None:

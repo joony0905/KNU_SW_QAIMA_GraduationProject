@@ -7,9 +7,81 @@ import os
 import httpx
 
 from app.models.feature3 import Feature3ExplainResult, Feature3Warning, PortfolioAnalyzeResponse
-from app.services.llm.invest_level import invest_level_prompt
+from app.services.llm.invest_level import invest_level_prompt, normalize_language_code, output_language_prompt
 
 log = logging.getLogger(__name__)
+
+USER_TEXT_REPLACEMENTS = {
+    "AGGRESSIVE_THAN_PROFILE": "투자 성향보다 공격적인 상태",
+    "CONSERVATIVE_THAN_PROFILE": "투자 성향보다 보수적인 상태",
+    "ALIGNED": "투자 성향 기준과 대체로 맞는 상태",
+    "ABOVE_TARGET_VOLATILITY": "목표 변동성보다 높은 상태",
+    "BELOW_TARGET_VOLATILITY": "목표 변동성보다 낮은 상태",
+    "HIGH_RISK_CONTRIBUTION": "특정 종목의 위험 기여도 집중",
+    "PROFILE_ALIGNED": "투자 성향 기준에 가까운 구성",
+    "TARGET_VOLATILITY_INFEASIBLE": "현재 제약에서 목표 변동성에 정확히 맞추기 어려운 상태",
+    "CAPM_LOW_R_SQUARED": "시장 설명력이 낮은 상태",
+    "CAPM_COMMON_SAMPLE_INSUFFICIENT": "공통 수익률 표본이 부족한 상태",
+    "CAPM_PARTIAL_LOW_COMMON_SAMPLE": "일부 종목의 공통 수익률 표본이 부족한 상태",
+    "CAPM_BETA_UNAVAILABLE": "베타 계산이 어려운 상태",
+    "CAPM_HIGH_VOLATILITY": "변동성이 높아 CAPM 신뢰도가 제한되는 상태",
+    "CURRENT": "현재 포트폴리오",
+    "MIN_VOL": "최소 변동성 비교안",
+    "MAX_SHARPE": "위험 대비 효율 비교안",
+    "RISK_ALLOCATION": "성향 기반 배분안",
+    "UTILITY_OPTIMAL": "현재 조건 효율안",
+    "THEORETICAL_UTILITY": "이론적 효율 참고안",
+    "STABLE": "안정형 비교안",
+    "BALANCED": "균형형 비교안",
+    "AGGRESSIVE": "공격형 비교안",
+    "PSYCHOLOGICAL": "심리 성향 비교안",
+    "CASH_MAX": "현금 비중 한도",
+    "RISKY_MAX": "위험자산 비중 한도",
+    "PARTIAL": "일부 반영",
+    "EXCLUDED": "제외",
+    "UNAVAILABLE": "사용 불가",
+    "AVAILABLE": "사용 가능",
+    "HIGH": "높음",
+    "MID": "보통",
+    "LOW": "낮음",
+}
+
+USER_TEXT_REPLACEMENTS_EN = {
+    "AGGRESSIVE_THAN_PROFILE": "more aggressive than the risk profile",
+    "CONSERVATIVE_THAN_PROFILE": "more conservative than the risk profile",
+    "ALIGNED": "broadly aligned with the risk profile",
+    "ABOVE_TARGET_VOLATILITY": "above target volatility",
+    "BELOW_TARGET_VOLATILITY": "below target volatility",
+    "HIGH_RISK_CONTRIBUTION": "concentrated risk contribution from a specific holding",
+    "PROFILE_ALIGNED": "allocation close to the risk profile",
+    "TARGET_VOLATILITY_INFEASIBLE": "target volatility is difficult to match under the current constraints",
+    "CAPM_LOW_R_SQUARED": "low market explanatory power",
+    "CAPM_COMMON_SAMPLE_INSUFFICIENT": "insufficient common return sample",
+    "CAPM_PARTIAL_LOW_COMMON_SAMPLE": "insufficient common return sample for some holdings",
+    "CAPM_BETA_UNAVAILABLE": "beta is unavailable",
+    "CAPM_HIGH_VOLATILITY": "CAPM reliability is limited by high volatility",
+    "CURRENT": "current portfolio",
+    "MIN_VOL": "minimum-volatility comparison",
+    "MAX_SHARPE": "risk-efficiency comparison",
+    "RISK_ALLOCATION": "risk-profile allocation",
+    "UTILITY_OPTIMAL": "current-constraint efficiency case",
+    "THEORETICAL_UTILITY": "theoretical efficiency reference",
+    "STABLE": "stable comparison",
+    "BALANCED": "balanced comparison",
+    "AGGRESSIVE": "aggressive comparison",
+    "PSYCHOLOGICAL": "psychological-profile comparison",
+    "CASH_MAX": "cash weight limit",
+    "RISKY_MAX": "risky-asset weight limit",
+    "PARTIAL": "partially reflected",
+    "EXCLUDED": "excluded",
+    "UNAVAILABLE": "unavailable",
+    "AVAILABLE": "available",
+    "HIGH": "high",
+    "MID": "moderate",
+    "LOW": "low",
+}
+
+BANNED_USER_TEXT_CODES = sorted(USER_TEXT_REPLACEMENTS)
 
 
 def _normalize_vendor(vendor_label: str | None) -> str:
@@ -88,8 +160,9 @@ async def generate_feature3_explain(
     response: PortfolioAnalyzeResponse,
     vendor: str | None,
     invest_level: str | None = None,
+    language_code: str | None = None,
 ) -> Feature3ExplainResult:
-    prompt = _prompt(response, invest_level)
+    prompt = _prompt(response, invest_level, language_code)
     normalized_vendor = _normalize_vendor(vendor)
     log.info(
         "[feature3][llm] start requested_vendor=%s normalized_vendor=%s prompt_chars=%s overlays=%s adjusted_portfolios=%s",
@@ -100,71 +173,112 @@ async def generate_feature3_explain(
         len(response.overlays.adjusted_portfolios),
     )
     if normalized_vendor == "openai":
-        return await _openai(prompt, vendor)
-    return await _gemini(prompt, vendor)
+        return await _openai(prompt, vendor, language_code)
+    return await _gemini(prompt, vendor, language_code)
 
 
-def deterministic_feature3_explain(response: PortfolioAnalyzeResponse) -> Feature3ExplainResult:
+def deterministic_feature3_explain(
+    response: PortfolioAnalyzeResponse,
+    language_code: str | None = None,
+) -> Feature3ExplainResult:
+    is_english = normalize_language_code(language_code) == "en"
     summary = response.summary
     capm_context = _capm_explain_context(response)
     capm_status = ((capm_context.get("capmPolicy") or {}).get("status") or "UNAVAILABLE")
-    capm_sentence = (
-        "효율성 기반 분석의 기대수익률은 과거 수익률 추정치와 CAPM 기대수익률을 품질 지표 기반 신뢰도로 결합한 연율 기대수익률입니다."
-        if capm_status == "AVAILABLE"
-        else "벤치마크 품질이나 공통 표본이 부족한 경우 CAPM 반영을 제한하고 과거 수익률 추정치 중심으로 해석합니다."
-    )
-    text = (
-        f"현재 포트폴리오의 연 변동성은 {summary.annualized_volatility:.1%}이고 "
-        f"투자 성향 기준은 {summary.target_volatility:.1%}입니다. "
-        f"판정은 {summary.suitability}이며, 주요 위험 요인은 "
-        f"{', '.join(summary.main_risk_drivers) if summary.main_risk_drivers else '크게 감지되지 않음'}입니다."
-    )
+    suitability_text = _replace_user_text(summary.suitability, language_code)
+    risk_drivers_text = [_replace_user_text(item, language_code) for item in summary.main_risk_drivers]
+    if is_english:
+        capm_sentence = (
+            "The expected return used in the efficiency analysis combines historical return estimates with CAPM expected returns, weighted by quality and reliability indicators."
+            if capm_status == "AVAILABLE"
+            else "When benchmark quality or common samples are limited, CAPM impact is constrained and the interpretation leans more on historical return estimates."
+        )
+        text = (
+            f"The current portfolio's annualized volatility is {summary.annualized_volatility:.1%}, "
+            f"versus a risk-profile target of {summary.target_volatility:.1%}. "
+            f"The assessment is {suitability_text}, and the main risk drivers are "
+            f"{', '.join(risk_drivers_text) if risk_drivers_text else 'not materially detected'}."
+        )
+        titles = {
+            "core_risk": "Core Risk",
+            "overlay_observations": "Supplementary Observations",
+            "portfolio_comparison": "Portfolio Comparison",
+            "volatility_analysis": "Volatility-Based Analysis",
+            "efficiency_analysis": "Efficiency-Based Analysis",
+            "final_judgement": "Overall Assessment",
+        }
+        overlay_summary = "Selected supplementary observations should be interpreted as reference signals separate from the core calculation."
+        comparison_summary = "The base portfolio and supplementary-observation comparison portfolios can be reviewed side by side."
+        efficiency_summary = f"{capm_sentence} SCL/SML are diagnostic indicators for market sensitivity and expected-return positioning, not investment recommendation lines."
+    else:
+        capm_sentence = (
+            "효율성 기반 분석의 기대수익률은 과거 수익률 추정치와 CAPM 기대수익률을 품질 지표 기반 신뢰도로 결합한 연율 기대수익률입니다."
+            if capm_status == "AVAILABLE"
+            else "벤치마크 품질이나 공통 표본이 부족한 경우 CAPM 반영을 제한하고 과거 수익률 추정치 중심으로 해석합니다."
+        )
+        text = (
+            f"현재 포트폴리오의 연 변동성은 {summary.annualized_volatility:.1%}이고 "
+            f"투자 성향 기준은 {summary.target_volatility:.1%}입니다. "
+            f"판정은 {suitability_text}이며, 주요 위험 요인은 "
+            f"{', '.join(risk_drivers_text) if risk_drivers_text else '크게 감지되지 않음'}입니다."
+        )
+        titles = {
+            "core_risk": "핵심 리스크",
+            "overlay_observations": "보조 관측",
+            "portfolio_comparison": "포트폴리오 비교",
+            "volatility_analysis": "변동성 기반 분석",
+            "efficiency_analysis": "효율성 기반 분석",
+            "final_judgement": "종합 판단",
+        }
+        overlay_summary = "선택한 보조 관측은 계산 결과와 분리해 참고 신호로 해석합니다."
+        comparison_summary = "기본 포트폴리오와 보조 관측을 반영한 비교 포트폴리오를 함께 확인할 수 있습니다."
+        efficiency_summary = f"{capm_sentence} SCL/SML은 시장 민감도와 기대수익률의 상대적 위치를 설명하기 위한 진단 지표이며 투자 권고선이 아닙니다."
     return Feature3ExplainResult(
         provider="DETERMINISTIC",
         text=text,
         sections={
             "core_risk": {
-                "title": "핵심 리스크",
+                "title": titles["core_risk"],
                 "summary": text,
-                "bullets": summary.main_risk_drivers[:3],
+                "bullets": risk_drivers_text[:3],
             },
             "overlay_observations": {
-                "title": "보조 관측",
-                "summary": "선택한 보조 관측은 계산 결과와 분리해 참고 신호로 해석합니다.",
+                "title": titles["overlay_observations"],
+                "summary": overlay_summary,
                 "bullets": [],
             },
             "portfolio_comparison": {
-                "title": "포트폴리오 비교",
-                "summary": "기본 포트폴리오와 보조 관측을 반영한 비교 포트폴리오를 함께 확인할 수 있습니다.",
+                "title": titles["portfolio_comparison"],
+                "summary": comparison_summary,
                 "bullets": [],
             },
             "volatility_analysis": {
-                "title": "변동성 기반 분석",
+                "title": titles["volatility_analysis"],
                 "summary": text,
                 "bullets": [],
             },
             "efficiency_analysis": {
-                "title": "효율성 기반 분석",
-                "summary": f"{capm_sentence} SCL/SML은 시장 민감도와 기대수익률의 상대적 위치를 설명하기 위한 진단 지표이며 투자 권고선이 아닙니다.",
+                "title": titles["efficiency_analysis"],
+                "summary": efficiency_summary,
                 "bullets": [],
             },
             "final_judgement": {
-                "title": "종합 판단",
+                "title": titles["final_judgement"],
                 "summary": text,
                 "bullets": [],
             },
         },
         overall={
             "summary": text,
-            "bullets": summary.main_risk_drivers[:3],
-            "risks": summary.main_risk_drivers[:3],
+            "bullets": risk_drivers_text[:3],
+            "risks": risk_drivers_text[:3],
             "conclusion": text,
         },
         warnings=[],
     )
 
 
-async def _openai(prompt: str, vendor_label: str | None) -> Feature3ExplainResult:
+async def _openai(prompt: str, vendor_label: str | None, language_code: str | None = None) -> Feature3ExplainResult:
     api_key = os.getenv("OPENAI_API_KEY")
     model = _resolve_openai_model(vendor_label)
     timeout = _float_env("FEATURE3_OPENAI_TIMEOUT", _float_env("OPENAI_TIMEOUT", 45.0))
@@ -173,7 +287,7 @@ async def _openai(prompt: str, vendor_label: str | None) -> Feature3ExplainResul
         return _fallback("OPENAI", model, "LLM_API_KEY_MISSING")
     payload = {
         "model": model,
-        "instructions": "제공된 Feature3 요약 데이터만 사용해 한국어로 설명하세요. 새 숫자나 근거를 만들지 마세요.",
+        "instructions": _feature3_instructions(language_code),
         "input": prompt,
         "max_output_tokens": _int_env("FEATURE3_OPENAI_MAX_OUTPUT_TOKENS", 4200),
         "reasoning": {"effort": os.getenv("FEATURE3_OPENAI_REASONING_EFFORT", "low")},
@@ -228,13 +342,14 @@ async def _openai(prompt: str, vendor_label: str | None) -> Feature3ExplainResul
                 log.warning("[feature3][llm] OpenAI empty text model=%s raw=%s", model, json.dumps(data, ensure_ascii=False)[:1200])
                 return _fallback("OPENAI", model, "LLM_EXPLAIN_EMPTY")
             log.info("[feature3][llm] OpenAI response model=%s text_chars=%s raw_prefix=%s", model, len(text), text[:500])
-            parsed = _parse_explain_json(text)
+            parsed = _parse_explain_json(text, language_code)
             if parsed is None:
                 log.warning("[feature3][llm] OpenAI parse failed model=%s raw=%s", model, text[:1500])
                 return _fallback("OPENAI", model, "LLM_EXPLAIN_PARSE_FAILED")
             parsed.provider = "OPENAI"
             parsed.model = model
-            parsed.text = text.strip()
+            _sanitize_explain_result(parsed, language_code)
+            parsed.text = json.dumps({"sections": parsed.sections, "overall": parsed.overall}, ensure_ascii=False)
             return parsed
     except httpx.TimeoutException:
         log.warning("[feature3][llm] OpenAI timeout model=%s timeout=%s", model, timeout)
@@ -244,7 +359,7 @@ async def _openai(prompt: str, vendor_label: str | None) -> Feature3ExplainResul
         return _fallback("OPENAI", model, f"LLM_EXPLAIN_EXCEPTION:{exc.__class__.__name__}")
 
 
-async def _gemini(prompt: str, vendor_label: str | None) -> Feature3ExplainResult:
+async def _gemini(prompt: str, vendor_label: str | None, language_code: str | None = None) -> Feature3ExplainResult:
     api_key = os.getenv("GEMINI_API_KEY")
     model = _resolve_gemini_model(vendor_label)
     timeout = _float_env("FEATURE3_GEMINI_TIMEOUT", 20.0)
@@ -271,13 +386,14 @@ async def _gemini(prompt: str, vendor_label: str | None) -> Feature3ExplainResul
                 log.warning("[feature3][llm] Gemini empty text model=%s raw=%s", model, json.dumps(data, ensure_ascii=False)[:1200])
                 return _fallback("GEMINI", model, "LLM_EXPLAIN_EMPTY")
             log.info("[feature3][llm] Gemini response model=%s text_chars=%s raw_prefix=%s", model, len(text), text[:500])
-            parsed = _parse_explain_json(text)
+            parsed = _parse_explain_json(text, language_code)
             if parsed is None:
                 log.warning("[feature3][llm] Gemini parse failed model=%s raw=%s", model, text[:1500])
                 return _fallback("GEMINI", model, "LLM_EXPLAIN_PARSE_FAILED")
             parsed.provider = "GEMINI"
             parsed.model = model
-            parsed.text = text.strip()
+            _sanitize_explain_result(parsed, language_code)
+            parsed.text = json.dumps({"sections": parsed.sections, "overall": parsed.overall}, ensure_ascii=False)
             return parsed
     except httpx.TimeoutException:
         log.warning("[feature3][llm] Gemini timeout model=%s timeout=%s", model, timeout)
@@ -338,18 +454,47 @@ def _openai_response_schema() -> dict:
     }
 
 
-def _prompt(response: PortfolioAnalyzeResponse, invest_level: str | None = None) -> str:
+def _feature3_instructions(language_code: str | None) -> str:
+    if normalize_language_code(language_code) == "en":
+        return (
+            "Use only the provided Feature3 summary data. Write all user-facing text in English. "
+            "Do not invent new numbers or evidence. Do not expose enum values, codes, or internal field names in final user text."
+        )
+    return (
+        "제공된 Feature3 요약 데이터만 사용해 한국어로 설명하세요. 새 숫자나 근거를 만들지 마세요. "
+        "입력 JSON의 enum, code, 내부 필드명은 최종 사용자 문구에 그대로 쓰지 마세요."
+    )
+
+
+def _prompt(
+    response: PortfolioAnalyzeResponse,
+    invest_level: str | None = None,
+    language_code: str | None = None,
+) -> str:
+    is_english = normalize_language_code(language_code) == "en"
+    display_language = "English" if is_english else "한국어"
+    enum_rule = (
+        "If enum/code values are needed, explain their meaning in English. For example, AGGRESSIVE_THAN_PROFILE means more aggressive than the risk profile, ABOVE_TARGET_VOLATILITY means above target volatility, and HIGH_RISK_CONTRIBUTION means concentrated risk contribution from a specific holding.\n"
+        if is_english
+        else
+        "위 enum/code가 필요하면 한국어 의미로 풀어 쓴다. 예: AGGRESSIVE_THAN_PROFILE은 투자 성향보다 공격적인 상태, ABOVE_TARGET_VOLATILITY는 목표 변동성보다 높은 상태, HIGH_RISK_CONTRIBUTION은 특정 종목의 위험 기여도 집중으로 쓴다.\n"
+    )
+    titles = _feature3_section_titles(is_english)
     payload = {
         "analysis_context": _explain_context(response),
     }
     return (
         "Feature3 포트폴리오 리스크 분석 결과를 일반 사용자에게 설명한다.\n"
+        f"{output_language_prompt(language_code)}"
         f"{invest_level_prompt(invest_level)}"
+        f"{output_language_prompt(language_code)}"
         "금융/계량 용어인 CAPM, SCL, SML, Ledoit-Wolf, 공분산, 베타, Sharpe, 상관계수는 투자레벨에 맞춰 사용할 수 있다.\n"
         "초급자와 중급자에게는 금융/계량 용어를 처음 쓸 때 쉬운 의미를 함께 붙인다.\n"
         "고급자와 전문가에게는 금융/계량 용어를 자연스럽게 사용할 수 있다.\n"
         "blendedExpectedReturn, halfTurnoverBudget, singleNameDeltaCap, adjustedPortfolioComparisons, sectionData, insightContext, overlaySignals 같은 내부 필드명과 구현 변수명은 최종 설명에 그대로 쓰지 않는다.\n"
         "내부 필드명은 의미 중심 표현으로 바꾼다. 예: blendedExpectedReturn은 결합 기대수익률, halfTurnoverBudget은 비중 변화 한도, singleNameDeltaCap은 개별 종목 비중 변화 제한으로 표현한다.\n"
+        f"다음 enum/code 문자열은 최종 설명에 절대 그대로 쓰지 않는다: {', '.join(BANNED_USER_TEXT_CODES)}.\n"
+        f"{enum_rule}"
         "반드시 제공된 JSON의 숫자와 경고만 사용한다. 새 숫자, 새 종목, 새 원인은 만들지 않는다.\n"
         "입력 JSON의 analysis_context만 근거로 사용한다.\n"
         "데이터가 부족한 섹션은 한계를 짧게 밝히되, 확인 가능한 리스크 방향과 점검 포인트는 설명한다.\n"
@@ -379,8 +524,8 @@ def _prompt(response: PortfolioAnalyzeResponse, invest_level: str | None = None)
         "'늘리세요', '줄이세요', '매수', '매도', '추천 비중' 같은 행동 권고 표현은 금지한다.\n"
         "'bullish', 'bearish', 'what-if', 'pressure', '압력' 같은 내부 또는 구어식 표현은 사용자 설명에 쓰지 않는다.\n"
         "대신 '비중 증가 방향의 보조 신호', '비중 감소 방향의 보조 신호', '분산효과 약화 가능성', '품질지표상 주의 요인', '추가 확인 필요' 같은 전문적 표현을 사용한다.\n"
-        "각 sections.core_risk.summary, sections.overlay_observations.summary, sections.portfolio_comparison.summary, sections.volatility_analysis.summary, sections.efficiency_analysis.summary는 한국어 4문장 이내로 작성한다.\n"
-        "sections.final_judgement.summary와 overall.summary는 한국어 10문장 이내로 작성한다.\n"
+        f"각 sections.core_risk.summary, sections.overlay_observations.summary, sections.portfolio_comparison.summary, sections.volatility_analysis.summary, sections.efficiency_analysis.summary는 {display_language} 4문장 이내로 작성한다.\n"
+        f"sections.final_judgement.summary와 overall.summary는 {display_language} 10문장 이내로 작성한다.\n"
         "문장 수는 마침표 기준으로 세며, 각 summary 안에서 줄바꿈이나 bullet 형식은 사용하지 않는다.\n"
         "bullets 배열은 빈 배열로 둔다. 설명은 summary에만 작성한다.\n"
         "overall.summary는 final_judgement.summary와 동일하게 둔다. overall.bullets와 overall.risks는 빈 배열로 둔다.\n"
@@ -390,17 +535,37 @@ def _prompt(response: PortfolioAnalyzeResponse, invest_level: str | None = None)
         "반드시 아래 JSON 구조만 출력한다. 마크다운 코드펜스와 추가 문장은 금지한다.\n"
         "{\n"
         '  "sections": {\n'
-        '    "core_risk": {"title": "핵심 리스크", "summary": "4문장 이내.", "bullets": []},\n'
-        '    "overlay_observations": {"title": "보조 관측", "summary": "4문장 이내.", "bullets": []},\n'
-        '    "portfolio_comparison": {"title": "포트폴리오 비교", "summary": "4문장 이내.", "bullets": []},\n'
-        '    "volatility_analysis": {"title": "변동성 기반 분석", "summary": "4문장 이내.", "bullets": []},\n'
-        '    "efficiency_analysis": {"title": "효율성 기반 분석", "summary": "4문장 이내.", "bullets": []},\n'
-        '    "final_judgement": {"title": "종합 판단", "summary": "10문장 이내.", "bullets": []}\n'
+        f'    "core_risk": {{"title": "{titles["core_risk"]}", "summary": "4문장 이내.", "bullets": []}},\n'
+        f'    "overlay_observations": {{"title": "{titles["overlay_observations"]}", "summary": "4문장 이내.", "bullets": []}},\n'
+        f'    "portfolio_comparison": {{"title": "{titles["portfolio_comparison"]}", "summary": "4문장 이내.", "bullets": []}},\n'
+        f'    "volatility_analysis": {{"title": "{titles["volatility_analysis"]}", "summary": "4문장 이내.", "bullets": []}},\n'
+        f'    "efficiency_analysis": {{"title": "{titles["efficiency_analysis"]}", "summary": "4문장 이내.", "bullets": []}},\n'
+        f'    "final_judgement": {{"title": "{titles["final_judgement"]}", "summary": "10문장 이내.", "bullets": []}}\n'
         "  },\n"
         '  "overall": {"summary": "final_judgement.summary와 동일", "bullets": [], "risks": [], "conclusion": null}\n'
         "}\n"
         f"JSON:\n{json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}"
     )
+
+
+def _feature3_section_titles(is_english: bool) -> dict[str, str]:
+    if is_english:
+        return {
+            "core_risk": "Core Risk",
+            "overlay_observations": "Supplementary Observations",
+            "portfolio_comparison": "Portfolio Comparison",
+            "volatility_analysis": "Volatility-Based Analysis",
+            "efficiency_analysis": "Efficiency-Based Analysis",
+            "final_judgement": "Overall Assessment",
+        }
+    return {
+        "core_risk": "핵심 리스크",
+        "overlay_observations": "보조 관측",
+        "portfolio_comparison": "포트폴리오 비교",
+        "volatility_analysis": "변동성 기반 분석",
+        "efficiency_analysis": "효율성 기반 분석",
+        "final_judgement": "종합 판단",
+    }
 
 
 def _explain_context(response: PortfolioAnalyzeResponse) -> dict:
@@ -1215,7 +1380,7 @@ def _short_text(value, limit: int) -> str | None:
     return text[: limit - 1].rstrip() + "…"
 
 
-def _parse_explain_json(text: str) -> Feature3ExplainResult | None:
+def _parse_explain_json(text: str, language_code: str | None = None) -> Feature3ExplainResult | None:
     payload = _extract_json_object(text)
     if not payload:
         log.warning("[feature3][llm] parse failed: no JSON object raw=%s", text[:800])
@@ -1247,12 +1412,15 @@ def _parse_explain_json(text: str) -> Feature3ExplainResult | None:
     ]
     if missing_sections:
         log.warning("[feature3][llm] parse warning: missing section keys=%s payload=%s", missing_sections, payload[:1200])
-    return Feature3ExplainResult(
+    result = Feature3ExplainResult(
         text=payload,
         sections=sections,
         overall=overall,
         warnings=[],
     )
+    _sanitize_explain_result(result, language_code)
+    result.text = json.dumps({"sections": result.sections, "overall": result.overall}, ensure_ascii=False)
+    return result
 
 
 def _extract_json_object(text: str) -> str | None:
@@ -1276,6 +1444,31 @@ def _extract_openai_text(data: dict) -> str | None:
             if content.get("type") in {"output_text", "text"} and content.get("text"):
                 return str(content["text"]).strip()
     return None
+
+
+def _sanitize_explain_result(result: Feature3ExplainResult, language_code: str | None = None) -> None:
+    result.sections = _sanitize_obj(result.sections, language_code)
+    result.overall = _sanitize_obj(result.overall, language_code)
+    if result.text:
+        result.text = _replace_user_text(result.text, language_code)
+
+
+def _sanitize_obj(value, language_code: str | None = None):
+    if isinstance(value, str):
+        return _replace_user_text(value, language_code)
+    if isinstance(value, list):
+        return [_sanitize_obj(item, language_code) for item in value]
+    if isinstance(value, dict):
+        return {key: _sanitize_obj(item, language_code) for key, item in value.items()}
+    return value
+
+
+def _replace_user_text(text: str, language_code: str | None = None) -> str:
+    sanitized = text
+    replacements = USER_TEXT_REPLACEMENTS_EN if normalize_language_code(language_code) == "en" else USER_TEXT_REPLACEMENTS
+    for raw, label in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+        sanitized = sanitized.replace(raw, label)
+    return sanitized
 
 
 def _fallback(provider: str, model: str | None, code: str) -> Feature3ExplainResult:

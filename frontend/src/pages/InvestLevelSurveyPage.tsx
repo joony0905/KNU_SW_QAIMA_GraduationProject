@@ -14,6 +14,7 @@ import {
   INVEST_LEVELS,
   type InvestLevel,
 } from "../utils/investLevel";
+import { investLevelLabel } from "../utils/displayLabels";
 
 const PASS_THRESHOLD = 4;
 
@@ -47,7 +48,7 @@ const STAGES: Stage[] = [
 
 export default function InvestLevelSurveyPage() {
   const navigate = useNavigate();
-  const { t } = useTranslation("investLevelPage");
+  const { t, i18n } = useTranslation("investLevelPage");
   const { setInvestLevel: setCtxInvestLevel } = useDictionary();
 
   const [step, setStep] = useState<1 | 2 | 3 | "result">(1);
@@ -104,10 +105,10 @@ export default function InvestLevelSurveyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-bg md:ml-[84px]">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
+    <div className="min-h-screen bg-bg overflow-x-hidden md:ml-[84px]">
+      <div className="w-full max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         {/* 헤더 */}
-        <header className="w-full bg-surface border-b border-line px-4 py-3 flex items-center justify-between">
+        <header className="w-full bg-surface border-b border-line px-3 sm:px-4 py-3 flex items-center justify-between gap-3">
           <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-ink">
             {t("title")}
           </h1>
@@ -123,9 +124,9 @@ export default function InvestLevelSurveyPage() {
 
         {/* 안내 */}
         {step !== "result" && (
-          <section className="w-full rounded-2xl border border-accent/30 bg-accent-soft px-5 py-4 flex items-start gap-3">
+          <section className="w-full rounded-xl sm:rounded-2xl border border-accent/30 bg-accent-soft px-4 sm:px-5 py-4 flex items-start gap-3">
             <Info size={18} className="text-accent flex-shrink-0 mt-0.5" />
-            <div className="flex flex-col gap-1.5">
+            <div className="min-w-0 flex flex-col gap-1.5">
               <p className="text-sm font-semibold text-ink">{t("notice.title")}</p>
               <p className="text-xs sm:text-sm text-ink-2 leading-relaxed">{t("notice.body")}</p>
             </div>
@@ -136,7 +137,7 @@ export default function InvestLevelSurveyPage() {
         {currentStage && (
           <section
             key={currentStage.index}
-            className="w-full bg-surface rounded-2xl border-2 border-line p-5 sm:p-6 flex flex-col gap-5"
+            className="w-full bg-surface rounded-xl sm:rounded-2xl border-2 border-line p-4 sm:p-6 flex flex-col gap-4 sm:gap-5"
           >
             <div className="flex flex-col gap-1.5">
               <h2 className="text-base sm:text-lg font-bold text-ink">
@@ -152,14 +153,14 @@ export default function InvestLevelSurveyPage() {
                     key={term}
                     type="button"
                     onClick={() => handleToggle(term)}
-                    className={`text-left px-4 py-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                    className={`min-w-0 text-left px-3 sm:px-4 py-3 rounded-xl border-2 transition-all flex items-center gap-2.5 sm:gap-3 ${
                       selected ? "border-accent bg-accent/10" : "border-line bg-surface hover:border-line-strong"
                     }`}
                   >
                     <span className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${selected ? "border-accent bg-accent" : "border-line-strong bg-surface"}`}>
                       {selected && <Check size={14} className="text-white" />}
                     </span>
-                    <span className={`text-sm sm:text-base ${selected ? "text-ink font-medium" : "text-ink-2"}`}>
+                    <span className={`min-w-0 break-words text-sm sm:text-base ${selected ? "text-ink font-medium" : "text-ink-2"}`}>
                       {term}
                     </span>
                   </button>
@@ -184,7 +185,7 @@ export default function InvestLevelSurveyPage() {
           <div className="flex flex-col gap-5">
             <section className="w-full rounded-2xl border-2 border-accent/30 bg-accent-soft p-6 sm:p-8 flex flex-col gap-4 items-center text-center">
               <p className="text-sm text-ink-3">{t("result.profileIntro")}</p>
-              <h2 className="text-3xl sm:text-4xl font-bold text-accent">{finalLevel}</h2>
+              <h2 className="max-w-full break-words text-3xl sm:text-4xl font-bold text-accent">{investLevelLabel(finalLevel, i18n.language)}</h2>
               <p className="text-ink-2 text-sm sm:text-base leading-relaxed max-w-md">
                 {t(`levels.${finalLevel}` as `levels.초급자`)}
               </p>
@@ -203,7 +204,7 @@ export default function InvestLevelSurveyPage() {
                   onClick={() => setLevelDropdownOpen((o) => !o)}
                   className={`inline-flex items-center justify-between gap-2 w-full pl-3.5 pr-3 py-2.5 rounded-lg bg-bg-sunk border text-sm text-ink transition-colors ${levelDropdownOpen ? "border-accent" : "border-line"}`}
                 >
-                  <span className="truncate">{finalLevel}</span>
+                  <span className="truncate">{investLevelLabel(finalLevel, i18n.language)}</span>
                   <ChevronDown size={16} className={`text-ink-3 flex-shrink-0 pointer-events-none transition-transform ${levelDropdownOpen ? "rotate-180" : ""}`} />
                 </button>
                 {levelDropdownOpen && (
@@ -215,7 +216,7 @@ export default function InvestLevelSurveyPage() {
                         onClick={() => { setFinalLevel(lv); setLevelDropdownOpen(false); }}
                         className={`w-full text-left px-3.5 py-2.5 text-sm transition-colors ${lv === finalLevel ? "bg-accent-soft text-accent font-semibold" : "text-ink hover:bg-bg-sunk"}`}
                       >
-                        {lv}
+                        {investLevelLabel(lv, i18n.language)}
                       </button>
                     ))}
                   </div>

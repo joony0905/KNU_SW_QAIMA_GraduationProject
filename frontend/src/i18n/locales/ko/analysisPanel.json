@@ -104,6 +104,7 @@
     "shortSelling": "공매도"
   },
   "shortSelling": {
+    "shortSelling": "공매도",
     "titleSuffix": "현황",
     "headerItem": "항목",
     "headerValue": "값",
@@ -124,5 +125,76 @@
     "risks": "리스크",
     "conclusion": "결론"
   },
-  "notes": "참고"
+  "notes": "참고",
+  "external": {
+    "tabs": {
+      "summary": "요약",
+      "macro": "금리·환율",
+      "flow": "수급",
+      "news": "뉴스",
+      "peer": "유사종목",
+      "risk": "공매도"
+    },
+    "loading": {
+      "short": "조회중",
+      "bonds": "국채 데이터를 확인하는 중입니다.",
+      "trends": "추세 데이터를 확인하는 중입니다.",
+      "flow": "수급 데이터를 불러오는 중입니다…",
+      "news": "뉴스를 불러오는 중입니다…",
+      "peer": "유사 종목을 불러오는 중입니다…"
+    },
+    "empty": {
+      "data": "데이터 없음",
+      "bonds": "국채 데이터가 없습니다.",
+      "trends": "표시할 추세 데이터가 없습니다.",
+      "flow": "수급 데이터가 없습니다.",
+      "stockData": "종목 데이터 없음",
+      "news": "표시할 뉴스가 없습니다.",
+      "peer": "표시할 유사 종목이 없습니다.",
+      "shortSelling": "공매도 데이터가 없습니다."
+    },
+    "error": {
+      "news": "뉴스를 불러오지 못했습니다.",
+      "peer": "유사 종목을 불러오지 못했습니다."
+    },
+    "flow": {
+      "tradingDays": "{{count}}거래일",
+      "marketFlow": "시장 수급",
+      "stockChart": "종목 외국인/기관 순매수",
+      "marketChart": "시장 외국인/기관 순매수",
+      "foreignInstitution": "외국인/기관",
+      "foreignAccum": "외국인 누적",
+      "institutionAccum": "기관 누적",
+      "combined": "외국인+기관"
+    },
+    "macro": {
+      "fxAsOf": "환율 기준일",
+      "krRates": "국내 금리",
+      "usRates": "미국 금리",
+      "fxTrend": "환율 추세",
+      "krRateTrend": "국내 금리 추세",
+      "usRateTrend": "미국 금리 추세"
+    },
+    "countUnit": "개",
+    "peer": {
+      "flowTitle": "유사종목 흐름",
+      "unlockAfterAnalysis": "분석 결과 보기 후 활성화",
+      "unlockDescription": "분석 결과 보기 후 유사 종목군 평균 흐름이 활성화됩니다.",
+      "avgFlow": "유사 종목군 평균 {{value}}",
+      "noComparison": "종목 대비 데이터 없음",
+      "anchorStronger": "분석 종목이 유사 종목군 평균보다 {{value}} 강함",
+      "anchorWeaker": "분석 종목이 유사 종목군 평균보다 {{value}} 약함",
+      "similarFlow": "분석 종목과 유사 종목군 평균 흐름이 유사",
+      "peerAverage": "유사 종목군 평균",
+      "anchorStock": "분석 종목",
+      "peerCount": "유사 종목 수",
+      "countUnit": "{{count}}개",
+      "status": {
+        "up": "상승",
+        "down": "하락",
+        "mixed": "혼재",
+        "locked": "잠금"
+      }
+    }
+  }
 }

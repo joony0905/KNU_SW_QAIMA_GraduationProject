@@ -18,16 +18,18 @@ async def analyze(req: Feature3AnalysisRequest) -> PortfolioAnalyzeResponse:
     portfolio_req = req.to_portfolio_request()
     try:
         response = analyze_portfolio(portfolio_req)
+        language_code = portfolio_req.options.language_code if portfolio_req.options else None
         if portfolio_req.options.include_llm_explain:
             explain = await generate_feature3_explain(
                 response,
                 portfolio_req.options.llm_vendor,
                 portfolio_req.invest_level,
+                language_code,
             )
-            response.explain = explain if explain.text else deterministic_feature3_explain(response)
+            response.explain = explain if explain.text else deterministic_feature3_explain(response, language_code)
             response.warnings.extend(explain.warnings)
         else:
-            response.explain = deterministic_feature3_explain(response)
+            response.explain = deterministic_feature3_explain(response, language_code)
         return response
     except Exception as e:
         log.exception("feature3 portfolio analysis failed")

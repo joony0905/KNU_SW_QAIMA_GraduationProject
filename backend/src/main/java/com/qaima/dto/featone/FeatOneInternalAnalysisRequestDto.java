@@ -18,7 +18,8 @@ public record FeatOneInternalAnalysisRequestDto(
                         null,
                         request.getInvestLevel(),
                         request.getLlmVendor(),
-                        Boolean.TRUE.equals(request.getIncludeExplain())
+                        Boolean.TRUE.equals(request.getIncludeExplain()),
+                        request.getLanguageCode()
                 ),
                 new Subject(
                         request.getStockCode(),
@@ -46,7 +47,8 @@ public record FeatOneInternalAnalysisRequestDto(
             String asOf,
             String investLevel,
             String llmVendor,
-            Boolean includeLlmExplain
+            Boolean includeLlmExplain,
+            String languageCode
     ) {
     }
 

@@ -451,7 +451,7 @@ const holdingAllocationPieStyle = (allocations: HoldingAllocation[]) => {
 };
 
 export default function PortfolioMockPage() {
-  const { t } = useTranslation("portfolioPage");
+  const { t, i18n } = useTranslation("portfolioPage");
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggle } = useTheme();
@@ -743,6 +743,8 @@ export default function PortfolioMockPage() {
   const analysisInFlightRef = useRef(false);
   const portfolioPdfRef = useRef<HTMLElement | null>(null);
   const portfolioReportRef = useRef<HTMLDivElement | null>(null);
+  const riskProfileTypeLabel = (profileType?: string | null) =>
+    profileType ? t(`riskProfileType.${profileType}` as `riskProfileType.${string}`, profileType) : "-";
   const reportMeta = analysisResult
     ? {
         featureType: "FEATURE3" as const,
@@ -754,7 +756,7 @@ export default function PortfolioMockPage() {
         userName: reportUserName,
         analysisWindow: t(`analysisOptions.analysisWindow.${selectedWindow.label}` as `analysisOptions.analysisWindow.${string}`, selectedWindow.label),
         dataAsOf: analysisResult.freshness?.newestDataAt ?? analysisResult.freshness?.priceSeriesAsOf ?? null,
-        riskProfile: analysisResult.policy.riskProfile.profileType,
+        riskProfile: riskProfileTypeLabel(analysisResult.policy.riskProfile.profileType),
         priceBasis: t(`pricePolicy.${analysisResult.policy.pricePolicy.used}` as `pricePolicy.${string}`, analysisResult.policy.pricePolicy.used),
         covarianceModel: analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel
           ? t(`covarianceModel.${analysisResult.advanced.covarianceDiagnostics.usedCovarianceModel}` as `covarianceModel.${string}`, analysisResult.advanced.covarianceDiagnostics.usedCovarianceModel)
@@ -856,6 +858,7 @@ export default function PortfolioMockPage() {
           includeDiagnostics: true,
           includeLlmExplain: true,
           llmVendor,
+          languageCode: i18n.language.startsWith("en") ? "en" : "ko",
           maxCashWeight: cashLimit,
         },
       });
@@ -1318,9 +1321,9 @@ export default function PortfolioMockPage() {
                   </div>
                 </div>
 
-                <div className="px-4 pb-4">
+                <div className="px-3 pb-4 sm:px-4">
                   {/* 헤더 행 */}
-                  <div className="grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] rounded-xl bg-bg-sunk">
+                  <div className="hidden sm:grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] rounded-xl bg-bg-sunk">
                     <div className="px-4 py-3 flex items-center justify-center">
                       <span className="text-xs uppercase font-bold tracking-wider text-ink-3">{t("manager.col.name")}</span>
                     </div>
@@ -1340,33 +1343,36 @@ export default function PortfolioMockPage() {
                     {rows.map((row) => (
                       <div
                         key={row.id}
-                        className="grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] transition-colors border-b border-line hover:bg-bg-sunk"
+                        className="relative grid grid-cols-2 gap-2 border-b border-line px-2 py-3 transition-colors hover:bg-bg-sunk sm:grid-cols-[2fr,1.2fr,1.8fr,0.8fr] sm:gap-0 sm:px-0 sm:py-0"
                       >
-                        <div className="px-4 py-3 flex items-center justify-center">
+                        <div className="col-span-2 min-w-0 pr-10 sm:col-span-1 sm:pr-0 sm:px-4 sm:py-3 flex flex-col items-stretch justify-center">
+                          <span className="mb-1 text-[11px] font-semibold text-ink-4 sm:hidden">{t("manager.col.name")}</span>
                           <StockSearchCell
                             value={row.name}
                             onSelect={(name, stockCode) => handleStockSelect(row.id, name, stockCode)}
                           />
                         </div>
-                        <div className="px-4 py-3 flex items-center justify-center">
+                        <div className="min-w-0 sm:px-4 sm:py-3 flex flex-col items-stretch justify-center">
+                          <span className="mb-1 text-[11px] font-semibold text-ink-4 sm:hidden">{t("manager.col.quantity")}</span>
                           <input
-                            className="w-full text-center text-sm bg-transparent border-none rounded-lg px-2 py-1 focus:outline-none transition-colors text-ink font-mono tabular focus:bg-accent-soft"
+                            className="w-full text-center text-sm bg-bg-sunk border border-line rounded-lg px-2 py-2 focus:outline-none transition-colors text-ink font-mono tabular focus:bg-accent-soft sm:bg-transparent sm:border-none sm:py-1"
                             value={row.quantity ? row.quantity.toLocaleString() : ""}
                             onChange={(e) => handleChangeRow(row.id, "quantity", e.target.value)}
                             inputMode="numeric"
                             placeholder="0"
                           />
                         </div>
-                        <div className="px-4 py-3 flex items-center justify-center">
+                        <div className="min-w-0 sm:px-4 sm:py-3 flex flex-col items-stretch justify-center">
+                          <span className="mb-1 text-[11px] font-semibold text-ink-4 sm:hidden">{t("manager.col.avgPrice")}</span>
                           <input
-                            className="w-full text-center text-sm bg-transparent border-none rounded-lg px-2 py-1 focus:outline-none transition-colors text-ink font-mono tabular focus:bg-accent-soft"
+                            className="w-full text-center text-sm bg-bg-sunk border border-line rounded-lg px-2 py-2 focus:outline-none transition-colors text-ink font-mono tabular focus:bg-accent-soft sm:bg-transparent sm:border-none sm:py-1"
                             value={row.avgPrice ? row.avgPrice.toLocaleString() : ""}
                             onChange={(e) => handleChangeRow(row.id, "avgPrice", e.target.value)}
                             inputMode="numeric"
                             placeholder="0"
                           />
                         </div>
-                        <div className="px-4 py-3 flex items-center justify-center">
+                        <div className="absolute right-2 top-3 sm:static sm:px-4 sm:py-3 flex items-center justify-center">
                           <button
                             type="button"
                             onClick={() => handleRemoveRow(row.id)}
@@ -1378,23 +1384,24 @@ export default function PortfolioMockPage() {
                       </div>
 	                    ))}
 	                  </div>
-                    <div className="mt-3 grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] rounded-xl bg-bg-sunk border border-line">
-                      <div className="px-4 py-3 flex flex-col justify-center">
+                    <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-bg-sunk border border-line px-3 py-3 sm:grid-cols-[2fr,1.2fr,1.8fr,0.8fr] sm:gap-0 sm:px-0 sm:py-0">
+                      <div className="col-span-2 sm:col-span-1 sm:px-4 sm:py-3 flex flex-col justify-center">
                         <span className="text-sm font-semibold text-ink">{cashLabel}</span>
                       </div>
-                      <div className="px-4 py-3 flex items-center justify-center">
+                      <div className="hidden sm:flex px-4 py-3 items-center justify-center">
                         <span className="text-xs text-ink-4">-</span>
                       </div>
-                      <div className="px-4 py-3 flex items-center justify-center">
+                      <div className="col-span-2 sm:col-span-1 sm:px-4 sm:py-3 flex flex-col items-stretch justify-center">
+                        <span className="mb-1 text-[11px] font-semibold text-ink-4 sm:hidden">{t("manager.col.avgPrice")}</span>
                         <input
-                          className="w-full text-center text-sm bg-transparent border-none rounded-lg px-2 py-1 focus:outline-none transition-colors text-ink font-mono tabular focus:bg-accent-soft"
+                          className="w-full text-center text-sm bg-surface border border-line rounded-lg px-2 py-2 focus:outline-none transition-colors text-ink font-mono tabular focus:bg-accent-soft sm:bg-transparent sm:border-none sm:py-1"
                           value={cashAmount ? cashAmount.toLocaleString() : ""}
                           onChange={(e) => handleCashChange(e.target.value)}
                           inputMode="numeric"
                           placeholder="0"
                         />
                       </div>
-                      <div className="px-4 py-3 flex items-center justify-center">
+                      <div className="col-span-2 sm:col-span-1 sm:px-4 sm:py-3 flex items-center justify-center">
                         <span className="text-xs text-ink-4">{t("manager.cashFixed")}</span>
                       </div>
                     </div>
@@ -1474,7 +1481,7 @@ export default function PortfolioMockPage() {
                         <span className="text-sm font-medium text-ink-2">{t(`analysisOptions.extraOption.${opt.key}.label` as `analysisOptions.extraOption.${string}.label`)}</span>
                         <div className="group relative flex-shrink-0">
                           <Info size={14} className="transition-colors text-ink-4 group-hover:text-ink-3" />
-                          <div className="absolute left-5 top-0 w-64 p-2.5 text-xs rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-30 leading-relaxed bg-ink text-bg">
+                          <div className="fixed left-3 right-3 top-20 z-[80] w-auto max-w-[calc(100vw-1.5rem)] p-2.5 text-xs rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity leading-relaxed bg-ink text-bg sm:absolute sm:left-5 sm:right-auto sm:top-0 sm:z-30 sm:w-64 sm:max-w-none">
                             {[0, 1].map((i) => (
                               <p key={i} className={i > 0 ? "mt-1" : ""}>{t(`analysisOptions.extraOption.${opt.key}.desc${i}` as `analysisOptions.extraOption.${string}.desc0`)}</p>
                             ))}
@@ -1766,7 +1773,7 @@ export default function PortfolioMockPage() {
               ref={portfolioPdfRef}
               className={`qaima-portfolio-report qaima-report-enter flex w-full min-w-0 max-w-full flex-col gap-5 overflow-hidden ${
                 isPortfolioZoomOpen
-                  ? "fixed inset-x-2 top-2 bottom-2 z-[100] mx-auto w-auto max-w-6xl overflow-y-auto overflow-x-hidden rounded-2xl bg-bg p-3 sm:inset-x-4 sm:top-4 sm:bottom-4 sm:p-7 shadow-pop"
+                  ? "fixed inset-x-2 top-2 bottom-2 z-[100] mx-auto w-auto max-w-[calc(100vw-1rem)] overflow-y-auto overflow-x-hidden rounded-2xl bg-bg p-3 shadow-pop sm:inset-x-4 sm:top-4 sm:bottom-4 sm:max-w-6xl sm:p-7"
                   : "w-full"
               }`}
               onClick={(event) => {
@@ -1883,8 +1890,8 @@ export default function PortfolioMockPage() {
                     {t("summary.profileCard")}
                   </p>
                   <div className="flex items-end gap-2">
-                    <span className="text-3xl font-bold text-ink font-mono tabular tracking-tighter">
-                      {analysisResult.policy.riskProfile.profileType}
+                    <span className="text-2xl sm:text-3xl font-bold text-ink tracking-tighter">
+                      {riskProfileTypeLabel(analysisResult.policy.riskProfile.profileType)}
                     </span>
                   </div>
                   <p className="text-sm text-ink-3">{t("summary.profileDesc")}</p>
@@ -2513,7 +2520,7 @@ export default function PortfolioMockPage() {
 
               </div>}
 
-              {analysisTab === "ADVANCED" && <div ref={portfolioReportRef} className="qaima-scroll-stagger w-full min-w-0 max-w-full overflow-hidden rounded-2xl p-3 sm:p-5 bg-surface border border-line shadow-card">
+              {analysisTab === "ADVANCED" && <div ref={portfolioReportRef} className="qaima-feature3-advanced qaima-scroll-stagger w-full min-w-0 max-w-full overflow-hidden rounded-2xl p-3 sm:p-5 bg-surface border border-line shadow-card">
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="text-base font-bold text-ink"><DictionaryText text={t("advanced.title")} /></h3>
@@ -2685,7 +2692,7 @@ export default function PortfolioMockPage() {
                       : "";
 
                     return (
-                      <div key={`scl-pdf-${series.stockCode}`} className="mt-2 rounded-lg bg-bg-sunk border border-line p-2">
+                      <div key={`scl-pdf-${series.stockCode}`} className="mt-2 min-w-0 max-w-full overflow-hidden rounded-lg bg-bg-sunk border border-line p-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div>
                             <p className="text-[11px] font-bold text-ink">
@@ -2742,7 +2749,7 @@ export default function PortfolioMockPage() {
                   const smlHoverBeta = smlHover ? toSmlBeta(smlHover.x) : null;
                   const smlHoverReturn = smlHover ? toSmlReturn(smlHover.y) : null;
                   return (
-                    <div className="mt-4 rounded-xl bg-bg-sunk border border-line p-3">
+                    <div className="mt-4 min-w-0 max-w-full overflow-hidden rounded-xl bg-bg-sunk border border-line p-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <h4 className="text-sm font-bold text-ink">{t("capmSection.title")}</h4>
@@ -2842,7 +2849,7 @@ export default function PortfolioMockPage() {
                       ) : null}
                       {capmAssets.length ? (
                         <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
-                          <div className="rounded-lg bg-surface border border-line p-3">
+                          <div className="min-w-0 max-w-full overflow-hidden rounded-lg bg-surface border border-line p-3">
                             <div className="flex items-center justify-between gap-2">
                               <h5 className="text-xs font-bold text-ink">{t("sclSection.title")}</h5>
                               <span className="text-[10px] text-ink-4">{t("sclSection.alphaNote")}</span>
@@ -2881,7 +2888,7 @@ export default function PortfolioMockPage() {
                                   </div>
                                 ) : null}
                                 {activeSclSeries ? (
-                              <div className="mt-2 rounded-lg bg-bg-sunk border border-line p-2">
+                              <div className="mt-2 min-w-0 max-w-full overflow-hidden rounded-lg bg-bg-sunk border border-line p-2">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div>
                                     <p className="text-[11px] font-bold text-ink">
@@ -2997,7 +3004,7 @@ export default function PortfolioMockPage() {
                               {t("sclSection.footnote")}
                             </p>
                           </div>
-                          <div className="rounded-lg bg-surface border border-line p-3">
+                          <div className="min-w-0 max-w-full overflow-hidden rounded-lg bg-surface border border-line p-3">
                             <div className="flex items-center justify-between gap-2">
                               <h5 className="text-xs font-bold text-ink">{t("smlSection.title")}</h5>
                               <span className="text-[10px] text-ink-4">{t("smlSection.axisNote")}</span>
@@ -3153,7 +3160,7 @@ export default function PortfolioMockPage() {
                 </div>
 
                 {analysisResult.advanced?.frontier?.length ? (
-                  <div className="mt-5">
+                  <div className="mt-5 min-w-0 max-w-full overflow-hidden">
                     <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                       <h4 className="min-w-0 text-sm font-bold text-ink">{t("frontier.title")}</h4>
                       <p className="min-w-0 text-xs text-ink-4 sm:text-right">
@@ -3508,7 +3515,7 @@ export default function PortfolioMockPage() {
                         setFrontierHover({ x: svgPoint.x, y: svgPoint.y });
                       };
                       return (
-                        <div className="mt-3 overflow-hidden rounded-xl bg-bg-sunk border border-line p-2 sm:overflow-x-auto sm:p-3">
+                        <div className="qaima-frontier-chart-shell mt-3 min-w-0 max-w-full overflow-hidden rounded-xl bg-bg-sunk border border-line p-2 sm:overflow-x-auto sm:p-3">
                           <svg
                             viewBox={`0 0 ${viewW} ${viewH}`}
                             className="h-[360px] w-full min-w-0 cursor-crosshair sm:h-[640px] sm:min-w-[760px]"
@@ -3780,9 +3787,9 @@ export default function PortfolioMockPage() {
                               <span className="ml-2 font-mono tabular text-ink">U={utilityValue.toFixed(4)}</span>
                             </div>
                           )}
-	                          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+	                          <div className="mt-3 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
 	                            {markerMetricCards.map((portfolio) => (
-                              <div key={`marker-card-${portfolio.type}`} className="rounded-lg bg-surface border border-line px-3 py-2">
+                              <div key={`marker-card-${portfolio.type}`} className="min-w-0 overflow-hidden rounded-lg bg-surface border border-line px-3 py-2">
                                 <div className="flex items-center gap-2">
                                   <span
                                     className="w-2.5 h-2.5 rounded-full"
@@ -3809,16 +3816,16 @@ export default function PortfolioMockPage() {
 	                          </div>
                           <div className="mt-4">
                             <h5 className="text-sm font-bold text-ink">{t("frontier.efficiencyTitle")}</h5>
-                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                            <div className="mt-2 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                               {portfolioPieCards.map((portfolio) => (
-                                <div key={`advanced-pie-${portfolio.type}`} className="rounded-lg bg-surface border border-line p-3">
-                                  <div className="flex items-center justify-between gap-2">
+                                <div key={`advanced-pie-${portfolio.type}`} className="min-w-0 overflow-hidden rounded-lg bg-surface border border-line p-3">
+                                  <div className="flex min-w-0 flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
                                     <p className="text-xs font-bold text-ink">{advancedPortfolioLabel(portfolio.type, portfolio.label)}</p>
                                     <span className="text-[10px] font-mono tabular text-ink-4">
                                       Sharpe {portfolio.sharpeRatio?.toFixed(2) ?? "-"}
                                     </span>
                                   </div>
-                                  <div className="mt-3 flex items-center gap-3">
+                                  <div className="mt-3 flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center">
                                     {pdfExporting ? (
                                       <SvgPortfolioPieChart
                                         weights={portfolio.weights}
@@ -3832,7 +3839,7 @@ export default function PortfolioMockPage() {
                                         aria-label={`${advancedPortfolioLabel(portfolio.type, portfolio.label)} 구성비 파이차트`}
                                       />
                                     )}
-                                    <div className="min-w-0 flex-1">
+                                    <div className="min-w-0 w-full flex-1">
                                       <div className="grid grid-cols-2 gap-2 text-[10px] text-ink-4">
                                         <div>
                                           <p>σ</p>
@@ -3875,8 +3882,8 @@ export default function PortfolioMockPage() {
                               ))}
                             </div>
                             {theoreticalUtility && (
-                              <div className="mt-3 rounded-lg bg-surface border border-purple-300 p-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="mt-3 min-w-0 overflow-hidden rounded-lg bg-surface border border-purple-300 p-3">
+                                <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
                                   <div>
                                     <p className="text-xs font-bold text-ink">{t("theoreticalAdvanced.title")}</p>
                                     <p className="mt-1 text-[11px] leading-relaxed text-ink-4">
@@ -3885,7 +3892,7 @@ export default function PortfolioMockPage() {
                                         : t("theoreticalAdvanced.addCashDesc")}
                                     </p>
                                   </div>
-                                  <div className="text-right">
+                                  <div className="text-left sm:text-right">
                                     <p className="text-[10px] text-ink-4">
                                       {theoreticalUtility.constraintBinding === "CASH_MAX" ? t("theoreticalAdvanced.cashMaxFundingLabel") : t("theoreticalAdvanced.addCashFundingLabel")}
                                     </p>
@@ -3896,7 +3903,7 @@ export default function PortfolioMockPage() {
                                     </p>
                                   </div>
                                 </div>
-                                <div className="mt-3 flex items-center gap-3">
+                                <div className="mt-3 flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:items-center">
                                   {pdfExporting ? (
                                     <SvgPortfolioPieChart
                                       weights={theoreticalUtility.weights}
@@ -3910,8 +3917,8 @@ export default function PortfolioMockPage() {
                                       aria-label="이론적 효용접점 구성비 파이차트"
                                     />
                                   )}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="grid grid-cols-3 gap-2 text-[10px] text-ink-4">
+                                  <div className="min-w-0 w-full flex-1">
+                                    <div className="grid grid-cols-1 gap-2 text-[10px] text-ink-4 min-[420px]:grid-cols-3">
                                       <div>
                                         <p>σ</p>
                                         <p className="mt-0.5 font-mono tabular text-ink">{formatPct(theoreticalUtility.volatility)}</p>

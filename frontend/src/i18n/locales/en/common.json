@@ -13,6 +13,13 @@
     "edit": "Edit",
     "delete": "Delete"
   },
+  "investLevelBadge": {
+    "retakeTitle": "Retake invest level survey",
+    "label": "Analysis by Invest Level",
+    "loading": "Loading",
+    "modalTitle": "Retake the invest level survey?",
+    "modalBody": "The report explanation style will be adjusted to your invest level."
+  },
   "token": {
     "label": "Tokens",
     "badgeAriaLabel": "Check and top up token balance"

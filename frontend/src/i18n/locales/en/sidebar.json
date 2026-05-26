@@ -12,6 +12,7 @@
     "myInfo": "Account",
     "login": "Log in",
     "unknown": "Unknown",
+    "loading": "Loading user info",
     "billing": "Plans / Top up",
     "logout": "Log out"
   }

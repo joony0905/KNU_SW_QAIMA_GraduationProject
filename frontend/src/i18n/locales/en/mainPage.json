@@ -12,6 +12,10 @@
     "subtitle": "Price, financials, industry, news, rates — we pull scattered data into a single analysis report. All you do is enter a ticker.",
     "searchPlaceholder": "Samsung, 005930, NVDA…"
   },
+  "languageSwitcher": {
+    "ko": "View in Korean",
+    "en": "View in English"
+  },
   "features": {
     "eyebrow": "WHAT QAIMA DOES",
     "title": "Three lenses on a single stock",

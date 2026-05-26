@@ -68,6 +68,7 @@ class Feature3AnalyzeOptions(BaseModel):
     include_diagnostics: bool = False
     include_llm_explain: bool = False
     llm_vendor: str | None = None
+    language_code: str | None = None
     risk_free_rate: float | None = Field(default=None, ge=0)
     risk_free_rate_source: str | None = None
     risk_free_rate_as_of: str | None = None
@@ -138,6 +139,7 @@ class Feature3RequestContext(BaseModel):
     invest_level: str | None = None
     llm_vendor: str | None = None
     include_llm_explain: bool = False
+    language_code: str | None = None
 
 
 class Feature3PortfolioInput(BaseModel):
@@ -159,6 +161,8 @@ class Feature3AnalysisRequest(BaseModel):
         options.include_llm_explain = self.request_context.include_llm_explain
         if self.request_context.llm_vendor:
             options.llm_vendor = self.request_context.llm_vendor
+        if self.request_context.language_code:
+            options.language_code = self.request_context.language_code
         return PortfolioAnalyzeRequest(
             portfolio_id=self.portfolio.portfolio_id,
             invest_level=self.request_context.invest_level,

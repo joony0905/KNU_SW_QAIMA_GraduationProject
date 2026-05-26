@@ -30,6 +30,7 @@ export const fetchFeature2Analysis = async (
   from?: string,
   to?: string,
   investLevel?: InvestLevel,
+  languageCode?: "ko" | "en",
 ): Promise<ApiResponse<Feature2AnalyzeResponse>> => {
   const body: Record<string, unknown> = { stockCode };
   if (freq) body.freq = freq;
@@ -40,6 +41,7 @@ export const fetchFeature2Analysis = async (
   if (displayLimit) body.displayLimit = displayLimit;
   if (llmVendor) body.llmVendor = llmVendor;
   if (investLevel) body.investLevel = investLevel;
+  if (languageCode) body.languageCode = languageCode;
   const res = await api.post<ApiResponse<Feature2AnalyzeResponse>>(
     "/feature2/analyze",
     body,

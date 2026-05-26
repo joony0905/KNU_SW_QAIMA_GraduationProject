@@ -37,7 +37,8 @@ public class Feature2RequestNormalizer {
                 normalizeMaxLag(req == null ? null : req.getMaxLag()),
                 normalizeDisplayLimit(req == null ? null : req.getDisplayLimit()),
                 normalizeLlmVendor(req == null ? null : req.getLlmVendor()),
-                normalizeInvestLevel(req == null ? null : req.getInvestLevel())
+                normalizeInvestLevel(req == null ? null : req.getInvestLevel()),
+                normalizeLanguageCode(req == null ? null : req.getLanguageCode())
         );
     }
 
@@ -97,5 +98,12 @@ public class Feature2RequestNormalizer {
             case "초급자", "중급자", "고급자", "전문가" -> investLevel.trim();
             default -> "초급자";
         };
+    }
+
+    private String normalizeLanguageCode(String languageCode) {
+        if (languageCode == null || languageCode.isBlank()) {
+            return "ko";
+        }
+        return languageCode.trim().toLowerCase().startsWith("en") ? "en" : "ko";
     }
 }

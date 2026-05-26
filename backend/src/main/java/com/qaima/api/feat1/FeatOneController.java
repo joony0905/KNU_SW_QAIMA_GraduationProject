@@ -50,7 +50,8 @@ public class FeatOneController {
                 request.getMarketDivCode(),
                 request.getIncludeExplain(),
                 request.getLlmVendor(),
-                request.getInvestLevel()
+                request.getInvestLevel(),
+                request.getLanguageCode()
         );
 
         return creditService.useFeature1(userId, referenceId)

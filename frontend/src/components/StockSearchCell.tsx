@@ -142,7 +142,7 @@ export default function StockSearchCell({
   return (
     <div ref={wrapperRef} className="relative w-full">
       <input
-        className="w-full text-center text-sm text-ink font-medium bg-transparent border-none rounded-lg px-2 py-1 focus:outline-none focus:bg-accent/5 transition-colors"
+        className="w-full text-center text-sm text-ink font-medium bg-bg-sunk border border-line rounded-lg px-2 py-2 focus:outline-none focus:bg-accent/5 transition-colors sm:bg-transparent sm:border-none sm:py-1"
         value={inputValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}

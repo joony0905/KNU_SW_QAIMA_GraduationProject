@@ -21,5 +21,6 @@ public class Feature2ExplainRequestDto {
     private Integer window;
     private String llmVendor;
     private String investLevel;
+    private String languageCode;
     private Feature2ExplainMetricsDto metrics;
 }

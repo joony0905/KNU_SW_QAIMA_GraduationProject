@@ -14,7 +14,8 @@ public record Feature3InternalAnalysisRequestDto(
                         null,
                         request.investLevel(),
                         request.options() != null ? request.options().llmVendor() : null,
-                        request.options() != null && Boolean.TRUE.equals(request.options().includeLlmExplain())
+                        request.options() != null && Boolean.TRUE.equals(request.options().includeLlmExplain()),
+                        request.options() != null ? request.options().languageCode() : null
                 ),
                 new Portfolio(
                         request.portfolioId(),
@@ -33,7 +34,8 @@ public record Feature3InternalAnalysisRequestDto(
             String asOf,
             String investLevel,
             String llmVendor,
-            Boolean includeLlmExplain
+            Boolean includeLlmExplain,
+            String languageCode
     ) {
     }
 

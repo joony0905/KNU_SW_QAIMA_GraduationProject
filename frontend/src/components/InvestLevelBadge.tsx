@@ -4,7 +4,9 @@ import { TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useDictionary } from "./DictContext";
+import { investLevelLabel } from "../utils/displayLabels";
 
 type Props = {
   className?: string;
@@ -12,6 +14,7 @@ type Props = {
 
 export default function InvestLevelBadge({ className }: Props) {
   const { investLevel, investLevelReady } = useDictionary();
+  const { t, i18n } = useTranslation("common");
   const navigate = useNavigate();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -20,16 +23,16 @@ export default function InvestLevelBadge({ className }: Props) {
       <button
         type="button"
         onClick={() => setConfirmOpen(true)}
-        title="투자레벨 설문 다시하기"
+        title={t("investLevelBadge.retakeTitle")}
         className={`inline-flex items-center gap-2.5 rounded-lg border border-accent/30 bg-accent-soft/70 px-3.5 py-2 text-left text-xs text-ink-2 transition-colors hover:bg-accent-soft sm:text-sm ${className ?? ""}`}
       >
         <span className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-md bg-surface text-accent shadow-card">
           <TrendingUp size={16} aria-hidden="true" />
         </span>
         <span className="flex flex-col leading-tight">
-          <span className="text-[11px] font-semibold text-accent sm:text-xs">투자레벨 기준 분석</span>
+          <span className="text-[11px] font-semibold text-accent sm:text-xs">{t("investLevelBadge.label")}</span>
           <span className="mt-0.5 text-sm font-bold text-ink sm:text-base">
-            {investLevelReady ? investLevel : "불러오는 중"}
+            {investLevelReady ? investLevelLabel(investLevel, i18n.language) : t("investLevelBadge.loading")}
           </span>
         </span>
       </button>
@@ -37,9 +40,9 @@ export default function InvestLevelBadge({ className }: Props) {
       {confirmOpen && createPortal(
         <div className="qaima-modal-backdrop-in fixed inset-0 z-[100] flex items-center justify-center bg-black/45 px-4">
           <div className="qaima-modal-pop-in w-full max-w-sm rounded-2xl border border-line bg-surface p-5 shadow-pop">
-            <h3 className="text-base font-bold text-ink">투자 레벨 설문을 할까요?</h3>
+            <h3 className="text-base font-bold text-ink">{t("investLevelBadge.modalTitle")}</h3>
             <p className="mt-2 text-sm leading-relaxed text-ink-3">
-              투자 레벨에 맞춰 분석 보고서의 설명 방식이 조정돼요.
+              {t("investLevelBadge.modalBody")}
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -47,14 +50,14 @@ export default function InvestLevelBadge({ className }: Props) {
                 onClick={() => navigate("/invest-level-survey")}
                 className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
               >
-                예
+                {t("button.confirm")}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmOpen(false)}
                 className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink-3 transition-colors hover:bg-bg-sunk"
               >
-                아니오
+                {t("button.cancel")}
               </button>
             </div>
           </div>

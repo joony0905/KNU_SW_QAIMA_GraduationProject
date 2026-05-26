@@ -51,6 +51,7 @@ export type PortfolioAnalyzeRequest = {
     includeDiagnostics?: boolean;
     includeLlmExplain?: boolean;
     llmVendor?: string;
+    languageCode?: "ko" | "en";
     maxCashWeight?: number;
   };
 };

@@ -5,8 +5,9 @@ import { BarChart2, Globe, Briefcase, BookOpen, User, Menu } from "lucide-react"
 import { useTranslation } from "react-i18next";
 import { isLoggedIn } from "../utils/auth";
 import { logout } from "../api/auth";
+import { getMyProfile } from "../api/user";
 import { clearAccessToken } from "../api/tokenStore";
-import { clearUser, getUser } from "../api/userStore";
+import { clearUser, getUser, setUser, type UserInfo } from "../api/userStore";
 import { clearTokenBalance } from "../api/billingStore";
 import { useBilling } from "../contexts/BillingContext";
 
@@ -32,15 +33,47 @@ export default function Sidebar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [anchorTop, setAnchorTop] = useState<number | null>(null);
   const [loggedIn, setLoggedIn] = useState<boolean>(() => isLoggedIn());
+  const [user, setSidebarUser] = useState<UserInfo | null>(() => isLoggedIn() ? getUser() : null);
   // 모바일(md 미만)에서 사이드바 자체의 슬라이드 인/아웃을 제어.
   const [mobileOpen, setMobileOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const user = loggedIn ? getUser() : null;
-
   useEffect(() => {
-    setLoggedIn(isLoggedIn());
+    let cancelled = false;
+
+    const syncAuthState = () => {
+      const nextLoggedIn = isLoggedIn();
+      setLoggedIn(nextLoggedIn);
+
+      if (!nextLoggedIn) {
+        setSidebarUser(null);
+        return;
+      }
+
+      const cachedUser = getUser();
+      setSidebarUser(cachedUser);
+
+      if (cachedUser?.email) return;
+
+      void getMyProfile()
+        .then((profile) => {
+          if (cancelled) return;
+          const nextUser = { email: profile.email, name: profile.name };
+          setUser(nextUser);
+          setSidebarUser(nextUser);
+        })
+        .catch(() => {
+          if (!cancelled) setSidebarUser(null);
+        });
+    };
+
+    syncAuthState();
+    window.addEventListener("qaima:auth-change", syncAuthState);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("qaima:auth-change", syncAuthState);
+    };
   }, [location.pathname]);
 
   // 페이지 이동 시 모바일 사이드바·계정 팝업 자동 닫기.
@@ -235,7 +268,7 @@ export default function Sidebar() {
           >
             <div className="px-4 py-2.5 border-b border-line">
               <p className="text-[13px] font-semibold text-ink truncate">
-                {user?.email ?? t("account.unknown")}
+                {user?.email ?? t("account.loading")}
               </p>
               {user?.name && (
                 <p className="text-[11px] text-ink-3 truncate">{user.name}</p>

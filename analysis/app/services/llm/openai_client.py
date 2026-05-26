@@ -13,7 +13,7 @@ from app.models.feature1 import Feature1Metrics, Feature1Request, FinancialPoint
 from app.models.feature2 import Feature2ExplainRequest
 from app.services.llm.base import LLMClient
 from app.services.llm.feature2_prompt import build_feature2_prompt
-from app.services.llm.invest_level import invest_level_prompt
+from app.services.llm.invest_level import invest_level_prompt, output_language_prompt
 
 OPENAI_BASE_URL = "https://api.openai.com/v1/responses"
 DEFAULT_MODEL = "gpt-5-mini"
@@ -64,6 +64,7 @@ class OpenAIClient(LLMClient):
             "model": model,
             "instructions": (
                     "당신은 데이터 기반 투자 분석가이다.\n"
+                    f"{output_language_prompt(req.language_code)}"
                     "[작성 원칙]\n"
                     "모든 분석은 제공된 데이터만 사용\n"
                     "외부 지식 사용 금지\n"
@@ -85,8 +86,9 @@ class OpenAIClient(LLMClient):
                     "부채비율 높음 → 재무 리스크 존재\n"
                     "현금흐름 양수 → 재무 안정성 긍정적\n"
                     "[출력 규칙]\n"
-                    "모든 문장은 귀엽게 존댓말 “~에요 / ~이에요” 체로 작성\n"
-                    "숫자는 반드시 사람이 읽기 쉬운 한국식 단위(억, 만)로 변환하여 출력\n"
+                    "한국어 출력일 때는 모든 문장을 귀엽게 존댓말 “~에요 / ~이에요” 체로 작성\n"
+                    "한국어 출력일 때는 숫자를 사람이 읽기 쉬운 한국식 단위(억, 만)로 변환하여 출력\n"
+                    "English output must use a clear, concise professional tone and readable global units such as K, M, B, or % where helpful\n"
                     "각 섹션 summary는 1~2문장\n"
                     "overall.summary는 정확히 6문장\n"
                     "overall.conclusion은 최대 2문장\n"
@@ -224,7 +226,8 @@ class OpenAIClient(LLMClient):
             "model": model,
             "instructions": (
                 "당신은 데이터 기반 투자 분석가입니다. "
-                "제공된 Feature2 외부요인 데이터만 사용해 설명하세요."
+                "제공된 Feature2 외부요인 데이터만 사용해 설명하세요. "
+                f"{output_language_prompt(req.language_code)}"
             ),
             "input": build_feature2_prompt(req, compact=compact),
             "max_output_tokens": min(
@@ -367,12 +370,13 @@ class OpenAIClient(LLMClient):
         financial_summary = self._build_financial_summary(req)
 
         return (
-            "Write sectioned explanations in Korean.\n"
+            f"{output_language_prompt(req.language_code)}"
             "Each section must only use its own data.\n"
             "Keep wording concise, factual, and insight-oriented.\n"
             "When price, valuation, indicators, and financial data align, explain the indirect signal they suggest.\n"
             "When they conflict, explain the tension as a check point instead of stopping at a cautious disclaimer.\n\n"
             f"{invest_level_prompt(req.invest_level)}\n"
+            f"{output_language_prompt(req.language_code)}"
             "Return sections with title, summary, bullets keys and overall with summary, bullets, risks, conclusion keys.\n"
             f"stock_code={metrics.stock_code}\n"
             "\n[PRICE_FLOW]\n"

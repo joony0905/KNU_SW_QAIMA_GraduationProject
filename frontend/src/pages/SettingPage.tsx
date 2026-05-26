@@ -49,6 +49,11 @@ import ReportHeader from "../components/ReportHeader";
 import { downloadElementAsPdf, waitForPdfCaptureReady } from "../utils/reportPdf";
 import qaimaLogo from "../assets/qaima-final.png";
 import { clientLog } from "../utils/clientLog";
+import {
+  investLevelLabel,
+  riskProfileDescription,
+  riskProfileLabel as formatRiskProfileLabel,
+} from "../utils/displayLabels";
 
 const formatPhone = (v: string): string => {
   const d = (v ?? "").replace(/[^0-9]/g, "");
@@ -74,19 +79,19 @@ type CardProps = {
 function SettingCard({ icon: Icon, title, desc, action, children }: CardProps) {
   return (
     <section className="w-full rounded-2xl border border-line bg-surface shadow-card">
-      <div className="flex items-start justify-between gap-4 px-5 sm:px-6 pt-5 pb-4 border-b border-line">
-        <div className="flex items-start gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 px-5 sm:px-6 pt-5 pb-4 border-b border-line">
+        <div className="flex min-w-0 items-start gap-3">
           <div className="shrink-0 w-9 h-9 grid place-items-center rounded-xl bg-accent-soft text-accent">
             <Icon size={17} />
           </div>
-          <div>
-            <h2 className="text-base font-bold text-ink tracking-tight">
+          <div className="min-w-0">
+            <h2 className="text-base font-bold text-ink tracking-tight break-words">
               {title}
             </h2>
-            {desc && <p className="mt-0.5 text-xs text-ink-3">{desc}</p>}
+            {desc && <p className="mt-0.5 text-xs text-ink-3 break-words">{desc}</p>}
           </div>
         </div>
-        {action}
+        {action && <div className="max-w-full shrink-0 sm:pt-0">{action}</div>}
       </div>
       <div className="px-5 sm:px-6 py-5">{children}</div>
     </section>
@@ -107,6 +112,15 @@ const formatKstDateTime = (value?: string | null) => {
     minute: "2-digit",
     hour12: false,
   });
+};
+
+const REPORT_RETENTION_DAYS = 7;
+const REPORT_RETENTION_MS = REPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+const isReportWithinRetention = (report: AnalysisReportSummary | AnalysisReportDetail): boolean => {
+  const generatedAt = new Date(report.generatedAt).getTime();
+  if (Number.isNaN(generatedAt)) return false;
+  return Date.now() - generatedAt <= REPORT_RETENTION_MS;
 };
 
 function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
@@ -221,10 +235,12 @@ function SettingSelect<T extends string>({
   value,
   options,
   onChange,
+  labelForOption,
 }: {
   value: T;
   options: readonly T[];
   onChange: (next: T) => void;
+  labelForOption?: (value: T) => string;
 }) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -274,7 +290,7 @@ function SettingSelect<T extends string>({
           open ? "border-accent" : "border-line"
         }`}
       >
-        <span className="truncate">{value}</span>
+        <span className="truncate">{labelForOption ? labelForOption(value) : value}</span>
         {open ? (
           <ChevronUp size={16} className="text-ink-3 flex-shrink-0 pointer-events-none" />
         ) : (
@@ -307,7 +323,7 @@ function SettingSelect<T extends string>({
                     : "text-ink hover:bg-bg-sunk"
                 }`}
               >
-                {opt}
+                {labelForOption ? labelForOption(opt) : opt}
               </button>
             ))}
           </div>,
@@ -424,7 +440,7 @@ export default function SettingPage() {
     setReportsError(null);
     fetchMyReports(reportFilter)
       .then((rows) => {
-        if (alive) setReports(rows);
+        if (alive) setReports(rows.filter(isReportWithinRetention));
       })
       .catch((e) => {
         if (alive) setReportsError(getApiErrorMessage(e, t("settingPage:errors.reportsLoad")));
@@ -497,11 +513,23 @@ export default function SettingPage() {
 
   const labelOf = (item: WatchlistItem) =>
     item.stockName ?? (item.stockId != null ? `#${item.stockId}` : t("settingPage:cards.reports.stockFallback"));
+  const displayInvestLevel = (value: InvestLevel) => investLevelLabel(value, i18n.language);
+  const displayRiskProfile = (value: RiskProfileLabel | "미설정") =>
+    value === "미설정" ? t("settingPage:riskProfileUnset") : formatRiskProfileLabel(value, i18n.language);
+  const selectedRiskProfileDescription =
+    riskProfileDescription(riskProfileLabel !== "미설정" ? riskProfileLabel : null, i18n.language)
+    ?? RISK_PROFILE_OPTIONS.find((option) => option.label === riskProfileLabel)?.description;
 
   const openReportDetail = async (reportId: number) => {
     setReportDetailLoading(true);
     try {
-      setSelectedReport(await fetchReportDetail(reportId));
+      const detail = await fetchReportDetail(reportId);
+      if (!isReportWithinRetention(detail)) {
+        setReports((prev) => prev.filter((item) => item.reportId !== reportId));
+        alert(t("settingPage:errors.reportExpired"));
+        return;
+      }
+      setSelectedReport(detail);
     } catch (e) {
       alert(getApiErrorMessage(e, t("settingPage:errors.reportDetailLoad")));
     } finally {
@@ -512,6 +540,11 @@ export default function SettingPage() {
   const handleReportDownload = async (report: AnalysisReportSummary | AnalysisReportDetail) => {
     try {
       const detail = "resultSnapshot" in report ? report : await fetchReportDetail(report.reportId);
+      if (!isReportWithinRetention(detail)) {
+        setReports((prev) => prev.filter((item) => item.reportId !== detail.reportId));
+        alert(t("settingPage:errors.reportExpired"));
+        return;
+      }
       setPdfReport(detail);
       setPdfExporting(true);
       await waitForPdfCaptureReady();
@@ -534,7 +567,7 @@ export default function SettingPage() {
   ];
 
   const ghostBtn =
-    "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-line bg-surface text-sm font-medium text-ink-2 hover:bg-bg-sunk transition-colors";
+    "inline-flex max-w-full items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg border border-line bg-surface text-sm font-medium text-ink-2 hover:bg-bg-sunk transition-colors whitespace-normal text-center";
 
   return (
     <div className="min-h-screen bg-bg md:ml-[84px]">
@@ -580,10 +613,10 @@ export default function SettingPage() {
             {basicInfo.map(([label, value]) => (
               <div
                 key={label}
-                className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
+                className="flex items-start justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
               >
-                <dt className="text-sm text-ink-3">{label}</dt>
-                <dd className="text-sm font-medium text-ink text-right">
+                <dt className="shrink-0 text-sm text-ink-3">{label}</dt>
+                <dd className="min-w-0 text-sm font-medium text-ink text-right break-words">
                   {value}
                 </dd>
               </div>
@@ -610,6 +643,7 @@ export default function SettingPage() {
             value={investLevel}
             options={INVEST_LEVELS}
             onChange={handleInvestLevelChange}
+            labelForOption={displayInvestLevel}
           />
         </SettingCard>
 
@@ -630,10 +664,11 @@ export default function SettingPage() {
               value={riskProfileLabel}
               options={["미설정", ...RISK_PROFILE_OPTIONS.map((option) => option.label)] as const}
               onChange={handleRiskProfileChange}
+              labelForOption={displayRiskProfile}
             />
             {riskProfileLabel !== "미설정" && (
               <p className="text-xs text-ink-3">
-                {RISK_PROFILE_OPTIONS.find((option) => option.label === riskProfileLabel)?.description}
+                {selectedRiskProfileDescription}
               </p>
             )}
             {riskProfileError && (
@@ -740,13 +775,13 @@ export default function SettingPage() {
           title={t("settingPage:cards.reports.title")}
           desc={reportsLoading ? t("settingPage:cards.reports.loadingDesc") : t("settingPage:cards.reports.countDesc", { count: reports.length })}
           action={
-            <div className="flex items-center gap-1 rounded-lg bg-bg-sunk border border-line p-1">
+            <div className="flex max-w-full flex-wrap items-center gap-1 rounded-lg bg-bg-sunk border border-line p-1">
               {(["ALL", "FEATURE1", "FEATURE2", "FEATURE3"] as const).map((item) => (
                 <button
                   key={item}
                   type="button"
                   onClick={() => setReportFilter(item)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold ${
+                  className={`min-w-0 px-2.5 py-1 rounded-md text-xs font-semibold ${
                     reportFilter === item ? "bg-surface text-ink shadow-card" : "text-ink-3"
                   }`}
                 >
@@ -761,48 +796,54 @@ export default function SettingPage() {
           ) : reportsError ? (
             <p className="text-sm text-danger text-center py-6">{reportsError}</p>
           ) : reports.length === 0 ? (
-            <p className="text-sm text-ink-3 text-center py-6">{t("settingPage:cards.reports.empty")}</p>
+            <div className="py-6 text-center">
+              <p className="text-sm text-ink-3">{t("settingPage:cards.reports.empty")}</p>
+              <p className="mt-1 text-xs text-ink-4">{t("settingPage:cards.reports.retentionNotice")}</p>
+            </div>
           ) : (
-            <div className="divide-y divide-line">
-              {reports.map((report) => (
-                <div key={report.reportId} className="py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent">
-                        {featureLabel(report.featureType)}
-                      </span>
-                      <p className="text-sm font-bold text-ink truncate">
-                        {report.subjectType === "PORTFOLIO"
-                          ? report.portfolioSummary || t("settingPage:cards.reports.portfolioLabel")
-                          : `${report.companyName || report.stockCode || t("settingPage:cards.reports.stockFallback")} (${report.stockCode || "-"})`}
+            <div>
+              <p className="mb-2 text-xs text-ink-4">{t("settingPage:cards.reports.retentionNotice")}</p>
+              <div className="divide-y divide-line">
+                {reports.map((report) => (
+                  <div key={report.reportId} className="py-3 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-bold text-accent">
+                          {featureLabel(report.featureType)}
+                        </span>
+                        <p className="text-sm font-bold text-ink truncate">
+                          {report.subjectType === "PORTFOLIO"
+                            ? report.portfolioSummary || t("settingPage:cards.reports.portfolioLabel")
+                            : `${report.companyName || report.stockCode || t("settingPage:cards.reports.stockFallback")} (${report.stockCode || "-"})`}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-ink-3">
+                        {formatKstDateTime(report.generatedAt)} · {report.analysisModel || "-"} · {investLevelLabel(report.investLevel, i18n.language)}
                       </p>
                     </div>
-                    <p className="mt-1 text-xs text-ink-3">
-                      {formatKstDateTime(report.generatedAt)} · {report.analysisModel || "-"} · {report.investLevel || "-"}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void openReportDetail(report.reportId)}
+                        disabled={reportDetailLoading}
+                        className={ghostBtn}
+                      >
+                        <Eye size={14} />
+                        {t("settingPage:cards.reports.viewBtn")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleReportDownload(report)}
+                        disabled={pdfExporting}
+                        className={ghostBtn}
+                      >
+                        <Download size={14} />
+                        PDF
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void openReportDetail(report.reportId)}
-                      disabled={reportDetailLoading}
-                      className={ghostBtn}
-                    >
-                      <Eye size={14} />
-                      {t("settingPage:cards.reports.viewBtn")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleReportDownload(report)}
-                      disabled={pdfExporting}
-                      className={ghostBtn}
-                    >
-                      <Download size={14} />
-                      PDF
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </SettingCard>

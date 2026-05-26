@@ -82,7 +82,8 @@
       "empty": "No saved reports.",
       "viewBtn": "View",
       "portfolioLabel": "Portfolio",
-      "stockFallback": "Stock"
+      "stockFallback": "Stock",
+      "retentionNotice": "Reports are kept for 7 days from creation and are deleted automatically after that."
     },
     "bugReport": {
       "title": "Bug Report / Contact",
@@ -122,6 +123,7 @@
     "glossarySave": "Failed to save preference.",
     "reportsLoad": "Failed to load reports.",
     "reportDetailLoad": "Failed to load report detail.",
+    "reportExpired": "This report has passed the retention period and was removed from the list.",
     "pdfFailed": "PDF re-download failed."
   }
 }
