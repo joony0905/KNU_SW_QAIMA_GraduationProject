@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { bootstrapAccessToken } from "../api/tokenStore";
 
-const API_BASE_URL = "http://localhost:8080/api/v1";
+const API_BASE_URL = "/api/v1";
 
 export default function OAuth2SuccessPage() {
   const navigate = useNavigate();

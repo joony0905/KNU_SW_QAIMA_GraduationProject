@@ -20,7 +20,7 @@ import SurveyPage from "./pages/SurveyPage";
 import InvestLevelSurveyPage from "./pages/InvestLevelSurveyPage";
 import { bootstrapAccessToken } from "./api/tokenStore";
 
-const API_BASE_URL = "http://localhost:8080/api/v1";
+const API_BASE_URL = "/api/v1";
 
 export default function App() {
   const [authReady, setAuthReady] = useState(false);
