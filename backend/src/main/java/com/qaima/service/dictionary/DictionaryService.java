@@ -14,11 +14,12 @@ import com.qaima.repository.DictionaryAliasRepository;
 import com.qaima.repository.DictionaryRepository;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -46,7 +47,12 @@ public class DictionaryService {
 
         return Blocking.call(() -> {
             DictionaryTerm term = resolveCanonicalTerm(rawTerm, normalizedTerm);
-            return toDto(term, preferredEnglishTerm(List.of(term)).get(term.getTerm()));
+            List<DictionaryTerm> terms = List.of(term);
+            return toDto(
+                    term,
+                    preferredEnglishTerm(terms).get(term.getTerm()),
+                    aliasesByTerm(terms).get(term.getTerm())
+            );
         });
     }
 
@@ -178,7 +184,12 @@ public class DictionaryService {
             entity.setReviewedAt(reviewedAt);
             entity.setTag(tag);
             DictionaryTerm saved = dictionaryRepository.save(entity);
-            return toDto(saved, preferredEnglishTerm(List.of(saved)).get(saved.getTerm()));
+            List<DictionaryTerm> terms = List.of(saved);
+            return toDto(
+                    saved,
+                    preferredEnglishTerm(terms).get(saved.getTerm()),
+                    aliasesByTerm(terms).get(saved.getTerm())
+            );
         });
     }
 
@@ -255,8 +266,9 @@ public class DictionaryService {
 
     private List<DictionaryTermDto> toDtos(List<DictionaryTerm> entities) {
         Map<String, String> termEnByTerm = preferredEnglishTerm(entities);
+        Map<String, List<String>> aliasesByTerm = aliasesByTerm(entities);
         return entities.stream()
-                .map(entity -> toDto(entity, termEnByTerm.get(entity.getTerm())))
+                .map(entity -> toDto(entity, termEnByTerm.get(entity.getTerm()), aliasesByTerm.get(entity.getTerm())))
                 .toList();
     }
 
@@ -282,11 +294,31 @@ public class DictionaryService {
         return result;
     }
 
-    private static DictionaryTermDto toDto(DictionaryTerm entity, String termEn) {
+    private Map<String, List<String>> aliasesByTerm(List<DictionaryTerm> entities) {
+        List<String> terms = entities.stream()
+                .map(DictionaryTerm::getTerm)
+                .toList();
+        Map<String, List<String>> result = new HashMap<>();
+        if (terms.isEmpty()) return result;
+
+        dictionaryAliasRepository.findByCanonicalTerm_TermInOrderByAliasTermAsc(terms)
+                .forEach(alias -> {
+                    String canonicalTerm = alias.getCanonicalTerm() == null
+                            ? null
+                            : alias.getCanonicalTerm().getTerm();
+                    String aliasTerm = alias.getAliasTerm();
+                    if (canonicalTerm == null || aliasTerm == null || aliasTerm.isBlank()) return;
+                    result.computeIfAbsent(canonicalTerm, ignored -> new ArrayList<>()).add(aliasTerm.trim());
+                });
+        return result;
+    }
+
+    private static DictionaryTermDto toDto(DictionaryTerm entity, String termEn, List<String> aliases) {
         if (entity == null) return null;
         return DictionaryTermDto.builder()
                 .term(entity.getTerm())
                 .termEn(resolveTermEn(entity, termEn))
+                .aliases(aliases == null ? List.of() : aliases)
                 .initial(entity.getInitial())
                 .description(entity.getDescription())
                 .descriptionEn(entity.getDescriptionEn())

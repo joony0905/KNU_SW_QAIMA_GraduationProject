@@ -430,7 +430,8 @@
     },
     "zone": { "overbought": "Overbought", "oversold": "Oversold", "neutral": "Neutral" },
     "alignment": { "bullish": "Bullish", "bearish": "Bearish" },
-    "techCaption": "EMA, Bollinger Bands, and Stochastic key values."
+    "techCaption": "EMA, Bollinger Bands, and Stochastic key values.",
+    "countValue": "{{count}}"
   },
   "peer": {
     "selectedLabel": "Selected peers",

@@ -214,7 +214,7 @@ const displayMetricValue = (key: string, raw: string | undefined, t: TFunction<"
   if (["ROE", "OPM", "NPM", "Debt", "Current", "RevenueGrowth", "EPSGrowth"].includes(key)) {
     return `${compactNumber(raw, 1) ?? raw}%`;
   }
-  if (key === "count") return `${compactNumber(raw, 0) ?? raw}건`;
+  if (key === "count") return t("metric.countValue", { count: compactNumber(raw, 0) ?? raw });
   return compactNumber(raw) ?? raw;
 };
 
@@ -2258,7 +2258,7 @@ export default function PortfolioMockPage() {
                 const excludedCount = capm?.excludedAssetCount ?? 0;
                 const aiSummary = analysisResult.explain?.sections?.efficiencyAnalysis?.summary;
                 const plainSummary = aiSummary
-                  ? (i18n.language.startsWith("en")
+                  ? localizeBackendText((i18n.language.startsWith("en")
                     ? aiSummary
                       .replaceAll("CAPM", "market-based estimate")
                       .replaceAll("historical", "historical trend")
@@ -2278,7 +2278,7 @@ export default function PortfolioMockPage() {
                       .replaceAll("blendedExpectedReturn", "최종 기대 흐름")
                       .replaceAll("blended E[R]", "최종 기대 흐름")
                       .replaceAll("E[R]", "기대 흐름")
-                      .replaceAll("SCL/SML", "시장 민감도 진단"))
+                      .replaceAll("SCL/SML", "시장 민감도 진단")), i18n.language)
                   : null;
                 return (
                   <section className="rounded-2xl p-5 bg-surface border border-line shadow-card">

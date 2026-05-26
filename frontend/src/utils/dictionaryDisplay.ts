@@ -1,4 +1,5 @@
 import type { DictionaryTermDto } from "../types/dictionary";
+import { fallbackDictionaryDescriptionEn } from "./dictionaryDescriptionFallback";
 
 export function isEnglishLanguage(language?: string | null): boolean {
   return (language ?? "").toLowerCase().startsWith("en");
@@ -11,6 +12,9 @@ export function dictionaryDescription(
   if (!entry) return "";
   if (isEnglishLanguage(language) && entry.descriptionEn?.trim()) {
     return entry.descriptionEn;
+  }
+  if (isEnglishLanguage(language)) {
+    return fallbackDictionaryDescriptionEn(entry.term) ?? entry.description ?? "";
   }
   return entry.description ?? "";
 }

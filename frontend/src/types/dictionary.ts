@@ -1,6 +1,7 @@
 export interface DictionaryTermDto {
   term: string;
   termEn?: string | null;
+  aliases?: string[] | null;
   initial: string;
   description: string;
   descriptionEn?: string | null;

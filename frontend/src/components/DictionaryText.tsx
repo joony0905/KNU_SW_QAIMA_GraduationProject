@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { ReactNode } from "react";
 import DictTerm from "./DictTerm";
 import { useDictionary } from "./DictContext";
+import type { DictionaryTermDto } from "../types/dictionary";
 
 interface DictionaryTextProps {
   text: string;
@@ -57,6 +58,17 @@ const hasEndBoundary = (text: string, end: number) => {
   return /[가-힣]/.test(next) && startsWithParticle(text.slice(end));
 };
 
+const dictionaryMatchTerms = (entry: DictionaryTermDto): string[] => {
+  const values = [entry.term, entry.termEn, ...(entry.aliases ?? [])];
+  return Array.from(
+    new Set(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value && value.length >= 2)),
+    ),
+  );
+};
+
 export default function DictionaryText({ text }: DictionaryTextProps) {
   const { terms, ready } = useDictionary();
 
@@ -64,8 +76,8 @@ export default function DictionaryText({ text }: DictionaryTextProps) {
     const grouped = new Map<string, string[]>();
     if (!ready || terms.size === 0) return grouped;
 
-    const normalizedTerms = Array.from(terms.values())
-      .map((entry) => entry.term.trim())
+    const normalizedTerms = Array.from(new Set(terms.values()))
+      .flatMap(dictionaryMatchTerms)
       .filter((term) => term.length >= 2)
       .sort((a, b) => b.length - a.length);
 

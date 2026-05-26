@@ -430,7 +430,8 @@
     },
     "zone": { "overbought": "과열", "oversold": "침체", "neutral": "중립" },
     "alignment": { "bullish": "상승 우위", "bearish": "하락 우위" },
-    "techCaption": "EMA, 볼린저밴드, 스토캐스틱 핵심값입니다."
+    "techCaption": "EMA, 볼린저밴드, 스토캐스틱 핵심값입니다.",
+    "countValue": "{{count}}건"
   },
   "peer": {
     "selectedLabel": "선택 유사 종목",

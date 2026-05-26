@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.util.List;
 
 @Getter
 @Setter
@@ -16,6 +17,7 @@ import java.time.Instant;
 public class DictionaryTermDto {
     private String term;
     private String termEn;
+    private List<String> aliases;
     private String initial;
     private String description;
     private String descriptionEn;

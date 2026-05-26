@@ -111,6 +111,14 @@ const formatAdjustmentBasis = (peer: PeerItem, t: (key: string) => string) => {
   return t("relativeLine.adjustment.rawCorrBased");
 };
 
+const dedupeByTime = <T extends { time: Time }>(points: T[]): T[] => {
+  const byTime = new Map<number, T>();
+  for (const point of points) {
+    byTime.set(Number(point.time), point);
+  }
+  return Array.from(byTime.values()).sort((a, b) => Number(a.time) - Number(b.time));
+};
+
 function RelativeLineWidget({
   data,
   lineColor = "#2563eb",
@@ -164,7 +172,7 @@ function RelativeLineWidget({
   const [hoverTooltipDayKey, setHoverTooltipDayKey] = React.useState<string | null>(null);
 
   const toSortedLineData = (points: RelativeLinePoint[] | null | undefined, scale = 1): LineData<Time>[] => {
-    return (points ?? [])
+    return dedupeByTime((points ?? [])
       .filter(
         (p) =>
           p &&
@@ -175,8 +183,7 @@ function RelativeLineWidget({
       .map((p) => ({
         time: isoToEpochSeconds(p.t) as UTCTimestamp,
         value: Number(p.value) * scale,
-      }))
-      .sort((a, b) => Number(a.time) - Number(b.time));
+      })));
   };
 
   const rawIndustryData = useMemo<LineData<Time>[]>(() => toSortedLineData(data, 1), [data]);
@@ -232,7 +239,7 @@ function RelativeLineWidget({
 
   const bandHighData = useMemo<AreaData<Time>[]>(() => {
     if (!showPeerOverlay) return [];
-    const mapped = (overlayBand ?? [])
+    const mapped = dedupeByTime((overlayBand ?? [])
       .filter(
         (p) =>
           p &&
@@ -243,15 +250,14 @@ function RelativeLineWidget({
       .map((p) => ({
         time: isoToEpochSeconds(p.t) as UTCTimestamp,
         value: Number(p.p80) * 100,
-      }))
-      .sort((a, b) => Number(a.time) - Number(b.time));
+      })));
     const first = mapped[0]?.value ?? 0;
     return mapped.map((p) => ({ ...p, value: Number(p.value) - Number(first) }));
   }, [commonTimes, overlayBand, showPeerOverlay]);
 
   const bandLowData = useMemo<AreaData<Time>[]>(() => {
     if (!showPeerOverlay) return [];
-    const mapped = (overlayBand ?? [])
+    const mapped = dedupeByTime((overlayBand ?? [])
       .filter(
         (p) =>
           p &&
@@ -262,8 +268,7 @@ function RelativeLineWidget({
       .map((p) => ({
         time: isoToEpochSeconds(p.t) as UTCTimestamp,
         value: Number(p.p20) * 100,
-      }))
-      .sort((a, b) => Number(a.time) - Number(b.time));
+      })));
     const first = mapped[0]?.value ?? 0;
     return mapped.map((p) => ({ ...p, value: Number(p.value) - Number(first) }));
   }, [commonTimes, overlayBand, showPeerOverlay]);
@@ -562,12 +567,27 @@ function RelativeLineWidget({
       currentChart.applyOptions({ width: w, height: h });
       currentChart.timeScale().fitContent();
     };
+
+    const scheduleSyncSize = () => {
+      requestAnimationFrame(syncSize);
+    };
+
     const raf = requestAnimationFrame(syncSize);
     const timeout = window.setTimeout(syncSize, 250);
+    const lateTimeout = window.setTimeout(syncSize, 800);
+    window.addEventListener("resize", scheduleSyncSize);
+    window.addEventListener("orientationchange", scheduleSyncSize);
+    window.visualViewport?.addEventListener("resize", scheduleSyncSize);
+    window.visualViewport?.addEventListener("scroll", scheduleSyncSize);
 
     return () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(timeout);
+      window.clearTimeout(lateTimeout);
+      window.removeEventListener("resize", scheduleSyncSize);
+      window.removeEventListener("orientationchange", scheduleSyncSize);
+      window.visualViewport?.removeEventListener("resize", scheduleSyncSize);
+      window.visualViewport?.removeEventListener("scroll", scheduleSyncSize);
       try {
         ro.disconnect();
       } catch {}
@@ -770,7 +790,7 @@ function RelativeLineWidget({
       )}
       <div
         ref={containerRef}
-        className="w-full flex-1 min-h-[220px] sm:min-h-0"
+        className="w-full min-w-0 shrink-0 flex-1 min-h-[300px] sm:min-h-0"
         style={{ height }}
       />
       {showPeerOverlay && tooltipDayKey && (

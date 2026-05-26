@@ -25,6 +25,14 @@ export default function DictTerm({ term, children }: DictTermProps) {
   const description = dictionaryDescription(entry, i18n.language);
   const isEnglish = isEnglishLanguage(i18n.language);
   const label = dictionaryTermLabel(entry, i18n.language);
+  const englishTermLabel = entry?.termEn?.trim() || null;
+  const displayLabel = isEnglish && englishTermLabel ? englishTermLabel : children;
+  const headingLabel =
+    isEnglish && englishTermLabel
+      ? englishTermLabel
+      : typeof children === "string"
+        ? children
+        : label;
 
   if (!entry) {
     return <>{children}</>;
@@ -47,7 +55,7 @@ export default function DictTerm({ term, children }: DictTermProps) {
             hovered ? "font-bold bg-accent-soft rounded px-0.5" : ""
           }`}
         >
-          {isEnglish ? label : children}
+          {displayLabel}
         </span>
         <button
           onClick={(e) => {
@@ -55,7 +63,7 @@ export default function DictTerm({ term, children }: DictTermProps) {
             setModalOpen(true);
           }}
           className="w-3.5 h-3.5 rounded-full bg-ink-4 hover:bg-accent text-[9px] font-bold text-white flex items-center justify-center flex-shrink-0 transition-colors"
-          title={label}
+          title={headingLabel}
         >
           ?
         </button>
@@ -64,7 +72,7 @@ export default function DictTerm({ term, children }: DictTermProps) {
         {glossaryHover && hovered && (
           <span className="absolute left-0 top-full z-[9998] mt-1.5 w-72 max-w-[80vw] rounded-xl bg-surface border border-line shadow-pop px-4 py-3 text-left cursor-default">
             <span className="block text-sm font-semibold text-accent mb-1">
-              {label}
+              {headingLabel}
             </span>
             <span className="block text-xs text-ink-2 leading-relaxed max-h-32 overflow-hidden whitespace-pre-wrap">
               {description}
@@ -86,7 +94,7 @@ export default function DictTerm({ term, children }: DictTermProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-              <h2 className="text-lg font-semibold text-accent">{label}</h2>
+              <h2 className="text-lg font-semibold text-accent">{headingLabel}</h2>
               <button
                 onClick={() => setModalOpen(false)}
                 className="text-ink-4 hover:text-ink-2 text-xl leading-none"

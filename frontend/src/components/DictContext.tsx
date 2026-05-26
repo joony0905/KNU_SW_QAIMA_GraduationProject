@@ -62,6 +62,14 @@ export function DictProvider({ children }: { children: React.ReactNode }) {
         const map = new Map<string, DictionaryTermDto>();
         for (const t of list) {
           map.set(t.term.toLowerCase(), t);
+          if (t.termEn?.trim()) {
+            map.set(t.termEn.trim().toLowerCase(), t);
+          }
+          for (const alias of t.aliases ?? []) {
+            if (alias?.trim()) {
+              map.set(alias.trim().toLowerCase(), t);
+            }
+          }
         }
         setTerms(map);
       })
