@@ -306,7 +306,6 @@ export default function StocksMockPage() {
         featureType: "FEATURE1" as const,
         subjectLabel: `${mainStock.name || analysisData.metrics?.stockCode || "분석종목"} (${mainStock.symbol || analysisData.metrics?.stockCode || "-"})`,
         generatedAt: analysisResult?.meta?.timestamp ?? null,
-        analysisModel: llmVendor,
         investLevel,
         userName: reportUserName,
         analysisWindow: analysisFrom || analysisTo ? `${analysisFrom || "-"} ~ ${analysisTo || "-"}` : null,

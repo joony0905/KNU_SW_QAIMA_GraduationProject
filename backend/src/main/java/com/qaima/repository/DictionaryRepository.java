@@ -24,6 +24,23 @@ public interface DictionaryRepository extends JpaRepository<DictionaryTerm, Stri
     @Query("""
         select d
         from DictionaryTerm d
+        where d.initial = :initial
+           or exists (
+               select a.aliasId
+               from DictionaryAlias a
+               where a.canonicalTerm = d
+                 and a.normalizedAliasTerm like concat(:initial, '%')
+           )
+        order by d.term asc
+    """)
+    List<DictionaryTerm> findByInitialIncludingAliasesOrderByTermAsc(
+            @Param("initial") String initial,
+            Pageable pageable
+    );
+
+    @Query("""
+        select d
+        from DictionaryTerm d
         where d.term like :containsPattern escape '\\'
         order by
             case

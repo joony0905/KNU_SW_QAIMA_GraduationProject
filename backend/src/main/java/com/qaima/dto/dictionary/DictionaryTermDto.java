@@ -15,6 +15,7 @@ import java.time.Instant;
 @Builder
 public class DictionaryTermDto {
     private String term;
+    private String termEn;
     private String initial;
     private String description;
     private String descriptionEn;

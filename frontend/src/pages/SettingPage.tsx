@@ -164,7 +164,6 @@ function SavedReportDocument({ report }: { report: AnalysisReportDetail }) {
             : `${report.companyName || report.stockCode || t("cards.reports.stockFallback")} (${report.stockCode || "-"})`,
           subjectDetail: reportPortfolioSummary(report.portfolioSummary, i18n.language),
           generatedAt: report.generatedAt,
-          analysisModel: report.analysisModel,
           investLevel: report.investLevel,
           userName: report.userName,
           analysisWindow: report.analysisWindow,

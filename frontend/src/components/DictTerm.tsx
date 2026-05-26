@@ -3,7 +3,11 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useDictionary } from "./DictContext";
 import { useDictTermOwner } from "./DictSeenScope";
-import { dictionaryDescription, isEnglishLanguage } from "../utils/dictionaryDisplay";
+import {
+  dictionaryDescription,
+  dictionaryTermLabel,
+  isEnglishLanguage,
+} from "../utils/dictionaryDisplay";
 
 interface DictTermProps {
   term: string;
@@ -20,6 +24,7 @@ export default function DictTerm({ term, children }: DictTermProps) {
   const entry = ready ? terms.get(term.toLowerCase()) : undefined;
   const description = dictionaryDescription(entry, i18n.language);
   const isEnglish = isEnglishLanguage(i18n.language);
+  const label = dictionaryTermLabel(entry, i18n.language);
 
   if (!entry) {
     return <>{children}</>;
@@ -42,7 +47,7 @@ export default function DictTerm({ term, children }: DictTermProps) {
             hovered ? "font-bold bg-accent-soft rounded px-0.5" : ""
           }`}
         >
-          {children}
+          {isEnglish ? label : children}
         </span>
         <button
           onClick={(e) => {
@@ -50,7 +55,7 @@ export default function DictTerm({ term, children }: DictTermProps) {
             setModalOpen(true);
           }}
           className="w-3.5 h-3.5 rounded-full bg-ink-4 hover:bg-accent text-[9px] font-bold text-white flex items-center justify-center flex-shrink-0 transition-colors"
-          title={entry.term}
+          title={label}
         >
           ?
         </button>
@@ -59,7 +64,7 @@ export default function DictTerm({ term, children }: DictTermProps) {
         {glossaryHover && hovered && (
           <span className="absolute left-0 top-full z-[9998] mt-1.5 w-72 max-w-[80vw] rounded-xl bg-surface border border-line shadow-pop px-4 py-3 text-left cursor-default">
             <span className="block text-sm font-semibold text-accent mb-1">
-              {entry.term}
+              {label}
             </span>
             <span className="block text-xs text-ink-2 leading-relaxed max-h-32 overflow-hidden whitespace-pre-wrap">
               {description}
@@ -81,7 +86,7 @@ export default function DictTerm({ term, children }: DictTermProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-              <h2 className="text-lg font-semibold text-accent">{entry.term}</h2>
+              <h2 className="text-lg font-semibold text-accent">{label}</h2>
               <button
                 onClick={() => setModalOpen(false)}
                 className="text-ink-4 hover:text-ink-2 text-xl leading-none"

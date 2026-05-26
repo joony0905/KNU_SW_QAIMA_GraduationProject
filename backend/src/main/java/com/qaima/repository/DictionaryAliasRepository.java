@@ -40,5 +40,8 @@ public interface DictionaryAliasRepository extends JpaRepository<DictionaryAlias
 
     List<DictionaryAlias> findByCanonicalTerm_TermOrderByAliasTermAsc(String canonicalTerm);
 
+    @EntityGraph(attributePaths = "canonicalTerm")
+    List<DictionaryAlias> findByCanonicalTerm_TermInOrderByAliasTermAsc(List<String> canonicalTerms);
+
     boolean existsByNormalizedAliasTerm(String normalizedAliasTerm);
 }

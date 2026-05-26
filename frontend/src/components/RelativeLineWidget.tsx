@@ -715,7 +715,7 @@ function RelativeLineWidget({
           {title}
         </div>
       )}
-      <div className="px-1 pb-2 flex flex-wrap gap-4 text-xs sm:text-sm text-zinc-600">
+      <div className="px-1 pb-2 flex flex-wrap gap-x-4 gap-y-2 text-xs sm:text-sm text-zinc-600">
         {showPeerOverlay && (
           <div className="flex items-center gap-2">
             <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "#0f766e" }} />
@@ -740,15 +740,15 @@ function RelativeLineWidget({
         )}
       </div>
       {showPeerOverlay && (
-        <div className="px-1 pb-3 flex items-start justify-between gap-3 text-[11px] sm:text-xs text-zinc-500">
-          <p className="leading-relaxed">
+        <div className="px-1 pb-3 flex flex-col gap-2 text-[11px] sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:text-xs text-zinc-500">
+          <p className="min-w-0 leading-relaxed sm:flex-1">
             {t("relativeLine.summary")}
           </p>
-          <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+          <span className="self-start shrink-0 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 sm:self-auto">
             {t("relativeLine.latestCoverage", { value: formatCoverage(latestCoverage) })}
             {latestCoverageDayKey ? ` · ${latestCoverageDayKey}` : ""}
           </span>
-          <div className="shrink-0">
+          <div className="absolute right-1 top-[4.4rem] shrink-0 sm:static">
             <button
               type="button"
               aria-label={t("relativeLine.openInfo")}
@@ -770,7 +770,7 @@ function RelativeLineWidget({
       )}
       <div
         ref={containerRef}
-        className="w-full flex-1 min-h-0"
+        className="w-full flex-1 min-h-[220px] sm:min-h-0"
         style={{ height }}
       />
       {showPeerOverlay && tooltipDayKey && (

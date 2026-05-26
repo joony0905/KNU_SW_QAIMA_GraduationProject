@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -43,7 +44,10 @@ public class DictionaryService {
             return Mono.error(new IllegalArgumentException("term is required"));
         }
 
-        return Blocking.call(() -> toDto(resolveCanonicalTerm(rawTerm, normalizedTerm)));
+        return Blocking.call(() -> {
+            DictionaryTerm term = resolveCanonicalTerm(rawTerm, normalizedTerm);
+            return toDto(term, preferredEnglishTerm(List.of(term)).get(term.getTerm()));
+        });
     }
 
     public Mono<List<DictionaryTermDto>> search(String q, String initial, Integer page, Integer size) {
@@ -66,11 +70,11 @@ public class DictionaryService {
                         pageable
                 );
             } else if (initialKey != null) {
-                list = dictionaryRepository.findByInitialOrderByTermAsc(initialKey, pageable);
+                list = dictionaryRepository.findByInitialIncludingAliasesOrderByTermAsc(initialKey, pageable);
             } else {
                 list = dictionaryRepository.findAllByOrderByTermAsc(pageable);
             }
-            return list.stream().map(DictionaryService::toDto).toList();
+            return toDtos(list);
         });
     }
 
@@ -174,7 +178,7 @@ public class DictionaryService {
             entity.setReviewedAt(reviewedAt);
             entity.setTag(tag);
             DictionaryTerm saved = dictionaryRepository.save(entity);
-            return toDto(saved);
+            return toDto(saved, preferredEnglishTerm(List.of(saved)).get(saved.getTerm()));
         });
     }
 
@@ -249,10 +253,40 @@ public class DictionaryService {
                 .orElseThrow(() -> new ResourceNotFoundException("Unknown term: " + rawTerm));
     }
 
-    private static DictionaryTermDto toDto(DictionaryTerm entity) {
+    private List<DictionaryTermDto> toDtos(List<DictionaryTerm> entities) {
+        Map<String, String> termEnByTerm = preferredEnglishTerm(entities);
+        return entities.stream()
+                .map(entity -> toDto(entity, termEnByTerm.get(entity.getTerm())))
+                .toList();
+    }
+
+    private Map<String, String> preferredEnglishTerm(List<DictionaryTerm> entities) {
+        List<String> terms = entities.stream()
+                .map(DictionaryTerm::getTerm)
+                .toList();
+        Map<String, String> result = new HashMap<>();
+        if (terms.isEmpty()) return result;
+
+        dictionaryAliasRepository.findByCanonicalTerm_TermInOrderByAliasTermAsc(terms)
+                .stream()
+                .filter(alias -> isEnglishDisplayAlias(alias.getAliasTerm()))
+                .sorted(DictionaryService::compareEnglishAliases)
+                .forEach(alias -> {
+                    String canonicalTerm = alias.getCanonicalTerm() == null
+                            ? null
+                            : alias.getCanonicalTerm().getTerm();
+                    if (canonicalTerm != null) {
+                        result.putIfAbsent(canonicalTerm, alias.getAliasTerm().trim());
+                    }
+                });
+        return result;
+    }
+
+    private static DictionaryTermDto toDto(DictionaryTerm entity, String termEn) {
         if (entity == null) return null;
         return DictionaryTermDto.builder()
                 .term(entity.getTerm())
+                .termEn(resolveTermEn(entity, termEn))
                 .initial(entity.getInitial())
                 .description(entity.getDescription())
                 .descriptionEn(entity.getDescriptionEn())
@@ -266,6 +300,36 @@ public class DictionaryService {
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
+    }
+
+    private static String resolveTermEn(DictionaryTerm entity, String aliasTermEn) {
+        if (aliasTermEn != null && !aliasTermEn.isBlank()) {
+            return aliasTermEn.trim();
+        }
+        String term = entity.getTerm();
+        return isEnglishDisplayAlias(term) ? term : null;
+    }
+
+    private static boolean isEnglishDisplayAlias(String value) {
+        if (value == null) return false;
+        String trimmed = value.trim();
+        return !trimmed.isBlank()
+                && trimmed.matches(".*[A-Za-z].*")
+                && !trimmed.matches(".*[가-힣].*")
+                && !trimmed.contains("_");
+    }
+
+    private static int compareEnglishAliases(DictionaryAlias left, DictionaryAlias right) {
+        int scoreCompare = Integer.compare(englishAliasScore(left), englishAliasScore(right));
+        if (scoreCompare != 0) return scoreCompare;
+        return Integer.compare(right.getAliasTerm().length(), left.getAliasTerm().length());
+    }
+
+    private static int englishAliasScore(DictionaryAlias alias) {
+        String notes = alias.getNotes() == null ? "" : alias.getNotes();
+        String sourceType = alias.getSourceType() == null ? "" : alias.getSourceType();
+        if (notes.contains("영문") || "planned_alias".equalsIgnoreCase(sourceType)) return 0;
+        return 1;
     }
 
     private static DictionaryAliasDto toAliasDto(DictionaryAlias entity) {

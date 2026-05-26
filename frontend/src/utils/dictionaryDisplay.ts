@@ -14,3 +14,14 @@ export function dictionaryDescription(
   }
   return entry.description ?? "";
 }
+
+export function dictionaryTermLabel(
+  entry: DictionaryTermDto | null | undefined,
+  language?: string | null,
+): string {
+  if (!entry) return "";
+  if (isEnglishLanguage(language) && entry.termEn?.trim()) {
+    return entry.termEn;
+  }
+  return entry.term;
+}

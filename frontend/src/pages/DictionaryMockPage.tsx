@@ -6,7 +6,7 @@ import type { DictionaryTermDto } from "../types/dictionary";
 import { fetchDictionaryTerms, fetchDictionaryTerm } from "../api/dictionary";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { useTheme } from "../hooks/useTheme";
-import { dictionaryDescription } from "../utils/dictionaryDisplay";
+import { dictionaryDescription, dictionaryTermLabel } from "../utils/dictionaryDisplay";
 
 const HANGUL_LETTERS = [
   "ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ",
@@ -46,6 +46,7 @@ export default function DictionaryMockPage() {
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
         const haystack = [
+          dictionaryTermLabel(term, i18n.language),
           term.term,
           term.description,
           term.descriptionEn,
@@ -54,7 +55,7 @@ export default function DictionaryMockPage() {
       }
       return true;
     });
-  }, [terms, searchQuery]);
+  }, [terms, searchQuery, i18n.language]);
 
   const resultCount = filteredTerms.length;
 
@@ -115,7 +116,7 @@ export default function DictionaryMockPage() {
             {selectedTerm ? (
               <>
                 <h2 className="text-base sm:text-lg md:text-xl font-semibold leading-snug text-accent tracking-tight">
-                  {selectedTerm.term}
+                  {dictionaryTermLabel(selectedTerm, i18n.language)}
                 </h2>
                 <div className="mt-1 flex-1 overflow-y-auto">
                   <p className="text-[11px] sm:text-xs md:text-sm leading-relaxed text-ink-2 font-normal">
@@ -282,8 +283,8 @@ export default function DictionaryMockPage() {
             {/* 검색 결과 요약 라인 */}
             <div className="w-full border-b pb-1 border-line">
               <p className="text-[11px] sm:text-xs md:text-sm font-medium text-ink-3">
-                {selectedHangul
-                  ? t("result.withLetter", { letter: selectedHangul })
+                {selectedHangul || selectedAlpha
+                  ? t("result.withLetter", { letter: selectedHangul ?? selectedAlpha })
                   : t("result.noLetter")}
                 <span className="font-semibold text-accent">{resultCount}</span>
                 {t("result.suffix")}
@@ -313,7 +314,7 @@ export default function DictionaryMockPage() {
                             : "font-medium text-ink hover:text-accent"
                         }`}
                       >
-                        {term.term}
+                        {dictionaryTermLabel(term, i18n.language)}
                       </button>
                     ))}
 

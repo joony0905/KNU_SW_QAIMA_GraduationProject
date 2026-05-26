@@ -54,7 +54,6 @@ import {
 } from "../api/watchlist";
 import { isLoggedIn } from "../utils/auth";
 import { getApiErrorMessage } from "../utils/errorMessage";
-import DictTerm from "../components/DictTerm";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
 import { formatKstOffsetDateTime, shiftKstDays, shiftKstMonths } from "../utils/kst";
 import { refreshTokenBalance } from "../api/billingStore";
@@ -519,7 +518,6 @@ export default function Feature2MockPage() {
         featureType: "FEATURE2" as const,
         subjectLabel: `${mainStock.name || analysisPanelResult.metrics?.stock?.companyName || t("errors.subjectFallback")} (${mainStock.symbol || analysisPanelResult.metrics?.stock?.stockCode || "-"})`,
         generatedAt: analysisResult?.meta?.timestamp ?? null,
-        analysisModel: llmVendor,
         investLevel,
         userName: reportUserName,
         analysisWindow: t("analysisWindow.label", { n: selectedWindow }),
@@ -1162,13 +1160,16 @@ export default function Feature2MockPage() {
             {/* [좌측 하단] 산업 지수 차트 카드 */}
             <section className="w-full bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4">
               <h2 className="text-ink text-lg sm:text-2xl font-semibold tracking-tight">
-                {mainStock.name} {t("industry.titlePrefix")} <DictTerm term="산업 지수">{t("industry.indexLabel")}</DictTerm>
+                {t("industry.chartTitle", {
+                  name: mainStock.name,
+                  defaultValue: `${mainStock.name} ${t("industry.titlePrefix")} ${t("industry.indexLabel")}`,
+                })}
               </h2>
 
               {/* 헤더와 차트 사이 divider */}
               <div className="h-px bg-line" />
 
-              <div className="w-full h-80 sm:h-[420px] flex items-stretch overflow-hidden">
+              <div className="w-full h-[520px] sm:h-[420px] flex items-stretch overflow-hidden">
               {industryChartLoading && (
                 <div className="flex-1 min-h-0 w-full flex items-center justify-center">
                   <p className="text-sm sm:text-base text-ink-3">{t("chart.loading")}</p>

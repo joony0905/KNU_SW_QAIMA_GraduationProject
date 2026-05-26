@@ -768,7 +768,6 @@ export default function PortfolioMockPage() {
         subjectLabel: t("result.subjectLabel"),
         subjectDetail: portfolioSubjectDetail,
         generatedAt: new Date().toISOString(),
-        analysisModel: llmVendor,
         investLevel,
         userName: reportUserName,
         analysisWindow: t(`analysisOptions.analysisWindow.${selectedWindow.label}` as `analysisOptions.analysisWindow.${string}`, selectedWindow.label),
@@ -2452,7 +2451,7 @@ export default function PortfolioMockPage() {
                     <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
                       {analysisResult.overlays.visualizations.map((viz) => (
                         <div key={viz.type} className="rounded-xl bg-bg-sunk border border-line p-4">
-                          <h4 className="text-sm font-bold text-ink">{viz.title}</h4>
+                          <h4 className="text-sm font-bold text-ink">{localizeBackendText(viz.title, i18n.language)}</h4>
                           <div className="mt-3 flex flex-col gap-2">
                             {viz.items.map((item) => {
                               return (

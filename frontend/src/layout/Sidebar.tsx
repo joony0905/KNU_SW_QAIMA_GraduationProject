@@ -21,9 +21,18 @@ const navItems = [
 ] as const;
 
 const ACCOUNT_ONLY_PREFIXES = ["/setting", "/billing"];
+const MOBILE_BREAKPOINT_PX = 768;
+const SIDEBAR_WIDTH_PX = 84;
+const EDGE_SWIPE_START_PX = 32;
+const EDGE_SWIPE_OPEN_PX = 42;
+const EDGE_SWIPE_CLOSE_PX = 42;
+const EDGE_SWIPE_VERTICAL_CANCEL_PX = 48;
 
 const isAccountOnlyPath = (pathname: string): boolean =>
   ACCOUNT_ONLY_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -36,8 +45,19 @@ export default function Sidebar() {
   const [user, setSidebarUser] = useState<UserInfo | null>(() => isLoggedIn() ? getUser() : null);
   // 모바일(md 미만)에서 사이드바 자체의 슬라이드 인/아웃을 제어.
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [dragTranslateX, setDragTranslateX] = useState<number | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const edgeSwipeRef = useRef<{
+    mode: "opening" | "closing";
+    startX: number;
+    startY: number;
+    deltaX: number;
+  } | null>(null);
+  const dragProgress =
+    dragTranslateX === null
+      ? null
+      : clamp((dragTranslateX + SIDEBAR_WIDTH_PX) / SIDEBAR_WIDTH_PX, 0, 1);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +100,8 @@ export default function Sidebar() {
   useEffect(() => {
     setMobileOpen(false);
     setMenuOpen(false);
+    setDragTranslateX(null);
+    edgeSwipeRef.current = null;
   }, [location.pathname]);
 
   // 모바일 사이드바가 열린 동안 본문 스크롤 잠금.
@@ -100,6 +122,110 @@ export default function Sidebar() {
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
+  }, [mobileOpen]);
+
+  // 모바일 좌측 엣지 스와이프로 열고, 열린 상태에선 반대 스와이프로 닫기.
+  useEffect(() => {
+    const touchOptions: AddEventListenerOptions = { passive: false };
+    const isMobileViewport = () =>
+      window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX - 1}px)`).matches;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (!isMobileViewport() || event.touches.length !== 1) return;
+
+      const touch = event.touches[0];
+      if (mobileOpen) {
+        edgeSwipeRef.current = {
+          mode: "closing",
+          startX: touch.clientX,
+          startY: touch.clientY,
+          deltaX: 0,
+        };
+        setDragTranslateX(0);
+        return;
+      }
+
+      if (touch.clientX <= EDGE_SWIPE_START_PX) {
+        edgeSwipeRef.current = {
+          mode: "opening",
+          startX: touch.clientX,
+          startY: touch.clientY,
+          deltaX: 0,
+        };
+        setDragTranslateX(-SIDEBAR_WIDTH_PX);
+        return;
+      }
+
+      edgeSwipeRef.current = null;
+      setDragTranslateX(null);
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const start = edgeSwipeRef.current;
+      if (!start || event.touches.length !== 1) return;
+
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - start.startX;
+      const deltaY = Math.abs(touch.clientY - start.startY);
+      start.deltaX = deltaX;
+
+      if (
+        deltaY > EDGE_SWIPE_VERTICAL_CANCEL_PX ||
+        (start.mode === "opening" && deltaX < -8)
+      ) {
+        edgeSwipeRef.current = null;
+        setDragTranslateX(null);
+        return;
+      }
+
+      if (Math.abs(deltaX) > 8) event.preventDefault();
+
+      if (start.mode === "opening") {
+        setDragTranslateX(
+          clamp(-SIDEBAR_WIDTH_PX + deltaX, -SIDEBAR_WIDTH_PX, 0),
+        );
+        return;
+      }
+
+      setDragTranslateX(clamp(deltaX, -SIDEBAR_WIDTH_PX, 0));
+    };
+
+    const handleTouchEnd = () => {
+      const swipe = edgeSwipeRef.current;
+      edgeSwipeRef.current = null;
+      setDragTranslateX(null);
+
+      if (!swipe) return;
+
+      if (swipe.mode === "opening") {
+        setMobileOpen(swipe.deltaX >= EDGE_SWIPE_OPEN_PX);
+        return;
+      }
+
+      const shouldClose = swipe.deltaX <= -EDGE_SWIPE_CLOSE_PX;
+      if (shouldClose) {
+        setMenuOpen(false);
+        setMobileOpen(false);
+      } else {
+        setMobileOpen(true);
+      }
+    };
+
+    const cancelSwipe = () => {
+      edgeSwipeRef.current = null;
+      setDragTranslateX(null);
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, touchOptions);
+    window.addEventListener("touchmove", handleTouchMove, touchOptions);
+    window.addEventListener("touchend", handleTouchEnd);
+    window.addEventListener("touchcancel", cancelSwipe);
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", cancelSwipe);
+    };
   }, [mobileOpen]);
 
   const openAccountMenu = () => {
@@ -196,11 +322,12 @@ export default function Sidebar() {
       </div>
 
       {/* 모바일 사이드바 백드롭 — 바깥 여백 클릭 시 닫기 */}
-      {mobileOpen && (
+      {(mobileOpen || dragProgress !== null) && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-ink/50"
+          className="md:hidden fixed inset-0 z-40 bg-ink"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
+          style={{ opacity: dragProgress === null ? 0.5 : 0.5 * dragProgress }}
         />
       )}
 
@@ -208,10 +335,15 @@ export default function Sidebar() {
       <div
         className={`w-[84px] h-dvh border-r border-line bg-surface
                     flex flex-col items-center py-6 gap-1.5 fixed left-0 top-0 z-50
-                    transform transition-transform duration-200 ease-out
+                    transform ${dragTranslateX === null ? "transition-transform duration-200 ease-out" : "transition-none"}
                     ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
                     md:translate-x-0`}
         role="navigation"
+        style={
+          dragTranslateX === null
+            ? undefined
+            : { transform: `translateX(${dragTranslateX}px)` }
+        }
       >
         {/* 상단 로고 — introIcon, /main 이동 */}
         <NavLink

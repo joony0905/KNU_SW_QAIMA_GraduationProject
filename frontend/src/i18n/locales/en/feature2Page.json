@@ -15,6 +15,7 @@
   },
   "industry": {
     "titlePrefix": "Related",
+    "chartTitle": "{{name}} Related Industry Index",
     "indexLabel": "Industry Index",
     "noData": "No industry index data.",
     "loadFailed": "Failed to load the industry index chart."
