@@ -1,0 +1,25 @@
+{
+  "interest": "관심",
+  "inputPlaceholder": "검색어를 입력해주세요",
+  "searching": "검색 중...",
+  "noResults": "검색 결과 없음",
+  "recentSearches": "최근 검색어",
+  "noWatchlist": "관심종목이 없습니다.",
+  "invalidStock": "유효하지 않은 종목입니다.",
+  "selectFromList": "목록에서 종목을 선택해주세요.",
+  "featured": {
+    "label": "특징주",
+    "loading": "불러오는 중...",
+    "noStocks": "표시할 종목이 없습니다.",
+    "fallbackNotice": "특징주 데이터를 불러오지 못해 임시 데이터를 표시 중입니다.",
+    "disclaimer": "ETF/KONEX 등 QAIMA 미지원 상품은 제외되어, 실제 증권사와 랭킹에 다소 차이가 있을 수 있습니다. 장외 시간에는 최근 거래일 마감 기준으로 표시됩니다.",
+    "topics": {
+      "GAINERS": "상승종목",
+      "LOSERS": "하락종목",
+      "NEAR_NEW_HIGH": "신고가 근접 종목",
+      "NEAR_NEW_LOW": "신저가 근접 종목",
+      "TOP_TURNOVER": "거래대금 상위종목",
+      "VOLUME_SURGE": "거래량 급등종목"
+    }
+  }
+}

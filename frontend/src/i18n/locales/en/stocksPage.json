@@ -1,0 +1,65 @@
+{
+  "header": {
+    "eyebrow": "Equities · Deep Analysis",
+    "title": "Deep Analysis",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode"
+  },
+  "price": {
+    "won": " KRW",
+    "prevDayDiff": "Prev day"
+  },
+  "chart": {
+    "indicators": "Indicators",
+    "markers": "Markers",
+    "loading": "Loading chart...",
+    "noData": "No chart data available.",
+    "loadFailed": "Failed to load chart."
+  },
+  "indicators": {
+    "title": "Investment Indicators",
+    "financialStatement": "Financials",
+    "noFinancialData": "No financial data matches the criteria."
+  },
+  "analysisPeriod": {
+    "title": "Analysis period",
+    "preset3Months": "3M",
+    "preset6Months": "6M",
+    "preset1Year": "1Y",
+    "preset3Years": "3Y"
+  },
+  "runCard": {
+    "tag": "✨ AI Deep Analysis",
+    "title": "We'll analyze the chosen period in one shot",
+    "subtitle": "Price flow · financial timeline · indicators in one report",
+    "viewButton": "View analysis →"
+  },
+  "emptyResult": {
+    "title": "Analysis results will appear here",
+    "subtitle": "Run an analysis to begin"
+  },
+  "modal": {
+    "titleSuffix": "Analysis Result"
+  },
+  "loadingStage": {
+    "preparing": "Preparing analysis",
+    "priceData": "Loading price data",
+    "llmGenerating": "Generating LLM analysis",
+    "timeline": "Building financial timeline",
+    "indicators": "Applying technical indicators"
+  },
+  "errors": {
+    "needStockInput": "Please enter a stock.",
+    "invalidStock": "Invalid stock. Enter a 6-digit code (e.g., 005930).",
+    "needStockBeforeAnalyze": "Please search for a stock before running analysis.",
+    "analyzeFailed": "Analysis failed. The used credit was automatically refunded."
+  },
+  "watchlist": {
+    "loginRequired": "Please log in to use this feature.",
+    "removed": "Removed from watchlist.",
+    "removeFailed": "Failed to remove from watchlist.",
+    "stockNotLoaded": "Please wait for the stock data to load, then try again.",
+    "added": "Added to watchlist.",
+    "addFailed": "Failed to add to watchlist."
+  }
+}

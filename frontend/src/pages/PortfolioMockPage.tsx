@@ -1,15 +1,18 @@
 // src/pages/PortfolioMockPage.tsx
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { createPortal } from "react-dom";
 import type { MouseEvent, ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Trash2, Plus, Info, ClipboardList, Sun, Moon, ChevronDown, ChevronUp, Lock, Save, Download, Maximize2 } from "lucide-react";
+import { Trash2, Plus, Info, ClipboardList, Sun, Moon, Lock, Save, Download, Maximize2 } from "lucide-react";
 import InvestLevelBadge from "../components/InvestLevelBadge";
 import { isLoggedIn } from "../utils/auth";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchCell from "../components/StockSearchCell";
 import TokenBalanceBadge from "../components/TokenBalanceBadge";
+import { refreshTokenBalance } from "../api/billingStore";
 import { useDictionary } from "../components/DictContext";
 import DictionaryText from "../components/DictionaryText";
 import { getMyRiskProfile } from "../api/user";
@@ -36,30 +39,6 @@ import { downloadElementAsPdf, waitForPdfCaptureReady } from "../utils/reportPdf
 import ReportHeader from "../components/ReportHeader";
 import useReportUserName from "../hooks/useReportUserName";
 
-const LLM_VENDOR_OPTIONS = [
-  "GPT-5.4",
-  "GPT-5.2",
-  "GPT-5 mini",
-  "GPT-4.1",
-  "GPT-4o",
-  "Gemini 3.1 Pro",
-  "Gemini 3 Pro",
-  "Gemini 3 Flash",
-  "Gemini 3.1 Flash Lite",
-  "Gemini 2.5 Flash",
-  "Gemini 2.5 Pro",
-  "Claude Opus 4.6",
-  "Claude Opus 4.5",
-  "Claude Sonnet 4.6",
-  "Claude Sonnet 4",
-  "Claude Haiku 4.5",
-  "Grok 4",
-  "Grok 4.1 Fast",
-  "Grok 4 Fast",
-  "Grok 3",
-  "Grok 3 Mini",
-] as const;
-
 type AnalysisWindowPreset = {
   label: string;
   lookbackTradingDays: number;
@@ -67,9 +46,9 @@ type AnalysisWindowPreset = {
 };
 
 const ANALYSIS_WINDOWS: AnalysisWindowPreset[] = [
-  { label: "6개월", lookbackTradingDays: 126, fetchCalendarDays: 190 },
-  { label: "1년", lookbackTradingDays: 252, fetchCalendarDays: 370 },
-  { label: "2년", lookbackTradingDays: 504, fetchCalendarDays: 740 },
+  { label: "6M", lookbackTradingDays: 126, fetchCalendarDays: 190 },
+  { label: "1Y", lookbackTradingDays: 252, fetchCalendarDays: 370 },
+  { label: "2Y", lookbackTradingDays: 504, fetchCalendarDays: 740 },
 ];
 
 type HoldingRow = {
@@ -149,99 +128,40 @@ const formatPctPoint = (value?: number | null, digits = 2): string => {
 const formatKRW = (value?: number | null): string =>
   `${Math.round(value ?? 0).toLocaleString("ko-KR")}원`;
 
-const capmWeightReasons = (asset: Feature3CapmAsset): string[] => {
+const capmWeightReasons = (asset: Feature3CapmAsset, t: TFunction<"portfolioPage">): string[] => {
   const warnings = new Set(asset.warnings ?? []);
   const reasons: string[] = [];
   if (warnings.has("CAPM_LOW_R_SQUARED") || (asset.rSquared !== null && asset.rSquared !== undefined && asset.rSquared < 0.1)) {
-    reasons.push("낮은 R²");
+    reasons.push(t("capmWeightReason.lowRSquared"));
   }
   if (asset.correlation !== null && asset.correlation !== undefined && Math.abs(asset.correlation) < 0.3) {
-    reasons.push("낮은 correlation");
+    reasons.push(t("capmWeightReason.lowCorrelation"));
   }
   if (warnings.has("CAPM_COMMON_SAMPLE_INSUFFICIENT") || warnings.has("CAPM_PARTIAL_LOW_COMMON_SAMPLE") || (asset.commonSampleSize ?? 0) < 120) {
-    reasons.push("표본 부족");
+    reasons.push(t("capmWeightReason.insufficientSample"));
   }
   if (warnings.has("CAPM_BETA_UNAVAILABLE")) {
-    reasons.push("beta 계산 불가");
+    reasons.push(t("capmWeightReason.betaUnavailable"));
   }
   if (
     warnings.has("CAPM_HIGH_VOLATILITY")
     || (asset.volatilityReliabilityFactor !== null && asset.volatilityReliabilityFactor !== undefined && asset.volatilityReliabilityFactor < 0.75)
     || (asset.annualVolatility !== null && asset.annualVolatility !== undefined && asset.annualVolatility > 0.4)
   ) {
-    reasons.push("높은 변동성");
+    reasons.push(t("capmWeightReason.highVolatility"));
   }
   if ((asset.capmWeight ?? 0) < 0.3 && reasons.length === 0) {
-    reasons.push("신뢰도 낮음");
+    reasons.push(t("capmWeightReason.lowConfidence"));
   }
   return reasons.slice(0, 3);
 };
 
-const capmWeightReasonText = (asset: Feature3CapmAsset): string => {
-  const reasons = capmWeightReasons(asset);
-  if (!reasons.length) return "CAPM 품질 지표 양호";
-  return `${reasons.join(" · ")}으로 CAPM 반영 제한`;
+const capmWeightReasonText = (asset: Feature3CapmAsset, t: TFunction<"portfolioPage">): string => {
+  const reasons = capmWeightReasons(asset, t);
+  if (!reasons.length) return t("capmWeightReason.goodQuality");
+  return t("capmWeightReason.limited", { reasons: reasons.join(" · ") });
 };
 
-const riskLevelLabel: Record<string, string> = {
-  LOW: "낮음",
-  MID: "보통",
-  HIGH: "높음",
-};
-
-const capmStatusLabel: Record<string, string> = {
-  AVAILABLE: "분석 가능",
-  DISABLED: "분석 제외",
-  UNAVAILABLE: "데이터 없음",
-};
-
-const capmAssetStatusLabel: Record<string, string> = {
-  APPLIED: "반영",
-  PARTIAL: "부분 반영",
-  EXCLUDED: "제외",
-};
-
-const benchmarkSourceLabel: Record<string, string> = {
-  DB: "저장 데이터",
-  KIS_BACKFILLED: "외부 데이터 보강",
-  DB_INSUFFICIENT: "저장 데이터 부족",
-  DB_STALE: "최신 데이터 아님",
-  UNAVAILABLE: "데이터 없음",
-};
-
-const pricePolicyLabel: Record<string, string> = {
-  YAHOO_ADJ_CLOSE: "수정종가",
-  RAW_CLOSE: "종가",
-  YAHOO_ADJ_CLOSE_WITH_KIS_FALLBACK: "수정주가 + 종가 보완",
-  ADJUSTED_CLOSE: "수정종가 요청",
-  CLOSE: "종가",
-};
-
-const covarianceModelLabel: Record<string, string> = {
-  LEDOIT_WOLF: "안정화 공분산",
-  SAMPLE_COVARIANCE: "표본 공분산",
-  SAMPLE: "표본 공분산",
-};
-
-const marketDataSourceLabel: Record<string, string> = {
-  DB: "저장 데이터",
-  KIS: "국내 시세",
-  YAHOO: "Yahoo 수정종가",
-  MARKETSTACK: "해외 시세",
-  MIXED: "혼합",
-  EMPTY: "데이터 없음",
-  UNAVAILABLE: "사용 불가",
-};
-
-const cacheStatusLabel: Record<string, string> = {
-  HIT: "재사용",
-  MISS: "새 조회",
-  STALE: "오래됨",
-  AVAILABLE: "사용 가능",
-  UNAVAILABLE: "확인 필요",
-  BYPASSED: "캐시 미사용",
-  REFRESHED: "갱신됨",
-};
 
 type OverlayCachePolicy = "REUSE_AVAILABLE" | "FORCE_REFRESH";
 type OverlayCachePolicyMap = Record<string, OverlayCachePolicy>;
@@ -251,39 +171,10 @@ const overlayPreviewMessage = (message?: string | null): string => {
   return message;
 };
 
-const featureSourceLabel: Record<string, string> = {
-  CORE_RISK: "핵심 리스크",
-  FEATURE1: "기본 지표",
-  FEATURE2: "보조 관측",
-  FEATURE2_INDUSTRY: "업종 관측",
-  FEATURE2_PEERCLUSTER: "유사 종목 관측",
-  FEATURE2_NEWS: "뉴스 관측",
-  FEATURE3: "포트폴리오 분석",
-};
-
 type OverlayValueItem = {
   label: string;
   value: string;
   tone?: "default" | "good" | "warn" | "muted";
-};
-
-const metricLabels: Record<string, string> = {
-  PER: "PER",
-  PBR: "PBR",
-  PSR: "PSR",
-  ROE: "ROE",
-  OPM: "영업이익률",
-  NPM: "순이익률",
-  Debt: "부채비율",
-  Current: "유동비율",
-  RevenueGrowth: "매출 성장",
-  EPSGrowth: "EPS 성장",
-  alignment: "추세 정렬",
-  percent_b: "밴드 위치",
-  zone: "스토캐스틱",
-  k_minus_d: "K-D",
-  score: "감성 점수",
-  count: "뉴스 수",
 };
 
 const valueToneClass: Record<NonNullable<OverlayValueItem["tone"]>, string> = {
@@ -310,13 +201,13 @@ const compactNumber = (raw?: string, digits = 2): string | null => {
   return numeric.toLocaleString("ko-KR", { maximumFractionDigits: digits });
 };
 
-const displayMetricValue = (key: string, raw?: string): string => {
+const displayMetricValue = (key: string, raw: string | undefined, t: TFunction<"portfolioPage">): string => {
   if (!raw) return "-";
-  if (key === "alignment") return raw === "bullish" ? "상승 우위" : raw === "bearish" ? "하락 우위" : raw;
+  if (key === "alignment") return raw === "bullish" ? t("metric.alignment.bullish") : raw === "bearish" ? t("metric.alignment.bearish") : raw;
   if (key === "zone") {
-    if (raw === "overbought") return "과열";
-    if (raw === "oversold") return "침체";
-    return "중립";
+    if (raw === "overbought") return t("metric.zone.overbought");
+    if (raw === "oversold") return t("metric.zone.oversold");
+    return t("metric.zone.neutral");
   }
   if (key === "percent_b") return `${compactNumber(raw, 1) ?? raw}%`;
   if (["ROE", "OPM", "NPM", "Debt", "Current", "RevenueGrowth", "EPSGrowth"].includes(key)) {
@@ -354,69 +245,69 @@ const renderValueItems = (items: OverlayValueItem[], caption?: string): ReactNod
   </div>
 );
 
-const renderMetricOverlayValue = (value: string, keys: string[], caption?: string): ReactNode => {
+const renderMetricOverlayValue = (value: string, keys: string[], t: TFunction<"portfolioPage">, caption?: string): ReactNode => {
   const metrics = parseMetricMap(value);
   const items = keys
     .filter((key) => metrics[key] !== undefined)
     .map((key) => ({
-      label: metricLabels[key] ?? key,
-      value: displayMetricValue(key, metrics[key]),
+      label: t(`metric.label.${key}` as `metric.label.${string}`, key),
+      value: displayMetricValue(key, metrics[key], t),
       tone: toneForMetric(key, metrics[key]),
     }));
   return items.length ? renderValueItems(items, caption) : value;
 };
 
-const renderIndustryOverlayValue = (value: string): ReactNode => {
+const renderIndustryOverlayValue = (value: string, t: TFunction<"portfolioPage">): ReactNode => {
   const [industry, indexName] = value.split("/").map((part) => part.trim()).filter(Boolean);
   return renderValueItems([
-    { label: "산업", value: industry || value },
-    ...(indexName ? [{ label: "업종 지수", value: indexName, tone: "muted" as const }] : []),
+    { label: t("industry.label"), value: industry || value },
+    ...(indexName ? [{ label: t("industry.indexLabel"), value: indexName, tone: "muted" as const }] : []),
   ]);
 };
 
-const relationLabel = (raw?: string): string => {
-  if (raw === "LEADER") return "선행";
-  if (raw === "FOLLOWER") return "후행";
-  if (raw === "COINCIDENT") return "동행";
-  return "관계 미확정";
+const relationLabel = (raw: string | undefined, t: TFunction<"portfolioPage">): string => {
+  if (raw === "LEADER") return t("relation.LEADER");
+  if (raw === "FOLLOWER") return t("relation.FOLLOWER");
+  if (raw === "COINCIDENT") return t("relation.COINCIDENT");
+  return t("relation.UNKNOWN");
 };
 
-const renderPeerOverlayValue = (value: string): ReactNode => {
+const renderPeerOverlayValue = (value: string, t: TFunction<"portfolioPage">): ReactNode => {
   const peers = value.split(" | ");
   const items = peers.map((part) => {
     if (part.startsWith("selectedPeers=")) {
-      return { label: "선택 유사 종목", value: `${part.replace("selectedPeers=", "")}개`, tone: "muted" as const };
+      return { label: t("peer.selectedLabel"), value: t("peer.selectedCount", { count: part.replace("selectedPeers=", "") }), tone: "muted" as const };
     }
     const [namePart, ...rest] = part.split(",");
     const metrics = parseMetricMap(rest.join(","));
     const corr = parseMetricMap(namePart).corr ?? namePart.split(" corr=")[1];
     const name = namePart.split(" corr=")[0];
-    const lag = metrics.lag ? ` · ${metrics.lag}일 시차` : "";
+    const lag = metrics.lag ? t("peer.lagLabel", { lag: metrics.lag }) : "";
     return {
       label: name,
-      value: `상관도 ${compactNumber(corr, 3) ?? "-"} · ${relationLabel(metrics.relation)}${lag}`,
+      value: `${t("peer.corrLabel", { corr: compactNumber(corr, 3) ?? "-" })} · ${relationLabel(metrics.relation, t)}${lag}`,
       tone: Number(corr) >= 0.75 ? "warn" as const : "default" as const,
     };
   });
-  return renderValueItems(items, "유사 종목 상관도는 동행 종목 참고 정보이며 비중 조정에는 직접 사용하지 않습니다.");
+  return renderValueItems(items, t("peer.footerNote"));
 };
 
-const renderOverlayValue = (overlayType: string, value?: string | null): ReactNode => {
+const renderOverlayValue = (overlayType: string, value: string | null | undefined, t: TFunction<"portfolioPage">): ReactNode => {
   if (!value) return "-";
   if (overlayType === "fundamentals") {
-    return renderMetricOverlayValue(value, ["PER", "PBR", "PSR", "ROE", "OPM", "NPM", "Debt", "RevenueGrowth", "EPSGrowth"]);
+    return renderMetricOverlayValue(value, ["PER", "PBR", "PSR", "ROE", "OPM", "NPM", "Debt", "RevenueGrowth", "EPSGrowth"], t);
   }
   if (overlayType === "technical") {
-    return renderMetricOverlayValue(value, ["alignment", "percent_b", "zone", "k_minus_d"], "EMA, 볼린저밴드, 스토캐스틱 핵심값입니다.");
+    return renderMetricOverlayValue(value, ["alignment", "percent_b", "zone", "k_minus_d"], t, t("metric.techCaption"));
   }
   if (overlayType === "news") {
-    return renderMetricOverlayValue(value, ["score", "count"]);
+    return renderMetricOverlayValue(value, ["score", "count"], t);
   }
   if (overlayType === "industry") {
-    return renderIndustryOverlayValue(value);
+    return renderIndustryOverlayValue(value, t);
   }
   if (overlayType === "correlation" && value.includes(" | ")) {
-    return renderPeerOverlayValue(value);
+    return renderPeerOverlayValue(value, t);
   }
   return value;
 };
@@ -435,11 +326,11 @@ const explainSections = (explain?: PortfolioAnalyzeResponse["explain"] | null) =
   ].filter((section): section is NonNullable<PortfolioExplainSection> => Boolean(section?.summary || section?.bullets?.length));
 };
 
-const renderExplainSection = (section?: PortfolioExplainSection | null, options?: { hideTitle?: boolean }) => {
+const renderExplainSection = (section: PortfolioExplainSection | null | undefined, options: { hideTitle?: boolean } | undefined, t: TFunction<"portfolioPage">) => {
   if (!section?.summary && !section?.bullets?.length) return null;
   return (
     <div className="rounded-xl bg-bg-sunk border border-line p-4">
-      {!options?.hideTitle ? <h4 className="text-sm font-bold text-ink">{section.title ?? "요약"}</h4> : null}
+      {!options?.hideTitle ? <h4 className="text-sm font-bold text-ink">{section.title ?? t("explainSummary.fallbackTitle")}</h4> : null}
       {section.summary ? (
         <p className={`${options?.hideTitle ? "" : "mt-1"} text-xs leading-relaxed text-ink-3`}>
           <DictionaryText text={section.summary} />
@@ -458,27 +349,6 @@ const renderExplainSection = (section?: PortfolioExplainSection | null, options?
   );
 };
 
-const portfolioTypeLabel: Record<string, string> = {
-  CURRENT: "현재 구성",
-  STABLE: "안정형",
-  BALANCED: "균형형",
-  AGGRESSIVE: "공격형",
-  PSYCHOLOGICAL: "심리형",
-  RISK_ALLOCATION: "CAL 기반 위험배분",
-  UTILITY_OPTIMAL: "효용최대 포트폴리오",
-  THEORETICAL_UTILITY: "이론적 효용접점",
-  OVERLAY_BALANCED: "보조 관측 균형 시나리오",
-  QUALITY_TILT: "품질 압력 시나리오",
-  MOMENTUM_AWARE: "기술 흐름 압력",
-  NEWS_GUARDED: "뉴스 경계 압력",
-  DIVERSIFICATION_TILT: "분산 압력 시나리오",
-};
-
-const suitabilityLabel: Record<string, string> = {
-  CONSERVATIVE_THAN_PROFILE: "성향보다 안정적",
-  ALIGNED: "성향과 유사",
-  AGGRESSIVE_THAN_PROFILE: "성향보다 공격적",
-};
 
 const portfolioPieStyle = (weights: PortfolioAnalyzeResponse["currentPortfolio"]["weights"]) => {
   let cursor = 0;
@@ -581,6 +451,7 @@ const holdingAllocationPieStyle = (allocations: HoldingAllocation[]) => {
 };
 
 export default function PortfolioMockPage() {
+  const { t } = useTranslation("portfolioPage");
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggle } = useTheme();
@@ -595,7 +466,7 @@ export default function PortfolioMockPage() {
     navigate("/login");
   };
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedMarket, setSelectedMarket] = useState<"국내" | "해외">("국내");
+  const [selectedMarket, setSelectedMarket] = useState<"domestic" | "overseas">("domestic");
   const [selectedWindow, setSelectedWindow] = useState<AnalysisWindowPreset>(ANALYSIS_WINDOWS[1]);
   const [usdKrwRate, setUsdKrwRate] = useState<Feature2ExchangeRatePoint | null>(null);
   const [exchangeRateError, setExchangeRateError] = useState("");
@@ -675,12 +546,12 @@ export default function PortfolioMockPage() {
       .then((res) => {
         if (!alive) return;
         setUsdKrwRate(res.data?.usdKrw ?? null);
-        setExchangeRateError(res.data?.usdKrw ? "" : "환율 없음");
+        setExchangeRateError(res.data?.usdKrw ? "" : t("assetRatio.exchangeRateNone"));
       })
       .catch(() => {
         if (!alive) return;
         setUsdKrwRate(null);
-        setExchangeRateError("환율 로드 실패");
+        setExchangeRateError(t("assetRatio.exchangeRateFailed"));
       });
     return () => {
       alive = false;
@@ -751,14 +622,14 @@ export default function PortfolioMockPage() {
   const [portfolioSaveMessage, setPortfolioSaveMessage] = useState("");
 
   // 현재 선택된 마켓에 맞는 rows / setter
-  const rows = selectedMarket === "국내" ? domesticRows : overseasRows;
-  const setRows = selectedMarket === "국내" ? setDomesticRows : setOverseasRows;
-  const cashAmount = selectedMarket === "국내" ? domesticCash : overseasCash;
-  const setCashAmount = selectedMarket === "국내" ? setDomesticCash : setOverseasCash;
-  const cashCurrency = selectedMarket === "국내" ? "KRW" : "USD";
-  const cashLabel = selectedMarket === "국내" ? "보유중인 현금" : "USD 현금";
+  const rows = selectedMarket === "domestic" ? domesticRows : overseasRows;
+  const setRows = selectedMarket === "domestic" ? setDomesticRows : setOverseasRows;
+  const cashAmount = selectedMarket === "domestic" ? domesticCash : overseasCash;
+  const setCashAmount = selectedMarket === "domestic" ? setDomesticCash : setOverseasCash;
+  const cashCurrency = selectedMarket === "domestic" ? "KRW" : "USD";
+  const cashLabel = selectedMarket === "domestic" ? t("manager.cashDomestic") : t("manager.cashOverseas");
   const exchangeRate = usdKrwRate?.value ?? null;
-  const cashValueKRW = selectedMarket === "국내" ? cashAmount : exchangeRate ? cashAmount * exchangeRate : 0;
+  const cashValueKRW = selectedMarket === "domestic" ? cashAmount : exchangeRate ? cashAmount * exchangeRate : 0;
   const cashValueDisplay = Math.max(0, cashAmount);
   const riskyValue = rows.reduce((sum, r) => sum + r.quantity * r.avgPrice, 0);
   useEffect(() => {
@@ -779,7 +650,7 @@ export default function PortfolioMockPage() {
       })
       .catch(() => {
         if (alive) {
-          setPortfolioSaveMessage("저장된 포트폴리오를 불러오지 못했습니다.");
+          setPortfolioSaveMessage(t("manager.loadFailed"));
         }
       });
 
@@ -790,12 +661,12 @@ export default function PortfolioMockPage() {
 
   // 총 금액 계산 (국내: 원, 해외: 달러 기준이라고 가정)
   const totalKRW =
-    selectedMarket === "국내"
+    selectedMarket === "domestic"
       ? riskyValue + cashValueKRW
       : exchangeRate ? riskyValue * exchangeRate + cashValueKRW : 0;
 
   const totalUSD =
-    selectedMarket === "국내"
+    selectedMarket === "domestic"
       ? exchangeRate ? totalKRW / exchangeRate : 0
       : riskyValue + cashValueDisplay;
 
@@ -816,7 +687,7 @@ export default function PortfolioMockPage() {
     } else {
       aggregatedByStock.set(key, {
         id: row.id,
-        label: row.name.trim() || "미입력 종목",
+        label: row.name.trim() || t("manager.unnamedStock"),
         value,
       });
       aggregatedOrder.push(key);
@@ -868,25 +739,25 @@ export default function PortfolioMockPage() {
   const [err, setErr] = useState("");
   const [pdfExporting, setPdfExporting] = useState(false);
   const [isPortfolioZoomOpen, setIsPortfolioZoomOpen] = useState(false);
-  const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
-  const [isModelOpen, setIsModelOpen] = useState(false);
-  const modelRef = useRef<HTMLDivElement | null>(null);
+  const llmVendor = "GPT-5 mini";
   const portfolioPdfRef = useRef<HTMLElement | null>(null);
   const portfolioReportRef = useRef<HTMLDivElement | null>(null);
   const reportMeta = analysisResult
     ? {
         featureType: "FEATURE3" as const,
-        subjectLabel: "포트폴리오",
-        subjectDetail: `${rows[0]?.name || analysisResult.currentPortfolio.weights[0]?.companyName || "구성종목"} 외 ${Math.max(0, rows.length - 1)}개 종목`,
+        subjectLabel: t("result.subjectLabel"),
+        subjectDetail: `${rows[0]?.name || analysisResult.currentPortfolio.weights[0]?.companyName || t("result.subjectLabel")} 외 ${Math.max(0, rows.length - 1)}개 종목`,
         generatedAt: new Date().toISOString(),
         analysisModel: llmVendor,
         investLevel,
         userName: reportUserName,
-        analysisWindow: selectedWindow.label,
+        analysisWindow: t(`analysisOptions.analysisWindow.${selectedWindow.label}` as `analysisOptions.analysisWindow.${string}`, selectedWindow.label),
         dataAsOf: analysisResult.freshness?.newestDataAt ?? analysisResult.freshness?.priceSeriesAsOf ?? null,
         riskProfile: analysisResult.policy.riskProfile.profileType,
-        priceBasis: pricePolicyLabel[analysisResult.policy.pricePolicy.used] ?? analysisResult.policy.pricePolicy.used,
-        covarianceModel: covarianceModelLabel[analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? ""] ?? analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? null,
+        priceBasis: t(`pricePolicy.${analysisResult.policy.pricePolicy.used}` as `pricePolicy.${string}`, analysisResult.policy.pricePolicy.used),
+        covarianceModel: analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel
+          ? t(`covarianceModel.${analysisResult.advanced.covarianceDiagnostics.usedCovarianceModel}` as `covarianceModel.${string}`, analysisResult.advanced.covarianceDiagnostics.usedCovarianceModel)
+          : null,
       }
     : null;
 
@@ -915,11 +786,11 @@ export default function PortfolioMockPage() {
     }
     const validRows = rows.filter((r) => r.name.trim() !== "");
     if (validRows.length === 0) {
-      setErr("최소 1개 종목을 입력해주세요.");
+      setErr(t("runBanner.minOneStock"));
       return;
     }
     if (riskGamma === null) {
-      setErr("투자 성향 지수를 입력해주세요.");
+      setErr(t("runBanner.needRiskProfileError"));
       return;
     }
     setLoading(true);
@@ -952,7 +823,7 @@ export default function PortfolioMockPage() {
           companyName: r.name.trim(),
           quantity: r.quantity,
           avgPrice: r.avgPrice,
-          currency: selectedMarket === "국내" ? "KRW" : "USD",
+          currency: selectedMarket === "domestic" ? "KRW" : "USD",
           assetType: "EQUITY",
         })),
         cashPositions: cashAmount > 0
@@ -987,15 +858,18 @@ export default function PortfolioMockPage() {
       setAnalysisTab("BASIC");
       setOverlayPreview(null);
     } catch (e) {
-      setErr(getApiErrorMessage(e, "분석에 실패했습니다. 잠시 후 다시 시도해주세요."));
+      setErr(getApiErrorMessage(e, t("runBanner.analyzeFailed")));
     } finally {
+      // 성공/실패 무관하게 서버 잔액과 동기화 (백엔드가 실패 시 환불 처리하므로
+      // 환불된 잔액이 UI 에 즉시 반영되도록).
+      refreshTokenBalance().catch(() => {});
       setLoading(false);
     }
   };
 
   const toggleOpen = () => setIsOpen((prev) => !prev);
 
-  const handleSelect = (value: "국내" | "해외") => {
+  const handleSelect = (value: "domestic" | "overseas") => {
     setSelectedMarket(value);
     setIsOpen(false);
   };
@@ -1015,22 +889,6 @@ export default function PortfolioMockPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isModelOpen) return;
-
-    const handleClickOutside = (event: globalThis.MouseEvent) => {
-      if (
-        modelRef.current &&
-        !modelRef.current.contains(event.target as Node)
-      ) {
-        setIsModelOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isModelOpen]);
 
   useEffect(() => {
     document.body.classList.toggle("qaima-portfolio-zoom-active", isPortfolioZoomOpen);
@@ -1194,23 +1052,23 @@ export default function PortfolioMockPage() {
         avgPrice: holding.averagePrice,
       })));
       setDomesticCash(saved.cashAmount ?? 0);
-      setSelectedMarket("국내");
-      setPortfolioSaveMessage("포트폴리오가 저장되었습니다.");
+      setSelectedMarket("domestic");
+      setPortfolioSaveMessage(t("manager.saveSuccess"));
       setSaveModalOpen(false);
     } catch (e) {
-      setPortfolioSaveMessage(getApiErrorMessage(e, "포트폴리오 저장에 실패했습니다."));
+      setPortfolioSaveMessage(getApiErrorMessage(e, t("manager.saveFailed")));
     } finally {
       setSavingPortfolio(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px]">
+    <div className="min-h-screen bg-bg md:ml-[84px]">
       {saveModalOpen && createPortal(
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
           <div className="w-full max-w-sm rounded-2xl bg-surface border border-line shadow-card p-5">
-            <h3 className="text-base font-bold text-ink tracking-tight">포트폴리오 저장</h3>
-            <p className="mt-2 text-sm text-ink-3">현재 포트폴리오 상태를 저장할까요?</p>
+            <h3 className="text-base font-bold text-ink tracking-tight">{t("saveModal.title")}</h3>
+            <p className="mt-2 text-sm text-ink-3">{t("saveModal.body")}</p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -1218,7 +1076,7 @@ export default function PortfolioMockPage() {
                 disabled={savingPortfolio}
                 className="px-4 py-2 rounded-lg border border-line text-sm font-semibold text-ink hover:bg-bg-sunk disabled:opacity-60"
               >
-                아니오
+                {t("saveModal.cancel")}
               </button>
               <button
                 type="button"
@@ -1226,7 +1084,7 @@ export default function PortfolioMockPage() {
                 disabled={savingPortfolio}
                 className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 disabled:opacity-60"
               >
-                {savingPortfolio ? "저장 중" : "예"}
+                {savingPortfolio ? t("saveModal.saving") : t("saveModal.confirm")}
               </button>
             </div>
           </div>
@@ -1241,13 +1099,13 @@ export default function PortfolioMockPage() {
               Portfolio · Analysis
             </div>
             <h1 className="mt-1 text-3xl font-bold text-ink tracking-tighter">
-              포트폴리오
+              {t("header.title")}
             </h1>
           </div>
           <div className="flex items-center gap-2.5">
             <button
               onClick={toggle}
-              aria-label={theme === "dark" ? "라이트 모드" : "다크 모드"}
+              aria-label={theme === "dark" ? t("header.lightMode") : t("header.darkMode")}
               className="w-9 h-9 grid place-items-center rounded-xl bg-surface
                          border border-line text-ink-2 shadow-card
                          hover:bg-bg-sunk transition-colors"
@@ -1275,7 +1133,7 @@ export default function PortfolioMockPage() {
                       onClick={toggleOpen}
                       className="inline-flex items-center justify-between px-3 h-9 rounded-lg text-sm bg-bg-sunk border border-line text-ink"
                     >
-                      <span className="font-semibold text-ink tracking-tight">{selectedMarket}</span>
+                      <span className="font-semibold text-ink tracking-tight">{t(`market.${selectedMarket}`)}</span>
                       <span
                         className={`ml-2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent ${
                           isOpen
@@ -1288,17 +1146,17 @@ export default function PortfolioMockPage() {
                       <div className="absolute left-0 top-[40px] rounded-lg z-10 w-[70px] bg-surface border border-line shadow-pop">
                         <button
                           type="button"
-                          onClick={() => handleSelect("국내")}
+                          onClick={() => handleSelect("domestic")}
                           className="w-full px-2 py-1.5 text-center text-sm rounded-t-lg text-ink hover:bg-bg-sunk"
                         >
-                          국내
+                          {t("market.domestic")}
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleSelect("해외")}
+                          onClick={() => handleSelect("overseas")}
                           className="w-full px-2 py-1.5 text-center text-sm rounded-b-lg text-ink hover:bg-bg-sunk"
                         >
-                          해외
+                          {t("market.overseas")}
                         </button>
                       </div>
                     )}
@@ -1306,25 +1164,25 @@ export default function PortfolioMockPage() {
 
                   {/* 타이틀: 좌우 내용 너비가 변해도 항상 카드 정중앙 고정 (밀림 방지) */}
                   <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-lg font-bold text-ink tracking-tight whitespace-nowrap pointer-events-none">
-                    {selectedMarket} 투자 자산 비율
+                    {selectedMarket === "domestic" ? t("assetRatio.titleDomestic") : t("assetRatio.titleOverseas")}
                   </p>
 
                   {/* 총 금액 / 환율 */}
                   <div className="flex-shrink-0 flex flex-col items-end gap-0.5">
                     <p className="font-medium text-sm font-mono tabular tracking-tight text-ink">
-                      {selectedMarket === "국내" || exchangeRate
-                        ? `${Math.round(totalKRW).toLocaleString()}원`
+                      {selectedMarket === "domestic" || exchangeRate
+                        ? `${Math.round(totalKRW).toLocaleString()}${t("assetRatio.won")}`
                         : "-"}
                     </p>
                     <p className="text-xs text-ink-3 font-mono tabular">
-                      {selectedMarket === "해외" || exchangeRate
-                        ? `${totalUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}달러`
+                      {selectedMarket === "overseas" || exchangeRate
+                        ? `${totalUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}${t("assetRatio.dollar")}`
                         : "-"}
                     </p>
                     <p className="text-[11px] text-ink-4">
                       {exchangeRate
                         ? `환율 ${exchangeRate.toLocaleString()} · ${usdKrwRate?.date ?? usdKrwRate?.source ?? ""}`
-                        : exchangeRateError || "환율 로딩중"}
+                        : exchangeRateError || t("assetRatio.exchangeRateLoading")}
                     </p>
                   </div>
                 </div>
@@ -1365,7 +1223,7 @@ export default function PortfolioMockPage() {
                             WebkitMaskImage: PIE_TOP_MASK,
                             maskImage: PIE_TOP_MASK,
                           }}
-                          aria-label={`${selectedMarket} 투자 자산 비율 파이차트`}
+                          aria-label={selectedMarket === "domestic" ? t("assetRatio.titleDomestic") : t("assetRatio.titleOverseas")}
                         />
                         {/* 윗면 광택 */}
                         <div
@@ -1381,10 +1239,10 @@ export default function PortfolioMockPage() {
                       {/* 총 평가액: 바닥과 무관하게 차트 정중앙 고정 */}
                       <div className="absolute inset-0 grid place-items-center text-center pointer-events-none">
                         <div className="max-w-[58%]">
-                          <p className="text-[10px] text-ink-4">총 평가액</p>
+                          <p className="text-[10px] text-ink-4">{t("assetRatio.centerLabel")}</p>
                           <p className="mt-0.5 text-sm font-bold text-ink font-mono tabular leading-tight truncate">
-                            {selectedMarket === "국내"
-                              ? `${Math.round(totalKRW).toLocaleString()}원`
+                            {selectedMarket === "domestic"
+                              ? `${Math.round(totalKRW).toLocaleString()}${t("assetRatio.won")}`
                               : `$${totalUSD.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                           </p>
                         </div>
@@ -1394,11 +1252,11 @@ export default function PortfolioMockPage() {
                     <div className="w-full sm:w-auto sm:min-w-[200px] sm:max-w-[260px] min-w-0 flex flex-col gap-2 max-h-56 overflow-y-auto">
                       {holdingAllocations.length === 0 ? (
                         <div className="text-center sm:text-left">
-                          <p className="text-sm font-medium text-ink-3">표시할 보유 비중이 없습니다</p>
+                          <p className="text-sm font-medium text-ink-3">{t("assetRatio.emptyTitle")}</p>
                           <p className="mt-1 text-xs text-ink-4">
                             {loggedIn
-                              ? "종목명, 수량, 평균단가를 입력하면 바로 반영됩니다."
-                              : "로그인 후 종목을 입력하면 비중이 표시됩니다."}
+                              ? t("assetRatio.emptyBodyLoggedIn")
+                              : t("assetRatio.emptyBodyGuest")}
                           </p>
                         </div>
                       ) : (
@@ -1431,7 +1289,7 @@ export default function PortfolioMockPage() {
                 <div className="px-6 pt-5 pb-3 flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-bold text-ink tracking-tight">Portfolio Manager</h2>
-                    <p className="text-sm mt-0.5 text-ink-3">보유 종목을 추가하거나 수정하세요</p>
+                    <p className="text-sm mt-0.5 text-ink-3">{t("manager.subtitle")}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -1440,7 +1298,7 @@ export default function PortfolioMockPage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors border border-line text-ink hover:bg-bg-sunk"
                     >
                       <Save size={14} />
-                      저장
+                      {t("manager.save")}
                     </button>
                     <button
                       type="button"
@@ -1448,7 +1306,7 @@ export default function PortfolioMockPage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors bg-accent text-white hover:opacity-90"
                     >
                       <Plus size={14} />
-                      종목 추가
+                      {t("manager.addStock")}
                     </button>
                   </div>
                 </div>
@@ -1457,16 +1315,16 @@ export default function PortfolioMockPage() {
                   {/* 헤더 행 */}
                   <div className="grid grid-cols-[2fr,1.2fr,1.8fr,0.8fr] rounded-xl bg-bg-sunk">
                     <div className="px-4 py-3 flex items-center justify-center">
-                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">종목 이름</span>
+                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">{t("manager.col.name")}</span>
                     </div>
                     <div className="px-4 py-3 flex items-center justify-center">
-                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">보유 주식 수</span>
+                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">{t("manager.col.quantity")}</span>
                     </div>
                     <div className="px-4 py-3 flex items-center justify-center">
-                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">매수 평균단가</span>
+                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">{t("manager.col.avgPrice")}</span>
                     </div>
                     <div className="px-4 py-3 flex items-center justify-center">
-                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">삭제</span>
+                      <span className="text-xs uppercase font-bold tracking-wider text-ink-3">{t("manager.col.delete")}</span>
                     </div>
                   </div>
 
@@ -1530,7 +1388,7 @@ export default function PortfolioMockPage() {
                         />
                       </div>
                       <div className="px-4 py-3 flex items-center justify-center">
-                        <span className="text-xs text-ink-4">고정</span>
+                        <span className="text-xs text-ink-4">{t("manager.cashFixed")}</span>
                       </div>
                     </div>
 	                </div>
@@ -1546,10 +1404,10 @@ export default function PortfolioMockPage() {
                     </div>
                     <div>
                       <p className="text-base font-bold text-ink tracking-tight">
-                        로그인이 필요한 기능입니다
+                        {t("manager.lock.title")}
                       </p>
                       <p className="mt-1 text-sm text-ink-2 max-w-xs">
-                        포트폴리오 입력과 분석은 로그인 후 이용할 수 있습니다.
+                        {t("manager.lock.body")}
                       </p>
                     </div>
                     <button
@@ -1557,7 +1415,7 @@ export default function PortfolioMockPage() {
                       onClick={goLogin}
                       className="mt-1 px-5 py-2 rounded-lg bg-accent text-white text-sm font-semibold hover:opacity-90 transition-opacity"
                     >
-                      로그인하러 가기
+                      {t("manager.lock.button")}
                     </button>
                   </div>
                 )}
@@ -1568,7 +1426,7 @@ export default function PortfolioMockPage() {
 
           {/* 둘째 행: 분석 옵션 (전체 너비, 가로 배치) */}
           <div className="w-full rounded-2xl p-5 bg-surface border border-line shadow-card">
-            <h2 className="text-base font-bold text-ink tracking-tight mb-4">분석 옵션</h2>
+            <h2 className="text-base font-bold text-ink tracking-tight mb-4">{t("analysisOptions.title")}</h2>
 
             <div className="flex flex-col lg:flex-row gap-5">
               {/* 왼쪽: 기본 분석 + 추가 옵션 체크박스 */}
@@ -1582,18 +1440,18 @@ export default function PortfolioMockPage() {
                     className="mt-0.5 w-4 h-4 cursor-not-allowed accent-accent"
                   />
                   <div className="flex-1">
-                    <span className="text-sm font-semibold text-accent">포트폴리오 기본 분석</span>
-                    <span className="ml-2 text-xs text-ink-4">(변경 불가)</span>
+                    <span className="text-sm font-semibold text-accent">{t("analysisOptions.baseOption.label")}</span>
+                    <span className="ml-2 text-xs text-ink-4">{t("analysisOptions.baseOption.locked")}</span>
                     <div className="mt-1 text-xs leading-relaxed text-ink-3">
-                      <p>포트폴리오의 변동성, 분산, 효율성을 기본적으로 분석합니다.</p>
-                      <p>모든 분석의 기준이 되는 핵심 계산이 포함됩니다.</p>
+                      <p>{t("analysisOptions.baseOption.desc0")}</p>
+                      <p>{t("analysisOptions.baseOption.desc1")}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* 추가 분석 옵션 (2열 그리드) */}
                 <div>
-                  <p className="text-xs mb-2 text-ink-4">추가 분석 (선택사항)</p>
+                  <p className="text-xs mb-2 text-ink-4">{t("analysisOptions.extraLabel")}</p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
                     {EXTRA_OPTIONS.map((opt) => (
                       <label
@@ -1606,12 +1464,12 @@ export default function PortfolioMockPage() {
                           onChange={() => toggleExtraOption(opt.key)}
                           className="w-4 h-4 cursor-pointer accent-accent flex-shrink-0"
                         />
-                        <span className="text-sm font-medium text-ink-2">{opt.label}</span>
+                        <span className="text-sm font-medium text-ink-2">{t(`analysisOptions.extraOption.${opt.key}.label` as `analysisOptions.extraOption.${string}.label`)}</span>
                         <div className="group relative flex-shrink-0">
                           <Info size={14} className="transition-colors text-ink-4 group-hover:text-ink-3" />
                           <div className="absolute left-5 top-0 w-64 p-2.5 text-xs rounded-lg shadow-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-30 leading-relaxed bg-ink text-bg">
-                            {opt.descriptions.map((d, i) => (
-                              <p key={i} className={i > 0 ? "mt-1" : ""}>{d}</p>
+                            {[0, 1].map((i) => (
+                              <p key={i} className={i > 0 ? "mt-1" : ""}>{t(`analysisOptions.extraOption.${opt.key}.desc${i}` as `analysisOptions.extraOption.${string}.desc0`)}</p>
                             ))}
                           </div>
                         </div>
@@ -1620,7 +1478,7 @@ export default function PortfolioMockPage() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs mb-2 text-ink-4">분석 기간</p>
+                  <p className="text-xs mb-2 text-ink-4">{t("analysisOptions.periodLabel")}</p>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {ANALYSIS_WINDOWS.map((window) => (
                       <button
@@ -1633,10 +1491,10 @@ export default function PortfolioMockPage() {
                             : "bg-bg-sunk text-ink-3 hover:bg-surface-2 font-medium"
                         }`}
                       >
-                        {window.label}
+                        {t(`analysisOptions.analysisWindow.${window.label}` as `analysisOptions.analysisWindow.${string}`, window.label)}
                       </button>
                     ))}
-                    <span className="ml-1 text-xs text-ink-4">1일봉</span>
+                    <span className="ml-1 text-xs text-ink-4">{t("analysisOptions.freqDay")}</span>
                   </div>
                 </div>
               </div>
@@ -1650,8 +1508,8 @@ export default function PortfolioMockPage() {
                 <div className="flex flex-col gap-3 px-3 py-3 rounded-lg bg-accent-soft border border-accent/20">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-semibold text-accent">투자 성향 지수</span>
-                      <span className="text-xs text-ink-4">(필수)</span>
+                      <span className="text-sm font-semibold text-accent">{t("riskProfile.title")}</span>
+                      <span className="text-xs text-ink-4">{t("riskProfile.required")}</span>
                     </div>
                     <button
                       type="button"
@@ -1659,7 +1517,7 @@ export default function PortfolioMockPage() {
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors text-accent bg-surface border border-accent/30 hover:bg-accent/10"
                     >
                       <ClipboardList size={14} />
-                      설문으로 확인하기
+                      {t("riskProfile.surveyButton")}
                     </button>
                   </div>
 
@@ -1675,8 +1533,8 @@ export default function PortfolioMockPage() {
                         className="w-full cursor-pointer accent-accent"
                       />
                       <div className="flex justify-between text-[11px] text-ink-3">
-                        <span>0.00 · 보수적</span>
-                        <span>공격적 · 1.00</span>
+                        <span>{t("riskProfile.sliderConservative")}</span>
+                        <span>{t("riskProfile.sliderAggressive")}</span>
                       </div>
                     </div>
                     <input
@@ -1691,15 +1549,14 @@ export default function PortfolioMockPage() {
                   </div>
 
 	                  <p className="text-xs leading-relaxed text-ink-3">
-	                    0에 가까울수록 안정적인 자산 배분을, 1에 가까울수록 공격적인
-	                    자산 배분을 기준으로 분석해요.
+	                    {t("riskProfile.desc")}
 	                  </p>
 	                </div>
 
 	                <div className="flex flex-col gap-3 px-3 py-3 rounded-lg bg-bg-sunk border border-line">
 	                  <div className="flex items-center justify-between flex-wrap gap-2">
 	                    <div className="flex items-center gap-1.5">
-	                      <span className="text-sm font-semibold text-ink">최대 현금비중 한도</span>
+	                      <span className="text-sm font-semibold text-ink">{t("riskProfile.cashLimitTitle")}</span>
 	                    </div>
 	                  </div>
 
@@ -1715,8 +1572,8 @@ export default function PortfolioMockPage() {
 	                        className="w-full cursor-pointer accent-accent"
 	                      />
 	                      <div className="flex justify-between text-[11px] text-ink-3">
-	                        <span>0% · 현금 X</span>
-	                        <span>현금 O · 100%</span>
+	                        <span>{t("riskProfile.cashLimitLeft")}</span>
+	                        <span>{t("riskProfile.cashLimitRight")}</span>
 	                      </div>
 	                    </div>
 	                    <span className="w-20 inline-block text-center text-sm font-semibold rounded-lg py-1.5 text-ink bg-surface border border-line font-mono tabular">
@@ -1725,7 +1582,7 @@ export default function PortfolioMockPage() {
 	                  </div>
 
 	                  <p className="text-xs leading-relaxed text-ink-3">
-	                    포트폴리오에 현금을 최대로 얼마나 남길지 설정해요. 투자 성향 지수를 조정하면 기본 한도가 함께 갱신되고, 여기서 직접 조정할 수도 있어요. 해당 값이 분석에 반영돼요.
+	                    {t("riskProfile.cashLimitDesc")}
 	                  </p>
 	                </div>
 
@@ -1739,19 +1596,19 @@ export default function PortfolioMockPage() {
                               flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="text-[11px] font-semibold text-accent tracking-tight mb-1">
-                ✨ AI 포트폴리오 분석
+                {t("runBanner.tag")}
               </div>
               <h3 className="text-lg font-bold text-ink tracking-tight">
-                포트폴리오를 한 번에 분석해 드릴게요
+                {t("runBanner.title")}
               </h3>
               <p className="text-sm text-ink-3 mt-1">
-                변동성 · 분산 구조 · 효율성을 종합한 리포트
+                {t("runBanner.subtitle")}
               </p>
               {!loading && loggedIn && riskGamma === null && (
-                <p className="text-xs text-ink-4 mt-1.5">투자 성향 지수를 먼저 입력해주세요.</p>
+                <p className="text-xs text-ink-4 mt-1.5">{t("runBanner.needRiskProfile")}</p>
               )}
               {!loading && !loggedIn && (
-                <p className="text-xs text-ink-4 mt-1.5">분석을 실행하려면 로그인이 필요합니다.</p>
+                <p className="text-xs text-ink-4 mt-1.5">{t("runBanner.needLogin")}</p>
               )}
               {err && <p className="text-xs text-danger mt-1.5">{err}</p>}
             </div>
@@ -1759,37 +1616,6 @@ export default function PortfolioMockPage() {
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <InvestLevelBadge />
                 <div className="flex items-center gap-3">
-                  <div ref={modelRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsModelOpen((prev) => !prev)}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-line text-sm"
-                  >
-                    <span className="text-ink-3 text-[11px]">모델</span>
-                    <span className="font-semibold text-ink">{llmVendor}</span>
-                    {isModelOpen
-                      ? <ChevronUp size={14} className="text-ink-3 pointer-events-none" />
-                      : <ChevronDown size={14} className="text-ink-3 pointer-events-none" />}
-                  </button>
-                  {isModelOpen && (
-                    <div className="absolute right-0 bottom-full mb-1 w-full min-w-44 bg-surface border border-line rounded-lg shadow-pop z-50 max-h-60 overflow-y-auto">
-                      {LLM_VENDOR_OPTIONS.map((vendor) => (
-                        <button
-                          key={vendor}
-                          type="button"
-                          onClick={() => { setLlmVendor(vendor); setIsModelOpen(false); }}
-                          className={`w-full text-left px-3.5 py-2.5 text-sm first:rounded-t-lg last:rounded-b-lg ${
-                            vendor === llmVendor
-                              ? "bg-accent-soft text-accent font-semibold"
-                              : "text-ink hover:bg-bg-sunk"
-                          }`}
-                        >
-                          {vendor}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  </div>
                   <button
                   type="button"
                   onClick={() => void handleAnalyzeClick()}
@@ -1797,12 +1623,12 @@ export default function PortfolioMockPage() {
                   className="px-5 py-2.5 rounded-xl bg-accent text-white font-semibold text-sm
                              hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity tracking-tight"
                 >
-                  {loading ? "분석 중..." : "분석 결과 보기 →"}
+                  {loading ? t("runBanner.analyzing") : t("runBanner.viewButton")}
                   </button>
                 </div>
               </div>
               {!loading && loggedIn && riskGamma === null && (
-                <p className="text-xs text-ink-4">투자 성향 지수를 먼저 입력해주세요.</p>
+                <p className="text-xs text-ink-4">{t("runBanner.needRiskProfile")}</p>
               )}
               {err && <p className="text-xs text-danger">{err}</p>}
             </div>
@@ -1812,11 +1638,11 @@ export default function PortfolioMockPage() {
             <section className="rounded-2xl border border-accent/30 shadow-card p-5 bg-surface">
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-base font-bold text-ink">추가 분석 비용 확인</h3>
+                  <h3 className="text-base font-bold text-ink">{t("overlayPreview.title")}</h3>
                   <p className="mt-1 text-sm text-ink-3">{overlayPreviewMessage(overlayPreview.userMessage)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-ink-4">예상 차감</p>
+                  <p className="text-xs text-ink-4">{t("overlayPreview.estimatedCharge")}</p>
                   <p className="text-2xl font-bold font-mono tabular text-ink">
                     {overlayPreviewCredit} credit
                   </p>
@@ -1827,27 +1653,27 @@ export default function PortfolioMockPage() {
                   <div key={overlay.overlayType} className="rounded-xl bg-bg-sunk border border-line p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-bold text-ink">{overlay.overlayType}</p>
-                      <span className="text-xs font-bold text-ink-4">{cacheStatusLabel[overlay.cacheStatus ?? ""] ?? overlay.cacheStatus}</span>
+                      <span className="text-xs font-bold text-ink-4">{t(`cacheStatus.${overlay.cacheStatus ?? ""}` as `cacheStatus.${string}`, overlay.cacheStatus ?? "")}</span>
                     </div>
                     <p className="mt-1 text-xs text-ink-3">{overlayPreviewMessage(overlay.userMessage)}</p>
                     <p className="mt-2 text-[11px] text-ink-4">
                       {overlay.cacheStatus === "MISS"
-                        ? "새 분석 후 기준 시각이 기록됩니다"
+                        ? t("overlayPreview.newAfterAnalysis")
                         : overlay.cacheAsOf
                           ? overlayCachePolicies[overlay.overlayType] === "FORCE_REFRESH"
-                            ? `기존 기준: ${overlay.cacheAsOf} · 새로 갱신 예정`
+                            ? t("overlayPreview.refreshScheduled", { date: overlay.cacheAsOf })
                             : overlay.cacheStatus === "AVAILABLE"
-                              ? `기준: ${overlay.cacheAsOf}`
-                              : `최근 결과 기준: ${overlay.cacheAsOf}`
+                              ? t("overlayPreview.existingBase", { date: overlay.cacheAsOf })
+                              : t("overlayPreview.existingBase", { date: overlay.cacheAsOf })
                           : overlay.cacheStatus === "AVAILABLE"
-                            ? "기준: 현재 등록된 산업 분류"
-                            : "기준 시각 확인 전"}
+                            ? t("overlayPreview.currentClassBase")
+                            : t("overlayPreview.pendingBase")}
                     </p>
                     {overlay.policySelectable !== false && overlay.cacheStatus === "HIT" && (
                       <div className="mt-3 grid grid-cols-1 gap-1.5">
                         {[
-                          { value: "REUSE_AVAILABLE" as const, label: "최근 결과 사용해서 분석" },
-                          { value: "FORCE_REFRESH" as const, label: "새로 분석하기" },
+                          { value: "REUSE_AVAILABLE" as const, label: t("overlayPreview.reuse") },
+                          { value: "FORCE_REFRESH" as const, label: t("overlayPreview.forceRefresh") },
                         ].map((option) => {
                           const checked = (overlayCachePolicies[overlay.overlayType] ?? "REUSE_AVAILABLE") === option.value;
                           return (
@@ -1890,14 +1716,14 @@ export default function PortfolioMockPage() {
                   onClick={() => setOverlayPreview(null)}
                   className="px-4 py-2 rounded-lg text-sm font-semibold bg-bg-sunk text-ink border border-line hover:bg-surface"
                 >
-                  취소
+                  {t("overlayPreview.cancel")}
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleAnalyzeClick(true)}
                   className="px-4 py-2 rounded-lg text-sm font-semibold bg-ink text-bg hover:opacity-90"
                 >
-                  이 조건으로 분석
+                  {t("overlayPreview.confirm")}
                 </button>
               </div>
             </section>
@@ -1906,14 +1732,14 @@ export default function PortfolioMockPage() {
           {/* 하단 전체 너비: 분석 결과 영역 */}
           {!analysisResult && !loading && (
             <div className="w-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-24 bg-bg-sunk border-line text-ink-4">
-              <p className="text-base font-medium">분석 결과가 여기에 표시됩니다</p>
-              <p className="text-sm mt-1">포트폴리오를 입력한 뒤 분석을 실행하세요</p>
+              <p className="text-base font-medium">{t("emptyResult.title")}</p>
+              <p className="text-sm mt-1">{t("emptyResult.subtitle")}</p>
             </div>
           )}
 
           {loading && (
             <div className="w-full rounded-2xl border-2 flex items-center justify-center py-24 bg-bg-sunk border-line">
-              <p className="text-base animate-pulse text-ink-3">분석 중입니다...</p>
+              <p className="text-base animate-pulse text-ink-3">{t("loading")}</p>
             </div>
           )}
 
@@ -1937,7 +1763,7 @@ export default function PortfolioMockPage() {
               }}
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <h2 className="text-lg font-bold text-ink tracking-tight">분석 결과</h2>
+                <h2 className="text-lg font-bold text-ink tracking-tight">{t("result.title")}</h2>
                 <div data-pdf-exclude="true" className="flex flex-wrap items-center gap-2">
                   <div className="inline-flex self-start sm:self-auto rounded-xl bg-bg-sunk border border-line p-1">
                     <button
@@ -1949,7 +1775,7 @@ export default function PortfolioMockPage() {
                           : "text-ink-3 hover:text-ink"
                       }`}
                     >
-                      리스크 요약
+                      {t("result.tabBasic")}
                     </button>
                     <button
                       type="button"
@@ -1960,14 +1786,14 @@ export default function PortfolioMockPage() {
                           : "text-ink-3 hover:text-ink"
                       }`}
                     >
-                      최적화 관측
+                      {t("result.tabAdvanced")}
                     </button>
                   </div>
                   <button
                     type="button"
                     onClick={handlePortfolioDownloadClick}
-                    aria-label="PDF로 다운로드"
-                    title="PDF로 다운로드"
+                    aria-label={t("result.downloadPdf")}
+                    title={t("result.downloadPdf")}
                     className="w-9 h-9 grid place-items-center rounded-lg border border-line bg-surface text-ink-2 hover:bg-bg-sunk transition-colors"
                   >
                     <Download size={16} />
@@ -1975,8 +1801,8 @@ export default function PortfolioMockPage() {
                   <button
                     type="button"
                     onClick={() => setIsPortfolioZoomOpen((prev) => !prev)}
-                    aria-label={isPortfolioZoomOpen ? "크게 보기 닫기" : "크게 보기"}
-                    title={isPortfolioZoomOpen ? "크게 보기 닫기" : "크게 보기"}
+                    aria-label={isPortfolioZoomOpen ? t("result.zoomClose") : t("result.zoomIn")}
+                    title={isPortfolioZoomOpen ? t("result.zoomClose") : t("result.zoomIn")}
                     className="w-9 h-9 grid place-items-center rounded-lg border border-line bg-surface text-ink-2 hover:bg-bg-sunk transition-colors"
                   >
                     {isPortfolioZoomOpen ? <span className="text-lg leading-none">x</span> : <Maximize2 size={16} />}
@@ -1991,7 +1817,7 @@ export default function PortfolioMockPage() {
                 {/* 카드 1: 위험 수준 */}
                 <div className="rounded-2xl p-5 flex flex-col gap-3 bg-surface border border-line shadow-card">
                   <p className="text-xs font-bold uppercase tracking-wider text-ink-4">
-                    위험 수준
+                    {t("summary.riskLevelCard")}
                   </p>
                   <div className="flex items-end gap-2">
                     <span className="text-3xl font-bold text-ink font-mono tabular tracking-tighter">
@@ -1999,7 +1825,7 @@ export default function PortfolioMockPage() {
                       <span className="text-base font-normal ml-0.5 text-ink-4">%</span>
                     </span>
                   </div>
-                  <p className="text-sm text-ink-3">포트폴리오 변동성</p>
+                  <p className="text-sm text-ink-3">{t("summary.portfolioVolatility")}</p>
                   <span
                     className={`self-start px-3 py-1 rounded-full text-xs font-bold ${
                       analysisResult.summary.riskLevel === "LOW"
@@ -2009,14 +1835,14 @@ export default function PortfolioMockPage() {
                           : "bg-danger/10 text-danger"
                     }`}
                   >
-                    {riskLevelLabel[analysisResult.summary.riskLevel] ?? analysisResult.summary.riskLevel}
+                    {t(`riskLevel.${analysisResult.summary.riskLevel}` as `riskLevel.${string}`, analysisResult.summary.riskLevel)}
                   </span>
                 </div>
 
                 {/* 카드 2: 분산 수준 */}
                 <div className="rounded-2xl p-5 flex flex-col gap-3 bg-surface border border-line shadow-card">
                   <p className="text-xs font-bold uppercase tracking-wider text-ink-4">
-                    성향 기준 변동성
+                    {t("summary.targetVolCard")}
                   </p>
                   <div className="flex items-end gap-2">
                     <span className="text-3xl font-bold text-ink font-mono tabular tracking-tighter">
@@ -2025,7 +1851,7 @@ export default function PortfolioMockPage() {
                     </span>
                   </div>
                   <p className="text-sm text-ink-3">
-                    투자 성향 기준 목표 변동성입니다
+                    {t("summary.targetVolDesc")}
                   </p>
                   <span
                     className={`self-start px-3 py-1 rounded-full text-xs font-bold ${
@@ -2036,21 +1862,21 @@ export default function PortfolioMockPage() {
                           : "bg-danger/10 text-danger"
                     }`}
                   >
-                    {suitabilityLabel[analysisResult.summary.suitability] ?? analysisResult.summary.suitability}
+                    {t(`suitability.${analysisResult.summary.suitability}` as `suitability.${string}`, analysisResult.summary.suitability)}
                   </span>
                 </div>
 
                 {/* 카드 3: 효율성 */}
                 <div className="rounded-2xl p-5 flex flex-col gap-3 bg-surface border border-line shadow-card">
                   <p className="text-xs font-bold uppercase tracking-wider text-ink-4">
-                    성향 프로필
+                    {t("summary.profileCard")}
                   </p>
                   <div className="flex items-end gap-2">
                     <span className="text-3xl font-bold text-ink font-mono tabular tracking-tighter">
                       {analysisResult.policy.riskProfile.profileType}
                     </span>
                   </div>
-                  <p className="text-sm text-ink-3">심리 기반 투자 성향</p>
+                  <p className="text-sm text-ink-3">{t("summary.profileDesc")}</p>
                   <span
                     className={`self-start px-3 py-1 rounded-full text-xs font-bold ${
                       analysisResult.summary.volatilityGap <= 0
@@ -2058,14 +1884,14 @@ export default function PortfolioMockPage() {
                         : "bg-danger/10 text-danger"
                     }`}
                   >
-                    차이 {(analysisResult.summary.volatilityGap * 100).toFixed(1)}%
+                    {t("summary.volDiff", { value: (analysisResult.summary.volatilityGap * 100).toFixed(1) })}
                   </span>
                 </div>
               </div>
 
               {analysisResult.explain?.sections?.coreRisk ? (
                 <div>
-                  {renderExplainSection(analysisResult.explain.sections.coreRisk)}
+                  {renderExplainSection(analysisResult.explain.sections.coreRisk, undefined, t)}
                 </div>
               ) : null}
 
@@ -2078,14 +1904,14 @@ export default function PortfolioMockPage() {
                 ];
                 return (
                   <section className="rounded-2xl p-5 bg-surface border border-line shadow-card">
-                    <h3 className="text-base font-bold text-ink">변동성 기반 분석</h3>
+                    <h3 className="text-base font-bold text-ink">{t("volatilitySection.title")}</h3>
                     <p className="mt-1 text-sm leading-relaxed text-ink-3">
-                      가격 시계열의 공분산과 현금 한도를 기준으로 목표 변동성에 가까운 포트폴리오를 비교합니다.
+                      {t("volatilitySection.desc")}
                       <br></br>
-                      LOW/MID/HIGH는 절대 위험등급이 아닌 각 카드의 목표 변동성 대비 실현 변동성 수준입니다.
+                      {t("volatilitySection.desc2")}
                     </p>
                     <div className="mt-3">
-                      {renderExplainSection(analysisResult.explain?.sections?.volatilityAnalysis, { hideTitle: true })}
+                      {renderExplainSection(analysisResult.explain?.sections?.volatilityAnalysis, { hideTitle: true }, t)}
                     </div>
                     <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
                       {basicPortfolioCards.map((portfolio) => (
@@ -2093,12 +1919,12 @@ export default function PortfolioMockPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-sm font-bold text-ink">
-                                {portfolioTypeLabel[portfolio.type] ?? portfolio.label}
+                                {t(`portfolioType.${portfolio.type}` as `portfolioType.${string}`, portfolio.label ?? portfolio.type)}
                               </p>
                               <p className="text-xs mt-1 text-ink-4">{portfolio.userDescription}</p>
                             </div>
                             <span
-                              title="각 카드의 목표 변동성 대비 실현 변동성 등급입니다."
+                              title={t("volatilitySection.desc2")}
                               className={`px-2 py-1 rounded-full text-[11px] font-bold ${
                                 portfolio.riskLevel === "LOW"
                                   ? "bg-success/10 text-success"
@@ -2107,7 +1933,7 @@ export default function PortfolioMockPage() {
                                     : "bg-danger/10 text-danger"
                               }`}
                             >
-                              {riskLevelLabel[portfolio.riskLevel] ?? portfolio.riskLevel}
+                              {t(`riskLevel.${portfolio.riskLevel}` as `riskLevel.${string}`, portfolio.riskLevel)}
                             </span>
                           </div>
 
@@ -2126,7 +1952,7 @@ export default function PortfolioMockPage() {
                               />
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs text-ink-4">변동성</p>
+                              <p className="text-xs text-ink-4">{t("volatilitySection.volatilityLabel")}</p>
                               <p className="text-2xl font-bold text-ink font-mono tabular tracking-tighter">
                                 {formatPct(portfolio.volatility)}
                               </p>
@@ -2135,7 +1961,7 @@ export default function PortfolioMockPage() {
                               </p>
                               {portfolio.targetVolatility !== null && portfolio.targetVolatility !== undefined && (
                                 <p className="text-[11px] text-ink-4">
-                                  기준 {formatPct(portfolio.targetVolatility)}
+                                  {t("volatilitySection.targetLabel", { value: formatPct(portfolio.targetVolatility) })}
                                 </p>
                               )}
                             </div>
@@ -2167,20 +1993,13 @@ export default function PortfolioMockPage() {
               })()}
 
 	              {(() => {
-	                const portfolioLabel = (type: string, label?: string) => {
-	                  if (type === "CURRENT") return "현재 포트폴리오";
-	                  if (type === "MIN_VOL") return "변동성 최소안";
-	                  if (type === "MAX_SHARPE") return "위험 대비 수익 우수안";
-	                  if (type === "RISK_ALLOCATION") return "CAL 기반 위험배분";
-	                  if (type === "UTILITY_OPTIMAL") return "효용최대안";
-	                  if (type === "THEORETICAL_UTILITY") return label ?? "목표 투자안";
-	                  return label ?? type;
-	                };
+	                const portfolioLabel = (type: string, label?: string) =>
+	                  t(`portfolioBasicLabel.${type}` as `portfolioBasicLabel.${string}`, label ?? type);
 	                const theoreticalPortfolio = analysisResult.advanced?.candidatePortfolios.find((portfolio) => portfolio.type === "THEORETICAL_UTILITY") ?? null;
-	                const theoreticalBasicLabel = theoreticalPortfolio?.constraintBinding === "CASH_MAX" ? "현금 확대 목표안" : "추가 투자 목표안";
-	                const theoreticalFundingLabel = theoreticalPortfolio?.constraintBinding === "CASH_MAX" ? "필요 현금 비중" : "추가 필요액";
+	                const theoreticalBasicLabel = theoreticalPortfolio?.constraintBinding === "CASH_MAX" ? t("theoreticalCard.cashMaxLabel") : t("theoreticalCard.addCashLabel");
+	                const theoreticalFundingLabel = theoreticalPortfolio?.constraintBinding === "CASH_MAX" ? t("theoreticalCard.cashMaxFundingLabel") : t("theoreticalCard.addCashFundingLabel");
 	                const theoreticalFundingValue = theoreticalPortfolio?.constraintBinding === "CASH_MAX"
-	                  ? `현금 ${formatPct(1 - (theoreticalPortfolio.theoreticalRiskyAllocation ?? 1))}`
+	                  ? t("theoreticalCard.cashPrefix", { value: formatPct(1 - (theoreticalPortfolio.theoreticalRiskyAllocation ?? 1)) })
 	                  : formatKRW(theoreticalPortfolio?.additionalRequiredCash);
 	                const portfolioCards = [
 	                  analysisResult.currentPortfolio,
@@ -2191,13 +2010,13 @@ export default function PortfolioMockPage() {
 
                 return (
                   <div className="rounded-2xl p-5 bg-surface border border-line shadow-card">
-                    <h3 className="text-base font-bold text-ink">효율성 기반 분석</h3>
+                    <h3 className="text-base font-bold text-ink">{t("efficiencySection.title")}</h3>
                     <p className="mt-1 text-sm leading-relaxed text-ink-3">
-                      기대수익률과 변동성을 함께 고려해 위험 대비 수익 효율이 높은 포트폴리오를 비교합니다. <br></br>
-                      평단 기준 현재 수익률은 참고 용도로 제공되며, 분석에 사용되지 않습니다.
+                      {t("efficiencySection.desc")} <br></br>
+                      {t("efficiencySection.desc2")}
                     </p>
                     <div className="mt-3">
-                      {renderExplainSection(analysisResult.explain?.sections?.efficiencyAnalysis, { hideTitle: true })}
+                      {renderExplainSection(analysisResult.explain?.sections?.efficiencyAnalysis, { hideTitle: true }, t)}
                     </div>
                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                       {portfolioCards.map((portfolio) => (
@@ -2254,7 +2073,7 @@ export default function PortfolioMockPage() {
                                     </div>
                                     {portfolio.type === "CURRENT" && weight.assetType !== "CASH" && (
                                       <div className="mt-0.5 ml-3.5 flex items-center justify-between gap-2 font-mono tabular">
-                                        <span className="truncate text-ink-4">평단 기준 현재 수익률</span>
+                                        <span className="truncate text-ink-4">{t("efficiencySection.unrealizedReturn")}</span>
                                         <span className={weight.unrealizedPnl !== undefined && weight.unrealizedPnl !== null && weight.unrealizedPnl < 0 ? "text-danger" : "text-success"}>
                                           {formatPct(weight.unrealizedReturnRate)}
                                         </span>
@@ -2275,8 +2094,8 @@ export default function PortfolioMockPage() {
 	                            <p className="text-xs font-bold text-ink">{theoreticalBasicLabel}</p>
 	                            <p className="mt-1 text-[11px] leading-relaxed text-ink-4">
 	                              {theoreticalPortfolio.constraintBinding === "CASH_MAX"
-	                                ? "지금 설정한 현금 한도보다 현금을 더 많이 둘 때 목표로 삼을 수 있는 구성입니다."
-	                                : "현재 투자금만으로는 도달하기 어려워, 추가 현금을 넣을 때 목표로 삼을 수 있는 구성입니다."}
+	                                ? t("theoreticalCard.cashMaxDesc")
+	                                : t("theoreticalCard.addCashDesc")}
 	                            </p>
 	                          </div>
 	                          <div className="text-right">
@@ -2311,7 +2130,7 @@ export default function PortfolioMockPage() {
 	                                <p className="mt-0.5 font-mono tabular text-ink">{formatPct(theoreticalPortfolio.expectedReturn ?? 0)}</p>
 	                              </div>
 	                              <div>
-	                                <p>위험자산 배수</p>
+	                                <p>{t("theoreticalCard.riskyMultiplier")}</p>
 	                                <p className="mt-0.5 font-mono tabular text-ink">{theoreticalPortfolio.theoreticalRiskyAllocation?.toFixed(2) ?? "-"}x</p>
 	                              </div>
 	                            </div>
@@ -2361,13 +2180,13 @@ export default function PortfolioMockPage() {
                   <section className="rounded-2xl p-5 bg-surface border border-line shadow-card">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-base font-bold text-ink">시장 기준 분석</h3>
+                        <h3 className="text-base font-bold text-ink">{t("marketAnalysis.title")}</h3>
                         <p className="mt-1 text-sm leading-relaxed text-ink-3">
-                          과거 가격 흐름과 시장 기준 흐름을 함께 반영해 최종 기대 흐름이 어떻게 잡혔는지 확인합니다.
+                          {t("marketAnalysis.desc")}
                         </p>
                       </div>
                       <span className="rounded-md border border-line bg-bg-sunk px-2 py-1 text-[11px] font-mono text-ink-3">
-                        {capmStatusLabel[capm?.status ?? "UNAVAILABLE"] ?? capm?.status ?? "데이터 없음"}
+                        {t(`capmStatus.${capm?.status ?? "UNAVAILABLE"}` as `capmStatus.${string}`, capm?.status ?? t("capmStatus.UNAVAILABLE"))}
                       </span>
                     </div>
 
@@ -2379,33 +2198,33 @@ export default function PortfolioMockPage() {
 
                     <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
                       <div className="rounded-lg bg-bg-sunk border border-line p-3">
-                        <p className="text-[11px] text-ink-4">벤치마크</p>
+                        <p className="text-[11px] text-ink-4">{t("marketAnalysis.benchmarkCard")}</p>
                         <p className="mt-1 text-sm font-bold text-ink">{benchmark?.benchmarkName ?? benchmark?.benchmarkCode ?? "-"}</p>
-                        <p className="mt-0.5 text-[11px] text-ink-4">{benchmarkSourceLabel[benchmark?.source ?? ""] ?? "-"} · 결측 {formatPct(benchmark?.missingRate)}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-4">{t(`benchmarkSource.${benchmark?.source ?? ""}` as `benchmarkSource.${string}`, "-")} · {t("marketAnalysis.missingRate", { value: formatPct(benchmark?.missingRate) })}</p>
                       </div>
                       <div className="rounded-lg bg-bg-sunk border border-line p-3">
-                        <p className="text-[11px] text-ink-4">반영된 종목</p>
-                        <p className="mt-1 text-sm font-mono font-bold text-ink">{appliedCount}개</p>
-                        <p className="mt-0.5 text-[11px] text-ink-4">제외 {excludedCount}개 · 부분 {capm?.partialAssetCount ?? 0}개</p>
+                        <p className="text-[11px] text-ink-4">{t("marketAnalysis.appliedCard")}</p>
+                        <p className="mt-1 text-sm font-mono font-bold text-ink">{appliedCount}{t("marketAnalysis.appliedCountSuffix")}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-4">{t("marketAnalysis.excludedSuffix", { count: excludedCount, partial: capm?.partialAssetCount ?? 0 })}</p>
                       </div>
                       <div className="rounded-lg bg-bg-sunk border border-line p-3">
-                        <p className="text-[11px] text-ink-4">시장 기준 반영 비중</p>
+                        <p className="text-[11px] text-ink-4">{t("marketAnalysis.capmWeightCard")}</p>
                         <p className="mt-1 text-sm font-mono font-bold text-ink">{formatPct(averageCapmWeight)}</p>
                         <div className="mt-2 h-2 rounded-full bg-surface overflow-hidden">
                           <div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, Math.max(0, averageCapmWeight * 100))}%` }} />
                         </div>
                       </div>
                       <div className="rounded-lg bg-bg-sunk border border-line p-3">
-                        <p className="text-[11px] text-ink-4">평균 신뢰도</p>
+                        <p className="text-[11px] text-ink-4">{t("marketAnalysis.confidenceCard")}</p>
                         <p className="mt-1 text-sm font-mono font-bold text-ink">{formatPct(averageBlendConfidence)}</p>
-                        <p className="mt-0.5 text-[11px] text-ink-4">낮을수록 과거 흐름 중심</p>
+                        <p className="mt-0.5 text-[11px] text-ink-4">{t("marketAnalysis.confidenceDesc")}</p>
                       </div>
                     </div>
 
                     {capmAssets.length ? (
                       <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
                         <div className="rounded-lg bg-bg-sunk border border-line p-3">
-                          <h4 className="text-xs font-bold text-ink">종목별 최종 기대 흐름</h4>
+                          <h4 className="text-xs font-bold text-ink">{t("marketAnalysis.historicalExpected")}</h4>
                           <div className="mt-3 flex flex-col gap-3">
                             {capmAssets.slice(0, 8).map((asset) => {
                               const capmWeight = Math.min(1, Math.max(0, asset.capmWeight ?? 0));
@@ -2415,7 +2234,7 @@ export default function PortfolioMockPage() {
                                   <div className="flex items-center justify-between gap-2 text-[11px]">
                                     <span className="font-semibold text-ink truncate">{asset.companyName ?? asset.stockCode}</span>
                                     <span className="font-mono tabular text-ink-4">
-                                      과거 {formatPct(historicalWeight, 0)} · 시장 {formatPct(capmWeight, 0)}
+                                      {t("marketAnalysis.blendRatioLabel", { historical: formatPct(historicalWeight, 0), capm: formatPct(capmWeight, 0) })}
                                     </span>
                                   </div>
                                   <div className="mt-1 flex h-2 rounded-full bg-surface overflow-hidden">
@@ -2423,9 +2242,9 @@ export default function PortfolioMockPage() {
                                     <div className="h-full bg-accent" style={{ width: `${capmWeight * 100}%` }} />
                                   </div>
                                   <div className="mt-1 grid grid-cols-3 gap-2 text-[10px] text-ink-4">
-                                    <span>과거 흐름 {formatPct(asset.historicalExpectedReturn)}</span>
-                                    <span>시장 기준 {asset.capmExpectedReturn !== null && asset.capmExpectedReturn !== undefined ? formatPct(asset.capmExpectedReturn) : "-"}</span>
-                                    <span className="text-ink">최종 {formatPct(asset.blendedExpectedReturn)}</span>
+                                    <span>{t("marketAnalysis.historicalLabel", { value: formatPct(asset.historicalExpectedReturn) })}</span>
+                                    <span>{t("marketAnalysis.capmLabel", { value: asset.capmExpectedReturn !== null && asset.capmExpectedReturn !== undefined ? formatPct(asset.capmExpectedReturn) : "-" })}</span>
+                                    <span className="text-ink">{t("marketAnalysis.finalLabel", { value: formatPct(asset.blendedExpectedReturn) })}</span>
                                   </div>
                                 </div>
                               );
@@ -2434,15 +2253,15 @@ export default function PortfolioMockPage() {
                         </div>
 
                         <div className="rounded-lg bg-bg-sunk border border-line p-3">
-                          <h4 className="text-xs font-bold text-ink">종목별 결과 요약</h4>
+                          <h4 className="text-xs font-bold text-ink">{t("marketAnalysis.summaryTable")}</h4>
                           <div className="mt-2 overflow-x-auto">
                             <table className="w-full min-w-[460px] text-left text-[11px]">
                               <thead className="text-ink-4">
                                 <tr>
-                                  <th className="py-2 pr-3">종목</th>
-                                  <th className="py-2 pr-3">시장 반영</th>
-                                  <th className="py-2 pr-3">최종 기대 흐름</th>
-                                  <th className="py-2 pr-3">상태</th>
+                                  <th className="py-2 pr-3">{t("marketAnalysis.col.stock")}</th>
+                                  <th className="py-2 pr-3">{t("marketAnalysis.col.capmWeight")}</th>
+                                  <th className="py-2 pr-3">{t("marketAnalysis.col.finalExpected")}</th>
+                                  <th className="py-2 pr-3">{t("marketAnalysis.col.status")}</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -2451,7 +2270,7 @@ export default function PortfolioMockPage() {
                                     <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
                                     <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.capmWeight)}</td>
                                     <td className="py-2 pr-3 font-mono tabular text-ink">{formatPct(asset.blendedExpectedReturn)}</td>
-                                    <td className="py-2 pr-3">{capmAssetStatusLabel[asset.status ?? ""] ?? "-"}</td>
+                                    <td className="py-2 pr-3">{t(`capmAssetStatus.${asset.status ?? ""}` as `capmAssetStatus.${string}`, "-")}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -2462,7 +2281,7 @@ export default function PortfolioMockPage() {
                     ) : null}
 
                     <p className="mt-3 rounded-lg bg-bg-sunk border border-line px-3 py-2 text-[11px] leading-relaxed text-ink-4">
-                      시장 기준 분석은 종목이 시장 흐름과 얼마나 같이 움직였는지 참고해 최종 기대 흐름을 보정한 결과입니다. 예상 수익률 보장이나 추천 비중으로 해석하지 않습니다.
+                      {t("marketAnalysis.footnote")}
                     </p>
                   </section>
                 );
@@ -2470,8 +2289,8 @@ export default function PortfolioMockPage() {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="rounded-2xl p-5 bg-surface border border-line shadow-card">
-                  <h3 className="text-base font-bold text-ink">위험 기여도</h3>
-                  <p className="mt-1 text-xs text-ink-4">보유 비중보다 실제 위험을 많이 만드는 종목을 확인합니다.</p>
+                  <h3 className="text-base font-bold text-ink">{t("riskContribution.title")}</h3>
+                  <p className="mt-1 text-xs text-ink-4">{t("riskContribution.subtitle")}</p>
                   <div className="mt-4 flex flex-col gap-3">
                     {analysisResult.currentPortfolio.riskContributions.map((contribution) => (
                       <div key={contribution.stockCode}>
@@ -2495,13 +2314,13 @@ export default function PortfolioMockPage() {
                 </div>
 
                 <div className="rounded-2xl p-5 bg-surface border border-line shadow-card">
-                  <h3 className="text-base font-bold text-ink">주요 해석</h3>
+                  <h3 className="text-base font-bold text-ink">{t("keyInsight.title")}</h3>
                   <div className="mt-4 flex flex-col gap-3">
                     {analysisResult.riskDrivers.map((driver) => (
                       <div key={driver.code} className="rounded-xl bg-bg-sunk border border-line p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-bold text-ink">{driver.title}</p>
-                          <span className="text-[11px] font-bold text-ink-4">{featureSourceLabel[driver.source] ?? driver.source}</span>
+                          <span className="text-[11px] font-bold text-ink-4">{t(`featureSource.${driver.source}` as `featureSource.${string}`, driver.source)}</span>
                         </div>
                         <p className="mt-1 text-xs leading-relaxed text-ink-3">{driver.description}</p>
                       </div>
@@ -2514,10 +2333,9 @@ export default function PortfolioMockPage() {
                 <section className="rounded-2xl p-5 bg-surface border border-line shadow-card">
                   <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
                     <div>
-	                      <h3 className="text-base font-bold text-ink">보조 관측 시나리오</h3>
+	                      <h3 className="text-base font-bold text-ink">{t("overlayScenario.title")}</h3>
 	                      <p className="mt-1 text-sm leading-relaxed text-ink-3">
-	                        핵심 리스크 최적화 결과를 대체하지 않는 보조 관측 기반 민감도 분석입니다.
-	                        선택한 보조 관측이 현재 구성의 확대·축소·분산 판단에 미치는 영향을 보여주며, 투자 추천 비중이나 수익률 최적해로 해석하지 않습니다.
+	                        {t("overlayScenario.desc")}
 	                      </p>
                     </div>
                     <span className="text-xs font-mono tabular text-ink-4">
@@ -2556,7 +2374,7 @@ export default function PortfolioMockPage() {
                   ) : null}
 
                   <div className="mt-5">
-                    {renderExplainSection(analysisResult.explain?.sections?.overlayObservations)}
+                    {renderExplainSection(analysisResult.explain?.sections?.overlayObservations, undefined, t)}
                   </div>
 
                   {analysisResult.overlays.explanations?.length ? (
@@ -2575,7 +2393,7 @@ export default function PortfolioMockPage() {
                               {item.score.toFixed(2)}
                             </span>
                           </div>
-                          <div className="mt-1 text-xs leading-relaxed text-ink-3">{renderOverlayValue(item.overlayType, item.description)}</div>
+                          <div className="mt-1 text-xs leading-relaxed text-ink-3">{renderOverlayValue(item.overlayType, item.description, t)}</div>
                         </div>
                       ))}
                     </div>
@@ -2592,10 +2410,10 @@ export default function PortfolioMockPage() {
 	                      <div key={portfolio.type} className="rounded-xl bg-bg-sunk border border-line p-4">
 	                        <div className="flex items-start justify-between gap-3">
 	                          <div>
-	                            <p className="text-sm font-bold text-ink">{portfolioTypeLabel[portfolio.type] ?? portfolio.label}</p>
+	                            <p className="text-sm font-bold text-ink">{t(`portfolioType.${portfolio.type}` as `portfolioType.${string}`, portfolio.label ?? portfolio.type)}</p>
 	                            <p className="mt-1 text-xs leading-relaxed text-ink-3">{portfolio.userDescription}</p>
 	                          </div>
-	                          <span className="text-[11px] font-bold text-ink-4">{riskLevelLabel[portfolio.riskLevel] ?? portfolio.riskLevel}</span>
+	                          <span className="text-[11px] font-bold text-ink-4">{t(`riskLevel.${portfolio.riskLevel}` as `riskLevel.${string}`, portfolio.riskLevel)}</span>
 	                        </div>
                         <div className="mt-4 flex items-center gap-3">
                           {pdfExporting ? (
@@ -2612,10 +2430,10 @@ export default function PortfolioMockPage() {
                             />
                           )}
                           <div className="min-w-0">
-                            <p className="text-[11px] text-ink-4">변동성</p>
+                            <p className="text-[11px] text-ink-4">{t("volatilitySection.volatilityLabel")}</p>
 	                            <p className="text-lg font-bold font-mono tabular text-ink">{formatPct(portfolio.volatility)}</p>
 	                            <p className="mt-0.5 text-[11px] font-mono tabular text-ink-4">
-	                              최대 변화 {formatPctPoint(maxAbsDelta)}
+	                              {t("overlayScenario.maxDelta", { value: formatPctPoint(maxAbsDelta) })}
 	                            </p>
 	                          </div>
 	                        </div>
@@ -2648,17 +2466,17 @@ export default function PortfolioMockPage() {
 	                  </div>
 
                   <div className="mt-5">
-                    {renderExplainSection(analysisResult.explain?.sections?.portfolioComparison)}
+                    {renderExplainSection(analysisResult.explain?.sections?.portfolioComparison, undefined, t)}
                   </div>
 
                   {analysisResult.explain?.sections?.finalJudgement ? (
                     <div className="mt-5">
-                      {renderExplainSection(analysisResult.explain.sections.finalJudgement)}
+                      {renderExplainSection(analysisResult.explain.sections.finalJudgement, undefined, t)}
                     </div>
                   ) : analysisResult.explain?.text && !explainSections(analysisResult.explain).length ? (
                     <div className="mt-5 rounded-xl bg-bg-sunk border border-line p-4">
                       <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-base font-bold text-ink">설명 요약</h3>
+                        <h3 className="text-base font-bold text-ink">{t("explainSummary.title")}</h3>
                         <span className="text-[11px] font-bold text-ink-4">{analysisResult.explain.provider}</span>
                       </div>
                       <p className="mt-3 text-sm leading-relaxed text-ink-3">
@@ -2671,7 +2489,7 @@ export default function PortfolioMockPage() {
 
               {analysisResult.warnings.length > 0 && (
                 <div className="rounded-2xl p-4 bg-warn/10 border border-warn/20">
-                  <p className="text-sm font-bold text-ink">참고해주세요</p>
+                  <p className="text-sm font-bold text-ink">{t("warnings.title")}</p>
                   <div className="mt-2 flex flex-col gap-1">
                     {analysisResult.warnings.slice(0, 4).map((warning) => (
                       <p key={`${warning.code}-${warning.target ?? "global"}`} className="text-xs text-ink-3">
@@ -2687,46 +2505,48 @@ export default function PortfolioMockPage() {
               {analysisTab === "ADVANCED" && <div ref={portfolioReportRef} className="qaima-scroll-stagger rounded-2xl p-5 bg-surface border border-line shadow-card">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-bold text-ink"><DictionaryText text="분석 진단" /></h3>
+                    <h3 className="text-base font-bold text-ink"><DictionaryText text={t("advanced.title")} /></h3>
                     <p className="mt-1 text-xs text-ink-4">
                       <DictionaryText text={analysisResult.freshness.userMessage ?? ""} />
                     </p>
                   </div>
                   <span className="text-xs font-mono tabular text-ink-4">
-                    분석대상 {analysisResult.policy.dataQuality.includedHoldingCount}개 · 제외 {analysisResult.policy.dataQuality.excludedHoldingCount}개
+                    {t("advanced.includedCount", { count: analysisResult.policy.dataQuality.includedHoldingCount, excluded: analysisResult.policy.dataQuality.excludedHoldingCount })}
                   </span>
                 </div>
 
                 <div className="mt-4 grid grid-cols-1 lg:grid-cols-5 gap-3">
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4"><DictionaryText text="가격 시계열 기준" /></p>
+                    <p className="text-xs text-ink-4"><DictionaryText text={t("advanced.priceBase")} /></p>
                     <p className="mt-1 text-sm font-bold text-ink">
-                      {pricePolicyLabel[analysisResult.policy.pricePolicy.used] ?? analysisResult.policy.pricePolicy.used}
+                      {t(`pricePolicy.${analysisResult.policy.pricePolicy.used}` as `pricePolicy.${string}`, analysisResult.policy.pricePolicy.used)}
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4"><DictionaryText text="수익률 표본수" /></p>
+                    <p className="text-xs text-ink-4"><DictionaryText text={t("advanced.sampleCount")} /></p>
                     <p className="mt-1 text-sm font-bold text-ink">
-                      {analysisResult.advanced?.covarianceDiagnostics?.sampleSize ?? 0}일
+                      {analysisResult.advanced?.covarianceDiagnostics?.sampleSize ?? 0}{t("advanced.sampleUnit")}
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4"><DictionaryText text="공통 결측률" /></p>
+                    <p className="text-xs text-ink-4"><DictionaryText text={t("advanced.commonMissing")} /></p>
                     <p className="mt-1 text-sm font-bold text-ink font-mono tabular">
                       {formatPct(analysisResult.policy.dataQuality.commonMissingRate)}
                     </p>
                     <p className="mt-0.5 text-[11px] text-ink-4">
-                      기준 {formatPct(analysisResult.policy.dataPolicy.maxCommonMissingRate, 0)} · 공통 {analysisResult.policy.dataQuality.commonPriceCount}일
+                      {t("advanced.missingDetail", { threshold: formatPct(analysisResult.policy.dataPolicy.maxCommonMissingRate, 0), count: analysisResult.policy.dataQuality.commonPriceCount })}
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4"><DictionaryText text="공분산 추정 모형" /></p>
+                    <p className="text-xs text-ink-4"><DictionaryText text={t("advanced.covModel")} /></p>
                     <p className="mt-1 text-sm font-bold text-ink">
-                      {covarianceModelLabel[analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? ""] ?? analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel ?? "-"}
+                      {analysisResult.advanced?.covarianceDiagnostics?.usedCovarianceModel
+                        ? t(`covarianceModel.${analysisResult.advanced.covarianceDiagnostics.usedCovarianceModel}` as `covarianceModel.${string}`, analysisResult.advanced.covarianceDiagnostics.usedCovarianceModel)
+                        : "-"}
                     </p>
                   </div>
                   <div className="rounded-xl bg-bg-sunk border border-line p-3">
-                    <p className="text-xs text-ink-4"><DictionaryText text="무위험수익률 r_f" /></p>
+                    <p className="text-xs text-ink-4"><DictionaryText text={t("advanced.riskFree")} /></p>
                     <p className="mt-1 text-sm font-bold text-ink font-mono tabular">
                       {formatPct(analysisResult.policy.riskFreePolicy?.rate ?? 0)}
                     </p>
@@ -2861,12 +2681,12 @@ export default function PortfolioMockPage() {
                               {series.companyName ?? asset?.companyName ?? series.stockCode}
                             </p>
                             <p className="mt-0.5 text-[10px] text-ink-4">
-                              <DictionaryText text={`${series.benchmarkName ?? asset?.benchmarkName ?? series.benchmarkCode ?? asset?.benchmarkCode ?? "벤치마크"} 기준 · 종목 수익률 = 일간 α + β × 벤치마크 수익률`} />
+                              {t("sclSection.regressionDesc", { benchmark: series.benchmarkName ?? asset?.benchmarkName ?? series.benchmarkCode ?? asset?.benchmarkCode ?? t("capmSection.benchmarkCard") })}
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-2 text-[10px] font-mono tabular text-ink-4">
                             <span>β {line?.beta?.toFixed(3) ?? "-"}</span>
-                            <span>일간 α {line?.dailyAlpha !== null && line?.dailyAlpha !== undefined ? formatPct(line.dailyAlpha, 3) : "-"}</span>
+                            <span>{t("sclSection.tableCol.dailyAlpha")} {line?.dailyAlpha !== null && line?.dailyAlpha !== undefined ? formatPct(line.dailyAlpha, 3) : "-"}</span>
                             <span>R² {asset?.rSquared?.toFixed(3) ?? "-"}</span>
                           </div>
                         </div>
@@ -2880,8 +2700,8 @@ export default function PortfolioMockPage() {
                           <line x1="44" y1="168" x2="44" y2="40" stroke="currentColor" className="text-line" />
                           <line x1={x(0)} y1="40" x2={x(0)} y2="168" stroke="#cbd5e1" strokeDasharray="3 4" />
                           <line x1="44" y1={y(0)} x2="336" y2={y(0)} stroke="#cbd5e1" strokeDasharray="3 4" />
-                          <text x="336" y="158" textAnchor="end" className="fill-ink-4 text-[10px]">벤치마크 수익률</text>
-                          <text x="44" y="24" className="fill-ink-4 text-[10px]">종목 수익률</text>
+                          <text x="336" y="158" textAnchor="end" className="fill-ink-4 text-[10px]">{t("sclSection.chartBenchmarkLabel")}</text>
+                          <text x="44" y="24" className="fill-ink-4 text-[10px]">{t("sclSection.chartAssetLabel")}</text>
                           <text x="44" y="184" className="fill-ink-4 text-[9px]">{formatPct(minX)}</text>
                           <text x="336" y="184" textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(maxX)}</text>
                           <text x="38" y={y(minY)} textAnchor="end" className="fill-ink-4 text-[9px]">{formatPct(minY)}</text>
@@ -2899,9 +2719,9 @@ export default function PortfolioMockPage() {
                           ))}
                         </svg>
                         <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-ink-4">
-                          <span className="text-accent"><DictionaryText text="파란 점: 공통 거래일 일간 로그수익률" /></span>
-                          <span className="text-danger"><DictionaryText text="빨간 선: SCL 회귀선" /></span>
-                          <span><DictionaryText text={`최근 ${Math.min(180, points.length)}개 관측치 표시`} /></span>
+                          <span className="text-accent"><DictionaryText text={t("sclSection.legend.points")} /></span>
+                          <span className="text-danger"><DictionaryText text={t("sclSection.legend.line")} /></span>
+                          <span><DictionaryText text={t("sclSection.legend.count", { count: Math.min(180, points.length) })} /></span>
                         </div>
                       </div>
                     );
@@ -2914,77 +2734,77 @@ export default function PortfolioMockPage() {
                     <div className="mt-4 rounded-xl bg-bg-sunk border border-line p-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <h4 className="text-sm font-bold text-ink"><DictionaryText text="CAPM · SCL · SML 기대수익률 혼합" /></h4>
+                          <h4 className="text-sm font-bold text-ink">{t("capmSection.title")}</h4>
                           <p className="mt-1 text-xs leading-relaxed text-ink-4">
-                            <DictionaryText text="최적화 입력 E[R]은 과거 흐름 추정값과 CAPM 기대수익률을 표본수·벤치마크 품질·설명력 기반 신뢰도로 혼합한 값입니다." />
+                            {t("capmSection.desc")}
                           </p>
                         </div>
                         <span className="rounded-md border border-line bg-surface px-2 py-1 text-[11px] font-mono text-ink-3">
-                          {capmStatusLabel[capm?.status ?? "UNAVAILABLE"] ?? capm?.status ?? "데이터 없음"}
+                          {t(`capmStatus.${capm?.status ?? "UNAVAILABLE"}` as `capmStatus.${string}`, capm?.status ?? t("capmStatus.UNAVAILABLE"))}
                         </span>
                       </div>
                       <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
                         <div className="rounded-lg bg-surface border border-line p-2">
-                          <p className="text-[11px] text-ink-4"><DictionaryText text="벤치마크" /></p>
+                          <p className="text-[11px] text-ink-4">{t("capmSection.benchmarkCard")}</p>
                           <p className="mt-1 text-xs font-bold text-ink">
                             {benchmark?.mode === "MULTI_BENCHMARK"
-                              ? `상장시장별 ${benchmark.benchmarks?.length ?? 0}개`
+                              ? t("capmSection.multiBenchmark", { count: benchmark.benchmarks?.length ?? 0 })
                               : primaryBenchmark?.benchmarkName ?? primaryBenchmark?.benchmarkCode ?? "-"}
                           </p>
                           <p className="mt-0.5 text-[11px] text-ink-4">
-                            {benchmark?.mode ?? "SINGLE_BENCHMARK"} · {benchmarkSourceLabel[primaryBenchmark?.source ?? ""] ?? "-"}
+                            {benchmark?.mode ?? "SINGLE_BENCHMARK"} · {t(`benchmarkSource.${primaryBenchmark?.source ?? "UNAVAILABLE"}` as `benchmarkSource.${string}`, primaryBenchmark?.source ?? "-")}
                           </p>
                         </div>
                         <div className="rounded-lg bg-surface border border-line p-2">
-                          <p className="text-[11px] text-ink-4"><DictionaryText text="벤치마크 결측률" /></p>
+                          <p className="text-[11px] text-ink-4">{t("capmSection.missingCard")}</p>
                           <p className="mt-1 text-xs font-mono font-bold text-ink">{formatPct(primaryBenchmark?.missingRate)}</p>
                           <p className="mt-0.5 text-[11px] text-ink-4">
                             {primaryBenchmark?.availablePriceCount ?? 0}/{primaryBenchmark?.expectedTradingDayCount ?? 0}
                           </p>
                         </div>
                         <div className="rounded-lg bg-surface border border-line p-2">
-                          <p className="text-[11px] text-ink-4"><DictionaryText text="CAPM 반영 종목" /></p>
+                          <p className="text-[11px] text-ink-4">{t("capmSection.appliedCard")}</p>
                           <p className="mt-1 text-xs font-mono font-bold text-ink">
-                            {(capm?.appliedAssetCount ?? 0) + (capm?.partialAssetCount ?? 0)}개
+                            {(capm?.appliedAssetCount ?? 0) + (capm?.partialAssetCount ?? 0)}{t("marketAnalysis.appliedCountSuffix")}
                           </p>
                           <p className="mt-0.5 text-[11px] text-ink-4">
-                            제외 {capm?.excludedAssetCount ?? 0}개
+                            {t("capmSection.excludedCount", { count: capm?.excludedAssetCount ?? 0 })}
                           </p>
                         </div>
                         <div className="rounded-lg bg-surface border border-line p-2">
-                          <p className="text-[11px] text-ink-4"><DictionaryText text="평균 CAPM 반영 비중" /></p>
+                          <p className="text-[11px] text-ink-4">{t("capmSection.avgWeightCard")}</p>
                           <p className="mt-1 text-xs font-mono font-bold text-ink">
                             {formatPct(typeof expectedPolicy?.averageCapmWeight === "number" ? expectedPolicy.averageCapmWeight : 0)}
                           </p>
                           <p className="mt-0.5 text-[11px] text-ink-4">
-                            신뢰도 {formatPct(typeof expectedPolicy?.averageBlendConfidence === "number" ? expectedPolicy.averageBlendConfidence : 0)}
+                            {t("capmSection.confidenceLabel", { value: formatPct(typeof expectedPolicy?.averageBlendConfidence === "number" ? expectedPolicy.averageBlendConfidence : 0) })}
                           </p>
                         </div>
                       </div>
                       {capmAssets.length ? (
                         <div className="mt-3">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h5 className="text-xs font-bold text-ink"><DictionaryText text="최종 E[R]" /></h5>
+                            <h5 className="text-xs font-bold text-ink">{t("capmSection.finalER")}</h5>
                             <p className="text-[11px] text-ink-4">
-                              <DictionaryText text="과거 흐름 E[R]과 CAPM E[R]을 신뢰도 기반 반영 비중으로 혼합합니다." />
+                              {t("capmSection.blendDesc")}
                             </p>
                           </div>
                           <div className="mt-2 overflow-x-auto">
                           <table className="w-full min-w-[900px] text-left text-[11px]">
                             <thead className="text-ink-4">
                               <tr>
-                                <th className="py-2 pr-3">종목</th>
-                                <th className="py-2 pr-3"><DictionaryText text="벤치마크" /></th>
-                                <th className="py-2 pr-3"><DictionaryText text="상태" /></th>
-                                <th className="py-2 pr-3"><DictionaryText text="표본" /></th>
+                                <th className="py-2 pr-3">{t("capmSection.tableCol.stock")}</th>
+                                <th className="py-2 pr-3">{t("capmSection.tableCol.benchmark")}</th>
+                                <th className="py-2 pr-3">{t("capmSection.tableCol.status")}</th>
+                                <th className="py-2 pr-3">{t("capmSection.tableCol.sample")}</th>
                                 <th className="py-2 pr-3">β</th>
-                                <th className="py-2 pr-3">연율 α</th>
+                                <th className="py-2 pr-3">{t("sclSection.tableCol.annualAlpha")}</th>
                                 <th className="py-2 pr-3">R²</th>
-                                <th className="py-2 pr-3"><DictionaryText text="과거 흐름 E[R]" /></th>
-                                <th className="py-2 pr-3"><DictionaryText text="CAPM E[R]" /></th>
-                                <th className="py-2 pr-3"><DictionaryText text="최종 E[R]" /></th>
-                                <th className="py-2 pr-3"><DictionaryText text="CAPM 반영 비중" /></th>
-                                <th className="py-2 pr-3"><DictionaryText text="낮은 비중 근거" /></th>
+                                <th className="py-2 pr-3">{t("capmSection.tableCol.historicalER")}</th>
+                                <th className="py-2 pr-3">{t("capmSection.tableCol.capmER")}</th>
+                                <th className="py-2 pr-3">{t("capmSection.tableCol.finalER2")}</th>
+                                <th className="py-2 pr-3">{t("capmSection.tableCol.capmWeight")}</th>
+                                <th className="py-2 pr-3">{t("capmSection.tableCol.weightReason")}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2992,7 +2812,7 @@ export default function PortfolioMockPage() {
                                 <tr key={`capm-${asset.stockCode}`} className="border-t border-line text-ink-3">
                                   <td className="py-2 pr-3 font-medium text-ink">{asset.companyName ?? asset.stockCode}</td>
                                   <td className="py-2 pr-3">{asset.benchmarkName ?? asset.benchmarkCode ?? "-"}</td>
-                                  <td className="py-2 pr-3">{capmAssetStatusLabel[asset.status ?? ""] ?? "-"}</td>
+                                  <td className="py-2 pr-3">{asset.status ? t(`capmAssetStatus.${asset.status}` as `capmAssetStatus.${string}`, asset.status) : "-"}</td>
                                   <td className="py-2 pr-3 font-mono tabular">{asset.commonSampleSize ?? 0}</td>
                                   <td className="py-2 pr-3 font-mono tabular">{asset.beta?.toFixed(3) ?? "-"}</td>
                                   <td className="py-2 pr-3 font-mono tabular">{asset.annualAlpha !== null && asset.annualAlpha !== undefined ? formatPct(asset.annualAlpha) : "-"}</td>
@@ -3001,7 +2821,7 @@ export default function PortfolioMockPage() {
                                   <td className="py-2 pr-3 font-mono tabular">{asset.capmExpectedReturn !== null && asset.capmExpectedReturn !== undefined ? formatPct(asset.capmExpectedReturn) : "-"}</td>
                                   <td className="py-2 pr-3 font-mono tabular text-ink">{formatPct(asset.blendedExpectedReturn)}</td>
                                   <td className="py-2 pr-3 font-mono tabular">{formatPct(asset.capmWeight)}</td>
-                                  <td className="py-2 pr-3">{capmWeightReasonText(asset)}</td>
+                                  <td className="py-2 pr-3">{capmWeightReasonText(asset, t)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -3013,8 +2833,8 @@ export default function PortfolioMockPage() {
                         <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
                           <div className="rounded-lg bg-surface border border-line p-3">
                             <div className="flex items-center justify-between gap-2">
-                              <h5 className="text-xs font-bold text-ink"><DictionaryText text="SCL 진단" /></h5>
-                              <span className="text-[10px] text-ink-4"><DictionaryText text="α: 일간 / 연율 구분 표시" /></span>
+                              <h5 className="text-xs font-bold text-ink">{t("sclSection.title")}</h5>
+                              <span className="text-[10px] text-ink-4">{t("sclSection.alphaNote")}</span>
                             </div>
                             {pdfExporting ? (
                               selectableSclSeries.length ? (
@@ -3023,7 +2843,7 @@ export default function PortfolioMockPage() {
                                 </div>
                               ) : (
                                 <div className="mt-2 rounded-lg bg-bg-sunk border border-line p-3 text-[11px] text-ink-4">
-                                  <DictionaryText text="SCL 회귀선을 그릴 공통 수익률 관측치가 부족합니다." />
+                                  {t("sclSection.noData")}
                                 </div>
                               )
                             ) : (
@@ -3057,12 +2877,12 @@ export default function PortfolioMockPage() {
                                       {activeSclSeries.companyName ?? activeSclAsset?.companyName ?? activeSclSeries.stockCode}
                                     </p>
                                     <p className="mt-0.5 text-[10px] text-ink-4">
-                                      <DictionaryText text={`${activeSclSeries.benchmarkName ?? activeSclAsset?.benchmarkName ?? activeSclSeries.benchmarkCode ?? activeSclAsset?.benchmarkCode ?? "벤치마크"} 기준 · 종목 수익률 = 일간 α + β × 벤치마크 수익률`} />
+                                      {t("sclSection.regressionDesc", { benchmark: activeSclSeries.benchmarkName ?? activeSclAsset?.benchmarkName ?? activeSclSeries.benchmarkCode ?? activeSclAsset?.benchmarkCode ?? t("capmSection.benchmarkCard") })}
                                     </p>
                                   </div>
                                   <div className="flex flex-wrap gap-2 text-[10px] font-mono tabular text-ink-4">
                                     <span>β {sclLine?.beta?.toFixed(3) ?? "-"}</span>
-                                    <span>일간 α {sclLine?.dailyAlpha !== null && sclLine?.dailyAlpha !== undefined ? formatPct(sclLine.dailyAlpha, 3) : "-"}</span>
+                                    <span>{t("sclSection.tableCol.dailyAlpha")} {sclLine?.dailyAlpha !== null && sclLine?.dailyAlpha !== undefined ? formatPct(sclLine.dailyAlpha, 3) : "-"}</span>
                                     <span>R² {activeSclAsset?.rSquared?.toFixed(3) ?? "-"}</span>
                                   </div>
                                 </div>
@@ -3078,8 +2898,8 @@ export default function PortfolioMockPage() {
                                   <line x1="44" y1="168" x2="44" y2="40" stroke="currentColor" className="text-line" />
                                   <line x1={sclX(0)} y1="40" x2={sclX(0)} y2="168" stroke="#cbd5e1" strokeDasharray="3 4" />
                                   <line x1="44" y1={sclY(0)} x2="336" y2={sclY(0)} stroke="#cbd5e1" strokeDasharray="3 4" />
-                                  <text x="336" y="158" textAnchor="end" className="fill-ink-4 text-[10px]">벤치마크 수익률</text>
-                                  <text x="44" y="24" className="fill-ink-4 text-[10px]">종목 수익률</text>
+                                  <text x="336" y="158" textAnchor="end" className="fill-ink-4 text-[10px]">{t("sclSection.chartBenchmarkLabel")}</text>
+                                  <text x="44" y="24" className="fill-ink-4 text-[10px]">{t("sclSection.chartAssetLabel")}</text>
                                   {!sclHover && (
                                     <g>
                                       <text x="44" y="184" className="fill-ink-4 text-[9px]">{formatPct(sclMinX)}</text>
@@ -3105,24 +2925,24 @@ export default function PortfolioMockPage() {
                                       <line x1="44" y1={sclHover.y} x2="336" y2={sclHover.y} stroke="#64748b" strokeDasharray="3 3" opacity="0.7" />
                                       <rect x={Math.min(236, Math.max(50, sclHover.x - 50))} y="170" width="100" height="20" rx="5" fill="#111827" opacity="0.92" />
                                       <text x={Math.min(290, Math.max(96, sclHover.x))} y="184" textAnchor="middle" className="fill-white text-[10px] font-mono">
-                                        벤치 {formatPct(sclHoverMarket, 2)}
+                                        {t("sclSection.benchmarkHover", { value: formatPct(sclHoverMarket, 2) })}
                                       </text>
                                       <rect x="0" y={Math.min(146, Math.max(42, sclHover.y - 10))} width="62" height="20" rx="5" fill="#111827" opacity="0.92" />
                                       <text x="31" y={Math.min(160, Math.max(56, sclHover.y + 4))} textAnchor="middle" className="fill-white text-[9px] font-mono">
-                                        종목:{formatPct(sclHoverAsset, 1)}
+                                        {t("sclSection.stockHover", { value: formatPct(sclHoverAsset, 1) })}
                                       </text>
                                     </g>
                                   )}
                                 </svg>
                                 <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-ink-4">
-                                  <span className="text-accent"><DictionaryText text="파란 점: 공통 거래일 일간 로그수익률" /></span>
-                                  <span className="text-danger"><DictionaryText text="빨간 선: SCL 회귀선" /></span>
-                                  <span><DictionaryText text={`최근 ${Math.min(180, sclPoints.length)}개 관측치 표시`} /></span>
+                                  <span className="text-accent"><DictionaryText text={t("sclSection.legend.points")} /></span>
+                                  <span className="text-danger"><DictionaryText text={t("sclSection.legend.line")} /></span>
+                                  <span><DictionaryText text={t("sclSection.legend.count", { count: Math.min(180, sclPoints.length) })} /></span>
                                 </div>
                               </div>
                             ) : (
                               <div className="mt-2 rounded-lg bg-bg-sunk border border-line p-3 text-[11px] text-ink-4">
-                                <DictionaryText text="SCL 회귀선을 그릴 공통 수익률 관측치가 부족합니다." />
+                                {t("sclSection.noData")}
                               </div>
                             )}
                               </>
@@ -3131,13 +2951,13 @@ export default function PortfolioMockPage() {
                               <table className="w-full min-w-[560px] text-left text-[11px]">
                                 <thead className="text-ink-4">
                                   <tr>
-                                    <th className="py-2 pr-3">종목</th>
+                                    <th className="py-2 pr-3">{t("sclSection.tableCol.stock")}</th>
                                     <th className="py-2 pr-3">β</th>
-                                    <th className="py-2 pr-3"><DictionaryText text="일간 α" /></th>
-                                    <th className="py-2 pr-3"><DictionaryText text="연율 α" /></th>
+                                    <th className="py-2 pr-3">{t("sclSection.tableCol.dailyAlpha")}</th>
+                                    <th className="py-2 pr-3">{t("sclSection.tableCol.annualAlpha")}</th>
                                     <th className="py-2 pr-3">R²</th>
-                                    <th className="py-2 pr-3"><DictionaryText text="표본" /></th>
-                                    <th className="py-2 pr-3"><DictionaryText text="상태" /></th>
+                                    <th className="py-2 pr-3">{t("sclSection.tableCol.sample")}</th>
+                                    <th className="py-2 pr-3">{t("sclSection.tableCol.status")}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -3156,20 +2976,20 @@ export default function PortfolioMockPage() {
                                         </div>
                                       </td>
                                       <td className="py-2 pr-3 font-mono tabular">{asset.commonSampleSize ?? 0}</td>
-                                      <td className="py-2 pr-3">{capmAssetStatusLabel[asset.status ?? ""] ?? "-"}</td>
+                                      <td className="py-2 pr-3">{asset.status ? t(`capmAssetStatus.${asset.status}` as `capmAssetStatus.${string}`, asset.status) : "-"}</td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
                             </div>
                             <p className="mt-2 text-[11px] text-ink-4">
-                              <DictionaryText text="SCL은 벤치마크 일간 로그수익률과 종목 일간 로그수익률의 관계를 요약한 보조 진단입니다." />
+                              {t("sclSection.footnote")}
                             </p>
                           </div>
                           <div className="rounded-lg bg-surface border border-line p-3">
                             <div className="flex items-center justify-between gap-2">
-                              <h5 className="text-xs font-bold text-ink"><DictionaryText text="SML 진단" /></h5>
-                              <span className="text-[10px] text-ink-4"><DictionaryText text="x: β · y: 연율 E[R]" /></span>
+                              <h5 className="text-xs font-bold text-ink">{t("smlSection.title")}</h5>
+                              <span className="text-[10px] text-ink-4">{t("smlSection.axisNote")}</span>
                             </div>
                             {smlGroups.length > 1 ? (
                               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -3186,7 +3006,7 @@ export default function PortfolioMockPage() {
                                           : "border-line bg-bg-sunk text-ink-3 hover:border-accent/50 hover:text-ink"
                                       }`}
                                     >
-                                      {group.benchmarkName ?? group.benchmarkCode ?? "벤치마크"}
+                                      {group.benchmarkName ?? group.benchmarkCode ?? t("capmSection.benchmarkCard")}
                                     </button>
                                   );
                                 })}
@@ -3194,7 +3014,7 @@ export default function PortfolioMockPage() {
                             ) : null}
                             {activeSmlGroup ? (
                               <div className="mt-2 rounded-md bg-bg-sunk border border-line px-2 py-1 text-[10px] text-ink-4">
-                                {(activeSmlGroup.benchmarkName ?? activeSmlGroup.benchmarkCode ?? "벤치마크")} · {benchmarkSourceLabel[activeSmlGroup.source ?? ""] ?? activeSmlGroup.source ?? "-"} · {activeSmlGroup.availablePriceCount ?? 0}개 · 결측 {formatPct(activeSmlGroup.missingRate)}
+                                {(activeSmlGroup.benchmarkName ?? activeSmlGroup.benchmarkCode ?? t("capmSection.benchmarkCard"))} · {t(`benchmarkSource.${activeSmlGroup.source ?? "UNAVAILABLE"}` as `benchmarkSource.${string}`, activeSmlGroup.source ?? "-")} · {activeSmlGroup.availablePriceCount ?? 0} · {t("smlSection.missingRateDetail", { value: formatPct(activeSmlGroup.missingRate) })}
                               </div>
                             ) : null}
                             <svg
@@ -3207,8 +3027,8 @@ export default function PortfolioMockPage() {
                             >
                               <line x1="44" y1="168" x2="336" y2="168" stroke="currentColor" className="text-line" />
                               <line x1="44" y1="168" x2="44" y2="40" stroke="currentColor" className="text-line" />
-                              <text x="336" y="158" textAnchor="end" className="fill-ink-4 text-[10px]">β</text>
-                              <text x="44" y="24" className="fill-ink-4 text-[10px]">연율 E[R]</text>
+                              <text x="336" y="158" textAnchor="end" className="fill-ink-4 text-[10px]">{t("smlSection.chartBetaLabel")}</text>
+                              <text x="44" y="24" className="fill-ink-4 text-[10px]">{t("smlSection.chartReturnLabel")}</text>
                               {!smlHover && (
                                 <g>
                                   <text x="44" y="184" className="fill-ink-4 text-[9px]">{chartMinBeta.toFixed(1)}</text>
@@ -3237,11 +3057,11 @@ export default function PortfolioMockPage() {
                                   <line x1="44" y1={smlHover.y} x2="336" y2={smlHover.y} stroke="#64748b" strokeDasharray="3 3" opacity="0.7" />
                                   <rect x={Math.min(266, Math.max(50, smlHover.x - 38))} y="170" width="76" height="20" rx="5" fill="#111827" opacity="0.92" />
                                   <text x={Math.min(304, Math.max(88, smlHover.x))} y="184" textAnchor="middle" className="fill-white text-[10px] font-mono">
-                                    β {smlHoverBeta.toFixed(2)}
+                                    {t("smlSection.betaHover", { value: smlHoverBeta.toFixed(2) })}
                                   </text>
                                   <rect x="0" y={Math.min(146, Math.max(42, smlHover.y - 10))} width="58" height="20" rx="5" fill="#111827" opacity="0.92" />
                                   <text x="29" y={Math.min(160, Math.max(56, smlHover.y + 4))} textAnchor="middle" className="fill-white text-[9px] font-mono">
-                                    E[R]:{formatPct(smlHoverReturn, 0)}
+                                    {t("smlSection.erHover", { value: formatPct(smlHoverReturn, 0) })}
                                   </text>
                                 </g>
                               )}
@@ -3250,12 +3070,12 @@ export default function PortfolioMockPage() {
                               <table className="w-full min-w-[520px] text-left text-[11px]">
                                 <thead className="text-ink-4">
                                   <tr>
-                                    <th className="py-2 pr-3">종목</th>
+                                    <th className="py-2 pr-3">{t("smlSection.tableCol.stock")}</th>
                                     <th className="py-2 pr-3">β</th>
-                                    <th className="py-2 pr-3"><DictionaryText text="CAPM E[R]" /></th>
-                                    <th className="py-2 pr-3"><DictionaryText text="과거 흐름 E[R]" /></th>
-                                    <th className="py-2 pr-3"><DictionaryText text="최종 E[R]" /></th>
-                                    <th className="py-2 pr-3"><DictionaryText text="CAPM 반영 비중" /></th>
+                                    <th className="py-2 pr-3">{t("smlSection.tableCol.capmER")}</th>
+                                    <th className="py-2 pr-3">{t("smlSection.tableCol.historicalER")}</th>
+                                    <th className="py-2 pr-3">{t("smlSection.tableCol.finalER")}</th>
+                                    <th className="py-2 pr-3">{t("smlSection.tableCol.capmWeight")}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -3273,23 +3093,23 @@ export default function PortfolioMockPage() {
                               </table>
                             </div>
                             <p className="mt-2 text-[11px] text-ink-4">
-                              <DictionaryText text="SML은 CAPM line 대비 종목 위치를 보는 보조 진단이며 예상 수익률 보장이나 추천 비중이 아닙니다." />
+                              {t("smlSection.footnote")}
                             </p>
                           </div>
                         </div>
                       ) : null}
                       <div className="mt-2 rounded-lg bg-surface border border-line px-3 py-2 text-[11px] text-ink-3">
                         <p className="text-ink">
-                          <DictionaryText text="CAPM 반영 비중은 공통 표본 수, 벤치마크 품질, 결측률, R², correlation, 변동성 안정성을 함께 반영해 계산합니다." />
+                          {t("capmSection.capmWeightNote")}
                         </p>
                         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-1.5">
-                          <p><DictionaryText text="공통 표본: 종목과 벤치마크의 공통 수익률 표본 수가 충분할수록 커집니다." /></p>
-                          <p><DictionaryText text="벤치마크 출처: 저장 데이터 또는 외부 보강 데이터이면 높고, 저장 데이터가 부족하면 낮게 반영됩니다." /></p>
-                          <p><DictionaryText text="데이터 커버리지: 벤치마크 결측률이 낮을수록 커집니다." /></p>
-                          <p><DictionaryText text="시장 설명력(R²): 시장수익률이 종목수익률을 설명하는 정도가 높을수록 커집니다." /></p>
-                          <p><DictionaryText text="상관관계(correlation): 종목과 벤치마크 수익률의 동행성이 강할수록 커집니다." /></p>
-                          <p><DictionaryText text="변동성 안정성: 종목 변동성이 과도하게 높으면 CAPM 반영을 줄입니다." /></p>
-                          <p><DictionaryText text="과거 흐름 비중: CAPM 신뢰도가 낮을수록 과거 흐름 추정값 비중이 커집니다." /></p>
+                          <p>{t("capmSection.capmWeightFactors.commonSample")}</p>
+                          <p>{t("capmSection.capmWeightFactors.benchmarkSource")}</p>
+                          <p>{t("capmSection.capmWeightFactors.coverage")}</p>
+                          <p>{t("capmSection.capmWeightFactors.rSquared")}</p>
+                          <p>{t("capmSection.capmWeightFactors.correlation")}</p>
+                          <p>{t("capmSection.capmWeightFactors.volatility")}</p>
+                          <p>{t("capmSection.capmWeightFactors.historicalWeight")}</p>
                         </div>
                       </div>
                     </div>
@@ -3300,11 +3120,11 @@ export default function PortfolioMockPage() {
                   <table className="w-full min-w-[640px] text-left text-xs">
                     <thead className="text-ink-4">
                       <tr>
-                        <th className="py-2 pr-3">구성종목</th>
-                        <th className="py-2 pr-3">가격 관측치</th>
-                        <th className="py-2 pr-3">결측률</th>
-                        <th className="py-2 pr-3">데이터 소스</th>
-                        <th className="py-2 pr-3">캐시 상태</th>
+                        <th className="py-2 pr-3">{t("advanced.dataTable.col.stock")}</th>
+                        <th className="py-2 pr-3">{t("advanced.dataTable.col.priceCount")}</th>
+                        <th className="py-2 pr-3">{t("advanced.dataTable.col.missingRate")}</th>
+                        <th className="py-2 pr-3">{t("advanced.dataTable.col.dataSource")}</th>
+                        <th className="py-2 pr-3">{t("advanced.dataTable.col.cacheStatus")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3313,8 +3133,8 @@ export default function PortfolioMockPage() {
                           <td className="py-2 pr-3 font-medium text-ink">{series.companyName ?? series.stockCode}</td>
                           <td className="py-2 pr-3 font-mono tabular">{series.availablePriceCount}</td>
                           <td className="py-2 pr-3 font-mono tabular">{formatPct(series.missingRate)}</td>
-                          <td className="py-2 pr-3">{marketDataSourceLabel[series.source ?? ""] ?? series.source}</td>
-                          <td className="py-2 pr-3">{cacheStatusLabel[series.cacheStatus ?? ""] ?? series.cacheStatus}</td>
+                          <td className="py-2 pr-3">{t(`marketDataSource.${series.source ?? "UNAVAILABLE"}` as `marketDataSource.${string}`, series.source ?? "-")}</td>
+                          <td className="py-2 pr-3">{t(`cacheStatus.${series.cacheStatus ?? "UNAVAILABLE"}` as `cacheStatus.${string}`, series.cacheStatus ?? "-")}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -3324,9 +3144,9 @@ export default function PortfolioMockPage() {
                 {analysisResult.advanced?.frontier?.length ? (
                   <div className="mt-5">
                     <div className="flex items-center justify-between gap-3">
-                      <h4 className="text-sm font-bold text-ink">효율적 프론티어</h4>
+                      <h4 className="text-sm font-bold text-ink">{t("frontier.title")}</h4>
                       <p className="text-xs text-ink-4">
-                        <DictionaryText text="E[R]은 극단 수익률을 완화한 과거 흐름과 시장 기준 기대수익률을 신뢰도에 따라 가중한 연율 추정값입니다." />
+                        {t("frontier.desc")}
                       </p>
                     </div>
                     {(() => {
@@ -3656,24 +3476,10 @@ export default function PortfolioMockPage() {
                         ]),
                       );
                       const markerMetricCards = visibleMarkers.filter((portfolio) => portfolio.type !== "CURRENT");
-                      const advancedPortfolioLabel = (type: string, label?: string) => {
-                        if (type === "CURRENT") return "현재 포트폴리오";
-                        if (type === "MIN_VOL") return "최소분산 포트폴리오";
-                        if (type === "MAX_SHARPE") return "최대샤프 포트폴리오";
-                        if (type === "RISK_ALLOCATION") return "CAL 기반 위험배분";
-                        if (type === "UTILITY_OPTIMAL") return "효용최대 포트폴리오";
-                        if (type === "THEORETICAL_UTILITY") return "이론적 효용접점";
-                        return label ?? type;
-                      };
-                      const advancedMarkerLabel = (type: string) => {
-                        if (type === "CURRENT") return "현재";
-                        if (type === "MIN_VOL") return "최소분산";
-                        if (type === "MAX_SHARPE") return "최대샤프";
-                        if (type === "RISK_ALLOCATION") return "위험배분";
-                        if (type === "UTILITY_OPTIMAL") return "효용최대";
-                        if (type === "THEORETICAL_UTILITY") return "이론접점";
-                        return type;
-                      };
+                      const advancedPortfolioLabel = (type: string, label?: string) =>
+                        t(`advancedPortfolioLabel.${type}` as `advancedPortfolioLabel.${string}`, label ?? type);
+                      const advancedMarkerLabel = (type: string) =>
+                        t(`advancedMarkerLabel.${type}` as `advancedMarkerLabel.${string}`, type);
                       const portfolioPieCards = [
                         analysisResult.currentPortfolio,
                         ...["MIN_VOL", "MAX_SHARPE", "RISK_ALLOCATION", "UTILITY_OPTIMAL"]
@@ -3696,14 +3502,14 @@ export default function PortfolioMockPage() {
                             viewBox={`0 0 ${viewW} ${viewH}`}
                             className="w-full h-[640px] cursor-crosshair"
                             role="img"
-                            aria-label="효율적 프론티어, 자본배분선, 투자자 무차별곡선"
+                            aria-label={t("frontier.ariaLabel")}
                             onMouseMove={handleFrontierHover}
                             onMouseLeave={() => setFrontierHover(null)}
                           >
                             <line x1={plotLeft} y1={plotBottom} x2={plotRight} y2={plotBottom} stroke="currentColor" className="text-line" />
                             <line x1={plotLeft} y1={plotBottom} x2={plotLeft} y2={plotTop} stroke="currentColor" className="text-line" />
-                            <text x={plotRight} y={viewH - 24} textAnchor="end" className="fill-ink-4 text-[12px]">변동성 σ</text>
-                            <text x={16} y={plotTop - 18} className="fill-ink-4 text-[12px]">기대수익률 E[R]</text>
+                            <text x={plotRight} y={viewH - 24} textAnchor="end" className="fill-ink-4 text-[12px]">{t("frontier.volatilityAxis")}</text>
+                            <text x={16} y={plotTop - 18} className="fill-ink-4 text-[12px]">{t("frontier.returnAxis")}</text>
                             <text x={plotLeft} y={plotBottom + 26} className="fill-ink-4 text-[11px]">{formatPct(minVol)}</text>
                             <text x={plotRight} y={plotBottom + 26} textAnchor="end" className="fill-ink-4 text-[11px]">{formatPct(maxVol)}</text>
                             <text x={plotLeft - 12} y={y(minReturn)} textAnchor="end" className="fill-ink-4 text-[11px]">{formatPct(minReturn)}</text>
@@ -3889,17 +3695,17 @@ export default function PortfolioMockPage() {
                                 </text>
                                 <rect x={tooltipX} y={tooltipY} width={tooltipW} height={tooltipH} rx="8" fill="#111827" stroke="#334155" opacity="0.96" />
                                 <text x={tooltipX + 12} y={tooltipY + 19} className="fill-white text-[12px] font-semibold">
-                                  {activeRiskFree ? "국채 무위험수익률" : activeMarker ? advancedPortfolioLabel(activeMarker.portfolio.type, activeMarker.portfolio.label) : "좌표"}
+                                  {activeRiskFree ? t("frontier.tooltipRiskFree") : activeMarker ? advancedPortfolioLabel(activeMarker.portfolio.type, activeMarker.portfolio.label) : t("frontier.tooltipCoord")}
                                 </text>
                                 <text x={tooltipX + 12} y={tooltipY + 38} className="fill-slate-300 text-[11px] font-mono">
                                   {activeRiskFree ? `σ ${formatPct(0)} · r_f ${formatPct(riskFreeRate)}` : `σ ${formatPct(hoverVol)} · E[R] ${formatPct(hoverReturn)}`}
                                 </text>
                                 <text x={tooltipX + 12} y={tooltipY + 57} className="fill-sky-300 text-[11px] font-mono">
-                                  {activeRiskFree ? "시각화상 CAL 축외 끝에 표시" : `EF ${activeFrontier ? `${formatPct(activeFrontier.point.volatility)} / ${formatPct(graphReturn(activeFrontier.point))}` : "-"}`}
+                                  {activeRiskFree ? t("frontier.tooltipRfLabel") : `EF ${activeFrontier ? `${formatPct(activeFrontier.point.volatility)} / ${formatPct(graphReturn(activeFrontier.point))}` : "-"}`}
                                 </text>
                                 {activeRiskFree && (
                                   <text x={tooltipX + 12} y={tooltipY + 76} className="fill-slate-300 text-[11px]">
-                                    실제 점은 변동성 0% 위치입니다.
+                                    {t("frontier.tooltipRfNote")}
                                   </text>
                                 )}
                                 {activeMarker && !activeRiskFree && (
@@ -3911,55 +3717,55 @@ export default function PortfolioMockPage() {
                             )}
                           </svg>
 	                          <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-ink-3">
-                            <span><DictionaryText text="파란선 효율적 프론티어" /></span>
-	                            <span><DictionaryText text="회색점 무위험자산 · σ 0% 축외" /></span>
-	                            <span className="text-success"><DictionaryText text="녹색 점선 자본배분선(CAL)" /></span>
-                            <span className="text-purple-600"><DictionaryText text="보라 점선 투자자 무차별곡선" /></span>
-                            <span className="text-success"><DictionaryText text="최대샤프 포트폴리오" /></span>
-                            <span className="text-orange-600"><DictionaryText text="CAL 기반 위험배분" /></span>
-                            <span className="text-danger"><DictionaryText text="효용최대 포트폴리오" /></span>
-                            <span className="text-purple-600"><DictionaryText text="이론적 효용접점" /></span>
-                            <span className="text-accent"><DictionaryText text="최소분산 포트폴리오" /></span>
-                            <span><DictionaryText text="회색 현재 포트폴리오" /></span>
+                            <span>{t("frontier.legend.frontier")}</span>
+	                            <span>{t("frontier.legend.riskFree")}</span>
+	                            <span className="text-success">{t("frontier.legend.cal")}</span>
+                            <span className="text-purple-600">{t("frontier.legend.indifference")}</span>
+                            <span className="text-success">{t("frontier.legend.maxSharpe")}</span>
+                            <span className="text-orange-600">{t("frontier.legend.riskAllocation")}</span>
+                            <span className="text-danger">{t("frontier.legend.utilityOptimal")}</span>
+                            <span className="text-purple-600">{t("frontier.legend.theoreticalUtility")}</span>
+                            <span className="text-accent">{t("frontier.legend.minVol")}</span>
+                            <span>{t("frontier.legend.current")}</span>
                           </div>
                           <div className="mt-2 rounded-lg bg-surface border border-line px-3 py-2 text-[11px] text-ink-3">
-                            <DictionaryText text="그래프의 E[R]은 시각화 안정성을 위해 -30%~60% 범위로 표시됩니다. 계산에는 cap 이전 기대수익률이 사용됩니다." />
+                            {t("frontier.efNote")}
                           </div>
 	                          <div className="mt-2 rounded-lg bg-surface border border-line px-3 py-2 text-[11px] text-ink-3">
-	                            <p className="font-semibold text-ink"><DictionaryText text="마커 산출 기준" /></p>
+	                            <p className="font-semibold text-ink">{t("frontier.markerBasisTitle")}</p>
 	                            <div className="mt-1.5 grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-2">
 	                              <p>
-	                                <DictionaryText text="효율적 프론티어는 현금을 제외한 위험자산 100% 조합에서 목표 기대수익률별 최소분산 포트폴리오를 구한 뒤, 지배되는 점을 제거한 상단 경계입니다. 같은 σ에서 더 높은 E[R]을 제공하는 조합만 남습니다." />
+	                                {t("frontier.markerBasis.frontier")}
 	                              </p>
 	                              <p>
-	                                <DictionaryText text="최대샤프 포트폴리오는 효율적 프론티어 위에서 (E[R] - r_f) / σ가 가장 큰 위험자산 조합입니다. 무위험자산과 이 점을 잇는 직선이 자본배분선(CAL)의 기준선입니다." />
+	                                {t("frontier.markerBasis.maxSharpe")}
 	                              </p>
 	                              <p>
-	                                <DictionaryText text="CAL 기반 위험배분은 최대샤프 위험자산 조합에 무위험자산을 섞고, 위험회피계수 γ와 현금 한도에 따라 위험자산 비중을 조절한 배분입니다." />
+	                                {t("frontier.markerBasis.riskAllocation")}
 	                              </p>
 	                              <p>
-	                                <DictionaryText text="효용최대 포트폴리오는 U = E[R] - 0.5 · γ · σ²를 최대화하는 배분입니다. 현재 현금 한도, 레버리지 금지, 종목별 비중 제한을 적용하므로 이론 접점이 제약 밖이면 가능한 경계점에 위치합니다." />
+	                                {t("frontier.markerBasis.utilityOptimal")}
 	                              </p>
 	                              <p>
-	                                <DictionaryText text="이론적 효용접점은 제약을 풀고 CAL과 투자자 무차별곡선이 접하는 지점입니다. 위험자산 배수 y* = (E[R]_maxSharpe - r_f) / (γ · σ_maxSharpe²)로 계산하며, y*가 현재 제약 밖이면 별도 마커와 목표 카드로 표시합니다." />
+	                                {t("frontier.markerBasis.theoreticalUtility")}
 	                              </p>
 	                              <p>
-	                                <DictionaryText text="최소분산 포트폴리오는 위험자산만 100% 보유한다고 가정했을 때 wᵀΣw가 가장 작은 조합입니다. 기대수익률보다 공분산 행렬의 구조가 핵심입니다." />
+	                                {t("frontier.markerBasis.minVol")}
 	                              </p>
 	                              <p>
-	                                <DictionaryText text="투자자 무차별곡선은 동일한 효용 U를 갖는 σ-E[R] 조합입니다. 내부해에서는 CAL과 접하고, 현금 한도나 위험자산 100% 상한에 걸리면 효용최대 포트폴리오에서는 교차처럼 보일 수 있습니다." />
+	                                {t("frontier.markerBasis.indifference")}
 	                              </p>
 	                              <p>
-	                                <DictionaryText text="현재 포트폴리오는 사용자가 입력한 수량, 평균단가, 보유 현금으로 계산한 현재 구성입니다. 평단 대비 손익은 표시용이며, 최적화 계산에는 가격 시계열의 수익률/공분산이 사용됩니다." />
+	                                {t("frontier.markerBasis.current")}
 	                              </p>
 	                              <p>
-	                                <DictionaryText text="자본배분선(CAL)은 무위험수익률 r_f에서 최대샤프 포트폴리오 방향으로 확장되는 선입니다. 이론적 효용접점이 있으면 최대샤프 이후 구간까지 점선으로 연장해 표시합니다." />
+	                                {t("frontier.markerBasis.cal")}
 	                              </p>
 	                            </div>
 	                          </div>
                           {utilityValue !== null && (
                             <div className="mt-2 rounded-lg bg-surface border border-line px-3 py-2 text-[11px] text-ink-3">
-                              <DictionaryText text={`투자자 무차별곡선은 실제 위험회피계수 γ ${riskAversionGamma.toFixed(2)} 기준으로 효용최대 포트폴리오를 지나도록 렌더링됩니다.`} />
+                              {t("frontier.indifferenceCurveNote", { gamma: riskAversionGamma.toFixed(2) })}
                               <span className="ml-2 font-mono tabular text-ink">U={utilityValue.toFixed(4)}</span>
                             </div>
                           )}
@@ -3991,7 +3797,7 @@ export default function PortfolioMockPage() {
 	                            ))}
 	                          </div>
                           <div className="mt-4">
-                            <h5 className="text-sm font-bold text-ink">효율성 기반 분석</h5>
+                            <h5 className="text-sm font-bold text-ink">{t("frontier.efficiencyTitle")}</h5>
                             <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                               {portfolioPieCards.map((portfolio) => (
                                 <div key={`advanced-pie-${portfolio.type}`} className="rounded-lg bg-surface border border-line p-3">
@@ -4043,7 +3849,7 @@ export default function PortfolioMockPage() {
                                             </div>
                                             {portfolio.type === "CURRENT" && weight.assetType !== "CASH" && (
                                               <div className="mt-0.5 ml-3.5 flex items-center justify-between gap-2 font-mono tabular">
-                                                <span className="truncate text-ink-4">평단 기준 현재 수익률</span>
+                                                <span className="truncate text-ink-4">{t("efficiencySection.unrealizedReturn")}</span>
                                                 <span className={weight.unrealizedPnl !== undefined && weight.unrealizedPnl !== null && weight.unrealizedPnl < 0 ? "text-danger" : "text-success"}>
                                                   {formatPct(weight.unrealizedReturnRate)}
                                                 </span>
@@ -4061,20 +3867,20 @@ export default function PortfolioMockPage() {
                               <div className="mt-3 rounded-lg bg-surface border border-purple-300 p-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <div>
-                                    <p className="text-xs font-bold text-ink">이론적 효용접점</p>
+                                    <p className="text-xs font-bold text-ink">{t("theoreticalAdvanced.title")}</p>
                                     <p className="mt-1 text-[11px] leading-relaxed text-ink-4">
                                       {theoreticalUtility.constraintBinding === "CASH_MAX"
-                                        ? "위험회피계수 γ 기준의 무제약 접점은 현재 현금 한도보다 더 높은 현금 비중을 요구합니다. 현금 한도를 완화하면 이 접점을 목표로 삼을 수 있습니다."
-                                        : "위험회피계수 γ 기준의 무제약 접점은 현재 총자산보다 큰 위험자산 금액을 요구합니다. 추가입금을 가정하면 이 접점을 목표로 삼을 수 있습니다."}
+                                        ? t("theoreticalAdvanced.cashMaxDesc")
+                                        : t("theoreticalAdvanced.addCashDesc")}
                                     </p>
                                   </div>
                                   <div className="text-right">
                                     <p className="text-[10px] text-ink-4">
-                                      {theoreticalUtility.constraintBinding === "CASH_MAX" ? "현금 한도 완화 필요" : "추가 필요액"}
+                                      {theoreticalUtility.constraintBinding === "CASH_MAX" ? t("theoreticalAdvanced.cashMaxFundingLabel") : t("theoreticalAdvanced.addCashFundingLabel")}
                                     </p>
                                     <p className="font-mono tabular text-sm font-bold text-danger">
                                       {theoreticalUtility.constraintBinding === "CASH_MAX"
-                                        ? `현금 ${formatPct(1 - (theoreticalUtility.theoreticalRiskyAllocation ?? 1))}`
+                                        ? t("theoreticalAdvanced.cashPrefix", { value: formatPct(1 - (theoreticalUtility.theoreticalRiskyAllocation ?? 1)) })
                                         : formatKRW(theoreticalUtility.additionalRequiredCash)}
                                     </p>
                                   </div>
@@ -4104,7 +3910,7 @@ export default function PortfolioMockPage() {
                                         <p className="mt-0.5 font-mono tabular text-ink">{formatPct(theoreticalUtility.expectedReturn ?? 0)}</p>
                                       </div>
                                       <div>
-                                        <p>위험자산 배수</p>
+                                        <p>{t("theoreticalCard.riskyMultiplier")}</p>
                                         <p className="mt-0.5 font-mono tabular text-ink">{theoreticalUtility.theoreticalRiskyAllocation?.toFixed(2) ?? "-"}x</p>
                                       </div>
                                     </div>

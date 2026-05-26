@@ -1,20 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import { completeSocialProfile, getMyProfile } from "../api/user";
 
 const inputClass =
   "w-full px-4 py-3 rounded-lg bg-bg-sunk border border-line text-ink placeholder:text-ink-4 text-sm outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition-colors";
 
-const COUNTRY_OPTIONS = ["대한민국", "미국", "일본", "중국", "영국", "프랑스", "독일", "싱가포르", "홍콩", "캐나다", "호주", "기타"];
+const COUNTRY_KEYS = ["kr", "us", "jp", "cn", "gb", "fr", "de", "sg", "hk", "ca", "au", "other"] as const;
 const numericControlKeys = new Set(["Backspace", "Delete", "Tab", "ArrowLeft", "ArrowRight", "Home", "End"]);
 
 export default function SocialProfileCompletePage() {
   const navigate = useNavigate();
+  const { t } = useTranslation("oauthPage");
   const countryRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState({ name: "", phone: "", birthdate: "", birthdateSecond: "", country: "" });
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const countryOptions = COUNTRY_KEYS.map((key) => t(`socialComplete.countries.${key}`));
 
   useEffect(() => {
     getMyProfile()
@@ -64,7 +68,7 @@ export default function SocialProfileCompletePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim() || !form.phone || !form.country || !validateBirthdate()) {
-      alert("추가정보를 모두 올바르게 입력해 주세요.");
+      alert(t("socialComplete.errors.invalid"));
       return;
     }
 
@@ -78,31 +82,31 @@ export default function SocialProfileCompletePage() {
       });
       navigate("/feature/1", { replace: true });
     } catch (err: unknown) {
-      if (err instanceof Error) alert("추가정보 저장 실패: " + err.message);
-      else alert("추가정보 저장 중 오류가 발생했습니다.");
+      if (err instanceof Error) alert(t("socialComplete.errors.saveFailed", { message: err.message }));
+      else alert(t("socialComplete.errors.saveUnknown"));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg p-4 ml-[84px]">
+    <div className="min-h-screen flex items-center justify-center bg-bg p-4 md:ml-[84px]">
       <div className="w-full max-w-[460px] bg-surface border border-line rounded-2xl shadow-card p-10 flex flex-col gap-7">
         <div>
-          <h1 className="text-3xl font-bold text-ink tracking-tighter">추가정보 입력</h1>
+          <h1 className="text-3xl font-bold text-ink tracking-tighter">{t("socialComplete.title")}</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input
             type="text"
-            placeholder="이름"
+            placeholder={t("socialComplete.fields.name")}
             value={form.name}
             onChange={(e) => handleChange("name", e.target.value)}
             className={inputClass}
           />
           <input
             type="tel"
-            placeholder="전화번호 ( - 제외)"
+            placeholder={t("socialComplete.fields.phone")}
             value={form.phone}
             onChange={(e) => handleChange("phone", e.target.value)}
             inputMode="numeric"
@@ -112,7 +116,7 @@ export default function SocialProfileCompletePage() {
             <div className="flex gap-2 items-stretch">
               <input
                 type="text"
-                placeholder="생년월일"
+                placeholder={t("socialComplete.fields.birthdate")}
                 value={form.birthdate}
                 onChange={(e) => handleChange("birthdate", e.target.value)}
                 onKeyDown={handleNumericKeyDown}
@@ -123,7 +127,7 @@ export default function SocialProfileCompletePage() {
               />
               <input
                 type="text"
-                placeholder="1"
+                placeholder={t("socialComplete.fields.birthdateSecond")}
                 value={form.birthdateSecond}
                 onChange={(e) => handleChange("birthdateSecond", e.target.value)}
                 onKeyDown={handleNumericKeyDown}
@@ -141,12 +145,14 @@ export default function SocialProfileCompletePage() {
               onClick={() => setShowCountryDropdown((prev) => !prev)}
               className="w-full px-4 py-3 rounded-lg bg-bg-sunk border border-line flex items-center justify-between text-sm hover:bg-surface-2 transition-colors"
             >
-              <span className={form.country ? "text-ink" : "text-ink-4"}>{form.country || "국적 선택"}</span>
+              <span className={form.country ? "text-ink" : "text-ink-4"}>
+                {form.country || t("socialComplete.fields.country")}
+              </span>
               <ChevronDown size={16} className="text-ink-3 pointer-events-none" />
             </button>
             {showCountryDropdown && (
               <div className="absolute top-full left-0 w-full mt-1.5 bg-surface border border-line rounded-lg shadow-pop z-10 max-h-[220px] overflow-y-auto">
-                {COUNTRY_OPTIONS.map((country) => (
+                {countryOptions.map((country) => (
                   <button
                     key={country}
                     type="button"
@@ -170,7 +176,7 @@ export default function SocialProfileCompletePage() {
             disabled={loading}
             className="w-full mt-3 py-3 rounded-lg bg-accent text-white text-base font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {loading ? "저장 중..." : "가입 완료"}
+            {loading ? t("socialComplete.buttons.submitting") : t("socialComplete.buttons.submit")}
           </button>
         </form>
       </div>

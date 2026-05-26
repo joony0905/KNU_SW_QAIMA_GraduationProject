@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type { FinancialDto } from "../types/financial";
 import { fetchFinancials } from "../api/financial";
 import DictTerm from "./DictTerm";
@@ -12,10 +14,10 @@ type Props = {
 
 type PeriodTab = "A" | "Q" | "H";
 
-const PERIOD_CONFIG: Record<PeriodTab, { label: string; years: number }> = {
-  A: { label: "연간", years: 5 },
-  Q: { label: "분기", years: 3 },
-  H: { label: "반기", years: 3 },
+const PERIOD_YEARS: Record<PeriodTab, number> = {
+  A: 5,
+  Q: 3,
+  H: 3,
 };
 
 const fmtWon = (v: number | null | undefined) => {
@@ -42,6 +44,7 @@ type RowDef = {
 
 type SectionDef = { title: string; rows: RowDef[] };
 
+// SECTIONS는 정적 표시용 — DictTerm 키로 Korean label이 사용되므로 유지
 const SECTIONS: SectionDef[] = [
   {
     title: "손익계산서",
@@ -99,9 +102,9 @@ const SECTIONS: SectionDef[] = [
   },
 ];
 
-function columnLabel(dto: FinancialDto): string {
+function columnLabel(dto: FinancialDto, t: TFunction<"financialModal">): string {
   const y = String(dto.year).slice(2);
-  if (dto.periodType === "A") return `${y}년`;
+  if (dto.periodType === "A") return t("columnLabel.annual", { y });
   if (dto.periodType === "Q") return `${y}.Q${dto.periodNo ?? dto.quarter ?? ""}`;
   if (dto.periodType === "H") return `${y}.H${dto.periodNo ?? dto.half ?? ""}`;
   return `${dto.year}`;
@@ -113,6 +116,7 @@ export default function FinancialDetailModal({
   ticker,
   companyName,
 }: Props) {
+  const { t } = useTranslation("financialModal");
   const [tab, setTab] = useState<PeriodTab>("A");
   const [data, setData] = useState<Record<PeriodTab, FinancialDto[]>>({
     A: [],
@@ -127,9 +131,9 @@ export default function FinancialDetailModal({
     setLoading(true);
 
     Promise.all([
-      fetchFinancials(ticker, PERIOD_CONFIG.A.years, "A").catch(() => []),
-      fetchFinancials(ticker, PERIOD_CONFIG.Q.years, "Q").catch(() => []),
-      fetchFinancials(ticker, PERIOD_CONFIG.H.years, "H").catch(() => []),
+      fetchFinancials(ticker, PERIOD_YEARS.A, "A").catch(() => []),
+      fetchFinancials(ticker, PERIOD_YEARS.Q, "Q").catch(() => []),
+      fetchFinancials(ticker, PERIOD_YEARS.H, "H").catch(() => []),
     ])
       .then(([annual, quarterly, half]) => {
         setData({
@@ -163,7 +167,7 @@ export default function FinancialDetailModal({
         {/* 헤더 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-line">
           <div>
-            <h2 className="text-lg font-semibold text-ink">재무제표 상세</h2>
+            <h2 className="text-lg font-semibold text-ink">{t("header")}</h2>
             <p className="text-sm text-ink-3">{companyName}</p>
           </div>
           <button
@@ -186,7 +190,7 @@ export default function FinancialDetailModal({
                   : "bg-surface-2 text-ink-2 hover:bg-line"
               }`}
             >
-              {PERIOD_CONFIG[key].label}
+              {t(`periods.${key}` as "periods.A" | "periods.Q" | "periods.H")}
             </button>
           ))}
         </div>
@@ -195,11 +199,11 @@ export default function FinancialDetailModal({
         <div className="flex-1 overflow-auto px-6 py-4">
           {loading ? (
             <p className="text-sm text-ink-3 py-10 text-center animate-pulse">
-              재무제표를 불러오는 중...
+              {t("loading")}
             </p>
           ) : columns.length === 0 ? (
             <p className="text-sm text-ink-3 py-10 text-center">
-              해당 기간의 재무제표 데이터가 없습니다.
+              {t("empty")}
             </p>
           ) : (
             <div className="flex flex-col gap-6">
@@ -213,14 +217,14 @@ export default function FinancialDetailModal({
                       <thead>
                         <tr className="bg-bg-sunk">
                           <th className="text-left px-3 py-2 font-medium text-ink-3 sticky left-0 bg-bg-sunk min-w-[140px]">
-                            항목
+                            {t("tableHeader")}
                           </th>
                           {columns.map((col) => (
                             <th
                               key={`${col.year}-${col.periodType}-${col.periodNo}`}
                               className="text-right px-3 py-2 font-medium text-ink-3 min-w-[90px] whitespace-nowrap"
                             >
-                              {columnLabel(col)}
+                              {columnLabel(col, t)}
                             </th>
                           ))}
                         </tr>

@@ -1,0 +1,41 @@
+{
+  "callback": {
+    "loading": "Signing you in...",
+    "wait": "Please hold on for a moment.",
+    "failed": "Login failed. Please try again.",
+    "noToken": "Could not receive authentication info."
+  },
+  "socialComplete": {
+    "title": "Complete your profile",
+    "fields": {
+      "name": "Name",
+      "phone": "Phone (digits only)",
+      "birthdate": "Date of birth",
+      "birthdateSecond": "1",
+      "country": "Select country"
+    },
+    "buttons": {
+      "submit": "Complete signup",
+      "submitting": "Saving..."
+    },
+    "errors": {
+      "invalid": "Please fill in all profile fields correctly.",
+      "saveFailed": "Failed to save profile: {{message}}",
+      "saveUnknown": "An error occurred while saving your profile."
+    },
+    "countries": {
+      "kr": "South Korea",
+      "us": "United States",
+      "jp": "Japan",
+      "cn": "China",
+      "gb": "United Kingdom",
+      "fr": "France",
+      "de": "Germany",
+      "sg": "Singapore",
+      "hk": "Hong Kong",
+      "ca": "Canada",
+      "au": "Australia",
+      "other": "Other"
+    }
+  }
+}

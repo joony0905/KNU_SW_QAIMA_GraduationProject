@@ -1,0 +1,21 @@
+{
+  "featureLabel": {
+    "FEATURE1": "Feat.1 Stock Analysis",
+    "FEATURE2": "Feat.2 External Factors",
+    "FEATURE3": "Feat.3 Portfolio Analysis"
+  },
+  "rows": {
+    "subject": "Subject",
+    "feature": "Feature",
+    "generatedAt": "Generated At",
+    "model": "Model",
+    "investLevel": "Invest Level",
+    "user": "User",
+    "window": "Period",
+    "dataAsOf": "Data As Of",
+    "riskProfile": "Risk Profile",
+    "priceBasis": "Price Basis",
+    "covarianceModel": "Covariance Model"
+  },
+  "userFallback": "User"
+}

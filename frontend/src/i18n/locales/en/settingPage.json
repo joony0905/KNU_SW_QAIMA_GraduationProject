@@ -1,0 +1,127 @@
+{
+  "title": "My Account",
+  "section": {
+    "account": {
+      "title": "Account",
+      "description": "Email and basic profile information"
+    },
+    "investLevel": {
+      "title": "Investment Style",
+      "description": "Adjusts the tone and depth of analysis reports"
+    },
+    "riskProfile": {
+      "title": "Risk Profile",
+      "description": "Used by portfolio analysis"
+    },
+    "watchlist": {
+      "title": "Watchlist",
+      "description": "Add stocks by tapping the star in Deep Analysis",
+      "empty": "Your watchlist is empty"
+    },
+    "myReports": {
+      "title": "My Reports",
+      "descriptionLoading": "Loading...",
+      "descriptionCount": "{{count}} recent report(s)"
+    },
+    "dictionary": {
+      "title": "Inline Term Explanations",
+      "description": "Show definitions when you hover over recognized terms"
+    },
+    "help": {
+      "title": "Help / Contact",
+      "description": "Reach out if you run into any issues"
+    }
+  },
+  "buttons": {
+    "logout": "Log out",
+    "editProfile": "Edit profile",
+    "viewReport": "View",
+    "downloadReport": "Download PDF"
+  },
+  "header": "My Account",
+  "themeLight": "Light mode",
+  "themeDark": "Dark mode",
+  "cards": {
+    "basicInfo": {
+      "title": "Basic Info",
+      "desc": "Information registered to your account",
+      "editBtn": "Edit Profile"
+    },
+    "investLevel": {
+      "title": "Invest Level",
+      "desc": "Set automatically from the survey; you can change it manually",
+      "retakeBtn": "Retake Survey"
+    },
+    "riskProfile": {
+      "title": "Risk Profile",
+      "desc": "Set automatically from the survey; you can change it manually",
+      "retakeBtn": "Retake Survey"
+    },
+    "glossaryHover": {
+      "title": "Term Preview",
+      "desc": "Show term definitions on hover without clicking",
+      "on": "On",
+      "off": "Off"
+    },
+    "watchlist": {
+      "title": "Watchlist",
+      "loadingDesc": "Loading...",
+      "countDesc": "{{count}} total",
+      "doneBtn": "Done",
+      "deleteSelectBtn": "Select & Delete",
+      "loading": "Loading watchlist...",
+      "empty": "No stocks in your watchlist.",
+      "deleteAriaLabel": "Remove {{name}}"
+    },
+    "reports": {
+      "title": "My Reports",
+      "loadingDesc": "Loading...",
+      "countDesc": "{{count}} recent report(s)",
+      "filterAll": "All",
+      "loading": "Loading reports...",
+      "empty": "No saved reports.",
+      "viewBtn": "View",
+      "portfolioLabel": "Portfolio",
+      "stockFallback": "Stock"
+    },
+    "bugReport": {
+      "title": "Bug Report / Contact",
+      "desc": "Let us know if anything is not working"
+    }
+  },
+  "basicInfo": {
+    "name": "Name",
+    "email": "ID (Email)",
+    "phone": "Phone",
+    "birthdate": "Date of Birth",
+    "gender": "Gender",
+    "genderMale": "Male",
+    "genderFemale": "Female"
+  },
+  "featureLabel": {
+    "FEATURE1": "Feat.1",
+    "FEATURE2": "Feat.2",
+    "FEATURE3": "Feat.3"
+  },
+  "riskProfileUnset": "Not set",
+  "reportDetail": {
+    "title": "Report Detail",
+    "redownload": "Re-download PDF",
+    "snapshotNote": "Regenerated from saved analysis snapshot.",
+    "overallSummary": "Overall Summary",
+    "risks": "Risks",
+    "sections": "Detailed Sections",
+    "notes": "Notes"
+  },
+  "errors": {
+    "watchlistLoad": "Failed to load watchlist.",
+    "watchlistDelete": "Failed to delete watchlist item.",
+    "profileLoad": "Failed to load your info.",
+    "investLevelSave": "Failed to save invest level.",
+    "riskProfileSave": "Failed to save risk profile.",
+    "glossarySave": "Failed to save preference.",
+    "reportsLoad": "Failed to load reports.",
+    "reportDetailLoad": "Failed to load report detail.",
+    "pdfFailed": "PDF re-download failed."
+  }
+}

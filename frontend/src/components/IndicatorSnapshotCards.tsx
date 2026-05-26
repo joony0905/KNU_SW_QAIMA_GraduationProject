@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { usePdfExportReveal } from "../contexts/PdfExportContext";
 import type { IndicatorBundle } from "../types/indicator";
 
@@ -41,7 +42,11 @@ const normalizeGauge = (value: number | null | undefined, max: number) => {
   return Math.max(0, Math.min((Math.abs(value) / max) * 100, 100));
 };
 
+type EmaAlignment = "rising" | "falling" | "mixed" | "unknown";
+type StochZone = "overbought" | "oversold" | "neutral" | "unknown";
+
 export default function IndicatorSnapshotCards({ indicators }: Props) {
+  const { t } = useTranslation("marketSnapshot");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [hasAnimated, setHasAnimated] = useState(false);
   const forceReveal = usePdfExportReveal();
@@ -70,14 +75,14 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
   const ema20 = latestDefined(indicators.ema?.["20"], (item) => item.value);
   const ema60 = latestDefined(indicators.ema?.["60"], (item) => item.value);
   const ema120 = latestDefined(indicators.ema?.["120"], (item) => item.value);
-  const emaAlignment =
+  const emaAlignment: EmaAlignment =
     ema20 != null && ema60 != null && ema120 != null
       ? ema20 > ema60 && ema60 > ema120
-        ? "상승 정렬"
+        ? "rising"
         : ema20 < ema60 && ema60 < ema120
-          ? "하락 정렬"
-          : "혼합"
-      : "확인 불가";
+          ? "falling"
+          : "mixed"
+      : "unknown";
 
   const bbLatest = latestItemWith(
     indicators.bb20_2,
@@ -100,14 +105,14 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
     indicators.stoch14_3_3,
     (item) => item.k != null && Number.isFinite(item.k) && item.d != null && Number.isFinite(item.d)
   );
-  const stochZone =
+  const stochZone: StochZone =
     stochLatest?.k != null
       ? stochLatest.k >= 80
-        ? "과열"
+        ? "overbought"
         : stochLatest.k <= 20
-          ? "침체"
-          : "중립"
-      : "확인 불가";
+          ? "oversold"
+          : "neutral"
+      : "unknown";
   const stochGap =
     stochLatest?.k != null && stochLatest?.d != null ? stochLatest.k - stochLatest.d : null;
 
@@ -117,7 +122,8 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
 
   const cards = [
     {
-      title: "이동평균선 (EMA)",
+      key: "ema",
+      title: t("indicators.cards.ema"),
       color: accentColor,
       body: (
         <>
@@ -128,14 +134,14 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
           </div>
           <div className="mt-3">
             <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="text-ink-2">정렬 상태</span>
-              <span className="font-medium text-ink">{emaAlignment}</span>
+              <span className="text-ink-2">{t("indicators.ema.alignment")}</span>
+              <span className="font-medium text-ink">{t(`indicators.ema.${emaAlignment}` as "indicators.ema.rising")}</span>
             </div>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-line">
               <div
                 className="h-full rounded-full"
                 style={{
-                  width: `${animated ? (emaAlignment === "상승 정렬" ? 92 : emaAlignment === "하락 정렬" ? 28 : 58) : 0}%`,
+                  width: `${animated ? (emaAlignment === "rising" ? 92 : emaAlignment === "falling" ? 28 : 58) : 0}%`,
                   backgroundColor: accentColor,
                   transition: "width 850ms cubic-bezier(0.22, 1, 0.36, 1)",
                 }}
@@ -146,19 +152,20 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
       ),
     },
     {
-      title: "볼린저 밴드 (Bollinger Band)",
+      key: "bb",
+      title: t("indicators.cards.bb"),
       color: successColor,
       body: (
         <>
           <div className="grid grid-cols-2 gap-2 text-sm text-ink-2">
-            <div>중심선: {fmt(bbLatest?.mid, 1)}</div>
-            <div>밴드폭: {fmt(bbWidth, 1)}</div>
-            <div>상단선: {fmt(bbLatest?.upper, 1)}</div>
-            <div>하단선: {fmt(bbLatest?.lower, 1)}</div>
+            <div>{t("indicators.bb.mid")} {fmt(bbLatest?.mid, 1)}</div>
+            <div>{t("indicators.bb.width")} {fmt(bbWidth, 1)}</div>
+            <div>{t("indicators.bb.upper")} {fmt(bbLatest?.upper, 1)}</div>
+            <div>{t("indicators.bb.lower")} {fmt(bbLatest?.lower, 1)}</div>
           </div>
           <div className="mt-3">
             <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="text-ink-2">밴드 내 위치</span>
+              <span className="text-ink-2">{t("indicators.bb.position")}</span>
               <span className="font-medium text-ink">{fmtPct(percentB, 1)}</span>
             </div>
             <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-line">
@@ -177,19 +184,20 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
       ),
     },
     {
-      title: "스토캐스틱 (Stochastic)",
+      key: "stoch",
+      title: t("indicators.cards.stoch"),
       color: warnColor,
       body: (
         <>
           <div className="grid grid-cols-2 gap-2 text-sm text-ink-2">
             <div>%K: {fmt(stochLatest?.k, 1)}</div>
             <div>%D: {fmt(stochLatest?.d, 1)}</div>
-            <div>구간: {stochZone}</div>
+            <div>{t("indicators.stoch.zone")} {t(`indicators.stoch.${stochZone}` as "indicators.stoch.overbought")}</div>
             <div>K-D: {fmt(stochGap, 1)}</div>
           </div>
           <div className="mt-3">
             <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="text-ink-2">오실레이터 위치</span>
+              <span className="text-ink-2">{t("indicators.stoch.position")}</span>
               <span className="font-medium text-ink">{fmtPct(stochLatest?.k, 1)}</span>
             </div>
             <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-line">
@@ -213,14 +221,14 @@ export default function IndicatorSnapshotCards({ indicators }: Props) {
   return (
     <div ref={rootRef}>
       <div className="flex flex-col gap-1">
-        <h3 className="text-base sm:text-lg font-semibold text-ink">투자 보조지표 요약 (Indicator)</h3>
-        <p className="text-sm text-ink-3">EMA · 볼린저 밴드 · 스토캐스틱</p>
+        <h3 className="text-base sm:text-lg font-semibold text-ink">{t("indicators.title")}</h3>
+        <p className="text-sm text-ink-3">{t("indicators.subtitle")}</p>
       </div>
 
       <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-4">
         {cards.map((card, index) => (
           <div
-            key={card.title}
+            key={card.key}
             className="rounded-2xl border border-line bg-bg-sunk px-4 py-4"
             style={{
               opacity: animated ? 1 : 0,

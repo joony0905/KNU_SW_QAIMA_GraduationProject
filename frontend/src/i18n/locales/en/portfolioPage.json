@@ -1,0 +1,455 @@
+{
+  "header": { "title": "Portfolio", "lightMode": "Light mode", "darkMode": "Dark mode" },
+  "saveModal": { "title": "Save Portfolio", "body": "Save the current portfolio?", "cancel": "No", "saving": "Saving", "confirm": "Yes" },
+  "market": { "domestic": "Domestic", "overseas": "Overseas" },
+  "assetRatio": {
+    "titleDomestic": "Domestic Asset Allocation",
+    "titleOverseas": "Overseas Asset Allocation",
+    "won": " KRW",
+    "dollar": " USD",
+    "exchangeRateLoading": "Loading exchange rate",
+    "exchangeRateNone": "No exchange rate",
+    "exchangeRateFailed": "Failed to load exchange rate",
+    "centerLabel": "Total Value",
+    "emptyTitle": "No holdings to display",
+    "emptyBodyLoggedIn": "Enter name, quantity, and avg price to reflect instantly.",
+    "emptyBodyGuest": "Log in and enter stocks to see allocation."
+  },
+  "manager": {
+    "subtitle": "Add or edit your holdings",
+    "save": "Save",
+    "addStock": "Add Stock",
+    "col": {
+      "name": "Stock Name",
+      "quantity": "Quantity",
+      "avgPrice": "Avg Price",
+      "delete": "Delete"
+    },
+    "cashFixed": "Fixed",
+    "cashDomestic": "Cash (KRW)",
+    "cashOverseas": "Cash (USD)",
+    "unnamedStock": "Unnamed Stock",
+    "saveSuccess": "Portfolio saved.",
+    "saveFailed": "Failed to save portfolio.",
+    "loadFailed": "Failed to load saved portfolio.",
+    "lock": {
+      "title": "Login required",
+      "body": "Portfolio input and analysis are available after logging in.",
+      "button": "Go to login"
+    }
+  },
+  "analysisOptions": {
+    "title": "Analysis Options",
+    "baseOption": {
+      "label": "Portfolio Basic Analysis",
+      "locked": "(Fixed)",
+      "desc0": "Analyzes the portfolio's volatility, diversification, and efficiency.",
+      "desc1": "Includes the core calculations that serve as the basis of all analysis."
+    },
+    "extraLabel": "Additional analysis (optional)",
+    "periodLabel": "Analysis period",
+    "freqDay": "Daily",
+    "extraOption": {
+      "fundamentals": {
+        "label": "Include Fundamentals",
+        "desc0": "Reflects holding characteristics based on financials and valuation.",
+        "desc1": "Provides interpretation considering each stock's fundamental condition."
+      },
+      "industry": {
+        "label": "Include Industry Concentration",
+        "desc0": "Checks how concentrated the portfolio is in specific industries.",
+        "desc1": "Identifies concentration risk through sector-level weights."
+      },
+      "correlation": {
+        "label": "Include Diversification Structure",
+        "desc0": "Analyzes risk concentration based on actual co-movement among holdings.",
+        "desc1": "Also references external stocks in the same sector with similar behavior."
+      },
+      "technical": {
+        "label": "Include Technical Indicators",
+        "desc0": "Incorporates price trends and momentum signals.",
+        "desc1": "Interprets portfolio condition based on recent market flow."
+      },
+      "news": {
+        "label": "Include News Flow",
+        "desc0": "Interprets the portfolio reflecting the overall recent news trend.",
+        "desc1": "Considers key issues that may affect individual stocks."
+      }
+    },
+    "analysisWindow": { "6M": "6M", "1Y": "1Y", "2Y": "2Y" }
+  },
+  "riskProfile": {
+    "title": "Risk Tolerance Index",
+    "required": "(Required)",
+    "surveyButton": "Take survey",
+    "sliderConservative": "0.00 · Conservative",
+    "sliderAggressive": "Aggressive · 1.00",
+    "desc": "Closer to 0 = conservative allocation; closer to 1 = aggressive allocation.",
+    "cashLimitTitle": "Max Cash Weight Limit",
+    "cashLimitLeft": "0% · No cash",
+    "cashLimitRight": "Cash · 100%",
+    "cashLimitDesc": "Set how much cash to keep at most. Adjusting the risk tolerance index also updates the default limit, and you can fine-tune it here. This value is applied in the analysis."
+  },
+  "runBanner": {
+    "tag": "✨ AI Portfolio Analysis",
+    "title": "We'll analyze your portfolio in one shot",
+    "subtitle": "A comprehensive report on volatility · diversification · efficiency",
+    "needRiskProfile": "Please enter your risk tolerance index first.",
+    "needLogin": "Login is required to run analysis.",
+    "analyzing": "Analyzing...",
+    "viewButton": "View analysis →",
+    "minOneStock": "Please enter at least one stock.",
+    "needRiskProfileError": "Please enter your risk tolerance index.",
+    "analyzeFailed": "Analysis failed. Used credits were automatically refunded."
+  },
+  "overlayPreview": {
+    "title": "Additional Analysis Cost",
+    "estimatedCharge": "Estimated deduction",
+    "newAfterAnalysis": "Reference time will be recorded after new analysis",
+    "existingBase": "As of: {{date}}",
+    "refreshScheduled": "Prev as of: {{date}} · Will be refreshed",
+    "currentClassBase": "Based on: current industry classification",
+    "pendingBase": "Reference time pending",
+    "reuse": "Use recent result",
+    "forceRefresh": "Re-analyze",
+    "cancel": "Cancel",
+    "confirm": "Analyze with these settings"
+  },
+  "emptyResult": {
+    "title": "Analysis results will appear here",
+    "subtitle": "Enter your portfolio and run an analysis"
+  },
+  "loading": "Analyzing...",
+  "result": {
+    "title": "Analysis Results",
+    "tabBasic": "Risk Summary",
+    "tabAdvanced": "Optimization View",
+    "downloadPdf": "Download as PDF",
+    "zoomIn": "Expand",
+    "zoomClose": "Close expanded view",
+    "subjectLabel": "Portfolio"
+  },
+  "summary": {
+    "riskLevelCard": "Risk Level",
+    "portfolioVolatility": "Portfolio Volatility",
+    "targetVolCard": "Profile Target Volatility",
+    "targetVolDesc": "Target volatility based on your risk profile",
+    "profileCard": "Risk Profile",
+    "profileDesc": "Behavioral investment profile",
+    "volDiff": "Gap {{value}}%"
+  },
+  "riskLevel": { "LOW": "Low", "MID": "Medium", "HIGH": "High" },
+  "suitability": {
+    "CONSERVATIVE_THAN_PROFILE": "More conservative",
+    "ALIGNED": "Aligned with profile",
+    "AGGRESSIVE_THAN_PROFILE": "More aggressive"
+  },
+  "volatilitySection": {
+    "title": "Volatility-Based Analysis",
+    "desc": "Compares portfolios near the target volatility based on price series covariance and cash limits.",
+    "desc2": "LOW/MID/HIGH are not absolute risk grades but relative to each card's target volatility.",
+    "volatilityLabel": "Volatility",
+    "targetLabel": "Target {{value}}"
+  },
+  "efficiencySection": {
+    "title": "Efficiency-Based Analysis",
+    "desc": "Compares portfolios with higher risk-adjusted efficiency, considering both expected return and volatility.",
+    "desc2": "Current return (avg cost) is for reference only and is not used in analysis.",
+    "unrealizedReturn": "Current return (avg cost)"
+  },
+  "portfolioType": {
+    "CURRENT": "Current",
+    "STABLE": "Stable",
+    "BALANCED": "Balanced",
+    "AGGRESSIVE": "Aggressive",
+    "PSYCHOLOGICAL": "Behavioral",
+    "RISK_ALLOCATION": "CAL Risk Allocation",
+    "UTILITY_OPTIMAL": "Utility-Optimal",
+    "THEORETICAL_UTILITY": "Theoretical Utility",
+    "OVERLAY_BALANCED": "Overlay Balanced",
+    "QUALITY_TILT": "Quality Tilt",
+    "MOMENTUM_AWARE": "Momentum Pressure",
+    "NEWS_GUARDED": "News-Guarded",
+    "DIVERSIFICATION_TILT": "Diversification Tilt",
+    "MIN_VOL": "Min-Variance Portfolio",
+    "MAX_SHARPE": "Max-Sharpe Portfolio"
+  },
+  "theoreticalCard": {
+    "cashMaxLabel": "Cash-Expansion Target",
+    "addCashLabel": "Additional Investment Target",
+    "cashMaxDesc": "Achievable when holding more cash than the current cash limit.",
+    "addCashDesc": "Requires additional capital beyond current holdings.",
+    "cashMaxFundingLabel": "Required cash weight",
+    "addCashFundingLabel": "Additional required",
+    "cashPrefix": "Cash {{value}}",
+    "riskyMultiplier": "Risky asset multiplier"
+  },
+  "marketAnalysis": {
+    "title": "Market-Based Analysis",
+    "desc": "Examines how the final expected flow was determined combining historical and market-based flow.",
+    "benchmarkCard": "Benchmark",
+    "appliedCard": "Applied stocks",
+    "capmWeightCard": "Market-based weight",
+    "confidenceCard": "Avg confidence",
+    "confidenceDesc": "Lower = more historical weight",
+    "appliedCountSuffix": "",
+    "excludedSuffix": "Excl. {{count}} · Partial {{partial}}",
+    "missingRate": "Missing {{value}}",
+    "historicalExpected": "Final expected flow by stock",
+    "blendRatioLabel": "Hist. {{historical}} · Mkt {{capm}}",
+    "historicalLabel": "Hist. {{value}}",
+    "capmLabel": "Mkt {{value}}",
+    "finalLabel": "Final {{value}}",
+    "summaryTable": "Summary by stock",
+    "col": {
+      "stock": "Stock",
+      "capmWeight": "Mkt weight",
+      "finalExpected": "Final expected",
+      "status": "Status"
+    },
+    "footnote": "Market-based analysis adjusts the final expected flow by referencing how closely stocks moved with the market. Not a guaranteed return or recommended weight."
+  },
+  "capmStatus": { "AVAILABLE": "Available", "DISABLED": "Excluded", "UNAVAILABLE": "No data" },
+  "capmAssetStatus": { "APPLIED": "Applied", "PARTIAL": "Partial", "EXCLUDED": "Excluded" },
+  "benchmarkSource": {
+    "DB": "Stored data",
+    "KIS_BACKFILLED": "External supplement",
+    "DB_INSUFFICIENT": "Insufficient stored data",
+    "DB_STALE": "Not latest data",
+    "UNAVAILABLE": "No data"
+  },
+  "riskContribution": {
+    "title": "Risk Contribution",
+    "subtitle": "Identify stocks contributing more risk than their portfolio weight."
+  },
+  "keyInsight": { "title": "Key Insights" },
+  "featureSource": {
+    "CORE_RISK": "Core Risk",
+    "FEATURE1": "Basic Indicators",
+    "FEATURE2": "Overlay Obs.",
+    "FEATURE2_INDUSTRY": "Industry Obs.",
+    "FEATURE2_PEERCLUSTER": "Peer Cluster Obs.",
+    "FEATURE2_NEWS": "News Obs.",
+    "FEATURE3": "Portfolio Analysis"
+  },
+  "overlayScenario": {
+    "title": "Overlay Scenarios",
+    "desc": "Sensitivity analysis based on supplementary observations that does not replace core risk optimization. Shows how selected overlays affect scaling the current portfolio. Not recommended weights or optimal returns.",
+    "maxDelta": "Max change {{value}}"
+  },
+  "explainSummary": { "title": "Explanation Summary", "fallbackTitle": "Summary" },
+  "warnings": { "title": "Please note" },
+  "advanced": {
+    "title": "Analysis Diagnostics",
+    "includedCount": "Included {{count}} · Excluded {{excluded}}",
+    "priceBase": "Price series basis",
+    "sampleCount": "Return sample count",
+    "sampleUnit": " days",
+    "commonMissing": "Common missing rate",
+    "missingDetail": "Threshold {{threshold}} · Common {{count}} days",
+    "covModel": "Covariance model",
+    "riskFree": "Risk-free rate r_f",
+    "dataTable": {
+      "col": {
+        "stock": "Holding",
+        "priceCount": "Price count",
+        "missingRate": "Missing rate",
+        "dataSource": "Data source",
+        "cacheStatus": "Cache status"
+      }
+    }
+  },
+  "capmSection": {
+    "title": "CAPM · SCL · SML E[R] Blend",
+    "desc": "The optimization input E[R] blends historical flow estimate and CAPM expected return, weighted by confidence based on sample size, benchmark quality, and explanatory power.",
+    "benchmarkCard": "Benchmark",
+    "multiBenchmark": "{{count}} by market",
+    "missingCard": "Benchmark missing rate",
+    "appliedCard": "CAPM-applied stocks",
+    "excludedCount": "Excl. {{count}}",
+    "avgWeightCard": "Avg CAPM weight",
+    "confidenceLabel": "Confidence {{value}}",
+    "finalER": "Final E[R]",
+    "blendDesc": "Blends historical flow E[R] and CAPM E[R] using confidence-based weights.",
+    "tableCol": {
+      "stock": "Stock",
+      "benchmark": "Benchmark",
+      "status": "Status",
+      "sample": "Sample",
+      "historicalER": "Historical E[R]",
+      "capmER": "CAPM E[R]",
+      "finalER2": "Final E[R]",
+      "capmWeight": "CAPM weight",
+      "weightReason": "Low weight reason"
+    },
+    "capmWeightNote": "CAPM weight is calculated reflecting common sample size, benchmark quality, missing rate, R², correlation, and volatility stability.",
+    "capmWeightFactors": {
+      "commonSample": "Common sample: increases as the number of common return samples grows.",
+      "benchmarkSource": "Benchmark source: higher for stored or externally supplemented data.",
+      "coverage": "Data coverage: higher as the benchmark missing rate decreases.",
+      "rSquared": "Market explanatory power (R²): higher as market returns better explain stock returns.",
+      "correlation": "Correlation: higher as the co-movement between stock and benchmark strengthens.",
+      "volatility": "Volatility stability: reduces CAPM weight when stock volatility is excessively high.",
+      "historicalWeight": "Historical weight: increases as CAPM confidence decreases."
+    }
+  },
+  "sclSection": {
+    "title": "SCL Diagnostics",
+    "alphaNote": "α: daily / annualized",
+    "noData": "Insufficient common return observations to draw SCL regression.",
+    "chartBenchmarkLabel": "Benchmark return",
+    "chartAssetLabel": "Stock return",
+    "legend": {
+      "points": "Blue dots: daily log returns on common trading days",
+      "line": "Red line: SCL regression",
+      "count": "Showing last {{count}} observations"
+    },
+    "regressionDesc": "{{benchmark}} basis · Stock return = daily α + β × Benchmark return",
+    "tableCol": {
+      "stock": "Stock",
+      "dailyAlpha": "Daily α",
+      "annualAlpha": "Annual α",
+      "sample": "Sample",
+      "status": "Status"
+    },
+    "footnote": "SCL is a supplementary diagnostic summarizing the relationship between daily log returns of benchmark and stock.",
+    "benchmarkHover": "Bench {{value}}",
+    "stockHover": "Stock:{{value}}"
+  },
+  "smlSection": {
+    "title": "SML Diagnostics",
+    "axisNote": "x: β · y: annual E[R]",
+    "chartBetaLabel": "β",
+    "chartReturnLabel": "Annual E[R]",
+    "missingRateDetail": "Missing {{value}}",
+    "tableCol": {
+      "stock": "Stock",
+      "capmER": "CAPM E[R]",
+      "historicalER": "Historical E[R]",
+      "finalER": "Final E[R]",
+      "capmWeight": "CAPM weight"
+    },
+    "footnote": "SML is a supplementary diagnostic showing stock positions relative to the CAPM line; not a guaranteed return or recommended weight.",
+    "betaHover": "β {{value}}",
+    "erHover": "E[R]:{{value}}"
+  },
+  "frontier": {
+    "title": "Efficient Frontier",
+    "desc": "E[R] is an annualized estimate blending historical flow with market-based expected returns, weighted by confidence.",
+    "ariaLabel": "Efficient frontier, capital allocation line, and investor indifference curve",
+    "volatilityAxis": "Volatility σ",
+    "returnAxis": "Expected Return E[R]",
+    "legend": {
+      "frontier": "Blue: efficient frontier",
+      "riskFree": "Gray dot: risk-free · σ 0% off-axis",
+      "cal": "Green dashed: CAL",
+      "indifference": "Purple dashed: indifference curve",
+      "maxSharpe": "Max-Sharpe portfolio",
+      "riskAllocation": "CAL risk allocation",
+      "utilityOptimal": "Utility-optimal portfolio",
+      "theoreticalUtility": "Theoretical utility point",
+      "minVol": "Min-variance portfolio",
+      "current": "Gray: current portfolio"
+    },
+    "tooltipRiskFree": "Risk-free rate (T-bond)",
+    "tooltipCoord": "Coordinates",
+    "tooltipRfLabel": "Shown at CAL off-axis end in chart",
+    "tooltipRfNote": "Actual point is at 0% volatility.",
+    "efNote": "Chart E[R] is capped at -30%~60% for visual stability. Pre-cap expected returns are used in calculations.",
+    "markerBasisTitle": "Marker Calculation Basis",
+    "markerBasis": {
+      "frontier": "The efficient frontier is the upper boundary of min-variance portfolios at each target return for 100% risky assets, with dominated points removed.",
+      "maxSharpe": "The max-Sharpe portfolio maximizes (E[R] - r_f) / σ on the efficient frontier. The line through this point from the risk-free asset is the reference CAL.",
+      "riskAllocation": "CAL risk allocation blends the max-Sharpe risky asset combo with the risk-free asset, adjusting the risky weight based on risk-aversion γ and cash limit.",
+      "utilityOptimal": "The utility-optimal portfolio maximizes U = E[R] - 0.5 · γ · σ². With current constraints applied, it sits at the closest feasible boundary when the theoretical tangent is outside constraints.",
+      "theoreticalUtility": "The theoretical utility point is where CAL and indifference curve are tangent without constraints. Computed as y* = (E[R]_maxSharpe - r_f) / (γ · σ_maxSharpe²).",
+      "minVol": "The min-variance portfolio minimizes wᵀΣw for 100% risky assets. The covariance structure matters more than expected returns.",
+      "indifference": "The investor indifference curve is a σ-E[R] set with equal utility U. It is tangent to the CAL at the interior solution.",
+      "current": "The current portfolio is calculated from user-entered quantities, avg costs, and cash. Unrealized P&L is display-only; price series returns/covariances are used in optimization.",
+      "cal": "The CAL extends from the risk-free rate r_f toward the max-Sharpe portfolio. Extended as a dashed line past max-Sharpe when a theoretical utility point exists."
+    },
+    "indifferenceCurveNote": "The indifference curve is rendered to pass through the utility-optimal portfolio based on actual risk-aversion γ {{gamma}}.",
+    "efficiencyTitle": "Efficiency-Based Analysis"
+  },
+  "theoreticalAdvanced": {
+    "title": "Theoretical Utility Point",
+    "cashMaxDesc": "The unconstrained tangent at γ requires a higher cash ratio than the current cash limit. Relaxing the limit makes this point achievable.",
+    "addCashDesc": "The unconstrained tangent at γ requires more risky asset capital than current total assets. Additional investment makes this point achievable.",
+    "cashMaxFundingLabel": "Cash limit relaxation needed",
+    "addCashFundingLabel": "Additional required",
+    "cashPrefix": "Cash {{value}}"
+  },
+  "pricePolicy": {
+    "YAHOO_ADJ_CLOSE": "Adj. close",
+    "RAW_CLOSE": "Close",
+    "YAHOO_ADJ_CLOSE_WITH_KIS_FALLBACK": "Adj. + close fallback",
+    "ADJUSTED_CLOSE": "Adj. close (requested)",
+    "CLOSE": "Close"
+  },
+  "covarianceModel": {
+    "LEDOIT_WOLF": "Stabilized covariance",
+    "SAMPLE_COVARIANCE": "Sample covariance",
+    "SAMPLE": "Sample covariance"
+  },
+  "marketDataSource": {
+    "DB": "Stored data",
+    "KIS": "Domestic quote",
+    "YAHOO": "Yahoo adj. close",
+    "MARKETSTACK": "Overseas quote",
+    "MIXED": "Mixed",
+    "EMPTY": "No data",
+    "UNAVAILABLE": "Unavailable"
+  },
+  "cacheStatus": {
+    "HIT": "Cached",
+    "MISS": "New fetch",
+    "STALE": "Stale",
+    "AVAILABLE": "Available",
+    "UNAVAILABLE": "Needs check",
+    "BYPASSED": "Cache bypassed",
+    "REFRESHED": "Refreshed"
+  },
+  "metric": {
+    "label": {
+      "PER": "PER", "PBR": "PBR", "PSR": "PSR", "ROE": "ROE",
+      "OPM": "Op. Margin", "NPM": "Net Margin", "Debt": "Debt Ratio",
+      "Current": "Current Ratio", "RevenueGrowth": "Rev. Growth", "EPSGrowth": "EPS Growth",
+      "alignment": "Trend Align", "percent_b": "Band Position", "zone": "Stochastic",
+      "k_minus_d": "K-D", "score": "Sentiment", "count": "News Count"
+    },
+    "zone": { "overbought": "Overbought", "oversold": "Oversold", "neutral": "Neutral" },
+    "alignment": { "bullish": "Bullish", "bearish": "Bearish" },
+    "techCaption": "EMA, Bollinger Bands, and Stochastic key values."
+  },
+  "peer": {
+    "selectedLabel": "Selected peers",
+    "selectedCount": "{{count}}",
+    "corrLabel": "Corr {{corr}}",
+    "lagLabel": " · {{lag}}d lag",
+    "footerNote": "Peer correlation is reference info for coincident stocks and not directly used for weight adjustment."
+  },
+  "relation": { "LEADER": "Leader", "FOLLOWER": "Follower", "COINCIDENT": "Coincident", "UNKNOWN": "Undetermined" },
+  "industry": { "label": "Sector", "indexLabel": "Sector index" },
+  "capmWeightReason": {
+    "lowRSquared": "Low R²",
+    "lowCorrelation": "Low correlation",
+    "insufficientSample": "Insufficient sample",
+    "betaUnavailable": "Beta unavailable",
+    "highVolatility": "High volatility",
+    "lowConfidence": "Low confidence",
+    "goodQuality": "CAPM quality indicators healthy",
+    "limited": "CAPM weight limited due to {{reasons}}"
+  },
+  "advancedMarkerLabel": {
+    "CURRENT": "Current", "MIN_VOL": "Min-Vol", "MAX_SHARPE": "Max-Sharpe",
+    "RISK_ALLOCATION": "Risk Alloc.", "UTILITY_OPTIMAL": "Utility-Opt", "THEORETICAL_UTILITY": "Theoretical"
+  },
+  "portfolioBasicLabel": {
+    "CURRENT": "Current Portfolio", "MIN_VOL": "Min-Variance", "MAX_SHARPE": "Max Risk-Return",
+    "RISK_ALLOCATION": "CAL Risk Allocation", "UTILITY_OPTIMAL": "Utility-Optimal", "THEORETICAL_UTILITY": "Target Portfolio"
+  },
+  "advancedPortfolioLabel": {
+    "CURRENT": "Current Portfolio", "MIN_VOL": "Min-Variance Portfolio", "MAX_SHARPE": "Max-Sharpe Portfolio",
+    "RISK_ALLOCATION": "CAL Risk Allocation", "UTILITY_OPTIMAL": "Utility-Optimal Portfolio", "THEORETICAL_UTILITY": "Theoretical Utility Point"
+  }
+}

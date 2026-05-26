@@ -2,7 +2,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { Star, Sun, Moon, ChevronDown, ChevronUp } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { Star, Sun, Moon } from "lucide-react";
 import InvestLevelBadge from "../components/InvestLevelBadge";
 import { useTheme } from "../hooks/useTheme";
 import StockSearchBar from "../components/StockSearchBar";
@@ -15,7 +16,7 @@ import { clientLog } from "../utils/clientLog";
 import { PdfExportContext } from "../contexts/PdfExportContext";
 import qaimaLogo from "../assets/qaima-final.png";
 
-import AnalysisResultPanel, { LLM_VENDOR_OPTIONS } from "../components/AnalysisResultPanel";
+import AnalysisResultPanel from "../components/AnalysisResultPanel";
 import type { AnalysisPanelResult } from "../types/analysisPanel";
 import {
   fetchFeature2Analysis,
@@ -236,6 +237,7 @@ const isMacroRatesEmpty = (data: Feature2MacroRates | null | undefined) =>
 export default function Feature2MockPage() {
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
+  const { t } = useTranslation("feature2Page");
   const { investLevel } = useDictionary();
   const reportUserName = useReportUserName();
   const searchRequestIdRef = useRef(0);
@@ -270,7 +272,7 @@ export default function Feature2MockPage() {
       : data;
 
     if (displayData.length === 0) {
-      setChartError("차트 데이터가 없습니다.");
+      setChartError(t("chart.noData"));
     }
 
     setCandles(displayData);
@@ -347,7 +349,7 @@ export default function Feature2MockPage() {
       );
     } catch (e: unknown) {
       clientLog.error("Chart data fetch failed", e);
-      setChartError("차트를 불러오지 못했습니다.");
+      setChartError(t("chart.loadFailed"));
       setCandles([]);
       setMainStock((prevState) => ({
         ...prevState,
@@ -463,7 +465,7 @@ export default function Feature2MockPage() {
   const [pdfExporting, setPdfExporting] = useState(false);
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const pdfRef = useRef<HTMLDivElement | null>(null);
-  const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
+  const llmVendor = "GPT-5 mini";
   const [selectedFreq, setSelectedFreq] = useState<"ONE_D" | "ONE_W">("ONE_D");
   const [selectedWindow, setSelectedWindow] = useState<60 | 120 | 180 | 252>(120);
   const feature2Explain = useMemo(
@@ -515,12 +517,12 @@ export default function Feature2MockPage() {
   const reportMeta = analysisPanelResult
     ? {
         featureType: "FEATURE2" as const,
-        subjectLabel: `${mainStock.name || analysisPanelResult.metrics?.stock?.companyName || "분석종목"} (${mainStock.symbol || analysisPanelResult.metrics?.stock?.stockCode || "-"})`,
+        subjectLabel: `${mainStock.name || analysisPanelResult.metrics?.stock?.companyName || t("errors.subjectFallback")} (${mainStock.symbol || analysisPanelResult.metrics?.stock?.stockCode || "-"})`,
         generatedAt: analysisResult?.meta?.timestamp ?? null,
         analysisModel: llmVendor,
         investLevel,
         userName: reportUserName,
-        analysisWindow: `최근 ${selectedWindow}거래일`,
+        analysisWindow: t("analysisWindow.label", { n: selectedWindow }),
         dataAsOf:
           analysisPanelResult.metrics?.newsSentimentSummary?.summaryDate
           ?? analysisPanelResult.metrics?.shortSelling?.reportDate
@@ -533,8 +535,6 @@ export default function Feature2MockPage() {
   const [isInterested, setIsInterested] = useState(false);
   const [currentStockId, setCurrentStockId] = useState<number | null>(null);
   const [watchlistItemId, setWatchlistItemId] = useState<number | null>(null);
-  const [isModelOpen, setIsModelOpen] = useState(false);
-  const modelRef = useRef<HTMLDivElement | null>(null);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({
     message: "",
     visible: false,
@@ -552,14 +552,14 @@ export default function Feature2MockPage() {
       setMacroRatesResult(result);
       setMacroRatesSeriesResult(seriesResult);
       if (isMacroRatesEmpty(result.data)) {
-        setMacroRatesError("환율/국채 데이터를 찾지 못했습니다.");
+        setMacroRatesError(t("macroError.missing"));
       }
     } catch (error) {
       if (requestId != null && searchRequestIdRef.current !== requestId) return;
       clientLog.error("Macro rates fetch failed", error);
       setMacroRatesResult(null);
       setMacroRatesSeriesResult(null);
-      setMacroRatesError("환율/국채 데이터를 불러오지 못했습니다.");
+      setMacroRatesError(t("macroError.fetchFailed"));
     } finally {
       if (requestId == null || searchRequestIdRef.current === requestId) {
         setMacroRatesLoading(false);
@@ -575,15 +575,6 @@ export default function Feature2MockPage() {
     return () => clearTimeout(t);
   }, [toast.visible]);
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (!modelRef.current) return;
-      if (modelRef.current.contains(e.target as Node)) return;
-      setIsModelOpen(false);
-    };
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
-  }, []);
 
   // 검색한 종목이 관심종목(워치리스트)에 들어있는지 동기화
   const syncWatchlistMembership = async (stockId: number | null) => {
@@ -609,7 +600,7 @@ export default function Feature2MockPage() {
   const toggleInterest = async () => {
     // 관심종목은 로그인 사용자 기준. 비로그인 시 강제 리다이렉트 대신 안내.
     if (!isLoggedIn()) {
-      setToast({ message: "로그인 후 이용할 수 있습니다.", visible: true });
+      setToast({ message: t("watchlist.loginRequired"), visible: true });
       return;
     }
     // 이미 등록됨 → 삭제
@@ -618,10 +609,10 @@ export default function Feature2MockPage() {
         await deleteWatchlistItem(watchlistItemId);
         setIsInterested(false);
         setWatchlistItemId(null);
-        setToast({ message: "관심종목에서 삭제되었습니다.", visible: true });
+        setToast({ message: t("watchlist.removed"), visible: true });
       } catch (e) {
         setToast({
-          message: getApiErrorMessage(e, "관심종목 삭제에 실패했습니다."),
+          message: getApiErrorMessage(e, t("watchlist.removeFailed")),
           visible: true,
         });
       }
@@ -631,7 +622,7 @@ export default function Feature2MockPage() {
     // 미등록 → 추가
     if (!currentStockId) {
       setToast({
-        message: "종목 정보를 불러온 뒤 다시 시도해주세요.",
+        message: t("watchlist.stockNotLoaded"),
         visible: true,
       });
       return;
@@ -642,10 +633,10 @@ export default function Feature2MockPage() {
       });
       setIsInterested(true);
       setWatchlistItemId(created.watchlistItemId);
-      setToast({ message: "관심종목에 추가되었습니다.", visible: true });
+      setToast({ message: t("watchlist.added"), visible: true });
     } catch (e) {
       setToast({
-        message: getApiErrorMessage(e, "관심종목 추가에 실패했습니다."),
+        message: getApiErrorMessage(e, t("watchlist.addFailed")),
         visible: true,
       });
     }
@@ -753,7 +744,7 @@ export default function Feature2MockPage() {
         setNewsItems(news);
       } catch {
         if (searchRequestIdRef.current !== requestId) return;
-        setNewsError("뉴스를 불러오지 못했습니다.");
+        setNewsError(t("news.loadFailed"));
       } finally {
         if (searchRequestIdRef.current === requestId) {
           setNewsLoading(false);
@@ -801,7 +792,7 @@ export default function Feature2MockPage() {
         );
         setRelatedStocks(mapRelatedStocks(result.data ?? []));
       } catch {
-        setRelatedError("유사 종목을 불러오지 못했습니다.");
+        setRelatedError(t("related.loadFailed"));
       } finally {
         setRelatedLoading(false);
       }
@@ -815,7 +806,7 @@ export default function Feature2MockPage() {
       } catch {
         if (searchRequestIdRef.current !== requestId) return;
         setInvestorFlowResult(null);
-        setInvestorFlowError("수급 데이터를 불러오지 못했습니다.");
+        setInvestorFlowError(t("investorFlow.loadFailed"));
       } finally {
         if (searchRequestIdRef.current === requestId) {
           setInvestorFlowLoading(false);
@@ -916,15 +907,15 @@ export default function Feature2MockPage() {
 
     if (!industryIndex) {
       if (warnings.includes("INDUSTRY_INDEX_OHLCV_EMPTY")) {
-        setIndustryChartError("산업 지수 데이터가 없습니다.");
+        setIndustryChartError(t("industry.noData"));
       } else {
-        setIndustryChartError("산업 지수 차트를 불러오지 못했습니다.");
+        setIndustryChartError(t("industry.loadFailed"));
       }
       return;
     }
 
     if (!industryIndex.series || industryIndex.series.length === 0) {
-      setIndustryChartError("산업 지수 데이터가 없습니다.");
+      setIndustryChartError(t("industry.noData"));
       return;
     }
 
@@ -967,7 +958,6 @@ export default function Feature2MockPage() {
         selectedWindow,
       );
       setAnalysisResult(result);
-      refreshTokenBalance().catch(() => {});
       setShortSellingSeriesResult(shortSellingSeries);
       setBaseRateSeriesResult(baseRateSeries);
 
@@ -978,8 +968,11 @@ export default function Feature2MockPage() {
       }
 
     } catch (e) {
-      setErr(getApiErrorMessage(e, "분석 결과를 불러오지 못했습니다."));
+      setErr(getApiErrorMessage(e, t("errors.analyzeFailed")));
     } finally {
+      // 성공/실패 무관하게 서버 잔액과 동기화 (백엔드가 실패 시 환불 처리하므로
+      // 환불된 잔액이 UI 에 즉시 반영되도록).
+      refreshTokenBalance().catch(() => {});
       setLoading(false);
     }
   };
@@ -1012,7 +1005,7 @@ export default function Feature2MockPage() {
   }, [mainStock.symbol]);
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px]">
+    <div className="min-h-screen bg-bg md:ml-[84px]">
       <div className="qaima-stagger max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         <header className="flex items-center justify-between">
           <div>
@@ -1020,13 +1013,13 @@ export default function Feature2MockPage() {
               Equities · External Factors
             </div>
             <h1 className="mt-1 text-3xl font-bold text-ink tracking-tighter">
-              외부요인
+              {t("header.title")}
             </h1>
           </div>
           <div className="flex items-center gap-2.5">
             <button
               onClick={toggle}
-              aria-label={theme === "dark" ? "라이트 모드" : "다크 모드"}
+              aria-label={theme === "dark" ? t("header.lightMode") : t("header.darkMode")}
               className="w-9 h-9 grid place-items-center rounded-xl bg-surface
                          border border-line text-ink-2 shadow-card
                          hover:bg-bg-sunk transition-colors"
@@ -1101,10 +1094,10 @@ export default function Feature2MockPage() {
                     <span className="text-2xl md:text-3xl font-bold text-ink font-mono tabular tracking-tighter">
                       {displayPrice}
                     </span>
-                    <span className="text-sm text-ink-3">원</span>
+                    <span className="text-sm text-ink-3">{t("price.won")}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-sm font-medium font-mono tabular">
-                    <span className="text-ink-3 text-xs">전일대비</span>
+                    <span className="text-ink-3 text-xs">{t("price.prevDayDiff")}</span>
                     <span className={mainColorClass}>{displayChange}</span>
                     <span className={mainColorClass}>({displayRate})</span>
                     {mainNumericChange > 0 && (
@@ -1138,7 +1131,7 @@ export default function Feature2MockPage() {
                 {chartLoading && (
                   <div className="flex-1 min-h-0 w-full flex items-center justify-center">
                     <p className="text-sm sm:text-base text-ink-3">
-                      차트를 불러오는 중입니다...
+                      {t("chart.loading")}
                     </p>
                   </div>
                 )}
@@ -1146,7 +1139,7 @@ export default function Feature2MockPage() {
                 {chartError && !chartLoading && (
                   <div className="flex-1 min-h-0 w-full flex items-center justify-center">
                     <p className="text-sm sm:text-base text-danger">
-                      {chartError ?? "차트를 불러오지 못했습니다."}
+                      {chartError ?? t("chart.loadFailed")}
                     </p>
                   </div>
                 )}
@@ -1168,7 +1161,7 @@ export default function Feature2MockPage() {
             {/* [좌측 하단] 산업 지수 차트 카드 */}
             <section className="w-full bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4">
               <h2 className="text-ink text-lg sm:text-2xl font-semibold tracking-tight">
-                {mainStock.name} 관련 <DictTerm term="산업 지수">산업 지수</DictTerm>
+                {mainStock.name} {t("industry.titlePrefix")} <DictTerm term="산업 지수">산업 지수</DictTerm>
               </h2>
 
               {/* 헤더와 차트 사이 divider */}
@@ -1177,14 +1170,14 @@ export default function Feature2MockPage() {
               <div className="w-full h-80 sm:h-[420px] flex items-stretch overflow-hidden">
               {industryChartLoading && (
                 <div className="flex-1 min-h-0 w-full flex items-center justify-center">
-                  <p className="text-sm sm:text-base text-ink-3">차트를 불러오는 중입니다...</p>
+                  <p className="text-sm sm:text-base text-ink-3">{t("chart.loading")}</p>
                 </div>
               )}
 
               {industryChartError && !industryChartLoading && (
                 <div className="flex-1 min-h-0 w-full flex items-center justify-center">
                   <p className="text-sm sm:text-base text-danger">
-                    {industryChartError ?? "차트를 불러오지 못했습니다."}
+                    {industryChartError ?? t("chart.loadFailed")}
                   </p>
                 </div>
               )}
@@ -1216,7 +1209,7 @@ export default function Feature2MockPage() {
 
             {!industryChartLoading && !industryChartError && industrySeries.length === 0 && (
               <div className="flex-1 min-h-0 w-full flex items-center justify-center">
-                <p className="text-sm sm:text-base text-ink-3">산업 지수 데이터가 없습니다.</p>
+                <p className="text-sm sm:text-base text-ink-3">{t("industry.noData")}</p>
               </div>
             )}
             </div>
@@ -1252,14 +1245,14 @@ export default function Feature2MockPage() {
 
         {/* 분석 기간 */}
         <div className="w-full bg-surface rounded-2xl border border-line px-4 sm:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-3 shadow-card">
-          <h3 className="text-sm sm:text-base font-semibold text-ink shrink-0">분석 기간</h3>
+          <h3 className="text-sm sm:text-base font-semibold text-ink shrink-0">{t("analysisPeriod.title")}</h3>
 
           <div className="flex flex-wrap gap-1.5">
             {([
-              ["3개월", 60],
-              ["6개월", 120],
-              ["9개월", 180],
-              ["1년", 252],
+              [t("analysisPeriod.preset3Months"), 60],
+              [t("analysisPeriod.preset6Months"), 120],
+              [t("analysisPeriod.preset9Months"), 180],
+              [t("analysisPeriod.preset1Year"), 252],
             ] as const).map(([label, window]) => (
               <button
                 key={label}
@@ -1276,8 +1269,8 @@ export default function Feature2MockPage() {
           </div>
 
           <div className="flex items-center gap-2 text-sm ml-auto">
-            <span className="text-xs text-ink-3 shrink-0">주기</span>
-            {([["ONE_D", "1일"], ["ONE_W", "1주"]] as const).map(([value, label]) => (
+            <span className="text-xs text-ink-3 shrink-0">{t("analysisPeriod.freqLabel")}</span>
+            {([["ONE_D", t("analysisPeriod.freqDay")]] as const).map(([value, label]) => (
               <button
                 key={value}
                 onClick={() => setSelectedFreq(value)}
@@ -1300,54 +1293,25 @@ export default function Feature2MockPage() {
                               flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <div className="text-[11px] font-semibold text-accent tracking-tight mb-1">
-                ✨ AI 외부요인 분석
+                {t("runCard.tag")}
               </div>
               <h3 className="text-lg font-bold text-ink tracking-tight">
-                선택한 기간을 한 번에 분석해 드릴게요
+                {t("runCard.title")}
               </h3>
               <p className="text-sm text-ink-3 mt-1">
-                기준금리 · 산업지수 · 공매도 · 유사종목을 종합한 리포트
+                {t("runCard.subtitle")}
               </p>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-shrink-0">
               <InvestLevelBadge />
               <div className="flex items-center gap-3">
-                <div ref={modelRef} className="relative">
-                <button
-                  onClick={() => setIsModelOpen((prev) => !prev)}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-surface border border-line text-sm"
-                >
-                  <span className="text-ink-3 text-[11px]">모델</span>
-                  <span className="font-semibold text-ink">{llmVendor}</span>
-                  {isModelOpen
-                    ? <ChevronUp size={14} className="text-ink-3 pointer-events-none" />
-                    : <ChevronDown size={14} className="text-ink-3 pointer-events-none" />}
-                </button>
-                {isModelOpen && (
-                  <div className="absolute right-0 bottom-full mb-1 w-full bg-surface border border-line rounded-xl shadow-pop z-50 max-h-60 overflow-y-auto">
-                    {LLM_VENDOR_OPTIONS.map((vendor) => (
-                      <button
-                        key={vendor}
-                        onClick={() => { setLlmVendor(vendor); setIsModelOpen(false); }}
-                        className={`w-full text-left px-3.5 py-2.5 text-sm first:rounded-t-xl last:rounded-b-xl ${
-                          vendor === llmVendor
-                            ? "bg-accent-soft text-accent font-semibold"
-                            : "text-ink hover:bg-bg-sunk"
-                        }`}
-                      >
-                        {vendor}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                </div>
                 <button
                 onClick={handleAnalyzeClick}
                 disabled={loading}
                 className="px-5 py-2.5 rounded-xl bg-accent text-white font-semibold text-sm
                            hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight"
               >
-                분석 결과 보기 →
+                {t("runCard.viewButton")}
                 </button>
               </div>
             </div>
@@ -1356,8 +1320,8 @@ export default function Feature2MockPage() {
 
         {!analysisResult && !loading && !err && (
           <div className="w-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-24 bg-bg-sunk border-line text-ink-4">
-            <p className="text-base font-medium">분석 결과가 여기에 표시됩니다</p>
-            <p className="text-sm mt-1">분석을 실행해주세요</p>
+            <p className="text-base font-medium">{t("emptyResult.title")}</p>
+            <p className="text-sm mt-1">{t("emptyResult.subtitle")}</p>
           </div>
         )}
 
@@ -1372,8 +1336,6 @@ export default function Feature2MockPage() {
                 onAnalyze={handleAnalyzeClick}
                 onDownload={handleDownloadClick}
                 onZoom={() => setIsAnalysisModalOpen(true)}
-                llmVendor={llmVendor}
-                onLlmVendorChange={setLlmVendor}
                 displayText={displayText}
                 layout="full"
                 reportMeta={reportMeta}
@@ -1394,7 +1356,7 @@ export default function Feature2MockPage() {
             >
               <div className="flex items-center justify-between px-5 py-3 border-b border-line">
                 <h2 className="text-base sm:text-lg font-semibold text-ink">
-                  {mainStock.name} ({mainStock.symbol}) 외부요인 분석
+                  {mainStock.name} ({mainStock.symbol}) {t("modal.titleSuffix")}
                 </h2>
                 <button
                   onClick={() => setIsAnalysisModalOpen(false)}
@@ -1412,8 +1374,6 @@ export default function Feature2MockPage() {
                   onAnalyze={handleAnalyzeClick}
                   onDownload={handleDownloadClick}
                   onZoom={() => {}}
-                  llmVendor={llmVendor}
-                  onLlmVendorChange={setLlmVendor}
                   displayText={displayText}
                   layout="full"
                   reportMeta={reportMeta}

@@ -1,9 +1,10 @@
 // frontend/src/components/TokenBalanceBadge.tsx
 import { Coins } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useTokenBalance } from "../hooks/useTokenBalance";
 import { useBilling } from "../contexts/BillingContext";
-
 export default function TokenBalanceBadge() {
+  const { t } = useTranslation("common");
   const balance = useTokenBalance();
   const { openBilling } = useBilling();
 
@@ -20,13 +21,13 @@ export default function TokenBalanceBadge() {
         hover:bg-accent/15 hover:border-accent/50
         transition-colors
       "
-      aria-label="토큰 잔량 확인 및 충전"
+      aria-label={t("token.badgeAriaLabel")}
     >
       <Coins size={14} className="text-accent" />
       <span className="text-xs sm:text-sm font-semibold tabular font-mono">
         {balance.toLocaleString()}
       </span>
-      <span className="text-[10px] sm:text-xs text-accent/70">토큰</span>
+      <span className="text-[10px] sm:text-xs text-accent/70">{t("token.label")}</span>
     </button>
   );
 }

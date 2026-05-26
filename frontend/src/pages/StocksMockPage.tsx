@@ -1,14 +1,15 @@
 // frontend/src/pages/StocksMockPage.tsx
 import { isLoggedIn } from "../utils/auth";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import TradingViewWidget from "../components/TradingViewWidget";
-import AnalysisResultPanel, { LLM_VENDOR_OPTIONS } from "../components/AnalysisResultPanel";
+import AnalysisResultPanel from "../components/AnalysisResultPanel";
 import { PdfExportContext } from "../contexts/PdfExportContext";
 import qaimaLogo from "../assets/qaima-final.png";
 import type { AnalysisPanelResult, FinancialTimelineSection, PriceFlowSummary } from "../types/analysisPanel";
 import { useRef, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Star, Sun, Moon, ChevronDown, ChevronUp, LineChart, MapPin } from "lucide-react";
+import { Star, Sun, Moon, LineChart, MapPin } from "lucide-react";
 import InvestLevelBadge from "../components/InvestLevelBadge";
 import StockSearchBar from "../components/StockSearchBar";
 import FeatureIntro from "../components/FeatureIntro";
@@ -211,6 +212,7 @@ const buildPriceFlowSummary = (
 export default function StocksMockPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { t } = useTranslation("stocksPage");
   const { investLevel } = useDictionary();
   const reportUserName = useReportUserName();
   const currentTime = useKSTTime();
@@ -245,7 +247,7 @@ export default function StocksMockPage() {
   const [analysisTo, setAnalysisTo] = useState<string>("");
   const [marketDivCode] = useState<string>("J");
   const [includeExplain] = useState<boolean>(true);
-  const [llmVendor, setLlmVendor] = useState<string>("Gemini 2.5 Flash");
+  const llmVendor = "GPT-5 mini";
 
   const [loading, setLoading] = useState(false);
   const [analysisLoadingStage, setAnalysisLoadingStage] = useState<string>("");
@@ -363,7 +365,7 @@ export default function StocksMockPage() {
       const data = response.data;
 
       if (data.length === 0) {
-        setChartError("차트 데이터가 없습니다.");
+        setChartError(t("chart.noData"));
       }
 
       setCandles(data);
@@ -430,7 +432,7 @@ export default function StocksMockPage() {
           : e?.config?.url,
         params: e?.config?.params,
       });
-      setChartError("차트를 불러오지 못했습니다.");
+      setChartError(t("chart.loadFailed"));
       setCandles([]);
 
       setMainStock((prevState) => ({
@@ -507,7 +509,7 @@ export default function StocksMockPage() {
 
     const q = value.trim();
     if (!q) {
-      setErr("종목을 입력해주세요.");
+      setErr(t("errors.needStockInput"));
       setHasSelectedStock(false);
       return;
     }
@@ -567,7 +569,7 @@ export default function StocksMockPage() {
         }));
       } else {
         setErr(
-          "유효하지 않은 종목입니다. 6자리 종목코드를 입력해주세요. (예: 005930)",
+          t("errors.invalidStock"),
         );
         setHasSelectedStock(false);
         return;
@@ -632,7 +634,7 @@ export default function StocksMockPage() {
       return;
     }
     setLoading(true);
-    setAnalysisLoadingStage("분석 준비 중");
+    setAnalysisLoadingStage(t("loadingStage.preparing"));
     setErr("");
     setAnalysisResult(null);
     setFinancialTimeline(null);
@@ -642,7 +644,7 @@ export default function StocksMockPage() {
     setShowChartMarkers(false);
 
     if (!mainStock.symbol) {
-      setErr("먼저 종목을 검색한 뒤 분석을 실행해주세요.");
+      setErr(t("errors.needStockBeforeAnalyze"));
       setAnalysisLoadingStage("");
       setLoading(false);
       return;
@@ -659,7 +661,7 @@ export default function StocksMockPage() {
         : undefined;
 
       // 사용자가 고른 기간으로 차트와 분석 범위를 맞춘다.
-      setAnalysisLoadingStage("가격 데이터를 불러오는 중");
+      setAnalysisLoadingStage(t("loadingStage.priceData"));
       const analysisCandles = await loadCandles(mainStock.symbol, "ANALYZE", {
         fromDate: requestedFromDate,
         toDate: requestedToDate,
@@ -674,7 +676,7 @@ export default function StocksMockPage() {
       const fromDate = analysisFrom || range.fromIso;
       const toDate = analysisTo || range.toIso;
 
-      setAnalysisLoadingStage("LLM 분석 결과를 생성하는 중");
+      setAnalysisLoadingStage(t("loadingStage.llmGenerating"));
       const result = await fetchAnalysis({
         stockCode: mainStock.symbol,
         freq: analysisFreq,
@@ -687,11 +689,10 @@ export default function StocksMockPage() {
       });
 
       setAnalysisResult(result);
-      refreshTokenBalance().catch(() => {});
       setPriceFlowSummary(buildPriceFlowSummary(analysisCandles, fromDate, toDate));
 
       const timelinePeriod = pickTimelinePeriod(fromDate, toDate);
-      setAnalysisLoadingStage("재무 시계열을 정리하는 중");
+      setAnalysisLoadingStage(t("loadingStage.timeline"));
       const timelineFinancials = await fetchFinancials(
         mainStock.symbol,
         TIMELINE_PERIOD_CONFIG[timelinePeriod].years,
@@ -702,7 +703,7 @@ export default function StocksMockPage() {
       );
 
       const ind = result?.data?.metrics?.indicators;
-      setAnalysisLoadingStage("투자 보조지표를 반영하는 중");
+      setAnalysisLoadingStage(t("loadingStage.indicators"));
 
       setIndicatorData({
         ema: ind?.ema ?? null,
@@ -713,8 +714,11 @@ export default function StocksMockPage() {
       setShowChartIndicators(true);
       setShowChartMarkers(false);
     } catch (e) {
-      setErr(getApiErrorMessage(e, "분석 결과를 불러오지 못했습니다."));
+      setErr(getApiErrorMessage(e, t("errors.analyzeFailed")));
     } finally {
+      // 성공/실패 무관하게 서버 잔액과 동기화 (백엔드가 실패 시 환불 처리하므로
+      // 환불된 잔액이 UI 에 즉시 반영되도록).
+      refreshTokenBalance().catch(() => {});
       setAnalysisLoadingStage("");
       setLoading(false);
     }
@@ -871,7 +875,7 @@ export default function StocksMockPage() {
   const toggleInterest = async () => {
     // 관심종목은 로그인 사용자 기준. 비로그인 시 강제 리다이렉트 대신 안내.
     if (!isLoggedIn()) {
-      setToast({ message: "로그인 후 이용할 수 있습니다.", visible: true });
+      setToast({ message: t("watchlist.loginRequired"), visible: true });
       return;
     }
     // 이미 등록됨 → 삭제
@@ -880,10 +884,10 @@ export default function StocksMockPage() {
         await deleteWatchlistItem(watchlistItemId);
         setIsInterested(false);
         setWatchlistItemId(null);
-        setToast({ message: "관심종목에서 삭제되었습니다.", visible: true });
+        setToast({ message: t("watchlist.removed"), visible: true });
       } catch (e) {
         setToast({
-          message: getApiErrorMessage(e, "관심종목 삭제에 실패했습니다."),
+          message: getApiErrorMessage(e, t("watchlist.removeFailed")),
           visible: true,
         });
       }
@@ -893,7 +897,7 @@ export default function StocksMockPage() {
     // 미등록 → 추가
     if (!currentStockId) {
       setToast({
-        message: "종목 정보를 불러온 뒤 다시 시도해주세요.",
+        message: t("watchlist.stockNotLoaded"),
         visible: true,
       });
       return;
@@ -904,28 +908,14 @@ export default function StocksMockPage() {
       });
       setIsInterested(true);
       setWatchlistItemId(created.watchlistItemId);
-      setToast({ message: "관심종목에 추가되었습니다.", visible: true });
+      setToast({ message: t("watchlist.added"), visible: true });
     } catch (e) {
       setToast({
-        message: getApiErrorMessage(e, "관심종목 추가에 실패했습니다."),
+        message: getApiErrorMessage(e, t("watchlist.addFailed")),
         visible: true,
       });
     }
   };
-
-  const [isModelOpen, setIsModelOpen] = useState(false);
-  const modelRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    const handleClickOutsideModel = (e: MouseEvent) => {
-      if (!modelRef.current) return;
-      if (modelRef.current.contains(e.target as Node)) return;
-      setIsModelOpen(false);
-    };
-
-    document.addEventListener("click", handleClickOutsideModel);
-    return () => document.removeEventListener("click", handleClickOutsideModel);
-  }, []);
 
   // 2) mainStock 표시/색상 계산은 친구 코드 기반으로 개선
   const displayPrice =
@@ -953,21 +943,21 @@ export default function StocksMockPage() {
   const { theme, toggle } = useTheme();
 
   return (
-    <div className="min-h-screen bg-bg ml-[84px]">
+    <div className="min-h-screen bg-bg md:ml-[84px]">
       <div className="qaima-stagger max-w-full sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6">
         <header className="flex items-end justify-between">
           <div>
             <div className="text-xs font-medium text-ink-3 tracking-tight">
-              Equities · Deep Analysis
+              {t("header.eyebrow")}
             </div>
             <h1 className="mt-1 text-3xl font-bold text-ink tracking-tighter">
-              심층분석
+              {t("header.title")}
             </h1>
           </div>
           <div className="flex items-center gap-2.5">
             <button
               onClick={toggle}
-              aria-label={theme === "dark" ? "라이트 모드" : "다크 모드"}
+              aria-label={theme === "dark" ? t("header.lightMode") : t("header.darkMode")}
               className="w-9 h-9 grid place-items-center rounded-xl bg-surface
                          border border-line text-ink-2 shadow-card
                          hover:bg-bg-sunk transition-colors"
@@ -1025,10 +1015,10 @@ export default function StocksMockPage() {
                       <span className="text-2xl md:text-3xl font-bold text-ink font-mono tabular tracking-tighter">
                         {displayPrice}
                       </span>
-                      <span className="text-sm text-ink-3">원</span>
+                      <span className="text-sm text-ink-3">{t("price.won")}</span>
                     </div>
                     <div className="flex items-center gap-1.5 text-sm font-medium font-mono tabular">
-                      <span className="text-ink-3 text-xs">전일대비</span>
+                      <span className="text-ink-3 text-xs">{t("price.prevDayDiff")}</span>
                       <span className={mainColorClass}>{displayChange}</span>
                       <span className={mainColorClass}>({displayRate})</span>
                       {mainNumericChange > 0 && (
@@ -1070,7 +1060,7 @@ export default function StocksMockPage() {
                       }`}
                     >
                       <LineChart size={14} aria-hidden="true" />
-                      보조지표
+                      {t("chart.indicators")}
                     </button>
                     <button
                       type="button"
@@ -1083,7 +1073,7 @@ export default function StocksMockPage() {
                       }`}
                     >
                       <MapPin size={14} aria-hidden="true" />
-                      마커
+                      {t("chart.markers")}
                     </button>
                   </div>
                 )}
@@ -1093,7 +1083,7 @@ export default function StocksMockPage() {
                     {chartLoading && (
                       <div className="flex-1 min-h-0 w-full flex items-center justify-center">
                         <p className="text-sm sm:text-base text-ink-3">
-                          차트를 불러오는 중입니다...
+                          {t("chart.loading")}
                         </p>
                       </div>
                     )}
@@ -1127,13 +1117,13 @@ export default function StocksMockPage() {
               <aside className="bg-surface rounded-2xl border border-line shadow-card p-5 flex flex-col gap-4 xl:h-[580px] min-h-0">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg sm:text-xl md:text-2xl font-semibold text-ink tracking-tight">
-                    투자지표
+                    {t("indicators.title")}
                   </h2>
                   <button
                     onClick={() => setIsFinModalOpen(true)}
                     className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent-soft text-accent-ink hover:bg-accent/15 transition-colors"
                   >
-                    재무제표
+                    {t("indicators.financialStatement")}
                   </button>
                 </div>
 
@@ -1149,7 +1139,7 @@ export default function StocksMockPage() {
                     ))
                   ) : (
                     <p className="text-sm text-ink-3">
-                      해당 조건의 재무제표 데이터가 없습니다.
+                      {t("indicators.noFinancialData")}
                     </p>
                   )}
                 </div>
@@ -1157,16 +1147,15 @@ export default function StocksMockPage() {
             </div>
             {/* ========== 분석 기간 선택 ========== */}
             <div className="w-full bg-surface rounded-xl border border-line px-4 sm:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-3 shadow-card">
-              <h3 className="text-sm sm:text-base font-semibold text-ink shrink-0">분석 기간</h3>
+              <h3 className="text-sm sm:text-base font-semibold text-ink shrink-0">{t("analysisPeriod.title")}</h3>
 
               {/* 프리셋 칩 */}
               <div className="flex flex-wrap gap-1.5">
                 {([
-                  ["3개월", 90],
-                  ["6개월", 180],
-                  ["1년", 365],
-                  ["3년", 1095],
-                  ["5년", 1825],
+                  [t("analysisPeriod.preset3Months"), 90],
+                  [t("analysisPeriod.preset6Months"), 180],
+                  [t("analysisPeriod.preset1Year"), 365],
+                  [t("analysisPeriod.preset3Years"), 1095],
                 ] as const).map(([label, days]) => {
                   const to = new Date();
                   const from = shiftKstDays(to, -days);
@@ -1198,7 +1187,7 @@ export default function StocksMockPage() {
                 <input
                   type="date"
                   value={analysisFrom}
-                  min={formatKstDate(shiftKstYears(new Date(), -5))}
+                  min={formatKstDate(shiftKstYears(new Date(), -3))}
                   max={analysisTo || formatKstDate(new Date())}
                   onChange={(e) => setAnalysisFrom(e.target.value)}
                   className="px-2 py-1.5 border border-line rounded-lg text-ink bg-surface focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
@@ -1207,7 +1196,7 @@ export default function StocksMockPage() {
                 <input
                   type="date"
                   value={analysisTo}
-                  min={analysisFrom || formatKstDate(shiftKstYears(new Date(), -5))}
+                  min={analysisFrom || formatKstDate(shiftKstYears(new Date(), -3))}
                   max={formatKstDate(new Date())}
                   onChange={(e) => setAnalysisTo(e.target.value)}
                   className="px-2 py-1.5 border border-line rounded-lg text-ink bg-surface focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent"
@@ -1222,54 +1211,25 @@ export default function StocksMockPage() {
                                   flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                   <div className="text-[11px] font-semibold text-accent tracking-tight mb-1">
-                    ✨ AI 심층분석
+                    {t("runCard.tag")}
                   </div>
                   <h3 className="text-lg font-bold text-ink tracking-tight">
-                    선택한 기간을 한 번에 분석해 드릴게요
+                    {t("runCard.title")}
                   </h3>
                   <p className="text-sm text-ink-3 mt-1">
-                    가격 흐름 · 재무 시계열 · 보조지표를 종합한 리포트
+                    {t("runCard.subtitle")}
                   </p>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-shrink-0">
                   <InvestLevelBadge />
                   <div className="flex items-center gap-3">
-                    <div ref={modelRef} className="relative">
-                    <button
-                      onClick={() => setIsModelOpen((prev) => !prev)}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-surface border border-line text-sm"
-                    >
-                      <span className="text-ink-3 text-[11px]">모델</span>
-                      <span className="font-semibold text-ink">{llmVendor}</span>
-                      {isModelOpen
-                        ? <ChevronUp size={14} className="text-ink-3 pointer-events-none" />
-                        : <ChevronDown size={14} className="text-ink-3 pointer-events-none" />}
-                    </button>
-                    {isModelOpen && (
-                      <div className="absolute right-0 bottom-full mb-1 w-full bg-surface border border-line rounded-lg shadow-pop z-50 max-h-60 overflow-y-auto">
-                        {LLM_VENDOR_OPTIONS.map((vendor) => (
-                          <button
-                            key={vendor}
-                            onClick={() => { setLlmVendor(vendor); setIsModelOpen(false); }}
-                            className={`w-full text-left px-3.5 py-2.5 text-sm first:rounded-t-lg last:rounded-b-lg ${
-                              vendor === llmVendor
-                                ? "bg-accent-soft text-accent font-semibold"
-                                : "text-ink hover:bg-bg-sunk"
-                            }`}
-                          >
-                            {vendor}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    </div>
                     <button
                     onClick={handleAnalyzeClick}
                     disabled={loading}
                     className="px-5 py-2.5 rounded-lg bg-accent text-white font-semibold text-sm
                                hover:opacity-90 disabled:opacity-50 transition-opacity tracking-tight"
                   >
-                    분석 결과 보기 →
+                    {t("runCard.viewButton")}
                     </button>
                   </div>
                 </div>
@@ -1279,8 +1239,8 @@ export default function StocksMockPage() {
             {/* ========== 하단 분석 결과 영역 ========== */}
             {!analysisData && !loading && !err && (
               <div className="w-full rounded-2xl border-2 border-dashed flex flex-col items-center justify-center py-24 bg-bg-sunk border-line text-ink-4">
-                <p className="text-base font-medium">분석 결과가 여기에 표시됩니다</p>
-                <p className="text-sm mt-1">분석을 실행해주세요</p>
+                <p className="text-base font-medium">{t("emptyResult.title")}</p>
+                <p className="text-sm mt-1">{t("emptyResult.subtitle")}</p>
               </div>
             )}
 
@@ -1300,8 +1260,6 @@ export default function StocksMockPage() {
                   setAnalysisZoom(1);
                   setIsAnalysisModalOpen(true);
                 }}
-                llmVendor={llmVendor}
-                onLlmVendorChange={setLlmVendor}
                 displayText={analysisData?.explain?.text ?? ""}
                 financialTimeline={financialTimeline}
                 priceFlowSummary={priceFlowSummary}
@@ -1326,7 +1284,7 @@ export default function StocksMockPage() {
               {/* 상단 헤더 */}
               <div className="flex items-center justify-between px-5 py-3 border-b border-line">
                 <h2 className="text-base sm:text-lg font-semibold text-ink">
-                  {mainStock.name} ({mainStock.symbol}) 분석 결과
+                  {mainStock.name} ({mainStock.symbol}) {t("modal.titleSuffix")}
                 </h2>
                 <button
                   onClick={() => setIsAnalysisModalOpen(false)}
@@ -1349,8 +1307,6 @@ export default function StocksMockPage() {
                   onAnalyze={handleAnalyzeClick}
                   onDownload={handleDownloadClick}
                   onZoom={() => {}}
-                  llmVendor={llmVendor}
-                  onLlmVendorChange={setLlmVendor}
                   displayText={analysisData?.explain?.text ?? ""}
                   financialTimeline={financialTimeline}
                   priceFlowSummary={priceFlowSummary}
@@ -1371,14 +1327,15 @@ export default function StocksMockPage() {
         />
 
         {/* 토스트 메시지 */}
-        {toast.visible && (
+        {toast.visible && createPortal(
           <div
-            className="fixed bottom-8 left-1/2 -translate-x-1/2
-                       bg-ink/80 text-bg px-4 py-2 rounded-lg
-                       text-sm sm:text-base"
+            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200]
+                       bg-ink/90 text-bg px-4 py-2 rounded-lg
+                       text-sm sm:text-base shadow-pop pointer-events-none"
           >
             {toast.message}
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     </div>

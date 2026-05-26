@@ -1,0 +1,20 @@
+{
+  "language": {
+    "label": "언어 / Language",
+    "description": "서비스 표시 언어를 선택합니다",
+    "ko": "한국어",
+    "en": "English"
+  },
+  "button": {
+    "save": "저장",
+    "cancel": "취소",
+    "close": "닫기",
+    "confirm": "확인",
+    "edit": "수정",
+    "delete": "삭제"
+  },
+  "token": {
+    "label": "토큰",
+    "badgeAriaLabel": "토큰 잔량 확인 및 충전"
+  }
+}

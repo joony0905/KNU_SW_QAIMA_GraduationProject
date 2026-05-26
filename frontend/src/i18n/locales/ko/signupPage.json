@@ -1,0 +1,75 @@
+{
+  "title": "회원가입",
+  "fields": {
+    "email": "이메일",
+    "verificationCode": "인증번호",
+    "password": "비밀번호 (영문, 숫자, 특수문자 포함 8~20자)",
+    "passwordConfirm": "비밀번호 확인",
+    "name": "이름",
+    "phone": "전화번호 ( - 제외)",
+    "birthdate": "생년월일",
+    "birthdateSecond": "1",
+    "country": "국적 선택"
+  },
+  "labels": {
+    "email": "이메일",
+    "verificationCode": "인증번호",
+    "password": "비밀번호",
+    "passwordConfirm": "비밀번호확인",
+    "name": "이름",
+    "phone": "연락처",
+    "birthdate": "생년월일",
+    "birthdateSecond": "주민등록번호 뒷자리",
+    "country": "국적"
+  },
+  "buttons": {
+    "requestCode": "인증받기",
+    "resendCode": "재요청",
+    "processing": "처리 중...",
+    "confirmCode": "인증확인",
+    "verified": "✓ 인증완료",
+    "submit": "회원가입",
+    "submitting": "가입 중..."
+  },
+  "alerts": {
+    "emailFirst": "이메일을 먼저 입력해주세요.",
+    "codeSent": "인증코드가 발송되었습니다. 이메일을 확인해주세요.",
+    "codeSendFailed": "인증코드 발송 실패: {{message}}",
+    "codeSendUnknown": "인증코드 발송 중 오류가 발생했습니다.",
+    "codeEmpty": "인증코드를 입력해주세요.",
+    "verifiedOk": "이메일 인증이 완료되었습니다.",
+    "verifyFailed": "인증 실패: {{message}}",
+    "verifyUnknown": "인증 중 오류가 발생했습니다.",
+    "fieldRequired": "{{label}}란을 기입해주십시오.",
+    "emailNotVerified": "이메일 인증을 완료해주세요.",
+    "privacyRequired": "개인정보 수집 및 이용에 동의해야 회원가입이 가능합니다.",
+    "signupDone": "회원가입이 완료되었습니다. 로그인해주세요.",
+    "signupFailedMessage": "회원가입 실패: {{message}}",
+    "signupConflict": "이미 가입된 이메일입니다.",
+    "signupBadRequest": "입력 정보를 다시 확인해주세요.",
+    "signupUnknown": "회원가입 중 오류가 발생했습니다."
+  },
+  "validation": {
+    "emailFormat": "이메일 형식이 올바르지 않습니다.",
+    "passwordShort": "비밀번호가 너무 짧습니다.",
+    "passwordLong": "비밀번호는 최대 20자리입니다.",
+    "passwordComposition": "비밀번호에는 숫자, 영어, 특수문자가 모두 하나씩 포함되어야 합니다.",
+    "passwordMismatch": "비밀번호가 일치하지 않습니다.",
+    "birthdateInvalid": "올바른 생년월일을 기입해주십시오.",
+    "genderDigitInvalid": "올바른 성별 자릿수를 기입해주십시오."
+  },
+  "codeHint": "이메일로 발송된 인증코드를 입력 후 '인증확인' 버튼을 눌러주세요.",
+  "privacy": {
+    "agree": "개인정보 수집 및 이용에 동의합니다.",
+    "details": "자세히 보기",
+    "panelTitle": "개인정보 수집 및 이용 안내",
+    "panelP1": "QAIMA는 회원가입, 본인 확인, 서비스 제공, 이용 통계 분석 및 맞춤형 서비스 개선을 위해 개인정보를 수집·이용합니다.",
+    "panelP2": "수집 항목: 이메일, 비밀번호, 이름, 전화번호, 생년월일, 성별, 국적, 접속 IP, 브라우저 정보, 서비스 이용 기록",
+    "panelP3": "보유 및 이용 기간: 회원 탈퇴 시까지 보관하며, 관계 법령에 따라 보관이 필요한 정보는 해당 기간 동안 보관할 수 있습니다.",
+    "panelP4": "동의를 거부할 수 있으나, 필수 개인정보 수집 및 이용에 동의하지 않을 경우 회원가입이 제한됩니다."
+  },
+  "loginLink": {
+    "intro": "이미 계정이 있으신가요?",
+    "action": "로그인"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "bars": {
+    "title": "Investment Overview",
+    "subtitle": "Valuation · Profitability · Stability · Growth · Per Share",
+    "asOf": "As of:",
+    "currency": "Currency:",
+    "sections": {
+      "valuation": "Valuation",
+      "profitability": "Profitability",
+      "stability": "Stability",
+      "growth": "Growth",
+      "perShare": "Per Share"
+    },
+    "units": {
+      "multiple": "x",
+      "trillion": "T",
+      "hundredMillion": "B"
+    },
+    "items": {
+      "marketCap": "Market Cap",
+      "operatingMargin": "Operating Margin",
+      "netMargin": "Net Margin",
+      "debtRatio": "Debt Ratio",
+      "currentRatio": "Current Ratio",
+      "quickRatio": "Quick Ratio",
+      "interestCoverage": "Interest Coverage",
+      "revenueGrowth": "Revenue Growth",
+      "epsGrowth": "EPS Growth",
+      "freeCashFlow": "Free Cash Flow"
+    }
+  },
+  "indicators": {
+    "title": "Technical Indicator Summary",
+    "subtitle": "EMA · Bollinger Band · Stochastic",
+    "cards": {
+      "ema": "Moving Average (EMA)",
+      "bb": "Bollinger Band",
+      "stoch": "Stochastic"
+    },
+    "ema": {
+      "alignment": "Alignment",
+      "rising": "Rising Alignment",
+      "falling": "Falling Alignment",
+      "mixed": "Mixed",
+      "unknown": "Unavailable"
+    },
+    "bb": {
+      "mid": "Mid:",
+      "width": "Width:",
+      "upper": "Upper:",
+      "lower": "Lower:",
+      "position": "Band Position"
+    },
+    "stoch": {
+      "zone": "Zone:",
+      "position": "Oscillator Position",
+      "overbought": "Overbought",
+      "oversold": "Oversold",
+      "neutral": "Neutral",
+      "unknown": "Unavailable"
+    }
+  }
+}

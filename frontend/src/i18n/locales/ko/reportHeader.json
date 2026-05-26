@@ -1,0 +1,21 @@
+{
+  "featureLabel": {
+    "FEATURE1": "기능1 종목 분석",
+    "FEATURE2": "기능2 외부요인 분석",
+    "FEATURE3": "기능3 포트폴리오 분석"
+  },
+  "rows": {
+    "subject": "분석대상",
+    "feature": "분석기능",
+    "generatedAt": "분석일시",
+    "model": "분석모델",
+    "investLevel": "투자 레벨",
+    "user": "사용자",
+    "window": "분석기간",
+    "dataAsOf": "데이터 기준",
+    "riskProfile": "위험성향",
+    "priceBasis": "가격 기준",
+    "covarianceModel": "공분산 모형"
+  },
+  "userFallback": "사용자"
+}

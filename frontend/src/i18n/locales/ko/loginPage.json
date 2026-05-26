@@ -1,0 +1,35 @@
+{
+  "title": "로그인",
+  "fields": {
+    "email": "이메일",
+    "password": "비밀번호"
+  },
+  "links": {
+    "signup": "회원가입",
+    "findAccount": "아이디/비밀번호 찾기"
+  },
+  "buttons": {
+    "submit": "로그인",
+    "submitting": "로그인 중...",
+    "naver": "NAVER 로그인",
+    "google": "Google 로그인"
+  },
+  "or": "OR CONTINUE WITH",
+  "errors": {
+    "empty": "이메일과 비밀번호를 입력하세요.",
+    "invalid": "이메일 또는 비밀번호가 일치하지 않습니다.",
+    "expired": "로그인 세션이 만료되었습니다. 다시 로그인해주세요.",
+    "locked": "계정이 잠겼습니다. 잠시 후 다시 시도해주세요.",
+    "unknown": "로그인 중 오류가 발생했습니다."
+  },
+  "oauth2": {
+    "providerFallback": "소셜",
+    "providerKakao": "카카오",
+    "accountLinkRequired": "이미 가입된 이메일입니다. 일반 로그인 후 설정에서 소셜 계정을 연결해주세요.",
+    "providerEmailNotVerified": "{{provider}} 계정의 이메일이 인증되지 않았습니다.",
+    "providerProfileInvalid": "{{provider}} 계정에서 필수 정보를 가져오지 못했습니다. 권한을 확인해주세요.",
+    "accountInactive": "계정이 비활성 상태입니다.",
+    "socialAccountInvalid": "연결된 계정 정보가 올바르지 않습니다.",
+    "loginFailed": "{{provider}} 로그인에 실패했습니다."
+  }
+}

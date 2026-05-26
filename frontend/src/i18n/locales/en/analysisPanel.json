@@ -1,0 +1,128 @@
+{
+  "trend": {
+    "rise": "Up",
+    "fall": "Down",
+    "flat": "Flat",
+    "checking": "Checking"
+  },
+  "investorFlow": {
+    "buyBoth": "Both net buy",
+    "sellBoth": "Both net sell",
+    "foreignBuyInstSell": "Foreign buy · Institution sell",
+    "foreignSellInstBuy": "Foreign sell · Institution buy",
+    "mixed": "Mixed"
+  },
+  "amountUnit": {
+    "trillion": " trillion KRW",
+    "hundredMillion": " hundred-million KRW",
+    "million": " million KRW",
+    "won": " KRW"
+  },
+  "macro": {
+    "exchange": "FX rate",
+    "baseRate": "Base rate",
+    "domesticBond": "KR bonds",
+    "usRates": "US bonds",
+    "shortSelling": "Short selling"
+  },
+  "sentiment": {
+    "positive": "Positive",
+    "negative": "Negative",
+    "neutral": "Neutral"
+  },
+  "timeAgo": {
+    "minutes": "{{n}} min ago",
+    "hours": "{{n}} hr ago",
+    "days": "{{n}} d ago"
+  },
+  "lead": {
+    "leading": "Leading",
+    "lagging": "Lagging",
+    "coincident": "Coincident",
+    "neutral": "Neutral"
+  },
+  "peer": {
+    "industryAdjustedBasis": "Industry-adjusted basis",
+    "industryAdjustedCorr": "Industry-adjusted correlation",
+    "rawCorr": "Correlation",
+    "clusterIncluded": "In cluster",
+    "similarExcluded": "Similar but excluded",
+    "lowCorr": "Low correlation",
+    "industryAdjustedSimilar": "Similar (industry-adjusted)",
+    "rawCorrBased": "Based on raw correlation",
+    "rawCorrFallback": "Raw correlation fallback",
+    "referenceCandidate": "Reference candidate"
+  },
+  "section": {
+    "defaultTitle": "Description"
+  },
+  "buttons": {
+    "downloadPdf": "Download as PDF",
+    "expand": "Expand view",
+    "viewAnalysis": "View analysis"
+  },
+  "status": {
+    "loading": "Analyzing..."
+  },
+  "subject": "Subject stock",
+  "investorFlowCard": {
+    "title": "Foreign & Institutional Flow",
+    "compare": "Stock vs market",
+    "stockDirection": "Stock direction",
+    "marketDirection": "Market direction",
+    "tradingDays": "Trading days analyzed",
+    "dayUnit": "d",
+    "noMarketMapping": "No market mapping"
+  },
+  "peerCluster": {
+    "title": "Peer reaction structure",
+    "selectedCount": "{{n}} selected",
+    "disclaimer": "Industry-adjusted correlation is an observational metric that simply subtracts common industry movement — not a refined factor model or a directional signal.",
+    "relation": "Relation",
+    "score": "Score",
+    "status": "Status",
+    "coreHeading": "Core peers",
+    "additionalHeading": "Additional candidates",
+    "empty": "No peer stocks were selected."
+  },
+  "news": {
+    "title": "News sentiment",
+    "scoredCount": "{{n}} scored articles",
+    "recentAvg": "Recent average score",
+    "scoredNews": "Scored articles",
+    "ratio": "Positive / Neutral / Negative",
+    "asOf": "As of",
+    "scoredHeading": "Articles with sentiment scores"
+  },
+  "macroSeries": {
+    "title": "Period trend · market context",
+    "subtitle": "Rates · bonds · FX · short selling",
+    "krBaseRate": "Korea base rate",
+    "usBaseRate": "US federal funds rate",
+    "baseRateChange": "Base rate change",
+    "shortSellingRatio": "Short selling value ratio",
+    "shortSelling": "Short selling"
+  },
+  "shortSelling": {
+    "titleSuffix": "status",
+    "headerItem": "Item",
+    "headerValue": "Value",
+    "asOf": "As of",
+    "shortVolume": "Short selling volume",
+    "totalVolume": "(total)",
+    "shortVolumeRatio": "Short selling volume ratio",
+    "shortAmount": "Short selling value",
+    "totalAmount": "(total)",
+    "shortAmountRatio": "Short selling value ratio",
+    "volumeLabel": "Volume",
+    "amountLabel": "Value"
+  },
+  "overall": {
+    "title": "Overall summary",
+    "summary": "Summary",
+    "highlights": "Highlights",
+    "risks": "Risks",
+    "conclusion": "Conclusion"
+  },
+  "notes": "Notes"
+}

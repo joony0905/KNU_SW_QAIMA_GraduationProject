@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import { requestEmailVerification, confirmEmailVerification, signup } from "../api/auth";
 
@@ -12,7 +13,24 @@ const inlineActionBtn =
 const inlineSuccessBadge =
   "px-4 py-3 rounded-lg bg-success/15 text-success border border-success/30 text-sm font-semibold whitespace-nowrap flex items-center";
 
-const COUNTRY_OPTIONS = ["대한민국", "미국", "일본", "중국", "영국", "프랑스", "독일","싱가포르", "홍콩", "캐나다", "호주", "기타"];
+// 백엔드는 국적 코드를 그대로 한국어 라벨로 저장하므로 키 → 한국어 라벨로 보낸다.
+// 표시 라벨만 다국어화하고, 제출 값은 항상 한국어를 유지한다.
+const COUNTRY_KEYS = ["kr", "us", "jp", "cn", "gb", "fr", "de", "sg", "hk", "ca", "au", "other"] as const;
+const COUNTRY_SUBMIT_VALUE: Record<(typeof COUNTRY_KEYS)[number], string> = {
+  kr: "대한민국",
+  us: "미국",
+  jp: "일본",
+  cn: "중국",
+  gb: "영국",
+  fr: "프랑스",
+  de: "독일",
+  sg: "싱가포르",
+  hk: "홍콩",
+  ca: "캐나다",
+  au: "호주",
+  other: "기타",
+};
+
 const numericControlKeys = new Set([
   "Backspace",
   "Delete",
@@ -25,6 +43,7 @@ const numericControlKeys = new Set([
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation(["signupPage", "oauthPage"]);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -83,49 +102,49 @@ export default function SignupPage() {
 
   const validateEmail = (value: string) => {
     const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-    return ok ? "" : "이메일 형식이 올바르지 않습니다.";
+    return ok ? "" : t("validation.emailFormat");
   };
 
   const validatePassword = (value: string) => {
-    if (value.length < 8) return "비밀번호가 너무 짧습니다.";
-    if (value.length > 12) return "비밀번호는 최대 12자리입니다.";
+    if (value.length < 8) return t("validation.passwordShort");
+    if (value.length > 20) return t("validation.passwordLong");
     const hasNumber = /[0-9]/.test(value);
     const hasLetter = /[a-zA-Z]/.test(value);
     const hasSpecial = /[^0-9a-zA-Z]/.test(value);
     if (!hasNumber || !hasLetter || !hasSpecial) {
-      return "비밀번호에는 숫자, 영어, 특수문자가 모두 하나씩 포함되어야 합니다.";
+      return t("validation.passwordComposition");
     }
     return "";
   };
 
   const validatePasswordConfirm = (password: string, confirm: string) =>
-    password === confirm ? "" : "비밀번호가 일치하지 않습니다.";
+    password === confirm ? "" : t("validation.passwordMismatch");
 
   const validateBirthdate = (date: string, genderDigit: string) => {
-    if (!/^[0-9]{6}$/.test(date)) return "올바른 생년월일을 기입해주십시오.";
-    if (!/^[0-9]$/.test(genderDigit)) return "올바른 성별 자릿수를 기입해주십시오.";
+    if (!/^[0-9]{6}$/.test(date)) return t("validation.birthdateInvalid");
+    if (!/^[0-9]$/.test(genderDigit)) return t("validation.genderDigitInvalid");
 
     const yy = parseInt(date.slice(0, 2), 10);
     const mm = parseInt(date.slice(2, 4), 10);
     const dd = parseInt(date.slice(4, 6), 10);
 
-    if (mm < 1 || mm > 12) return "올바른 생년월일을 기입해주십시오.";
+    if (mm < 1 || mm > 12) return t("validation.birthdateInvalid");
 
     const isLeap = yy % 4 === 0;
     const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     const maxDay = daysInMonth[mm - 1];
 
-    if (dd < 1 || dd > maxDay) return "올바른 생년월일을 기입해주십시오.";
+    if (dd < 1 || dd > maxDay) return t("validation.birthdateInvalid");
 
     const gd = parseInt(genderDigit, 10);
-    if (gd < 1 || gd > 4) return "올바른 성별 자릿수를 기입해주십시오.";
+    if (gd < 1 || gd > 4) return t("validation.genderDigitInvalid");
 
     return "";
   };
 
   const handleVerification = async () => {
     if (!formData.email) {
-      alert("이메일을 먼저 입력해주세요.");
+      alert(t("alerts.emailFirst"));
       return;
     }
     const emailError = validateEmail(formData.email);
@@ -137,10 +156,10 @@ export default function SignupPage() {
     try {
       await requestEmailVerification(formData.email);
       setVerificationSent(true);
-      alert("인증코드가 발송되었습니다. 이메일을 확인해주세요.");
+      alert(t("alerts.codeSent"));
     } catch (err: unknown) {
-      if (err instanceof Error) alert("인증코드 발송 실패: " + err.message);
-      else alert("인증코드 발송 중 오류가 발생했습니다.");
+      if (err instanceof Error) alert(t("alerts.codeSendFailed", { message: err.message }));
+      else alert(t("alerts.codeSendUnknown"));
     } finally {
       setVerificationLoading(false);
     }
@@ -148,36 +167,23 @@ export default function SignupPage() {
 
   const handleConfirmVerification = async () => {
     if (!formData.verificationCode) {
-      alert("인증코드를 입력해주세요.");
+      alert(t("alerts.codeEmpty"));
       return;
     }
     setVerificationLoading(true);
     try {
       await confirmEmailVerification(formData.email, formData.verificationCode);
       setEmailVerified(true);
-      alert("이메일 인증이 완료되었습니다.");
+      alert(t("alerts.verifiedOk"));
     } catch (err: unknown) {
-      if (err instanceof Error) alert("인증 실패: " + err.message);
-      else alert("인증 중 오류가 발생했습니다.");
+      if (err instanceof Error) alert(t("alerts.verifyFailed", { message: err.message }));
+      else alert(t("alerts.verifyUnknown"));
     } finally {
       setVerificationLoading(false);
     }
   };
 
-  const labelFor = (field: keyof typeof formData) => {
-    switch (field) {
-      case "email": return "이메일";
-      case "verificationCode": return "인증번호";
-      case "password": return "비밀번호";
-      case "passwordConfirm": return "비밀번호확인";
-      case "name": return "이름";
-      case "phone": return "연락처";
-      case "birthdate": return "생년월일";
-      case "birthdateSecond": return "주민등록번호 뒷자리";
-      case "country": return "국적";
-      default: return "";
-    }
-  };
+  const labelFor = (field: keyof typeof formData): string => t(`labels.${field}`);
 
   const handleBlur = (field: keyof typeof formData) => {
     setErrors((prev) => {
@@ -209,7 +215,7 @@ export default function SignupPage() {
 
     for (const field of requiredOrder) {
       if (!formData[field]) {
-        alert(`${labelFor(field)}란을 기입해주십시오.`);
+        alert(t("alerts.fieldRequired", { label: labelFor(field) }));
         return;
       }
     }
@@ -221,12 +227,12 @@ export default function SignupPage() {
     setErrors(newErrors);
 
     if (!emailVerified) {
-      alert("이메일 인증을 완료해주세요.");
+      alert(t("alerts.emailNotVerified"));
       return;
     }
 
     if (!privacyAgreed) {
-      alert("개인정보 수집 및 이용에 동의해야 회원가입이 가능합니다.");
+      alert(t("alerts.privacyRequired"));
       return;
     }
 
@@ -241,31 +247,29 @@ export default function SignupPage() {
         phone: formData.phone,
         country: formData.country,
       });
-      alert("회원가입이 완료되었습니다. 로그인해주세요.");
+      alert(t("alerts.signupDone"));
       navigate("/login");
     } catch (err: unknown) {
       const axiosErr = err as any;
       const serverMessage = axiosErr?.response?.data?.errors?.[0]?.message;
       const status = axiosErr?.response?.status;
 
-      if (serverMessage) alert("회원가입 실패: " + serverMessage);
-      else if (status === 409) alert("이미 가입된 이메일입니다.");
-      else if (status === 400) alert("입력 정보를 다시 확인해주세요.");
-      else if (err instanceof Error) alert("회원가입 실패: " + err.message);
-      else alert("회원가입 중 오류가 발생했습니다.");
+      if (serverMessage) alert(t("alerts.signupFailedMessage", { message: serverMessage }));
+      else if (status === 409) alert(t("alerts.signupConflict"));
+      else if (status === 400) alert(t("alerts.signupBadRequest"));
+      else if (err instanceof Error) alert(t("alerts.signupFailedMessage", { message: err.message }));
+      else alert(t("alerts.signupUnknown"));
     } finally {
       setSignupLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg p-4 ml-[84px]">
+    <div className="min-h-screen flex items-center justify-center bg-bg p-4 md:ml-[84px]">
       <div className="w-full max-w-[460px] bg-surface border border-line rounded-2xl shadow-card p-10 flex flex-col gap-7">
         {/* 헤더 */}
         <div>
-          <h1 className="text-3xl font-bold text-ink tracking-tighter">
-            회원가입
-          </h1>
+          <h1 className="text-3xl font-bold text-ink tracking-tighter">{t("title")}</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
@@ -274,7 +278,7 @@ export default function SignupPage() {
             <div className="flex gap-2">
               <input
                 type="email"
-                placeholder="이메일"
+                placeholder={t("fields.email")}
                 value={formData.email}
                 onChange={(e) => handleInputChange("email", e.target.value)}
                 onBlur={() => handleBlur("email")}
@@ -288,10 +292,10 @@ export default function SignupPage() {
                   className={inlineActionBtn}
                 >
                   {verificationLoading
-                    ? "처리 중..."
+                    ? t("buttons.processing")
                     : verificationSent
-                    ? "재요청"
-                    : "인증받기"}
+                    ? t("buttons.resendCode")
+                    : t("buttons.requestCode")}
                 </button>
               )}
             </div>
@@ -306,7 +310,7 @@ export default function SignupPage() {
               <input
                 type="text"
                 inputMode="numeric"
-                placeholder="인증번호"
+                placeholder={t("fields.verificationCode")}
                 value={formData.verificationCode}
                 onChange={(e) => handleInputChange("verificationCode", e.target.value)}
                 maxLength={6}
@@ -320,16 +324,14 @@ export default function SignupPage() {
                   disabled={verificationLoading || !verificationSent}
                   className={inlineActionBtn}
                 >
-                  인증확인
+                  {t("buttons.confirmCode")}
                 </button>
               ) : (
-                <div className={inlineSuccessBadge}>✓ 인증완료</div>
+                <div className={inlineSuccessBadge}>{t("buttons.verified")}</div>
               )}
             </div>
             {verificationSent && !emailVerified && (
-              <p className="mt-1.5 text-xs text-accent">
-                이메일로 발송된 인증코드를 입력 후 '인증확인' 버튼을 눌러주세요.
-              </p>
+              <p className="mt-1.5 text-xs text-accent">{t("codeHint")}</p>
             )}
           </div>
 
@@ -337,11 +339,11 @@ export default function SignupPage() {
           <div>
             <input
               type="password"
-              placeholder="비밀번호 (영문, 숫자, 특수문자 포함 8~12자)"
+              placeholder={t("fields.password")}
               value={formData.password}
               onChange={(e) => handleInputChange("password", e.target.value)}
               onBlur={() => handleBlur("password")}
-              maxLength={12}
+              maxLength={20}
               className={inputClass}
             />
             {errors.password && (
@@ -353,11 +355,11 @@ export default function SignupPage() {
           <div>
             <input
               type="password"
-              placeholder="비밀번호 확인"
+              placeholder={t("fields.passwordConfirm")}
               value={formData.passwordConfirm}
               onChange={(e) => handleInputChange("passwordConfirm", e.target.value)}
               onBlur={() => handleBlur("passwordConfirm")}
-              maxLength={12}
+              maxLength={20}
               className={inputClass}
             />
             {errors.passwordConfirm && (
@@ -368,7 +370,7 @@ export default function SignupPage() {
           {/* 이름 */}
           <input
             type="text"
-            placeholder="이름"
+            placeholder={t("fields.name")}
             value={formData.name}
             onChange={(e) => handleInputChange("name", e.target.value)}
             className={inputClass}
@@ -377,7 +379,7 @@ export default function SignupPage() {
           {/* 전화번호 */}
           <input
             type="tel"
-            placeholder="전화번호 ( - 제외)"
+            placeholder={t("fields.phone")}
             value={formData.phone}
             onChange={(e) => handleInputChange("phone", e.target.value)}
             className={inputClass}
@@ -388,7 +390,7 @@ export default function SignupPage() {
             <div className="flex gap-2 items-stretch">
               <input
                 type="text"
-                placeholder="생년월일"
+                placeholder={t("fields.birthdate")}
                 value={formData.birthdate}
                 onChange={(e) => handleInputChange("birthdate", e.target.value)}
                 onKeyDown={handleNumericKeyDown}
@@ -400,7 +402,7 @@ export default function SignupPage() {
               />
               <input
                 type="text"
-                placeholder="1"
+                placeholder={t("fields.birthdateSecond")}
                 value={formData.birthdateSecond}
                 onChange={(e) => handleInputChange("birthdateSecond", e.target.value)}
                 onKeyDown={handleNumericKeyDown}
@@ -427,29 +429,38 @@ export default function SignupPage() {
               className="w-full px-4 py-3 rounded-lg bg-bg-sunk border border-line flex items-center justify-between text-sm hover:bg-surface-2 transition-colors"
             >
               <span className={formData.country ? "text-ink" : "text-ink-4"}>
-                {formData.country || "국적 선택"}
+                {formData.country
+                  ? t(`oauthPage:socialComplete.countries.${
+                      (Object.keys(COUNTRY_SUBMIT_VALUE) as Array<keyof typeof COUNTRY_SUBMIT_VALUE>)
+                        .find((k) => COUNTRY_SUBMIT_VALUE[k] === formData.country) ?? "other"
+                    }`)
+                  : t("fields.country")}
               </span>
               <ChevronDown size={16} className="text-ink-3 pointer-events-none" />
             </button>
             {showCountryDropdown && (
               <div className="absolute top-full left-0 w-full mt-1.5 bg-surface border border-line rounded-lg shadow-pop z-10 max-h-[220px] overflow-y-auto">
-                {COUNTRY_OPTIONS.map((country) => (
-                  <button
-                    key={country}
-                    type="button"
-                    onClick={() => {
-                      handleInputChange("country", country);
-                      setShowCountryDropdown(false);
-                    }}
-                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-bg-sunk first:rounded-t-lg last:rounded-b-lg ${
-                      formData.country === country
-                        ? "bg-accent-soft text-accent font-semibold"
-                        : "text-ink"
-                    }`}
-                  >
-                    {country}
-                  </button>
-                ))}
+                {COUNTRY_KEYS.map((key) => {
+                  const submit = COUNTRY_SUBMIT_VALUE[key];
+                  const isActive = formData.country === submit;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        handleInputChange("country", submit);
+                        setShowCountryDropdown(false);
+                      }}
+                      className={`w-full px-4 py-2.5 text-left text-sm hover:bg-bg-sunk first:rounded-t-lg last:rounded-b-lg ${
+                        isActive
+                          ? "bg-accent-soft text-accent font-semibold"
+                          : "text-ink"
+                      }`}
+                    >
+                      {t(`oauthPage:socialComplete.countries.${key}`)}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -466,32 +477,24 @@ export default function SignupPage() {
               />
               <div className="flex-1">
                 <label htmlFor="privacy-agreement" className="text-sm text-ink">
-                  개인정보 수집 및 이용에 동의합니다.
+                  {t("privacy.agree")}
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowPrivacyDetail((prev) => !prev)}
                   className="ml-2 text-xs font-medium text-accent hover:underline"
                 >
-                  자세히 보기
+                  {t("privacy.details")}
                 </button>
               </div>
             </div>
             {showPrivacyDetail && (
               <div className="mt-3 rounded-md border border-line bg-surface p-3 text-xs leading-5 text-ink-2">
-                <p className="font-semibold text-ink">개인정보 수집 및 이용 안내</p>
-                <p className="mt-2">
-                  QAIMA는 회원가입, 본인 확인, 서비스 제공, 이용 통계 분석 및 맞춤형 서비스 개선을 위해 개인정보를 수집·이용합니다.
-                </p>
-                <p className="mt-2">
-                  수집 항목: 이메일, 비밀번호, 이름, 전화번호, 생년월일, 성별, 국적, 접속 IP, 브라우저 정보, 서비스 이용 기록
-                </p>
-                <p className="mt-2">
-                  보유 및 이용 기간: 회원 탈퇴 시까지 보관하며, 관계 법령에 따라 보관이 필요한 정보는 해당 기간 동안 보관할 수 있습니다.
-                </p>
-                <p className="mt-2">
-                  동의를 거부할 수 있으나, 필수 개인정보 수집 및 이용에 동의하지 않을 경우 회원가입이 제한됩니다.
-                </p>
+                <p className="font-semibold text-ink">{t("privacy.panelTitle")}</p>
+                <p className="mt-2">{t("privacy.panelP1")}</p>
+                <p className="mt-2">{t("privacy.panelP2")}</p>
+                <p className="mt-2">{t("privacy.panelP3")}</p>
+                <p className="mt-2">{t("privacy.panelP4")}</p>
               </div>
             )}
           </div>
@@ -502,17 +505,17 @@ export default function SignupPage() {
             disabled={signupLoading}
             className="w-full mt-3 py-3 rounded-lg bg-accent text-white text-base font-semibold tracking-tight hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            {signupLoading ? "가입 중..." : "회원가입"}
+            {signupLoading ? t("buttons.submitting") : t("buttons.submit")}
           </button>
 
           <p className="text-xs text-ink-3 text-center mt-1">
-            이미 계정이 있으신가요?{" "}
+            {t("loginLink.intro")}{" "}
             <button
               type="button"
               onClick={() => navigate("/login")}
               className="text-accent font-medium hover:underline"
             >
-              로그인
+              {t("loginLink.action")}
             </button>
           </p>
         </form>

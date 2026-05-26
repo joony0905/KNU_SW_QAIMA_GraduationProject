@@ -1,0 +1,34 @@
+{
+  "title": "Edit Profile",
+  "loading": "Loading your info...",
+  "card": {
+    "title": "Basic Info",
+    "desc": "You can update your name and phone number"
+  },
+  "labels": {
+    "email": "ID (Email)",
+    "birthdate": "Date of Birth",
+    "gender": "Gender",
+    "name": "Name",
+    "phone": "Phone Number"
+  },
+  "placeholders": {
+    "name": "Name",
+    "phone": "Phone (no dashes)"
+  },
+  "emailHint": "Email used as your ID cannot be changed.",
+  "gender": {
+    "male": "Male",
+    "female": "Female"
+  },
+  "errors": {
+    "nameRequired": "Please enter your name.",
+    "phoneInvalid": "Please enter a valid phone number.",
+    "loadFailed": "Failed to load your info.",
+    "saveFailed": "Failed to update profile."
+  },
+  "buttons": {
+    "saving": "Saving...",
+    "save": "Save Changes"
+  }
+}

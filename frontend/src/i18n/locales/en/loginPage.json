@@ -1,0 +1,35 @@
+{
+  "title": "Log in",
+  "fields": {
+    "email": "Email",
+    "password": "Password"
+  },
+  "links": {
+    "signup": "Sign up",
+    "findAccount": "Find ID / Password"
+  },
+  "buttons": {
+    "submit": "Log in",
+    "submitting": "Logging in...",
+    "naver": "Log in with NAVER",
+    "google": "Log in with Google"
+  },
+  "or": "OR CONTINUE WITH",
+  "errors": {
+    "empty": "Please enter your email and password.",
+    "invalid": "Email or password does not match.",
+    "expired": "Your session has expired. Please log in again.",
+    "locked": "Account is locked. Please try again later.",
+    "unknown": "An error occurred while logging in."
+  },
+  "oauth2": {
+    "providerFallback": "Social",
+    "providerKakao": "Kakao",
+    "accountLinkRequired": "This email is already registered. Please log in normally and link your social account in Settings.",
+    "providerEmailNotVerified": "Your {{provider}} account email is not verified.",
+    "providerProfileInvalid": "Could not fetch required profile fields from your {{provider}} account. Please review your permissions.",
+    "accountInactive": "This account is inactive.",
+    "socialAccountInvalid": "The linked account information is invalid.",
+    "loginFailed": "{{provider}} login failed."
+  }
+}

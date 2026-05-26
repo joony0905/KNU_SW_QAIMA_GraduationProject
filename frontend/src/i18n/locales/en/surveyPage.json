@@ -1,0 +1,142 @@
+{
+  "title": "Risk Profile Survey",
+  "back": "Back",
+  "progress": {
+    "intro": "Total of {{count}} questions. Answer all and press the button below.",
+    "answered": "{{answered}} / {{total}} answered ({{percent}}%)"
+  },
+  "questions": {
+    "age": {
+      "title": "Please select your age range.",
+      "options": {
+        "0": "Under 20",
+        "1": "20 – 40",
+        "2": "41 – 50",
+        "3": "51 – 60",
+        "4": "61 or older"
+      }
+    },
+    "investmentPeriod": {
+      "title": "How long do you plan to invest?",
+      "options": {
+        "0": "3 years or more",
+        "1": "2 to 3 years",
+        "2": "1 to 2 years",
+        "3": "6 months to 1 year",
+        "4": "Less than 6 months"
+      }
+    },
+    "investmentExperience": {
+      "title": "Select all product types you have invested in.",
+      "subtitle": "Multiple selections allowed. The highest score among selected options will be applied.",
+      "options": {
+        "0": "Aggressive growth products",
+        "1": "Active growth products",
+        "2": "Balanced products",
+        "3": "Conservative growth products",
+        "4": "Capital preservation products"
+      }
+    },
+    "derivativeExperience": {
+      "title": "Do you have experience with derivatives?",
+      "subtitle": "ELS / DLS / Derivative funds etc. Informational only — not counted in scoring.",
+      "options": {
+        "0": "Less than 1 year",
+        "1": "1 to 3 years",
+        "2": "3 years or more",
+        "3": "No experience"
+      }
+    },
+    "lossTolerance": {
+      "title": "What level of loss can you tolerate?",
+      "options": {
+        "0": "Principal loss is acceptable if high returns are expected",
+        "1": "Can accept partial principal loss",
+        "2": "Can accept only minimal principal loss",
+        "3": "Principal must be preserved at all costs"
+      }
+    },
+    "investmentAssetRatio": {
+      "title": "What share of your total assets are invested?",
+      "options": {
+        "0": "10% or less",
+        "1": "30% or less",
+        "2": "50% or less",
+        "3": "70% or less",
+        "4": "Over 70%"
+      }
+    },
+    "monthlyIncome": {
+      "title": "Please select your monthly income level.",
+      "options": {
+        "0": "Over 5,000,000 KRW",
+        "1": "Up to 5,000,000 KRW",
+        "2": "Up to 3,000,000 KRW",
+        "3": "Up to 2,000,000 KRW",
+        "4": "Up to 1,000,000 KRW"
+      }
+    },
+    "investmentPurpose": {
+      "title": "What is your investment goal?",
+      "options": {
+        "0": "Short-term living expense management",
+        "1": "Returns similar to savings accounts",
+        "2": "Returns above market average",
+        "3": "Active wealth growth"
+      }
+    },
+    "financialKnowledge": {
+      "title": "How would you rate your financial knowledge?",
+      "options": {
+        "0": "No experience with financial investment products",
+        "1": "Basic understanding of common products like stocks, bonds, and funds",
+        "2": "Deep understanding of common products like stocks, bonds, and funds",
+        "3": "Understanding of most products including derivatives"
+      }
+    }
+  },
+  "profiles": {
+    "안정형": {
+      "name": "Capital Preservation",
+      "description": "A conservative profile that prioritizes protecting principal. Allocation centered on stable assets such as savings accounts is appropriate."
+    },
+    "안정추구형": {
+      "name": "Conservative Growth",
+      "description": "Seeks returns above savings while minimizing loss risk. Bond-heavy allocation is appropriate."
+    },
+    "위험중립형": {
+      "name": "Balanced",
+      "description": "Seeks a balance between risk and return. A balanced mix of bonds and equities is appropriate."
+    },
+    "적극투자형": {
+      "name": "Active Growth",
+      "description": "Accepts volatility for above-average returns. A portfolio with higher equity exposure is appropriate."
+    },
+    "공격투자형": {
+      "name": "Aggressive Growth",
+      "description": "Actively accepts short-term volatility for long-term high returns. Allocation focused on equities and high-volatility assets is appropriate."
+    }
+  },
+  "cap": {
+    "stable": "Cap applied — 'Principal must be preserved' response limits to Capital Preservation level.",
+    "neutral": "Cap applied — 'Minimal loss only' response limits to Balanced level.",
+    "beforeCap": "Index before cap: {{value}}"
+  },
+  "warning": {
+    "unanswered": "Please answer this question.",
+    "hasUnanswered": "Some questions are unanswered. Scrolled to the first unanswered question."
+  },
+  "submit": "View Results",
+  "result": {
+    "profileIntro": "Your investment profile is",
+    "gammaLabel": "Risk Index",
+    "rawScore": "Raw Score",
+    "normalizedScore": "Normalized Score",
+    "reset": "Answer Again",
+    "apply": "Apply to Portfolio",
+    "applying": "Saving..."
+  },
+  "errors": {
+    "saveFailed": "Failed to save risk profile."
+  }
+}
