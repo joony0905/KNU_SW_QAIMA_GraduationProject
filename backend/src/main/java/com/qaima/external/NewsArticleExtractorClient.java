@@ -60,7 +60,7 @@ public class NewsArticleExtractorClient {
 
     private final WebClient webClient;
 
-    public NewsArticleExtractorClient(@Qualifier("defaultWebClient") WebClient webClient) {
+    public NewsArticleExtractorClient(@Qualifier("newsArticleWebClient") WebClient webClient) {
         this.webClient = webClient;
     }
 

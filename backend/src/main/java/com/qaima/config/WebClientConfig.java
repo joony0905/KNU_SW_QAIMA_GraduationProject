@@ -17,6 +17,15 @@ public class WebClientConfig {
         return WebClient.builder().build();
     }
 
+    @Bean(name = "newsArticleWebClient")
+    public WebClient newsArticleWebClient(
+            @Value("${feature2.news.article.max-in-memory-size-bytes:2097152}") int maxInMemorySizeBytes
+    ) {
+        return WebClient.builder()
+                .codecs(codecs -> configureMaxInMemorySize(codecs, maxInMemorySizeBytes))
+                .build();
+    }
+
     // 한국투자증권(KIS) 전용
     @Bean(name = "kisWebClient")
     public WebClient kisWebClient(
@@ -124,6 +133,10 @@ public class WebClientConfig {
 
     private void configureSecCodecs(ClientCodecConfigurer codecs) {
         codecs.defaultCodecs().maxInMemorySize(32 * 1024 * 1024);
+    }
+
+    private void configureMaxInMemorySize(ClientCodecConfigurer codecs, int maxInMemorySizeBytes) {
+        codecs.defaultCodecs().maxInMemorySize(Math.max(256 * 1024, maxInMemorySizeBytes));
     }
 
 }

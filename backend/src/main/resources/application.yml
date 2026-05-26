@@ -39,6 +39,8 @@ sec:
 
 feature2:
   news:
+    article:
+      max-in-memory-size-bytes: ${FEATURE2_NEWS_ARTICLE_MAX_IN_MEMORY_SIZE_BYTES:2097152}
     sentiment:
       model: ${FEATURE2_NEWS_SENTIMENT_MODEL:kf-deberta-sentiment-v2}
       timeout-seconds: ${FEATURE2_NEWS_SENTIMENT_TIMEOUT_SECONDS:30}
