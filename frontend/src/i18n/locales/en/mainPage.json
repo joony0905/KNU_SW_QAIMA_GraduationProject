@@ -46,7 +46,7 @@
         "desc": "Enter your holdings and get a risk, diversification, and efficiency check — plus rebalancing tuned to your risk profile.",
         "bullet1": "Risk-level diagnosis",
         "bullet2": "Diversification analysis",
-        "bullet3": "Profile-aware recommendations"
+        "bullet3": "Profile-aware rebalancing"
       }
     }
   },
@@ -74,7 +74,7 @@
     "sub": "Not blog summaries. We pull primary data from exchanges, central banks, and disclosure systems.",
     "price": {
       "label": "Live quotes",
-      "source": "Korea Investment KIS API",
+      "source": "Korea Investment, Yahoo Finance, MarketStack",
       "note": "KOSPI · KOSDAQ · NYSE · NASDAQ"
     },
     "financial": {
