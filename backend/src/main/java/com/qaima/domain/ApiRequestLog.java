@@ -41,7 +41,7 @@ public class ApiRequestLog {
     private String path;
 
     @Lob
-    @Column(name = "query_string")
+    @Column(name = "query_string", columnDefinition = "TEXT")
     private String queryString;
 
     @Column(nullable = false)
