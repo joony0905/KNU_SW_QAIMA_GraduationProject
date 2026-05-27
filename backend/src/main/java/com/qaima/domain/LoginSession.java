@@ -28,7 +28,7 @@ public class LoginSession {
     @Column(length = 45)
     private String ip;
 
-    @Column(length = 255)
+    @Column(length = 512)
     private String userAgent;
 
     @Column(unique = true, length = 200) // refresh_token_hash varchar(200) [unique]

@@ -94,7 +94,7 @@ export const signup = async (payload: SignupRequest): Promise<void> => {
 // 소셜 로그인 — 백엔드가 RT 쿠키 발급 후 success URL 로 다시 리다이렉트한다.
 export type SocialProvider = "google" | "kakao" | "naver";
 
-const OAUTH2_BASE_URL = "http://localhost:8080/api/v1/auth/oauth2";
+const OAUTH2_BASE_URL = "/api/v1/auth/oauth2";
 
 export const startOAuth2Login = (provider: SocialProvider): void => {
   // 로그인 후 돌아갈 경로를 기록해 둔다.

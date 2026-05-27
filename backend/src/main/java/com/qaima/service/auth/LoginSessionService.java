@@ -22,6 +22,7 @@ import reactor.core.publisher.Mono;
 public class LoginSessionService {
 
     private static final int REFRESH_TOKEN_BYTES = 64;
+    private static final int USER_AGENT_MAX_LENGTH = 512;
 
     private final SecureRandom secureRandom = new SecureRandom();
     private final LoginSessionRepository loginSessionRepository;
@@ -41,7 +42,7 @@ public class LoginSessionService {
         session.setUser(user);
         session.setDeviceId(deviceId);
         session.setIp(ip);
-        session.setUserAgent(userAgent);
+        session.setUserAgent(truncate(userAgent, USER_AGENT_MAX_LENGTH));
         session.setRefreshTokenHash(refreshTokenHash);
         session.setExpiresAt(expiresAt);
 
@@ -71,7 +72,7 @@ public class LoginSessionService {
                     session.setRefreshTokenHash(hashRefreshToken(newRefreshToken));
                     session.setExpiresAt(now.plusSeconds(Math.max(60, jwtProperties.getRefreshTokenValiditySeconds())));
                     session.setIp(ip);
-                    session.setUserAgent(userAgent);
+                    session.setUserAgent(truncate(userAgent, USER_AGENT_MAX_LENGTH));
 
                     return Blocking.call(() -> loginSessionRepository.save(session))
                             .thenReturn(new RotateResult(session.getUser(), newRefreshToken));
@@ -123,5 +124,12 @@ public class LoginSessionService {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to hash refresh token", e);
         }
+    }
+
+    private static String truncate(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 }

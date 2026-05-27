@@ -10,7 +10,7 @@ declare module "axios" {
   }
 }
 
-const BASE_URL = "http://localhost:8080/api/v1"; // 나중에 실 서버 주소로 교체
+const BASE_URL = "/api/v1";
 
 // 401 재시도 여부 추적용 플래그
 interface RetriableRequestConfig extends InternalAxiosRequestConfig {
