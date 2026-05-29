@@ -4,6 +4,9 @@ import com.qaima.common.ApiResponse;
 import com.qaima.domain.BaseRate;
 import com.qaima.service.baserate.BaseRateSyncService;
 import com.qaima.service.baserate.FredBaseRateSyncService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +22,8 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/base-rate")
+@Tag(name = "Admin - Macro", description = "Admin-only endpoints. Requires bearer token with ADMIN role.")
+@SecurityRequirement(name = "bearerAuth")
 public class BaseRateAdminController {
 
     private final BaseRateSyncService baseRateSyncService;
@@ -27,6 +32,7 @@ public class BaseRateAdminController {
     // 최신 한국은행 기준금리를 적재한다.
     // curl -X POST "http://localhost:8080/api/v1/admin/base-rate/sync/latest"
     @PostMapping("/sync/latest")
+    @Operation(summary = "Sync latest Korean base rate")
     public Mono<ApiResponse<BaseRateSyncResult>> syncLatest() {
         return baseRateSyncService.syncLatest()
                 .map(BaseRateSyncResult::from)
@@ -36,6 +42,7 @@ public class BaseRateAdminController {
     // 지정 기간의 한국은행 기준금리를 과거 적재한다.
     // curl -X POST "http://localhost:8080/api/v1/admin/base-rate/backfill?from=2020-01-01&to=2026-04-30"
     @PostMapping("/backfill")
+    @Operation(summary = "Backfill Korean base rates")
     public Mono<ApiResponse<BaseRateBackfillResult>> backfill(
             @RequestParam
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -50,6 +57,7 @@ public class BaseRateAdminController {
     // 최신 미국 정책금리(FEDFUNDS)를 FRED에서 적재한다.
     // curl -X POST "http://localhost:8080/api/v1/admin/base-rate/fred/sync/latest"
     @PostMapping("/fred/sync/latest")
+    @Operation(summary = "Sync latest FRED base rate")
     public Mono<ApiResponse<BaseRateSyncResult>> syncLatestFred() {
         return fredBaseRateSyncService.syncLatest()
                 .map(BaseRateSyncResult::from)
@@ -59,6 +67,7 @@ public class BaseRateAdminController {
     // 지정 기간의 미국 정책금리(FEDFUNDS)를 FRED에서 과거 적재한다.
     // curl -X POST "http://localhost:8080/api/v1/admin/base-rate/fred/backfill?from=2020-05-11&to=2025-05-11"
     @PostMapping("/fred/backfill")
+    @Operation(summary = "Backfill FRED base rates")
     public Mono<ApiResponse<BaseRateBackfillResult>> backfillFred(
             @RequestParam
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
@@ -71,6 +80,7 @@ public class BaseRateAdminController {
     }
 
     @GetMapping("/fred/latest")
+    @Operation(summary = "Get latest FRED base rate")
     public Mono<ApiResponse<BaseRateSyncResult>> latestFred(
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
@@ -86,6 +96,7 @@ public class BaseRateAdminController {
     }
 
     @GetMapping("/fred/series")
+    @Operation(summary = "List FRED base rate series")
     public Mono<ApiResponse<List<BaseRateSyncResult>>> seriesFred(
             @RequestParam(defaultValue = "120") int limit
     ) {

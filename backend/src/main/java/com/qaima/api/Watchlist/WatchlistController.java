@@ -6,6 +6,9 @@ import com.qaima.dto.watchlist.WatchlistItemUpdateDto;
 import com.qaima.dto.watchlist.WatchlistRequestDto;
 import com.qaima.dto.watchlist.WatchlistResponseDto;
 import com.qaima.service.watchlist.WatchlistService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -23,17 +26,21 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/v1/watchlist")
 @RequiredArgsConstructor
+@Tag(name = "Watchlist")
+@SecurityRequirement(name = "bearerAuth")
 public class WatchlistController {
 
     private final WatchlistService watchlistService;
 
     @GetMapping("/me")
+    @Operation(summary = "List my watchlist", description = "Returns the authenticated user's default watchlist items.")
     public Mono<ApiResponse<List<WatchlistResponseDto>>> getMyWatchlistItems(Authentication authentication) {
         return watchlistService.getDefaultWatchlistItems(currentUserId(authentication))
                 .map(ApiResponse::success);
     }
 
     @PostMapping("/me/items")
+    @Operation(summary = "Add stock to my watchlist", description = "Adds a stock to the authenticated user's default watchlist.")
     public Mono<ApiResponse<WatchlistResponseDto>> addStockToMyWatchlist(
             Authentication authentication,
             @Valid @RequestBody MyWatchlistItemRequestDto requestDto
@@ -43,6 +50,7 @@ public class WatchlistController {
     }
 
     @GetMapping("/{watchlistId}")
+    @Operation(summary = "List watchlist items")
     public Mono<ApiResponse<List<WatchlistResponseDto>>> getWatchlistItems(
             Authentication authentication,
             @PathVariable Long watchlistId
@@ -52,6 +60,7 @@ public class WatchlistController {
     }
 
     @PostMapping("/items")
+    @Operation(summary = "Add watchlist item")
     public Mono<ApiResponse<WatchlistResponseDto>> addStockToWatchlist(
             Authentication authentication,
             @Valid @RequestBody WatchlistRequestDto requestDto
@@ -61,6 +70,7 @@ public class WatchlistController {
     }
 
     @DeleteMapping("/items/{itemId}")
+    @Operation(summary = "Delete watchlist item", description = "Deletes a watchlist item by watchlist item id.")
     public Mono<ApiResponse<Void>> removeStockFromWatchlist(
             Authentication authentication,
             @PathVariable Long itemId
@@ -70,6 +80,7 @@ public class WatchlistController {
     }
 
     @PatchMapping("/items/{itemId}")
+    @Operation(summary = "Update watchlist item")
     public Mono<ApiResponse<WatchlistResponseDto>> updateWatchlistItemNote(
             Authentication authentication,
             @PathVariable Long itemId,

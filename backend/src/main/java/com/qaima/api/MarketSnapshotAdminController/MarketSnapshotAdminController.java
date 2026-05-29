@@ -3,6 +3,9 @@ package com.qaima.api.MarketSnapshotAdminController;
 import com.qaima.common.ApiResponse;
 import com.qaima.dto.stock.MarketSnapshotBackfillResult;
 import com.qaima.service.stock.MarketSnapshotBackfillService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -16,11 +19,14 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/market-snapshots")
+@Tag(name = "Admin - Market Data", description = "Admin-only endpoints. Requires bearer token with ADMIN role.")
+@SecurityRequirement(name = "bearerAuth")
 public class MarketSnapshotAdminController {
 
     private final MarketSnapshotBackfillService backfillService;
 
     @PostMapping("/backfill")
+    @Operation(summary = "Backfill market snapshot")
     public Mono<ApiResponse<MarketSnapshotBackfillResult>> backfillOne(
             @RequestParam String stockCode,
             @RequestParam(required = false) String exchange,
@@ -33,6 +39,7 @@ public class MarketSnapshotAdminController {
     }
 
     @PostMapping("/backfill/missing")
+    @Operation(summary = "Backfill missing market snapshots")
     public Mono<ApiResponse<List<MarketSnapshotBackfillResult>>> backfillMissing(
             @RequestParam(required = false) String exchange,
             @RequestParam(required = false) Integer limit,

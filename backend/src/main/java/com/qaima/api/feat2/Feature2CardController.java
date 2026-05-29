@@ -11,6 +11,9 @@ import com.qaima.dto.feature2.Feature2RelatedStockCardDto;
 import com.qaima.dto.feature2.Feature2ShortSellingSeriesPointDto;
 import com.qaima.dto.industry.IndustryIndexBlockDto;
 import com.qaima.service.feature2.Feature2CardService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,11 +28,14 @@ import java.util.List;
 @RequestMapping("/api/v1/feature2/cards")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Feature2")
+@SecurityRequirements
 public class Feature2CardController {
 
     private final Feature2CardService feature2CardService;
 
     @GetMapping("/base-rate")
+    @Operation(summary = "Get base rate card")
     public Mono<ApiResponse<Feature2MetricsDto.BaseRateMetrics>> getBaseRate() {
         return feature2CardService.loadBaseRate()
                 .map(result -> ApiResponse.successWithWarnings(
@@ -42,6 +48,7 @@ public class Feature2CardController {
     }
 
     @GetMapping("/base-rate-series")
+    @Operation(summary = "Get base rate series card")
     public Mono<ApiResponse<List<Feature2BaseRateSeriesPointDto>>> getBaseRateSeries(
             @RequestParam(defaultValue = "365") Integer limit
     ) {
@@ -57,6 +64,7 @@ public class Feature2CardController {
     }
 
     @GetMapping("/macro-rates")
+    @Operation(summary = "Get macro rates card")
     public Mono<ApiResponse<Feature2MacroRatesDto>> getMacroRates() {
         return feature2CardService.loadMacroRates()
                 .map(result -> ApiResponse.successWithWarnings(
@@ -69,6 +77,7 @@ public class Feature2CardController {
     }
 
     @GetMapping("/macro-rates-series")
+    @Operation(summary = "Get macro rates series card")
     public Mono<ApiResponse<Feature2MacroRatesSeriesDto>> getMacroRatesSeries(
             @RequestParam(defaultValue = "120") Integer limit
     ) {
@@ -84,6 +93,7 @@ public class Feature2CardController {
     }
 
     @GetMapping("/industry-index")
+    @Operation(summary = "Get industry index card")
     public Mono<ApiResponse<IndustryIndexBlockDto>> getIndustryIndex(
             @RequestParam String stockCode,
             @RequestParam(defaultValue = "ONE_D") Freq freq,
@@ -101,6 +111,7 @@ public class Feature2CardController {
     }
 
     @GetMapping("/short-selling")
+    @Operation(summary = "Get short selling card")
     public Mono<ApiResponse<Feature2MetricsDto.ShortSellingMetrics>> getShortSelling(
             @RequestParam String stockCode
     ) {
@@ -116,6 +127,7 @@ public class Feature2CardController {
     }
 
     @GetMapping("/short-selling-series")
+    @Operation(summary = "Get short selling series card")
     public Mono<ApiResponse<List<Feature2ShortSellingSeriesPointDto>>> getShortSellingSeries(
             @RequestParam String stockCode,
             @RequestParam(defaultValue = "60") Integer limit
@@ -133,6 +145,7 @@ public class Feature2CardController {
     }
 
     @GetMapping("/related-stocks")
+    @Operation(summary = "Get related stocks card")
     public Mono<ApiResponse<List<Feature2RelatedStockCardDto>>> getRelatedStocks(
             @RequestParam String stockCode,
             @RequestParam(defaultValue = "30") Integer limit
@@ -150,6 +163,7 @@ public class Feature2CardController {
     }
 
     @GetMapping("/investor-flow")
+    @Operation(summary = "Get investor flow card")
     public Mono<ApiResponse<Feature2InvestorFlowDto>> getInvestorFlow(
             @RequestParam String stockCode,
             @RequestParam(defaultValue = "60") Integer limit

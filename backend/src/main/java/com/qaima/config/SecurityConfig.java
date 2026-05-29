@@ -69,6 +69,7 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/dictionary/**").permitAll()
                         .pathMatchers("/api/v1/health/**").permitAll()
                         .pathMatchers("/api/v1/test/ping").permitAll()
+                        .pathMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/webjars/**").permitAll()
                         .pathMatchers("/api/v1/charts/**").permitAll()
                         .pathMatchers("/api/v1/stocks/**").permitAll()
                         .pathMatchers("/api/v1/featured-stocks/**").permitAll()

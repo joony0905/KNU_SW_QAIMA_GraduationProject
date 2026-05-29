@@ -4,6 +4,9 @@ import com.qaima.common.ApiResponse;
 import com.qaima.service.opendart.OpenDartCorpCodeSyncService;
 import com.qaima.service.opendart.OpenDartDailySyncService;
 import com.qaima.service.issuedshares.IssuedSharesSyncService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,6 +17,8 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/opendart")
+@Tag(name = "Admin - OpenDART", description = "Admin-only endpoints. Requires bearer token with ADMIN role.")
+@SecurityRequirement(name = "bearerAuth")
 // OpenDART 수동 동기화용 관리자 엔드포인트
 public class OpenDartAdminController {
 
@@ -22,6 +27,7 @@ public class OpenDartAdminController {
     private final OpenDartDailySyncService dailySyncService;
 
     @PostMapping("/corp-codes/sync")
+    @Operation(summary = "Sync OpenDART corporation codes")
     // stock master의 dart_corp_code 매핑을 전체 갱신
     public Mono<ApiResponse<OpenDartCorpCodeSyncService.SyncResult>> syncCorpCodes() {
         return corpCodeSyncService.syncAllStockMappings()
@@ -29,6 +35,7 @@ public class OpenDartAdminController {
     }
 
     @PostMapping("/issued-shares/sync")
+    @Operation(summary = "Sync OpenDART issued shares batch")
     // DART 매핑이 있는 전체 종목의 발행주식수를 일괄 동기화
     public Mono<ApiResponse<IssuedSharesSyncService.DailyBatchResult>> syncIssuedShares() {
         return issuedSharesSyncService.syncDailyAllMappedStocks()
@@ -36,6 +43,7 @@ public class OpenDartAdminController {
     }
 
     @PostMapping("/issued-shares/sync/stock")
+    @Operation(summary = "Sync OpenDART issued shares for stock")
     // 특정 종목만 단건으로 발행주식수 동기화
     public Mono<ApiResponse<IssuedSharesSyncService.StockSyncResult>> syncIssuedSharesForStock(
             @RequestParam String stockCode
@@ -45,6 +53,7 @@ public class OpenDartAdminController {
     }
 
     @PostMapping("/sync/daily")
+    @Operation(summary = "Run OpenDART daily sync")
     // corp_code 매핑과 발행주식수 일일 동기화를 한 번에 실행
     public Mono<ApiResponse<OpenDartDailySyncService.DailySyncResult>> runDailySync() {
         return dailySyncService.runDailySync()

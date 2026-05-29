@@ -19,6 +19,9 @@ import com.qaima.service.feature3.Feature3PriceSeriesService;
 import com.qaima.service.feature3.Feature3RiskFreeRateService;
 import com.qaima.service.report.AnalysisReportService;
 import com.qaima.service.stock.StockMappingService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Set;
@@ -39,6 +42,8 @@ import reactor.core.scheduler.Schedulers;
 @RequiredArgsConstructor
 @Slf4j
 @RequestMapping("/api/v1/feature3")
+@Tag(name = "Feature3")
+@SecurityRequirement(name = "bearerAuth")
 public class Feature3AnalyzeController {
 
     private final AnalysisApiClient analysisApiClient;
@@ -52,6 +57,7 @@ public class Feature3AnalyzeController {
     private final AnalysisReportService analysisReportService;
 
     @PostMapping("/analysis")
+    @Operation(summary = "Run Feature3 portfolio analysis", description = "Runs portfolio risk analysis and enriches the result with overlay signals.")
     public Mono<ApiResponse<PortfolioAnalyzeResponseDto>> analyze(
             Authentication authentication,
             @Valid @RequestBody PortfolioAnalyzeRequestDto req
@@ -109,6 +115,7 @@ public class Feature3AnalyzeController {
     }
 
     @PostMapping("/overlay-cache/preview")
+    @Operation(summary = "Preview Feature3 overlay cache")
     public Mono<ApiResponse<Feature3OverlayCachePreviewResponseDto>> previewOverlayCache(
             Authentication authentication,
             @Valid @RequestBody Feature3OverlayCachePreviewRequestDto req

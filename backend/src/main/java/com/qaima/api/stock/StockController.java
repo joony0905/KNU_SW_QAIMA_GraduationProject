@@ -8,6 +8,9 @@ import com.qaima.dto.stock.StockResponseDto;
 import com.qaima.service.stock.MarketSnapshotService;
 import com.qaima.service.stock.StockMappingService;
 import com.qaima.service.stock.StockService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,8 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/v1/stocks")
+@Tag(name = "Stock")
+@SecurityRequirements
 public class StockController {
 
     private final StockService stockService;
@@ -25,6 +30,7 @@ public class StockController {
     private final MarketSnapshotService marketSnapshotService;
 
     @GetMapping("/{stockId}")
+    @Operation(summary = "Get stock by id")
     public Mono<ApiResponse<StockResponseDto>> getStock(@PathVariable Long stockId) {
         return stockService.getStockWithRealtime(stockId)
                 .map(this::toResponse)
@@ -37,6 +43,7 @@ public class StockController {
      * - 내부적으로 ticker-meta + inquire-price 수행
      */
     @GetMapping("/code/{stockCode}")
+    @Operation(summary = "Get stock by code")
     public Mono<ApiResponse<StockResponseDto>> getOrCreateStockByCode(
             @PathVariable String stockCode
     ) {
@@ -46,6 +53,7 @@ public class StockController {
     }
 
     @GetMapping("/code/{stockCode}/market-snapshot")
+    @Operation(summary = "Get latest market snapshot")
     public Mono<ApiResponse<MarketSnapshotDto>> getLatestMarketSnapshot(
             @PathVariable String stockCode,
             @RequestParam(required = false)
@@ -58,6 +66,7 @@ public class StockController {
     }
 
     @GetMapping("/normalize")
+    @Operation(summary = "Normalize stock code")
     public Mono<ApiResponse<StockCodeMappingDto>> normalizeStockCode(
             @RequestParam(name = "name", required = false) String name,
             @RequestParam(name = "exchange", required = false) String exchange,
@@ -68,6 +77,7 @@ public class StockController {
     }
 
     @GetMapping("/normalize/candidates")
+    @Operation(summary = "List stock mapping candidates")
     public Mono<ApiResponse<List<StockCodeMappingDto>>> normalizeCandidates(
             @RequestParam(name = "name", required = false) String name,
             @RequestParam(name = "exchange", required = false) String exchange,
@@ -78,6 +88,7 @@ public class StockController {
     }
 
     @GetMapping("/search")
+    @Operation(summary = "Search stocks", description = "Searches stock mappings by ticker, company name, and registered aliases.")
     public Mono<ApiResponse<List<StockCodeMappingDto>>> searchStocks(
             @RequestParam(name = "q", required = false) String query
     ) {

@@ -1,6 +1,9 @@
 package com.qaima.api.AuthController;
 
 import com.qaima.domain.SocialProvider;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -13,9 +16,12 @@ import reactor.core.publisher.Mono;
 
 @Controller
 @RequestMapping("/api/v1/auth/oauth2")
+@Tag(name = "Auth")
+@SecurityRequirements
 public class AuthOAuth2Controller {
 
     @GetMapping("/{provider}")
+    @Operation(summary = "Start OAuth2 login")
     public Mono<Void> redirectToProvider(@PathVariable String provider, ServerWebExchange exchange) {
         SocialProvider socialProvider = SocialProvider.fromRegistrationId(provider)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Unsupported social provider"));

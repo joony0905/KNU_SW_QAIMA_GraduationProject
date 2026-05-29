@@ -8,6 +8,9 @@ import com.qaima.service.candle.CandleTimePolicy;
 import com.qaima.service.candle.CandleLoadResult;
 import com.qaima.service.chart.ChartService;
 import com.qaima.mapper.CandleMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -17,11 +20,14 @@ import java.time.OffsetDateTime;
 @RestController
 @RequestMapping("/api/v1/charts")
 @RequiredArgsConstructor
+@Tag(name = "Chart")
+@SecurityRequirements
 public class ChartController {
 
     private final ChartService chartService;
 
     @GetMapping("/candles")
+    @Operation(summary = "Get candle chart data", description = "Returns candle series data for a stock and frequency within the requested time range.")
     public Mono<ApiResponse<CandleSeriesResponse>> getCandles(
             @RequestParam String stockCode,
             @RequestParam Freq freq,

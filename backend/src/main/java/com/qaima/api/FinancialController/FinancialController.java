@@ -4,6 +4,9 @@ import com.qaima.common.ApiResponse;
 import com.qaima.domain.PeriodType;
 import com.qaima.dto.financial.FinancialDto;
 import com.qaima.service.financial.FinancialReadService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +18,8 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/stocks")
+@Tag(name = "Stock")
+@SecurityRequirements
 public class FinancialController {
 
     private final FinancialReadService financialQueryService;
@@ -32,6 +37,7 @@ public class FinancialController {
     */
 
     @GetMapping("/{ticker}/financials")
+    @Operation(summary = "List stock financial statements")
     public Mono<ApiResponse<List<FinancialDto>>> getFinancialsForLastNYears(
             @PathVariable String ticker,
             @RequestParam(name = "years", defaultValue = "5") int years,
@@ -54,6 +60,7 @@ public class FinancialController {
      */
 
     @GetMapping("/{ticker}/financials/{year}")
+    @Operation(summary = "List stock financial statements by year")
     public Mono<ApiResponse<List<FinancialDto>>> getFinancialsForYear(
             @PathVariable String ticker,
             @PathVariable int year,

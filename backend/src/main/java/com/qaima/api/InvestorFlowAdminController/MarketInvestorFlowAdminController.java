@@ -4,6 +4,9 @@ import com.qaima.common.ApiResponse;
 import com.qaima.domain.MarketInvestorFlow;
 import com.qaima.external.KisInvestorFlowClient;
 import com.qaima.service.investorflow.MarketInvestorFlowService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +22,8 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/investor-flow/market")
+@Tag(name = "Admin - Market Data", description = "Admin-only endpoints. Requires bearer token with ADMIN role.")
+@SecurityRequirement(name = "bearerAuth")
 public class MarketInvestorFlowAdminController {
 
     private final MarketInvestorFlowService marketInvestorFlowService;
@@ -27,6 +32,7 @@ public class MarketInvestorFlowAdminController {
     // curl -X POST "http://localhost:8080/api/v1/admin/investor-flow/market/sync?marketCode=KSP&from=2026-04-01&to=2026-04-30"
     // curl -X POST "http://localhost:8080/api/v1/admin/investor-flow/market/sync?marketCode=KSQ&from=2026-04-01&to=2026-04-30"
     @PostMapping("/sync")
+    @Operation(summary = "Sync market investor flow")
     public Mono<ApiResponse<MarketInvestorFlowSyncResult>> sync(
             @RequestParam(defaultValue = "KSP") String marketCode,
             @RequestParam(required = false) String industryCode,
@@ -41,6 +47,7 @@ public class MarketInvestorFlowAdminController {
     }
 
     @GetMapping("/series")
+    @Operation(summary = "List market investor flow series")
     public Mono<ApiResponse<List<MarketInvestorFlowRow>>> series(
             @RequestParam(defaultValue = "KSP") String marketCode,
             @RequestParam(required = false) String industryCode,

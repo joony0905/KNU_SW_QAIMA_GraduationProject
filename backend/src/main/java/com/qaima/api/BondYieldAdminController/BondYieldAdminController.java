@@ -6,6 +6,9 @@ import com.qaima.service.bondyield.BondYieldInstrument;
 import com.qaima.service.bondyield.BondYieldSyncService;
 import com.qaima.service.bondyield.FredBondYieldInstrument;
 import com.qaima.service.bondyield.FredBondYieldSyncService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -23,6 +26,8 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/bond-yield")
+@Tag(name = "Admin - Macro", description = "Admin-only endpoints. Requires bearer token with ADMIN role.")
+@SecurityRequirement(name = "bearerAuth")
 public class BondYieldAdminController {
 
     private final BondYieldSyncService bondYieldSyncService;
@@ -32,6 +37,7 @@ public class BondYieldAdminController {
     // curl -X POST "http://localhost:8080/api/v1/admin/bond-yield/sync/latest"
     // curl -X POST "http://localhost:8080/api/v1/admin/bond-yield/sync/latest?instrumentCode=KR10Y"
     @PostMapping("/sync/latest")
+    @Operation(summary = "Sync latest Korean bond yield")
     public Mono<ApiResponse<List<BondYieldRow>>> syncLatest(
             @RequestParam(required = false) String instrumentCode
     ) {
@@ -51,6 +57,7 @@ public class BondYieldAdminController {
     // curl -X POST "http://localhost:8080/api/v1/admin/bond-yield/backfill?from=2006-01-01&to=2026-04-30"
     // curl -X POST "http://localhost:8080/api/v1/admin/bond-yield/backfill?instrumentCode=KR3Y&from=2006-01-01&to=2026-04-30"
     @PostMapping("/backfill")
+    @Operation(summary = "Backfill Korean bond yields")
     public Mono<ApiResponse<BondYieldBackfillResult>> backfill(
             @RequestParam(required = false) String instrumentCode,
             @RequestParam
@@ -74,6 +81,7 @@ public class BondYieldAdminController {
     // curl -X POST "http://localhost:8080/api/v1/admin/bond-yield/fred/sync/latest"
     // curl -X POST "http://localhost:8080/api/v1/admin/bond-yield/fred/sync/latest?instrumentCode=US10Y"
     @PostMapping("/fred/sync/latest")
+    @Operation(summary = "Sync latest FRED bond yield")
     public Mono<ApiResponse<List<BondYieldRow>>> syncLatestFred(
             @RequestParam(required = false) String instrumentCode
     ) {
@@ -93,6 +101,7 @@ public class BondYieldAdminController {
     // curl -X POST "http://localhost:8080/api/v1/admin/bond-yield/fred/backfill?from=2020-05-11&to=2025-05-11"
     // curl -X POST "http://localhost:8080/api/v1/admin/bond-yield/fred/backfill?instrumentCode=US2Y&from=2020-05-11&to=2025-05-11"
     @PostMapping("/fred/backfill")
+    @Operation(summary = "Backfill FRED bond yields")
     public Mono<ApiResponse<BondYieldBackfillResult>> backfillFred(
             @RequestParam(required = false) String instrumentCode,
             @RequestParam
@@ -113,6 +122,7 @@ public class BondYieldAdminController {
     }
 
     @GetMapping("/fred/latest")
+    @Operation(summary = "Get latest FRED bond yield")
     public Mono<ApiResponse<BondYieldRow>> latestFred(
             @RequestParam(defaultValue = "US10Y") String instrumentCode,
             @RequestParam(required = false)
@@ -130,6 +140,7 @@ public class BondYieldAdminController {
     }
 
     @GetMapping("/fred/series")
+    @Operation(summary = "List FRED bond yield series")
     public Mono<ApiResponse<List<BondYieldRow>>> seriesFred(
             @RequestParam(defaultValue = "US10Y") String instrumentCode,
             @RequestParam(defaultValue = "120") int limit
@@ -141,6 +152,7 @@ public class BondYieldAdminController {
     }
 
     @GetMapping("/latest")
+    @Operation(summary = "Get latest Korean bond yield")
     public Mono<ApiResponse<BondYieldRow>> latest(
             @RequestParam(defaultValue = "KR10Y") String instrumentCode,
             @RequestParam(required = false)
@@ -158,6 +170,7 @@ public class BondYieldAdminController {
     }
 
     @GetMapping("/series")
+    @Operation(summary = "List Korean bond yield series")
     public Mono<ApiResponse<List<BondYieldRow>>> series(
             @RequestParam(defaultValue = "KR10Y") String instrumentCode,
             @RequestParam(defaultValue = "365") int limit

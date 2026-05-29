@@ -10,6 +10,9 @@ import com.qaima.service.featone.FeatOneResult;
 import com.qaima.service.featone.FeatOneService;
 import com.qaima.service.feature3.Feature3OverlayService;
 import com.qaima.service.report.AnalysisReportService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,6 +30,8 @@ import reactor.core.publisher.Mono;
 @RequestMapping("/api/v1/feature1")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Feature1")
+@SecurityRequirement(name = "bearerAuth")
 public class FeatOneController {
 
     private final FeatOneService featOneService;
@@ -35,6 +40,7 @@ public class FeatOneController {
     private final AnalysisReportService analysisReportService;
 
     @PostMapping("/analyze")
+    @Operation(summary = "Run Feature1 analysis", description = "Runs Feature1 stock analysis and stores a report snapshot when possible.")
     public Mono<ApiResponse<FeatOneAnalysisResponseDto>> analyze(
             Authentication authentication,
             @RequestBody FeatOneAnalyzeRequestDto request
