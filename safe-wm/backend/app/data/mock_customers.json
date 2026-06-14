@@ -1,0 +1,232 @@
+[
+  {
+    "customerId": "C001",
+    "name": "김OO",
+    "age": 68,
+    "region": "전북 전주",
+    "retirementStatus": "RETIRED",
+    "householdSize": 2,
+    "monthlyIncome": 1200000,
+    "monthlyExpense": 2800000,
+    "pensionIncome": 900000,
+    "otherIncome": 0,
+    "cashAssets": 18000000,
+    "depositAssets": 0,
+    "financialAssets": [
+      {
+        "assetId": "FA-C001-1",
+        "assetType": "STOCK",
+        "stockCode": "005930",
+        "name": "삼성전자",
+        "quantity": 100,
+        "avgPrice": 70000,
+        "currentPrice": 75000,
+        "currency": "KRW",
+        "volatilityLevel": "MID"
+      }
+    ],
+    "realEstateAssets": [
+      {
+        "propertyId": "RE-C001-1",
+        "type": "APARTMENT",
+        "region": "전북 전주",
+        "estimatedValue": 650000000,
+        "ownershipRatio": 1.0,
+        "isPrimaryResidence": true,
+        "monthlyRentIncome": 0,
+        "linkedLoanId": "L-C001-1",
+        "liquidityLevel": "LOW",
+        "priceChange1y": -0.04
+      }
+    ],
+    "loans": [
+      {
+        "loanId": "L-C001-1",
+        "type": "MORTGAGE",
+        "balance": 180000000,
+        "interestRate": 0.045,
+        "interestType": "VARIABLE",
+        "monthlyPayment": 1200000,
+        "maturityDate": "2038-12-31",
+        "collateralType": "REAL_ESTATE",
+        "linkedPropertyId": "RE-C001-1"
+      }
+    ],
+    "pensionAssets": 70000000,
+    "insuranceAssets": 30000000,
+    "confirmationItems": []
+  },
+  {
+    "customerId": "C002",
+    "name": "박OO",
+    "age": 72,
+    "region": "서울 강서",
+    "retirementStatus": "RETIRED",
+    "householdSize": 1,
+    "monthlyIncome": 300000,
+    "monthlyExpense": 3400000,
+    "pensionIncome": 700000,
+    "otherIncome": 0,
+    "cashAssets": 12000000,
+    "depositAssets": 8000000,
+    "financialAssets": [
+      {
+        "assetId": "FA-C002-1",
+        "assetType": "ETF",
+        "stockCode": "KODEX200",
+        "name": "KODEX 200",
+        "quantity": 5000,
+        "avgPrice": 31000,
+        "currentPrice": 32000,
+        "currency": "KRW",
+        "volatilityLevel": "HIGH"
+      },
+      {
+        "assetId": "FA-C002-2",
+        "assetType": "STOCK",
+        "stockCode": "000660",
+        "name": "SK하이닉스",
+        "quantity": 700,
+        "avgPrice": 180000,
+        "currentPrice": 190000,
+        "currency": "KRW",
+        "volatilityLevel": "HIGH"
+      }
+    ],
+    "realEstateAssets": [
+      {
+        "propertyId": "RE-C002-1",
+        "type": "OFFICETEL",
+        "region": "서울 강서",
+        "estimatedValue": 180000000,
+        "ownershipRatio": 1.0,
+        "isPrimaryResidence": false,
+        "monthlyRentIncome": 400000,
+        "linkedLoanId": "L-C002-1",
+        "liquidityLevel": "MID",
+        "priceChange1y": -0.02
+      }
+    ],
+    "loans": [
+      {
+        "loanId": "L-C002-1",
+        "type": "CREDIT",
+        "balance": 70000000,
+        "interestRate": 0.065,
+        "interestType": "VARIABLE",
+        "monthlyPayment": 900000,
+        "maturityDate": "2030-06-30",
+        "collateralType": "NONE"
+      }
+    ],
+    "pensionAssets": 15000000,
+    "insuranceAssets": 10000000,
+    "confirmationItems": [
+      {
+        "code": "MEDICAL_EXPENSE_CONFIRMATION",
+        "label": "의료비 예상 확인",
+        "description": "최근 의료비와 향후 비정기 지출 확인이 필요합니다.",
+        "required": true
+      }
+    ]
+  },
+  {
+    "customerId": "C003",
+    "name": "이OO",
+    "age": 64,
+    "region": "광주 북구",
+    "retirementStatus": "PRE_RETIRED",
+    "householdSize": 2,
+    "monthlyIncome": 2800000,
+    "monthlyExpense": 2600000,
+    "pensionIncome": 600000,
+    "otherIncome": 0,
+    "cashAssets": 26000000,
+    "depositAssets": 12000000,
+    "financialAssets": [
+      {
+        "assetId": "FA-C003-1",
+        "assetType": "FUND",
+        "name": "국내혼합형펀드",
+        "quantity": 1,
+        "avgPrice": 60000000,
+        "currentPrice": 60000000,
+        "currency": "KRW",
+        "volatilityLevel": "MID"
+      }
+    ],
+    "realEstateAssets": [
+      {
+        "propertyId": "RE-C003-1",
+        "type": "APARTMENT",
+        "region": "광주 북구",
+        "estimatedValue": 260000000,
+        "ownershipRatio": 1.0,
+        "isPrimaryResidence": true,
+        "monthlyRentIncome": 0,
+        "linkedLoanId": "L-C003-1",
+        "liquidityLevel": "MID",
+        "priceChange1y": -0.01
+      }
+    ],
+    "loans": [
+      {
+        "loanId": "L-C003-1",
+        "type": "MORTGAGE",
+        "balance": 60000000,
+        "interestRate": 0.038,
+        "interestType": "FIXED",
+        "monthlyPayment": 500000,
+        "maturityDate": "2035-03-31",
+        "collateralType": "REAL_ESTATE",
+        "linkedPropertyId": "RE-C003-1"
+      }
+    ],
+    "pensionAssets": 90000000,
+    "insuranceAssets": 25000000,
+    "confirmationItems": []
+  },
+  {
+    "customerId": "C004",
+    "name": "최OO",
+    "age": 66,
+    "region": "전북 익산",
+    "retirementStatus": "RETIRED",
+    "householdSize": 2,
+    "monthlyIncome": 900000,
+    "monthlyExpense": 2200000,
+    "pensionIncome": 2600000,
+    "otherIncome": 300000,
+    "cashAssets": 85000000,
+    "depositAssets": 120000000,
+    "financialAssets": [
+      {
+        "assetId": "FA-C004-1",
+        "assetType": "BOND",
+        "name": "국채형 채권",
+        "quantity": 1,
+        "avgPrice": 50000000,
+        "currentPrice": 50000000,
+        "currency": "KRW",
+        "volatilityLevel": "LOW"
+      }
+    ],
+    "realEstateAssets": [
+      {
+        "propertyId": "RE-C004-1",
+        "type": "APARTMENT",
+        "region": "전북 익산",
+        "estimatedValue": 230000000,
+        "ownershipRatio": 1.0,
+        "isPrimaryResidence": true,
+        "monthlyRentIncome": 0,
+        "liquidityLevel": "MID",
+        "priceChange1y": 0.01
+      }
+    ],
+    "loans": [],
+    "pensionAssets": 160000000,
+    "insuranceAssets": 80000000,
+    "confirmationItems": []
+  }
+]
