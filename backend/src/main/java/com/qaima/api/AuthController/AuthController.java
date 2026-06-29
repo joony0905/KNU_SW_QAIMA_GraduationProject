@@ -11,6 +11,9 @@ import com.qaima.dto.user.UserResponseDto;
 import com.qaima.security.AuthCookieProperties;
 import com.qaima.security.RefreshTokenCookieService;
 import com.qaima.service.auth.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import java.net.InetSocketAddress;
@@ -23,6 +26,8 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
+@Tag(name = "Auth")
+@SecurityRequirements
 public class AuthController {
 
     private final AuthService authService;
@@ -35,6 +40,7 @@ public class AuthController {
      */
 
     @PostMapping("/signup")
+    @Operation(summary = "Sign up", description = "Creates a local account after email verification is completed.")
     public Mono<ApiResponse<UserResponseDto>> signup(@Valid @RequestBody SignupRequestDto requestDto,
                                                      ServerHttpRequest request) {
         String ip = extractClientIp(request);
@@ -48,6 +54,7 @@ public class AuthController {
      */
 
     @PostMapping("/login")
+    @Operation(summary = "Log in", description = "Authenticates a local account and issues access/refresh tokens.")
     public Mono<ApiResponse<LoginResponseDto>> login(@Valid @RequestBody LoginRequestDto requestDto,
                                                      ServerHttpRequest request,
                                                      ServerHttpResponse response) {
@@ -61,12 +68,14 @@ public class AuthController {
     }
 
     @PostMapping("/find-id")
+    @Operation(summary = "Find login email", description = "Finds a user's login email from name and birthdate.")
     public Mono<ApiResponse<FindIdResponseDto>> findId(@Valid @RequestBody FindIdRequestDto requestDto) {
         return authService.findLoginId(requestDto)
                 .map(ApiResponse::success);
     }
 
     @PostMapping("/refresh")
+    @Operation(summary = "Refresh token", description = "Issues a new access token using the refresh token cookie.")
     public Mono<ApiResponse<TokenRefreshResponseDto>> refresh(ServerHttpRequest request,
                                                               ServerHttpResponse response) {
         String ip = extractClientIp(request);
@@ -79,6 +88,7 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
+    @Operation(summary = "Log out", description = "Revokes the refresh token cookie session when present.")
     public Mono<ApiResponse<Void>> logout(ServerHttpRequest request,
                                           ServerHttpResponse response) {
         String ip = extractClientIp(request);

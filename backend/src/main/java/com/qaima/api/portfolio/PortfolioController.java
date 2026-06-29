@@ -4,6 +4,9 @@ import com.qaima.common.ApiResponse;
 import com.qaima.dto.portfolio.PortfolioResponseDto;
 import com.qaima.dto.portfolio.PortfolioSaveRequestDto;
 import com.qaima.service.portfolio.PortfolioService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -17,17 +20,21 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/v1/portfolios")
 @RequiredArgsConstructor
+@Tag(name = "Portfolio")
+@SecurityRequirement(name = "bearerAuth")
 public class PortfolioController {
 
     private final PortfolioService portfolioService;
 
     @GetMapping("/me/default")
+    @Operation(summary = "Get my default portfolio", description = "Returns the authenticated user's saved default portfolio.")
     public Mono<ApiResponse<PortfolioResponseDto>> getMyPortfolio(Authentication authentication) {
         return portfolioService.getMyPortfolio(currentUserId(authentication))
                 .map(ApiResponse::success);
     }
 
     @PutMapping("/me/default")
+    @Operation(summary = "Save my default portfolio", description = "Replaces the authenticated user's default portfolio holdings.")
     public Mono<ApiResponse<PortfolioResponseDto>> replaceMyPortfolio(
             Authentication authentication,
             @Valid @RequestBody PortfolioSaveRequestDto request

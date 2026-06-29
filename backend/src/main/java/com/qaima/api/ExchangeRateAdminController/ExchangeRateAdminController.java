@@ -4,6 +4,9 @@ import com.qaima.common.ApiResponse;
 import com.qaima.domain.ExchangeRate;
 import com.qaima.service.exchangerate.ExchangeRateInstrument;
 import com.qaima.service.exchangerate.ExchangeRateSyncService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +22,8 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/exchange-rate")
+@Tag(name = "Admin - Macro", description = "Admin-only endpoints. Requires bearer token with ADMIN role.")
+@SecurityRequirement(name = "bearerAuth")
 public class ExchangeRateAdminController {
 
     private final ExchangeRateSyncService exchangeRateSyncService;
@@ -26,6 +31,7 @@ public class ExchangeRateAdminController {
     // 최신 USD/KRW 환율을 적재한다. 현재 지원 pairCode는 USD_KRW다.
     // curl -X POST "http://localhost:8080/api/v1/admin/exchange-rate/sync/latest?pairCode=USD_KRW"
     @PostMapping("/sync/latest")
+    @Operation(summary = "Sync latest exchange rate")
     public Mono<ApiResponse<ExchangeRateRow>> syncLatest(
             @RequestParam(defaultValue = "USD_KRW") String pairCode
     ) {
@@ -38,6 +44,7 @@ public class ExchangeRateAdminController {
     // 지정 기간의 USD/KRW 환율을 과거 적재한다.
     // curl -X POST "http://localhost:8080/api/v1/admin/exchange-rate/backfill?pairCode=USD_KRW&from=2010-01-01&to=2026-04-30"
     @PostMapping("/backfill")
+    @Operation(summary = "Backfill exchange rates")
     public Mono<ApiResponse<ExchangeRateBackfillResult>> backfill(
             @RequestParam(defaultValue = "USD_KRW") String pairCode,
             @RequestParam
@@ -52,6 +59,7 @@ public class ExchangeRateAdminController {
     }
 
     @GetMapping("/latest")
+    @Operation(summary = "Get latest exchange rate")
     public Mono<ApiResponse<ExchangeRateRow>> latest(
             @RequestParam(defaultValue = "USD_KRW") String pairCode,
             @RequestParam(required = false)
@@ -69,6 +77,7 @@ public class ExchangeRateAdminController {
     }
 
     @GetMapping("/series")
+    @Operation(summary = "List exchange rate series")
     public Mono<ApiResponse<List<ExchangeRateRow>>> series(
             @RequestParam(defaultValue = "USD_KRW") String pairCode,
             @RequestParam(defaultValue = "365") int limit

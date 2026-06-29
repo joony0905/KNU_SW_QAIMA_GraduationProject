@@ -4,6 +4,9 @@ import com.qaima.common.ApiResponse;
 import com.qaima.dto.mkstack.MarketStackTickersResponse;
 import com.qaima.external.StockApiClient;
 import com.qaima.service.stock.StockSyncService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,12 +18,15 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/sync")
 @RequiredArgsConstructor
+@Tag(name = "Admin - Sync", description = "Admin-only endpoints. Requires bearer token with ADMIN role.")
+@SecurityRequirement(name = "bearerAuth")
 public class StockSyncController {
 
     private final StockApiClient stockApiClient;
     private final StockSyncService stockSyncService;
 
     @PostMapping("/tickers")
+    @Operation(summary = "Sync market stack tickers")
     public Mono<ApiResponse<String>> syncTickers() {
         return stockApiClient.fetchTickers()
                 .flatMap(response -> {

@@ -5,6 +5,9 @@ import com.qaima.common.ErrorCode;
 import com.qaima.common.ErrorException;
 import com.qaima.dto.stock.StockMeta;
 import com.qaima.external.StockClient;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
@@ -12,11 +15,14 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/v1/meta")
 @RequiredArgsConstructor
+@Tag(name = "Stock")
+@SecurityRequirements
 public class MetaController {
 
     private final StockClient stockClient;
 
     @GetMapping("/tickers")
+    @Operation(summary = "Get ticker metadata")
     public Mono<ApiResponse<StockMeta>> getTickerMeta(
             @RequestParam String symbol
     ) {

@@ -5,6 +5,16 @@ qaima:
   cors:
     allowed-origin-patterns: ${QAIMA_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://localhost:3000,https://localhost:5173,https://localhost:3000}
 
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui/index.html
+    operations-sorter: method
+    tags-sorter: alpha
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+
 fred:
   base-url: "https://api.stlouisfed.org"
   api-key: ${FRED_API_KEY:}

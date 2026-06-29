@@ -7,6 +7,9 @@ import com.qaima.dto.credit.CreditBalanceDto;
 import com.qaima.dto.credit.CreditLedgerDto;
 import com.qaima.dto.credit.CreditTempChargeRequestDto;
 import com.qaima.service.credit.CreditService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -22,17 +25,21 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/v1/credits")
 @RequiredArgsConstructor
+@Tag(name = "Credit")
+@SecurityRequirement(name = "bearerAuth")
 public class CreditController {
 
     private final CreditService creditService;
 
     @GetMapping("/balance")
+    @Operation(summary = "Get credit balance")
     public Mono<ApiResponse<CreditBalanceDto>> balance(Authentication authentication) {
         return creditService.getBalance(currentUserId(authentication))
                 .map(ApiResponse::success);
     }
 
     @GetMapping("/ledger")
+    @Operation(summary = "List credit ledger")
     public Mono<ApiResponse<List<CreditLedgerDto>>> ledger(
             Authentication authentication,
             @RequestParam(defaultValue = "50") int limit
@@ -42,6 +49,7 @@ public class CreditController {
     }
 
     @PostMapping("/temp-charge")
+    @Operation(summary = "Charge temporary credits")
     public Mono<ApiResponse<CreditLedgerDto>> tempCharge(
             Authentication authentication,
             @Valid @RequestBody CreditTempChargeRequestDto request

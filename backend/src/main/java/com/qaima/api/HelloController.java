@@ -5,6 +5,10 @@ import com.qaima.dto.featone.FeatOneAnalysisResponseDto;
 import com.qaima.dto.featone.FeatOneRequestDto;
 import com.qaima.external.AnalysisApiClient;
 import com.qaima.external.TestExternalClient;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,17 +20,22 @@ import java.util.Map;
 @RestController
 @RequestMapping
 @RequiredArgsConstructor
+@Tag(name = "Health / Debug")
 public class HelloController {
 
     private final TestExternalClient externalClient;
     private final AnalysisApiClient analysisApiClient;
 
     @GetMapping("/")
+    @Operation(summary = "Backend home")
+    @SecurityRequirements
     public String home() {
         return "Welcome! QAIMA backend is running";
     }
 
     @GetMapping("/api/v1/test/ping")
+    @Operation(summary = "Health check")
+    @SecurityRequirements
     public ApiResponse<Map<String, Object>> ping() {
         Map<String, Object> payload = Map.of(
                 "ok", true,
@@ -37,6 +46,8 @@ public class HelloController {
     }
 
     @GetMapping("/api/v1/test/external")
+    @Operation(summary = "Debug external API")
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<ApiResponse<Map<String, Object>>> testExternal() {
         return externalClient.getPost(1)
                 .map(result -> {
@@ -54,6 +65,8 @@ public class HelloController {
     }
 
     @GetMapping("/api/v1/test/feature1")
+    @Operation(summary = "Debug Feature1 API")
+    @SecurityRequirement(name = "bearerAuth")
     public Mono<ApiResponse<FeatOneAnalysisResponseDto>> testAnalysis() {
         FeatOneRequestDto req = FeatOneRequestDto.builder()
                 .stockCode("AAPL")

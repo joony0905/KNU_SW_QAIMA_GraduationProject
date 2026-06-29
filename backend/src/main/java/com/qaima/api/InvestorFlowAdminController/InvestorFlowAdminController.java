@@ -3,6 +3,9 @@ package com.qaima.api.InvestorFlowAdminController;
 import com.qaima.common.ApiResponse;
 import com.qaima.domain.StockInvestorFlow;
 import com.qaima.service.investorflow.StockInvestorFlowService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -18,6 +21,8 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/investor-flow/stock")
+@Tag(name = "Admin - Market Data", description = "Admin-only endpoints. Requires bearer token with ADMIN role.")
+@SecurityRequirement(name = "bearerAuth")
 public class InvestorFlowAdminController {
 
     private final StockInvestorFlowService stockInvestorFlowService;
@@ -26,6 +31,7 @@ public class InvestorFlowAdminController {
     // curl -X POST "http://localhost:8080/api/v1/admin/investor-flow/stock/sync/latest?stockCode=005930"
     // curl -X POST "http://localhost:8080/api/v1/admin/investor-flow/stock/sync/latest?stockCode=005930&asOfDate=2026-04-29"
     @PostMapping("/sync/latest")
+    @Operation(summary = "Sync latest stock investor flow")
     public Mono<ApiResponse<StockInvestorFlowSyncResult>> syncLatest(
             @RequestParam String stockCode,
             @RequestParam(required = false)
@@ -39,6 +45,7 @@ public class InvestorFlowAdminController {
     // 지정 종목의 투자자 수급을 기간 적재한다. 초기/대량 적재는 batch/jobs/load_stock_investor_flow.py 사용을 권장한다.
     // curl -X POST "http://localhost:8080/api/v1/admin/investor-flow/stock/backfill?stockCode=005930&from=2026-04-01&to=2026-04-30"
     @PostMapping("/backfill")
+    @Operation(summary = "Backfill stock investor flow")
     public Mono<ApiResponse<StockInvestorFlowSyncResult>> backfill(
             @RequestParam String stockCode,
             @RequestParam
@@ -52,6 +59,7 @@ public class InvestorFlowAdminController {
     }
 
     @GetMapping("/series")
+    @Operation(summary = "List stock investor flow series")
     public Mono<ApiResponse<List<StockInvestorFlowRow>>> series(
             @RequestParam String stockCode,
             @RequestParam(defaultValue = "30") int limit

@@ -10,6 +10,9 @@ import com.qaima.dto.feature2.Feature2MetricsDto;
 import com.qaima.service.credit.CreditService;
 import com.qaima.service.feature2.Feature2AnalyzeService;
 import com.qaima.service.report.AnalysisReportService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -26,6 +29,8 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 @Slf4j
 @RequestMapping("/api/v1/feature2")
+@Tag(name = "Feature2")
+@SecurityRequirement(name = "bearerAuth")
 public class Feature2AnalyzeController {
 
     private final Feature2AnalyzeService feature2AnalyzeService;
@@ -33,6 +38,7 @@ public class Feature2AnalyzeController {
     private final AnalysisReportService analysisReportService;
 
     @PostMapping("/analyze")
+    @Operation(summary = "Run Feature2 analysis", description = "Runs Feature2 analysis for a stock using market, macro, peer, and short-selling context.")
     public Mono<ApiResponse<Feature2AnalyzeResponseDto>> analyze(
             Authentication authentication,
             @Valid @RequestBody Feature2AnalyzeRequestDto req

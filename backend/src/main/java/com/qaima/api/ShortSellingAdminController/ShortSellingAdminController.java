@@ -4,6 +4,9 @@ import com.qaima.common.ApiResponse;
 import com.qaima.service.shortselling.FinraShortSellingSyncService;
 import com.qaima.service.shortselling.FinraShortSellingSyncService.FinraShortSellingBackfillResult;
 import com.qaima.service.shortselling.FinraShortSellingSyncService.FinraShortSellingDailySyncResult;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -16,11 +19,14 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/short-selling/finra")
+@Tag(name = "Admin - Short Selling", description = "Admin-only endpoints. Requires bearer token with ADMIN role.")
+@SecurityRequirement(name = "bearerAuth")
 public class ShortSellingAdminController {
 
     private final FinraShortSellingSyncService finraShortSellingSyncService;
 
     @PostMapping("/sync")
+    @Operation(summary = "Sync FINRA short selling data")
     public Mono<ApiResponse<FinraShortSellingDailySyncResult>> syncDaily(
             @RequestParam
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
@@ -30,6 +36,7 @@ public class ShortSellingAdminController {
     }
 
     @PostMapping("/backfill")
+    @Operation(summary = "Backfill FINRA short selling data")
     public Mono<ApiResponse<FinraShortSellingBackfillResult>> backfill(
             @RequestParam
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

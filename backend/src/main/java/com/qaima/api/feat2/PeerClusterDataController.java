@@ -3,6 +3,9 @@ package com.qaima.api.feat2;
 import com.qaima.domain.Freq;
 import com.qaima.dto.peercluster.PeerClusterRequestDto;
 import com.qaima.service.feature2.PeerClusterDataService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -16,11 +19,14 @@ import java.util.Locale;
 @RequestMapping("/api/v1/feature2/peercluster")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Feature2")
+@SecurityRequirements
 public class PeerClusterDataController {
 
     private final PeerClusterDataService peerClusterDataService;
 
     @PostMapping("/data")
+    @Operation(summary = "Build Feature2 peer cluster data")
     public Mono<Map<String, Object>> data(@RequestBody Map<String, Object> body) {
         //FastAPI가 r.json()에서 바로 members/metas를 꺼내므로 ApiResponse로 감싸지않기
         PeerClusterRequestDto req = normalize(body);

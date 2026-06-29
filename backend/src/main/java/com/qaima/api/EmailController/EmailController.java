@@ -7,6 +7,9 @@ import com.qaima.dto.user.EmailRequestDto;
 import com.qaima.dto.user.PwdResetRequestDto;
 import com.qaima.service.auth.AuthLoginLogService;
 import com.qaima.service.auth.MailAuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.InetSocketAddress;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +24,15 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/email")
+@Tag(name = "Email")
+@SecurityRequirements
 public class EmailController {
 
     private final MailAuthService mailAuthService;
     private final AuthLoginLogService authLoginLogService;
 
     @PostMapping("/verification/request")
+    @Operation(summary = "Request email verification code")
     public Mono<ApiResponse<Void>> requestVerification(@Valid @RequestBody EmailRequestDto dto,
                                                        ServerHttpRequest request) {
         String email = dto.getEmail();
@@ -46,6 +52,7 @@ public class EmailController {
     }
 
     @PostMapping("/verification/confirm")
+    @Operation(summary = "Confirm email verification code")
     public Mono<ApiResponse<Void>> confirmVerification(@Valid @RequestBody EmailConfirmDto dto,
                                                        ServerHttpRequest request) {
         String email = dto.getEmail();
@@ -65,6 +72,7 @@ public class EmailController {
     }
 
     @PostMapping("/pwdreset/request")
+    @Operation(summary = "Request password reset link")
     public Mono<ApiResponse<Void>> requestPasswordReset(@Valid @RequestBody EmailRequestDto dto,
                                                         ServerHttpRequest request) {
         String email = dto.getEmail();
@@ -84,6 +92,7 @@ public class EmailController {
     }
 
     @GetMapping(value = "/pwdreset/form", produces = "text/html; charset=UTF-8")
+    @Operation(summary = "Render password reset form")
     public Mono<String> passwordResetForm(@RequestParam("token") String token) {
         return Mono.just("""
             <!doctype html>
@@ -107,6 +116,7 @@ public class EmailController {
             consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
             produces = "text/html; charset=UTF-8"
     )
+    @Operation(summary = "Confirm password reset form")
     public Mono<String> confirmPasswordResetForm(ServerWebExchange exchange,
                                                  ServerHttpRequest request) {
         String ip = extractClientIp(request);
@@ -145,6 +155,7 @@ public class EmailController {
     }
 
     @PostMapping("/pwdreset/confirm")
+    @Operation(summary = "Confirm password reset")
     public Mono<ApiResponse<Void>> confirmPasswordResetJson(@Valid @RequestBody PwdResetRequestDto dto,
                                                             ServerHttpRequest request) {
         String ip = extractClientIp(request);
