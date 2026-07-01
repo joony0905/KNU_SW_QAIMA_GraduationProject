@@ -1,0 +1,9 @@
+table_name	row_count
+stock	2774
+financial	102654
+price_ohlcv	1919827
+dictionary	3035
+news	1092
+short_selling	845606
+industry_index_ohlcv	26838
+market_snapshot	0

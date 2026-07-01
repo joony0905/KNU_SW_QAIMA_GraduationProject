@@ -1,0 +1,52 @@
+version	description	success	installed_on
+1	stock meta	1	2026-05-23 09:43:38
+2	seed exchange	1	2026-05-23 09:43:38
+3	create api request log	1	2026-05-23 09:43:38
+4	create auth and user tables	1	2026-05-23 09:43:39
+5	create market data tables	1	2026-05-23 09:43:39
+6	create news and sentiment tables	1	2026-05-23 09:43:39
+7	create watchlist tables	1	2026-05-23 09:43:39
+8	create dictionary table	1	2026-05-23 09:43:39
+9	create stock alias table	1	2026-05-23 09:43:39
+10	create market snapshot table	1	2026-05-23 09:43:40
+11	create short selling table	1	2026-05-23 09:43:40
+12	create base rate table	1	2026-05-23 09:43:40
+13	seed industry index	1	2026-05-23 09:43:40
+14	create issued shares table	1	2026-05-23 09:43:40
+15	add dart mapping to stock	1	2026-05-23 09:43:40
+16	add market snapshot float metrics	1	2026-05-23 09:43:40
+17	add share class to stock	1	2026-05-23 09:43:40
+18	add market snapshot batch metrics	1	2026-05-23 09:43:40
+19	add market snapshot warning flags	1	2026-05-23 09:43:40
+20	seed market holiday 2026	1	2026-05-23 09:43:41
+21	create news sentiment observation table	1	2026-05-23 09:43:41
+22	create social account table	1	2026-05-23 09:43:41
+23	make user password hash nullable	1	2026-05-23 09:43:41
+24	expand dictionary schema and add alias	1	2026-05-23 09:43:41
+25	extend news sentiment observation for local model	1	2026-05-23 09:43:41
+26	add news sentiment observation dedup index	1	2026-05-23 09:43:41
+27	create bond yield table	1	2026-05-23 09:43:41
+28	seed feature2 benchmark index	1	2026-05-23 09:43:41
+29	create stock investor flow table	1	2026-05-23 09:43:41
+30	create market investor flow table	1	2026-05-23 09:43:41
+31	create exchange rate table	1	2026-05-23 09:43:41
+32	add user credit tables	1	2026-05-23 09:43:41
+33	allow pre signup email verification	1	2026-05-23 09:43:42
+34	set initial credit default	1	2026-05-23 09:43:42
+35	widen short selling volume precision	1	2026-05-23 09:43:42
+36	add sec mapping to stock	1	2026-05-23 09:43:42
+37	add sec issued shares support	1	2026-05-23 09:43:42
+38	create sec 13f institutional holding tables	1	2026-05-23 09:43:42
+39	seed nasdaq sec 13f cusip mappings	1	2026-05-23 09:43:42
+40	seed expanded nasdaq sec 13f cusip mappings	1	2026-05-23 09:43:42
+41	add sec 13f holding aggregate index	1	2026-05-23 09:43:42
+42	add user default risk gamma	1	2026-05-23 09:43:43
+43	create user portfolio tables	1	2026-05-23 09:43:43
+44	create analysis report table	1	2026-05-23 09:43:43
+45	extend user birthdate and add gender	1	2026-05-23 09:43:43
+46	add user country	1	2026-05-23 09:43:43
+47	add user investment level	1	2026-05-26 00:47:05
+48	add dictionary description en	1	2026-05-26 08:38:53
+49	fix dictionary description en type	1	2026-05-26 08:46:55
+50	populate dictionary description en	1	2026-05-26 12:08:35
+51	widen auth request log text columns	1	2026-05-27 04:51:28
