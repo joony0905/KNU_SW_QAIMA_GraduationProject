@@ -51,12 +51,28 @@ public class StockApiClient implements StockClient {
         Mono<StockDto> fromKis = krClient
                 .fetchStockByCanonical(canonical, stock.getExchange())
                 .timeout(KIS_TIMEOUT)
-                .onErrorResume(ex -> Mono.empty());
+                .onErrorResume(ex -> {
+                    log.warn(
+                            "[StockApiClient][fetchStock][KIS] realtime quote failed. stockCode={}, exchange={}, cause={}",
+                            canonical,
+                            stock.getExchange() != null ? stock.getExchange().getCode() : null,
+                            diagnostic(ex)
+                    );
+                    return Mono.empty();
+                });
 
         Mono<StockDto> fromGlobal = globalClient
                 .fetchStockByMkstackCode(mkstackCodeOf(canonical))
                 .timeout(MARKETSTACK_TIMEOUT)
-                .onErrorResume(ex -> Mono.empty());
+                .onErrorResume(ex -> {
+                    log.warn(
+                            "[StockApiClient][fetchStock][Marketstack] realtime quote failed. stockCode={}, mkstackCode={}, cause={}",
+                            canonical,
+                            mkstackCodeOf(canonical),
+                            diagnostic(ex)
+                    );
+                    return Mono.empty();
+                });
 
         return fromKis.switchIfEmpty(fromGlobal)
                 .switchIfEmpty(Mono.error(new IllegalStateException(
@@ -124,6 +140,11 @@ public class StockApiClient implements StockClient {
         // ===== 국내: inquire-price 1회 + (옵션) search-info 1회 =====
         Mono<KisTickerMetaDto> priceMono = krClient.fetchTickerMeta(canonical)
                 .timeout(KIS_TIMEOUT)
+                .doOnError(ex -> log.warn(
+                        "[StockApiClient][fetchTickerMeta][KIS] inquire-price failed. stockCode={}, cause={}",
+                        canonical,
+                        diagnostic(ex)
+                ))
                 .cache();
 
         Mono<KisSearchInfoResponseDto.Output> infoMono = priceMono
@@ -158,7 +179,15 @@ public class StockApiClient implements StockClient {
         Mono<StockMeta> fromGlobal = globalClient.fetchTickerMetaByMkstackCode(mkstackCode)
                 .timeout(MARKETSTACK_TIMEOUT)
                 .map(data -> toStockMetaFromMarketstack(data, canonical))
-                .onErrorResume(ex -> Mono.empty());
+                .onErrorResume(ex -> {
+                    log.warn(
+                            "[StockApiClient][fetchTickerMeta][Marketstack] metadata fallback failed. stockCode={}, mkstackCode={}, cause={}",
+                            canonical,
+                            mkstackCode,
+                            diagnostic(ex)
+                    );
+                    return Mono.empty();
+                });
 
         return fromKis.switchIfEmpty(fromGlobal)
                 .map(ApiResponse::success)
@@ -398,6 +427,12 @@ public class StockApiClient implements StockClient {
                 .industryName(info != null ? info.getIdx_bztp_scls_cd_name() : null)
                 .kospi200("Y".equalsIgnoreCase(kospi200Yn))
                 .build();
+    }
+
+    private String diagnostic(Throwable ex) {
+        if (ex == null) return "null";
+        String message = ex.getMessage();
+        return ex.getClass().getName() + (message != null && !message.isBlank() ? ": " + message : "");
     }
 
     private StockMeta toStockMetaFromMarketstack(

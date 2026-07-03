@@ -77,10 +77,36 @@ public class StockService {
                 .flatMap(optional -> optional
                         .map(existing -> {
                             log.info("[getStockWithRealtimeByCode] existing stock hit: {}", code);
-                            return stockClient.fetchStock(existing);
+                            return stockClient.fetchStock(existing)
+                                    .onErrorResume(ex -> {
+                                        log.warn(
+                                                "[getStockWithRealtimeByCode] realtime quote failed; returning static stock info. stockCode={}, cause={}",
+                                                code,
+                                                ex.toString()
+                                        );
+                                        return Mono.just(toStaticStockDto(existing));
+                                    });
                         })
                         .orElseGet(() -> Mono.error(new ResourceNotFoundException("Unknown stockCode: " + code)))
                 );
+    }
+
+    private StockDto toStaticStockDto(Stock stock) {
+        return StockDto.builder()
+                .stockId(stock.getStockId())
+                .stockCode(stock.getStockCode())
+                .isin(stock.getIsin())
+                .companyName(stock.getCompanyName())
+                .exchangeId(stock.getExchange() != null ? stock.getExchange().getExchangeId() : null)
+                .exchangeCode(stock.getExchange() != null ? stock.getExchange().getCode() : null)
+                .assetType(stock.getAssetType())
+                .currency(stock.getCurrency())
+                .industryId(stock.getIndustry() != null ? stock.getIndustry().getIndustryId() : null)
+                .listedAt(stock.getListedAt())
+                .delistedAt(stock.getDelistedAt())
+                .price(null)
+                .changeRate(null)
+                .build();
     }
 
     /**
